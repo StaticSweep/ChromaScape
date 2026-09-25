@@ -49,14 +49,25 @@ class AccountBuilderOrchestrationControllerTest {
             AccountBuilderPostgresTestFixtures.CANONICAL_JSON,
             Clock.systemUTC(),
             (authority, envelope) -> true);
+    var canonicalJson = AccountBuilderPostgresTestFixtures.CANONICAL_JSON;
+    var gateway = new ClosedAccountBuilderOrchestrationGateway();
+    var requestFactory = new AccountBuilderOrchestrationRequestFactory(validator, canonicalJson);
+    var providerSource =
+        new ProviderDecisionOrchestrationSource(
+            (sessionId, turnId) -> java.util.Optional.empty(),
+            canonicalJson,
+            requestFactory,
+            validator);
     var service =
         new AccountBuilderOrchestrationService(
             validator,
-            AccountBuilderPostgresTestFixtures.CANONICAL_JSON,
+            canonicalJson,
             new InMemoryAccountBuilderOrchestrationStore(Clock.systemUTC()),
-            new ClosedAccountBuilderOrchestrationGateway(),
+            gateway,
             properties,
-            Clock.systemUTC());
+            Clock.systemUTC(),
+            providerSource,
+            new AccountBuilderCapabilityPreflight(gateway));
     return new AccountBuilderOrchestrationController(service, properties);
   }
 }

@@ -64,4 +64,17 @@ public class MouseOverlay extends JFrame {
 
     g2d.dispose();
   }
+
+  /**
+   * Erases the overlay completely, removing it from the screen and freeing resources. After calling
+   * this method, the overlay will no longer be visible or repaintable.
+   */
+  public void eraseOverlay() {
+    // Hide the window
+    setVisible(false);
+    // Dispose of the JFrame resources
+    dispose();
+    // Reset the mouse point just in case
+    mousePoint = new Point(0, 0);
+  }
 }

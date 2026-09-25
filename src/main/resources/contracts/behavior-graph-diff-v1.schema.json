@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.leeuwbot.dev/sc967/behavior-graph-diff/v1",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema", "base_graph_id", "base_graph_hash", "operations", "reason", "authority", "control_allowed"],
+  "properties": {
+    "schema": {"const": "behavior-graph-diff/v1"}, "base_graph_id": {"type": "string", "pattern": "^graph_[0-9a-f]{24}$"},
+    "base_graph_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, "operations": {"type": "array", "maxItems": 255, "items": {"$ref": "#/$defs/operation"}},
+    "reason": {"type": "string"}, "authority": {"$ref": "#/$defs/authority"}, "control_allowed": {"const": false}
+  },
+  "$defs": {
+    "authority": {"type": "object", "additionalProperties": false, "required": ["can_write_source", "can_approve_patch", "can_publish_graph", "can_activate_model", "can_dispatch_input"], "properties": {"can_write_source": {"const": false}, "can_approve_patch": {"const": false}, "can_publish_graph": {"const": false}, "can_activate_model": {"const": false}, "can_dispatch_input": {"const": false}}},
+    "semantics": {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"enum": ["start", "recorded_action", "terminal", "gate", "abstain", "recovery"]}, "parameters": {"type": "object"}, "recorded_action": {"type": "object"}}},
+    "node": {"type": "object", "additionalProperties": false, "required": ["id", "ordinal", "type", "semantics"], "properties": {"id": {"type": "string", "pattern": "^node_[0-9]+_[0-9a-f]{12}$"}, "ordinal": {"type": "integer", "minimum": 0}, "type": {"enum": ["START", "ACTION", "GATE", "ABSTAIN", "RECOVERY", "TERMINAL"]}, "semantics": {"$ref": "#/$defs/semantics"}, "source_tick_range": {"type": "object", "additionalProperties": false, "required": ["start", "end"], "properties": {"start": {"type": "integer"}, "end": {"type": "integer"}}}, "evidence_ids": {"type": "array", "items": {"type": "string"}}}},
+    "edge": {"type": "object", "additionalProperties": false, "required": ["id", "from", "to"], "properties": {"id": {"type": "string", "pattern": "^edge_[0-9]+_[0-9]+_[0-9a-f]{12}$"}, "from": {"type": "string"}, "to": {"type": "string"}}},
+    "operation": {"oneOf": [
+      {"type": "object", "additionalProperties": false, "required": ["op", "node"], "properties": {"op": {"const": "add_node"}, "node": {"$ref": "#/$defs/node"}}},
+      {"type": "object", "additionalProperties": false, "required": ["op", "node_id"], "properties": {"op": {"const": "remove_node"}, "node_id": {"type": "string"}}},
+      {"type": "object", "additionalProperties": false, "required": ["op", "node_id", "semantics"], "properties": {"op": {"const": "replace_semantics"}, "node_id": {"type": "string"}, "semantics": {"$ref": "#/$defs/semantics"}}},
+      {"type": "object", "additionalProperties": false, "required": ["op", "edge"], "properties": {"op": {"const": "add_edge"}, "edge": {"$ref": "#/$defs/edge"}}},
+      {"type": "object", "additionalProperties": false, "required": ["op", "edge_id"], "properties": {"op": {"const": "remove_edge"}, "edge_id": {"type": "string"}}}
+    ]}
+  }
+}

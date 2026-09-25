@@ -1,0 +1,24 @@
+{
+  "reportVersion": 1,
+  "runId": "run-uuid",
+  "attemptId": "attempt-uuid",
+  "mode": "CAUSAL_SIMULATION",
+  "manifestChecksum": "sha256:manifest-hash",
+  "runtimeIdentity": {
+    "xrspsAdapterVersion": "1.0.0",
+    "xrspsBuildCommit": "exact-commit",
+    "cacheRevision": "sha256:abc123",
+    "contentRevision": "sha256:def456"
+  },
+  "startedAt": "2026-01-01T00:00:00Z",
+  "terminalAt": "2026-01-01T00:01:00Z",
+  "outcome": "PASSED",
+  "executedActionCount": 1,
+  "checkpointCount": 2,
+  "mismatchTotals": {"hard": 0, "soft": 0, "info": 0},
+  "finalStateHash": "sha256:final-state",
+  "finalChainHash": "sha256:final-chain",
+  "artifactRefs": ["sha256:trace-hash", "sha256:snapshot-hash"],
+  "controlAllowed": false,
+  "reportChecksum": "sha256:report-hash"
+}

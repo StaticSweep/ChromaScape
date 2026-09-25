@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.screen.window.CompiledClassIsolationTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-16T23:51:40.881Z" hostname="fedora" time="0.048">
+  <properties/>
+  <testcase name="linuxDiscoveryAndFacadeClassesNeverReferenceRemoteInputOrAttachmentSymbols()" classname="com.chromascape.utils.core.screen.window.CompiledClassIsolationTest" time="0.042"/>
+  <testcase name="linuxDiscoveryClassesNeverReferenceWin32WindowClasses()" classname="com.chromascape.utils.core.screen.window.CompiledClassIsolationTest" time="0.005"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

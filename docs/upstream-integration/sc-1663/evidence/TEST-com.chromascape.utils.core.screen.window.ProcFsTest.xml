@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.screen.window.ProcFsTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-09-16T23:51:41.578Z" hostname="fedora" time="0.025">
+  <properties/>
+  <testcase name="readCmdlineReturnsNullDelimitedBytesAndEmptyForMissingPid()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.002"/>
+  <testcase name="statParsingHandlesCommasAndSpacesInsideTheCommField()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.002"/>
+  <testcase name="readCmdlineFailsForDirectoryEntry()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.002"/>
+  <testcase name="listPidDirsOnMissingRootIsEmpty()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.001"/>
+  <testcase name="bootIdIsTrimmedWhenPresentAndEmptyWhenAbsent()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.002"/>
+  <testcase name="listPidDirsReturnsSortedNumericDirsOnly()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.002"/>
+  <testcase name="readStartTimeTicksAndUptimeIsEmptyForDisappearingPid()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.001"/>
+  <testcase name="readStartTimeTicksAndUptimeIsEmptyForMalformedStatOrMissingUptime()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.002"/>
+  <testcase name="readExeTargetResolvesSymlinkAndIsEmptyWhenAbsent()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.001"/>
+  <testcase name="readStartTimeTicksAndUptimeParsesStatField22AndUptime()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.003"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

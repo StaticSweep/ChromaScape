@@ -1,0 +1,475 @@
+# ChromaScape Application Configuration
+
+spring:
+  application:
+    name: ChromaScape
+
+  # Report bundles are parsed by StabilizationBundleStreamReader directly from the servlet input
+  # stream so authentication and bounded streaming happen before any multipart materialization.
+  # Boot's eager multipart resolver would consume that stream before the controller can enforce
+  # those limits.
+  servlet:
+    multipart:
+      enabled: false
+
+  # Database configuration
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/chromascape?sslmode=disable}
+    username: ${SPRING_DATASOURCE_USERNAME:chromascape}
+    password: ${SPRING_DATASOURCE_PASSWORD:chromascape123}
+  jpa:
+    hibernate:
+      # Hibernate continues to manage the general schema for new tables, but SC-572 external-reference
+      # constraints (NOT NULL + unique on (run_id, external_reference)) are owned by the versioned
+      # Flyway migration V1 and must never be relied on here.
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        # Real JDBC batching for replay evidence inserts (events, hash samples, mismatches):
+        # ordered inserts make multi-partition event writes batch on the wire, and the replay
+        # PostgreSQL suite asserts >2-batch behavior end to end.
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+  # Versioned schema migrations (SC-572/SC-967). baseline-on-migrate lets an existing database adopt
+  # the migration history without a manual baseline insert; V1 enforces the durable artifact mapping.
+  # out-of-order lets the SC-967 baseline (V1_1, a no-op through IF NOT EXISTS on databases where
+  # Hibernate already created the tables) be adopted by histories that already applied V2/V3.
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    out-of-order: true
+    locations: classpath:db/migration
+
+# LeeuwBot Integration Configuration
+leeuwbot:
+  candidate-registry:
+    base-url: ${LEEUWBOT_CANDIDATE_REGISTRY_URL:http://127.0.0.1:8081}
+    token: ${STATIC_API_TOKEN:}
+  signing:
+    private-key-path: ${CANDIDATE_SIGNING_PRIVATE_KEY_PATH:}
+    public-key-path: ${CANDIDATE_SIGNING_PUBLIC_KEY_PATH:}
+    key-id: ${CANDIDATE_SIGNING_KEY_ID:}
+  integration:
+    # Enable/disable integration with LeeuwBot API
+    enabled: ${LEEUWBOT_ENABLED:true}
+
+    # URL of the ChromaScape Bridge Service
+    bridge-url: ${LEEUWBOT_BRIDGE_URL:http://localhost:8092}
+
+    # API key for authenticating with the bridge service
+    api-key: ${CHROMASCAPE_API_KEY:dev-token}
+
+    # Heartbeat configuration
+    heartbeat-interval-seconds: ${LEEUWBOT_HEARTBEAT_INTERVAL:30}
+
+    # Connection timeouts
+    connection-timeout-ms: ${LEEUWBOT_CONNECTION_TIMEOUT:5000}
+    read-timeout-ms: ${LEEUWBOT_READ_TIMEOUT:10000}
+
+    # Log forwarding
+    forward-logs: ${LEEUWBOT_FORWARD_LOGS:true}
+    log-batch-size: ${LEEUWBOT_LOG_BATCH_SIZE:50}
+    log-flush-interval-seconds: ${LEEUWBOT_LOG_FLUSH_INTERVAL:10}
+
+    # Script event reporting
+    report-script-events: ${LEEUWBOT_REPORT_EVENTS:true}
+
+    # Tick data forwarding to Go backend
+    forward-tick-data: ${LEEUWBOT_FORWARD_TICKS:true}
+    tick-forward-timeout-ms: ${LEEUWBOT_TICK_TIMEOUT:5000}
+    # Use Go backend as primary storage (true = Go only, false = hybrid: local + Go)
+    use-go-backend-storage: ${LEEUWBOT_USE_GO_STORAGE:false}
+
+    # Screen streaming to Mule Service
+    stream:
+      # Enable screen streaming
+      enabled: ${LEEUWBOT_STREAM_ENABLED:true}
+      # WebSocket URL for Mule Service agent endpoint
+      url: ${LEEUWBOT_STREAM_URL:ws://192.168.1.6:8084/ws/screens/agent}
+      # Host identifier for grouping (e.g., "pc1", "pc2")
+      host-id: ${LEEUWBOT_STREAM_HOST_ID:pc1}
+      # Display name for this stream instance
+      display-name: ${LEEUWBOT_STREAM_DISPLAY_NAME:ChromaScape}
+      # Default FPS when streaming is requested
+      fps: ${LEEUWBOT_STREAM_FPS:5}
+      # JPEG quality (1-100)
+      quality: ${LEEUWBOT_STREAM_QUALITY:70}
+      # Stream dimensions
+      width: ${LEEUWBOT_STREAM_WIDTH:800}
+      height: ${LEEUWBOT_STREAM_HEIGHT:600}
+
+# AI Routine capture transport authentication
+ai-routine:
+  capture:
+    token: ${AI_ROUTINE_CAPTURE_TOKEN:}
+  operator:
+    # Bearer token required for all candidate workflow endpoints (constant-time compared).
+    token: ${AI_ROUTINE_OPERATOR_TOKEN:}
+    # Auditable operator identity persisted into approval hashes and audit events.
+    id: ${AI_ROUTINE_OPERATOR_ID:operator}
+
+sc967:
+  candidate:
+    # Persistent root for durable candidate registration bundles (required when candidate builds are enabled).
+    staging-root: ${SC967_CANDIDATE_STAGING_ROOT:}
+    # Runtime gate for candidate builds. When false (default), build enqueue, worker execution and
+    # recovery dispatch are all rejected. When true, startup fails unless operator token/ID, signing
+    # key path/key ID, registry URL/token, staging root and the exact expected JAR name are valid.
+    builds-enabled: ${SC967_CANDIDATE_BUILDS_ENABLED:false}
+
+# Server configuration
+server:
+  port: ${SERVER_PORT:8090}  # Changed from 8080 to avoid conflict with leeuwbot-api
+
+# Same-origin debugger gateway capability facts. These values are server-only; the browser cannot
+# override the service identity or transport ceilings.
+gateway:
+  capabilities:
+    service-build-id: ${CHROMASCAPE_BUILD_ID:chromascape-dev}
+    max-rest-body-bytes: ${CHROMASCAPE_GATEWAY_MAX_REST_BODY_BYTES:1048576}
+    # Includes the transport envelope overhead while admitting the current 1 MiB viewport frame.
+    max-frame-bytes: ${CHROMASCAPE_GATEWAY_MAX_FRAME_BYTES:2097152}
+
+# ChromaScape runtime configuration
+chromascape:
+  # SC-810 authoritative source manifest trust. All values are mandatory at startup; empty
+  # placeholders deliberately fail SourceConfigurationValidator rather than enabling a fallback.
+  source:
+    public-key-base64: ${CHROMASCAPE_SOURCE_PUBLIC_KEY_BASE64:}
+    public-key-id: ${CHROMASCAPE_SOURCE_PUBLIC_KEY_ID:}
+    environment: ${CHROMASCAPE_SOURCE_ENVIRONMENT:}
+    access:
+      metadata-token: ${CHROMASCAPE_SOURCE_METADATA_TOKEN:}
+      content-token: ${CHROMASCAPE_SOURCE_CONTENT_TOKEN:}
+      actor-id: ${CHROMASCAPE_SOURCE_ACTOR_ID:debugger}
+    cache:
+      max-bytes: ${CHROMASCAPE_SOURCE_CACHE_MAX_BYTES:52428800}
+  patchloop:
+    # Execution backend: local_instance | micro6_local_executor
+    execution-backend: ${CHROMASCAPE_PATCHLOOP_EXECUTION_BACKEND:micro6_local_executor}
+    micro6-executor:
+      # Micro6 local executor base URL for patch-loop script execution
+      base-url: ${CHROMASCAPE_PATCHLOOP_MICRO6_EXECUTOR_BASE_URL:http://127.0.0.1:8098}
+    # Poll interval for syncing task-plan item status from linked patch-loop iterations
+    task-sync-interval-ms: ${CHROMASCAPE_PATCHLOOP_TASK_SYNC_INTERVAL_MS:5000}
+
+builder-goal:
+  remote:
+    machine-uuid: ${BUILDER_GOAL_REMOTE_MACHINE_UUID:}
+    endpoint: ${BUILDER_GOAL_REMOTE_ENDPOINT:}
+    executor-url: ${BUILDER_GOAL_REMOTE_EXECUTOR_URL:}
+    token: ${BUILDER_GOAL_REMOTE_TOKEN:}
+    timeout-seconds: ${BUILDER_GOAL_REMOTE_TIMEOUT_SECONDS:1800}
+  run-timeout-ms: ${BUILDER_GOAL_RUN_TIMEOUT_MS:300000}
+  status-sync-max-consecutive-failures: ${BUILDER_GOAL_STATUS_SYNC_MAX_CONSECUTIVE_FAILURES:3}
+  status-sync-failure-grace-ms: ${BUILDER_GOAL_STATUS_SYNC_FAILURE_GRACE_MS:15000}
+  launcher:
+    base-url: ${BUILDER_GOAL_LAUNCHER_BASE_URL:http://192.168.1.6:8084}
+    api-token: ${BUILDER_GOAL_LAUNCHER_API_TOKEN:devtoken123}
+    default-machine-uuid: ${BUILDER_GOAL_LAUNCHER_MACHINE_UUID:}
+    local-machine-uuid: ${BUILDER_GOAL_LAUNCHER_LOCAL_MACHINE_UUID:}
+    accounts-path: ${BUILDER_GOAL_LAUNCHER_ACCOUNTS_PATH:/api/v1/accounts}
+    start-command-path: ${BUILDER_GOAL_LAUNCHER_START_PATH:/api/v1/launcher/commands/start}
+    command-status-path: ${BUILDER_GOAL_LAUNCHER_STATUS_PATH:/api/v1/launcher/commands}
+    request-timeout-ms: ${BUILDER_GOAL_LAUNCHER_REQUEST_TIMEOUT_MS:10000}
+    poll-interval-ms: ${BUILDER_GOAL_LAUNCHER_POLL_INTERVAL_MS:1200}
+    command-timeout-ms: ${BUILDER_GOAL_LAUNCHER_COMMAND_TIMEOUT_MS:300000}
+    heartbeat-ready-timeout-ms: ${BUILDER_GOAL_LAUNCHER_HEARTBEAT_READY_TIMEOUT_MS:180000}
+    heartbeat-poll-interval-ms: ${BUILDER_GOAL_LAUNCHER_HEARTBEAT_POLL_INTERVAL_MS:2000}
+    accounts-refresh-seconds: ${BUILDER_GOAL_LAUNCHER_ACCOUNTS_REFRESH_SECONDS:30}
+  accounts:
+    enabled: ${BUILDER_GOAL_ACCOUNT_CATALOG_ENABLED:true}
+    base-url: ${BUILDER_GOAL_ACCOUNT_CATALOG_BASE_URL:${LEEUWBOT_BRIDGE_URL:http://localhost:8092}}
+    path: ${BUILDER_GOAL_ACCOUNT_CATALOG_PATH:/api/v1/accounts}
+    timeout-ms: ${BUILDER_GOAL_ACCOUNT_CATALOG_TIMEOUT_MS:5000}
+    refresh-seconds: ${BUILDER_GOAL_ACCOUNT_CATALOG_REFRESH_SECONDS:30}
+  recovery:
+    micro6-project-dir: ${BUILDER_GOAL_MICRO6_PROJECT_DIR:../micro6}
+    gradle-run-task: ${BUILDER_GOAL_MICRO6_GRADLE_RUN_TASK::client:runBuilderGoal}
+    launch-command-template: ${BUILDER_GOAL_MICRO6_LAUNCH_COMMAND_TEMPLATE:}
+    extra-run-args: ${BUILDER_GOAL_MICRO6_EXTRA_RUN_ARGS:}
+    world: ${BUILDER_GOAL_MICRO6_WORLD:360}
+    launch-timeout-ms: ${BUILDER_GOAL_MICRO6_LAUNCH_TIMEOUT_MS:5400000}
+    validation-timeout-ms: ${BUILDER_GOAL_MICRO6_VALIDATION_TIMEOUT_MS:300000}
+    heartbeat-poll-interval-ms: ${BUILDER_GOAL_MICRO6_HEARTBEAT_POLL_INTERVAL_MS:2000}
+    launch-log-file: ${BUILDER_GOAL_MICRO6_LAUNCH_LOG_FILE:micro6-recovery-launch.log}
+    agent-ready-timeout-ms: ${BUILDER_GOAL_AGENT_READY_TIMEOUT_MS:120000}
+    login-timeout-seconds: ${BUILDER_GOAL_LOGIN_TIMEOUT_SECONDS:60}
+    agent-poll-interval-ms: ${BUILDER_GOAL_AGENT_POLL_INTERVAL_MS:2000}
+  # Launch operation lifecycle
+  launch:
+    # Retention duration for terminal launch operations (ms)
+    terminal-retention-ms: ${BUILDER_GOAL_LAUNCH_TERMINAL_RETENTION_MS:1800000}
+    # Maximum duration an active operation waits before watchdog failure (ms, default ~95 min)
+    active-watchdog-ms: ${BUILDER_GOAL_LAUNCH_ACTIVE_WATCHDOG_MS:5700000}
+    # Interval for the active-operation watchdog check (ms)
+    watchdog-check-interval-ms: ${BUILDER_GOAL_LAUNCH_WATCHDOG_CHECK_INTERVAL_MS:60000}
+
+# Unified Frame Capture - Single capture thread for all consumers
+unified-capture:
+  # Enable unified capture (reduces CPU usage by eliminating duplicate screen captures)
+  enabled: ${UNIFIED_CAPTURE_ENABLED:true}
+  # Frames per second for all consumers (viewport, recording, streaming)
+  fps: ${UNIFIED_CAPTURE_FPS:30}
+
+viewport-stream:
+  # Target FPS for the browser viewport only (recording and other consumers still use unified-capture.fps)
+  target-fps: ${VIEWPORT_STREAM_FPS:15}
+  # JPEG quality for browser viewport frames
+  jpeg-quality: ${VIEWPORT_STREAM_JPEG_QUALITY:70}
+  # Downscale long edge before encode to reduce browser latency and payload size
+  max-long-edge: ${VIEWPORT_STREAM_MAX_LONG_EDGE:960}
+
+# Screen Capture Configuration - Continuous viewport display
+screencapture:
+  # Enable continuous screen capture to viewport
+  enabled: ${SCREENCAPTURE_ENABLED:true}
+  # Frames per second to capture (1-60, default 15)
+  # DEPRECATED: Use unified-capture.fps instead (this is kept for backward compatibility)
+  fps: ${SCREENCAPTURE_FPS:15}
+  # Only capture when game window is focused (optional feature)
+  capture-only-when-focused: ${SCREENCAPTURE_FOCUSED_ONLY:false}
+  # Minimum seconds between error logs (rate limiting, default 5)
+  error-log-interval-seconds: ${SCREENCAPTURE_ERROR_LOG_INTERVAL:5}
+
+# Game Recording Configuration - For replay functionality
+recording:
+  # Enable recording functionality
+  enabled: ${RECORDING_ENABLED:true}
+  # Directory where recordings are stored
+  output-directory: ${RECORDING_OUTPUT_DIR:recordings}
+  # Video quality (1-100, higher = better quality)
+  video-quality: ${RECORDING_QUALITY:75}
+  # Frames per second for recording
+  # DEPRECATED: Use unified-capture.fps instead (this is kept for backward compatibility)
+  fps: ${RECORDING_FPS:15}
+  # Record audio (not currently supported)
+  record-audio: ${RECORDING_AUDIO:false}
+  # Maximum recording duration in minutes (0 = unlimited)
+  max-duration-minutes: ${RECORDING_MAX_DURATION:60}
+  # Video encoding preset (veryfast, fast, medium, slow, slower, veryslow)
+  encoding-preset: ${RECORDING_ENCODING_PRESET:veryfast}
+  # Automatically record when game starts
+  auto-record: ${RECORDING_AUTO:false}
+  # Automatically record task-bound Micro6 debug sessions even when generic auto-record is off
+  auto-record-task-sessions: ${RECORDING_AUTO_TASK_SESSIONS:true}
+  # Maximum time to wait for RuneLite's canvas to expose capturable dimensions
+  initial-frame-timeout-ms: ${RECORDING_INITIAL_FRAME_TIMEOUT_MS:15000}
+  # Delay between initial frame-capture attempts
+  initial-frame-retry-interval-ms: ${RECORDING_INITIAL_FRAME_RETRY_INTERVAL_MS:250}
+  # How long the captured canvas size must remain unchanged before the recorder locks onto it
+  stability-window-ms: ${RECORDING_STABILITY_WINDOW_MS:1500}
+  # Minimum canvas width accepted as a stable recording size before the deadline fallback
+  min-capture-width: ${RECORDING_MIN_CAPTURE_WIDTH:640}
+  # Minimum canvas height accepted as a stable recording size before the deadline fallback
+  min-capture-height: ${RECORDING_MIN_CAPTURE_HEIGHT:400}
+
+# Tick Debugger Configuration - For tick-based debugging
+tick-debugger:
+  # Enable tick debugger functionality
+  enabled: ${TICK_DEBUGGER_ENABLED:true}
+  # Retention period for debug sessions (days)
+  retention-days: ${TICK_DEBUGGER_RETENTION_DAYS:7}
+  # WebSocket configuration
+  websocket:
+    # Maximum message size in bytes
+    max-message-size: ${TICK_DEBUGGER_WS_MAX_SIZE:1048576}
+  # Batch insert size for performance
+  batch-insert-size: ${TICK_DEBUGGER_BATCH_SIZE:100}
+  # Tick duration in milliseconds (RuneScape standard)
+  tick-duration-ms: ${TICK_DEBUGGER_TICK_DURATION:600}
+
+# Micro6 Integration Configuration
+micro6:
+  expected-artifact-name: ${MICRO6_EXPECTED_ARTIFACT_NAME:}
+  log-shipper:
+    # Enable/disable log file shipper
+    enabled: ${MICRO6_LOG_SHIPPER_ENABLED:false}
+    # Path to micro6 client log file (absolute path)
+    log-file-path: ${MICRO6_LOG_FILE_PATH:}
+    # Source identifier for shipped logs
+    source-name: ${MICRO6_SOURCE_NAME:micro6-shipper}
+    # Polling interval in milliseconds
+    polling-interval-ms: ${MICRO6_POLLING_MS:5000}
+    # Maximum logs per batch
+    max-batch-size: ${MICRO6_MAX_BATCH:100}
+    # Maximum deduplication history
+    max-history-lines: ${MICRO6_HISTORY_LINES:500}
+  executor-catalog:
+    # Enable/disable catalog fetch from local executor
+    enabled: ${MICRO6_EXECUTOR_CATALOG_ENABLED:true}
+    # Micro6 local executor base URL
+    base-url: ${MICRO6_EXECUTOR_BASE_URL:http://127.0.0.1:8098}
+    # HTTP timeout for catalog fetch
+    timeout-ms: ${MICRO6_EXECUTOR_TIMEOUT_MS:60000}
+    # Cache TTL in seconds
+    refresh-seconds: ${MICRO6_EXECUTOR_CATALOG_REFRESH_SECONDS:30}
+  source:
+    transport:
+      base-url: ${MICRO6_SOURCE_TRANSPORT_BASE_URL:}
+      auth-token: ${MICRO6_SOURCE_TRANSPORT_AUTH_TOKEN:}
+      actor: ${MICRO6_SOURCE_TRANSPORT_ACTOR:chromascape-web}
+
+# Analysis Provider Configuration - For BMAD (Bot Metric Analysis & Diagnostics)
+analysis:
+  # Provider selection: claude-api, codex-mcp, claude-mcp (legacy alias), or openai-codex
+  # Set via ANALYSIS_PROVIDER environment variable
+  # Default is codex-mcp for auto-start convenience
+  provider: ${ANALYSIS_PROVIDER:codex-mcp}
+
+  # MCP-specific configuration (used when provider is codex-mcp or claude-mcp)
+  mcp:
+    # Auto-start configuration
+    auto-start: ${MCP_AUTO_START:true}
+    bridge-directory: ${MCP_BRIDGE_DIR:scripts/mcp-bridge}
+    startup-timeout: ${MCP_STARTUP_TIMEOUT:30}
+
+    # MCP server URL
+    server-url: ${MCP_SERVER_URL:http://localhost:8765}
+    # Request timeout in seconds
+    timeout-seconds: ${MCP_TIMEOUT:120}
+    # Maximum retry attempts
+    max-retries: ${MCP_MAX_RETRIES:3}
+
+    # Verification configuration
+    # How long a cached verification result is considered fresh (seconds)
+    verification-ttl-seconds: ${MCP_VERIFICATION_TTL:300}
+    # Enable manual Codex MCP verification from /debugger
+    enable-manual-verification: ${MCP_ENABLE_VERIFICATION:true}
+
+  # OpenAI/Codex API configuration (used when provider is openai-codex)
+  openai:
+    # OpenAI API key (set via ANALYSIS_OPENAI_API_KEY environment variable)
+    api-key: ${ANALYSIS_OPENAI_API_KEY:}
+    # OpenAI Chat Completions endpoint URL
+    url: ${ANALYSIS_OPENAI_URL:https://api.openai.com/v1/chat/completions}
+    # Model to use for analysis (gpt-5-mini, gpt-4.1, etc.)
+    model: ${ANALYSIS_OPENAI_MODEL:gpt-5-mini}
+    # Request timeout in seconds
+    timeout-seconds: ${ANALYSIS_OPENAI_TIMEOUT:120}
+    # Maximum tokens in API response
+    max-tokens: ${ANALYSIS_OPENAI_MAX_TOKENS:8192}
+
+# Claude API Configuration - For BMAD (Bot Metric Analysis & Diagnostics)
+# Only used when analysis.provider=claude-api
+claude:
+  api:
+    # Claude API key (set via CLAUDE_API_KEY environment variable)
+    key: ${CLAUDE_API_KEY:}
+    # Claude API endpoint URL
+    url: ${CLAUDE_API_URL:https://api.anthropic.com/v1/messages}
+    # Model to use for analysis (claude-opus-4-6, claude-sonnet-4-5, etc.)
+    model: ${CLAUDE_API_MODEL:claude-opus-4-6}
+    # Request timeout in seconds
+    timeout-seconds: ${CLAUDE_API_TIMEOUT:120}
+    # Maximum tokens in API response
+    max-tokens: ${CLAUDE_API_MAX_TOKENS:4096}
+
+# Microbot Agent Server Configuration
+microbot:
+  agent-server:
+    # Enable/disable Microbot Agent Server adapter
+    enabled: ${MICROBOT_AGENT_SERVER_ENABLED:true}
+    # Base URL of the Microbot Agent Server
+    base-url: ${MICROBOT_AGENT_SERVER_URL:http://localhost:8085}
+    # HTTP request timeout in milliseconds
+    timeout-ms: ${MICROBOT_AGENT_SERVER_TIMEOUT:5000}
+    # Polling interval for state snapshots in milliseconds
+    poll-interval-ms: ${MICROBOT_AGENT_SERVER_POLL_MS:2000}
+
+# Feature Flags
+replay:
+  # Replay, worker, and viewer remain opt-in. Their data contracts are harmless while disabled.
+  enabled: ${REPLAY_ENABLED:false}
+  xrsps:
+    executable: ${REPLAY_XRSPS_EXECUTABLE:node}
+    entrypoint: ${REPLAY_XRSPS_ENTRYPOINT:}
+    working-directory: ${REPLAY_XRSPS_WORKING_DIRECTORY:}
+    expected-adapter-version: ${REPLAY_XRSPS_EXPECTED_ADAPTER_VERSION:}
+    expected-build-commit: ${REPLAY_XRSPS_EXPECTED_BUILD_COMMIT:}
+    expected-cache-revision: ${REPLAY_XRSPS_EXPECTED_CACHE_REVISION:}
+    expected-content-revision: ${REPLAY_XRSPS_EXPECTED_CONTENT_REVISION:}
+    startup-timeout-ms: ${REPLAY_XRSPS_STARTUP_TIMEOUT_MS:15000}
+    request-timeout-ms: ${REPLAY_XRSPS_REQUEST_TIMEOUT_MS:30000}
+    shutdown-timeout-ms: ${REPLAY_XRSPS_SHUTDOWN_TIMEOUT_MS:5000}
+    max-stdout-line-bytes: ${REPLAY_XRSPS_MAX_STDOUT_LINE_BYTES:10485760}
+    max-stderr-bytes: ${REPLAY_XRSPS_MAX_STDERR_BYTES:1048576}
+    response-queue-capacity: ${REPLAY_XRSPS_RESPONSE_QUEUE_CAPACITY:16}
+  worker:
+    enabled: ${REPLAY_WORKER_ENABLED:false}
+    concurrency: ${REPLAY_WORKER_CONCURRENCY:2}
+    lease-duration-seconds: ${REPLAY_WORKER_LEASE_DURATION_SECONDS:30}
+    heartbeat-seconds: ${REPLAY_WORKER_HEARTBEAT_SECONDS:10}
+    poll-interval-ms: ${REPLAY_WORKER_POLL_INTERVAL_MS:1000}
+    run-timeout-seconds: ${REPLAY_WORKER_RUN_TIMEOUT_SECONDS:300}
+    max-event-batch: ${REPLAY_WORKER_MAX_EVENT_BATCH:100}
+    max-retries: ${REPLAY_WORKER_MAX_RETRIES:2}
+    missing-report-repair-enabled: ${REPLAY_MISSING_REPORT_REPAIR_ENABLED:true}
+    missing-report-repair-batch-size: ${REPLAY_MISSING_REPORT_REPAIR_BATCH_SIZE:25}
+    missing-report-repair-interval-seconds: ${REPLAY_MISSING_REPORT_REPAIR_INTERVAL_SECONDS:30}
+  artifacts:
+    root: ${REPLAY_ARTIFACT_ROOT:.chromascape/replay-artifacts}
+    max-artifact-bytes: ${REPLAY_MAX_ARTIFACT_BYTES:104857600}
+    retain-failed-staging-hours: ${REPLAY_RETAIN_FAILED_STAGING_HOURS:24}
+  viewer:
+    enabled: ${REPLAY_VIEWER_ENABLED:false}
+    origin: ${REPLAY_VIEWER_ORIGIN:http://127.0.0.1:3000}
+    signing-secret: ${REPLAY_VIEWER_SIGNING_SECRET:}
+    token-ttl-seconds: ${REPLAY_VIEWER_TOKEN_TTL_SECONDS:300}
+
+features:
+  task-synthesis:
+    enabled: ${FEATURES_TASK_SYNTHESIS_ENABLED:true}
+  patch-loop:
+    autofix-enabled: ${FEATURES_PATCH_LOOP_AUTOFIX:true}
+  ai-player:
+    enabled: ${FEATURES_AI_PLAYER_ENABLED:false}
+    shadow-mode: ${FEATURES_AI_PLAYER_SHADOW:false}
+    # Observable request only; ShadowPolicyService permanently enforces false.
+    control-enabled: ${FEATURES_AI_PLAYER_CONTROL:false}
+
+# SC-1430 provider decision runtime. It is deliberately disabled and has no delivery capability.
+gameplay:
+  v2:
+    # SC-1449 additive v2 live gate. Default-off; both flags stay off until the exact
+    # human gate passes. Enable Micro6 validation without start permission first,
+    # then one bounded SC-1498 Fishing run. Disable both flags immediately on any
+    # identity or reconciliation discrepancy.
+    live-enabled: ${GAMEPLAY_V2_LIVE_ENABLED:false}
+    # Operator secret for /api/internal/gameplay/v2. Fail-closed: unset or shorter than 32
+    # characters closes the boundary entirely. Compared in constant time; header presence is
+    # never authentication on its own.
+    operator-key: ${GAMEPLAY_V2_OPERATOR_KEY:}
+  # SC-1431 source-neutral orchestration. Both flags stay off until dependency and SC-1449
+  # conformance evidence exists; HELD/SHADOW use the application service directly in tests.
+  accountbuilder-orchestration:
+    enabled: ${GAMEPLAY_ACCOUNTBUILDER_ORCHESTRATION_ENABLED:false}
+    live-delivery-enabled: ${GAMEPLAY_ACCOUNTBUILDER_LIVE_DELIVERY_ENABLED:false}
+    operator-key: ${GAMEPLAY_ACCOUNTBUILDER_ORCHESTRATION_OPERATOR_KEY:}
+  provider-runtime:
+    enabled: ${GAMEPLAY_PROVIDER_RUNTIME_ENABLED:false}
+    operator-key: ${GAMEPLAY_PROVIDER_RUNTIME_OPERATOR_KEY:}
+    work-root: ${GAMEPLAY_PROVIDER_RUNTIME_WORK_ROOT:.chromascape/provider-runtime-work}
+    transcript-root: ${GAMEPLAY_PROVIDER_TRANSCRIPT_ROOT:.chromascape/provider-transcripts}
+    max-stdout-bytes: ${GAMEPLAY_PROVIDER_MAX_STDOUT_BYTES:1048576}
+    max-stderr-bytes: ${GAMEPLAY_PROVIDER_MAX_STDERR_BYTES:131072}
+    process-start-timeout-millis: ${GAMEPLAY_PROVIDER_PROCESS_START_TIMEOUT_MS:5000}
+    first-event-timeout-millis: ${GAMEPLAY_PROVIDER_FIRST_EVENT_TIMEOUT_MS:30000}
+    tool-response-timeout-millis: ${GAMEPLAY_PROVIDER_TOOL_RESPONSE_TIMEOUT_MS:5000}
+    claude:
+      command: ["${GAMEPLAY_PROVIDER_CLAUDE_COMMAND:claude}"]
+      allowed-models: ["claude-*", "sonnet", "opus"]
+      credential-environment-names: ["ANTHROPIC_API_KEY"]
+    codex:
+      command: ["${GAMEPLAY_PROVIDER_CODEX_COMMAND:codex}"]
+      allowed-models: ["gpt-*", "o3", "o4-*"]
+      credential-environment-names: ["OPENAI_API_KEY"]
+
+# AI Player Configuration
+ai-player:
+  dataset:
+    output-dir: ${AI_PLAYER_DATASET_DIR:.chromascape/datasets}

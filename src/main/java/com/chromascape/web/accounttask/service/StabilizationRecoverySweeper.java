@@ -1,14 +1,15 @@
 package com.chromascape.web.accounttask.service;
 
+import com.chromascape.web.accounttask.repository.StabilizationArtifactRepository;
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import com.chromascape.web.accounttask.repository.StabilizationArtifactRepository;
 
 /**
  * Startup recovery sweeper for uncommitted ingestion namespaces (SC-572). On startup it deletes
@@ -25,7 +26,8 @@ public class StabilizationRecoverySweeper {
   private final StabilizationArtifactStore artifactStore;
   private final StabilizationArtifactRepository artifactRepository;
 
-  public StabilizationRecoverySweeper(StabilizationArtifactStore artifactStore,
+  public StabilizationRecoverySweeper(
+      StabilizationArtifactStore artifactStore,
       StabilizationArtifactRepository artifactRepository) {
     this.artifactStore = artifactStore;
     this.artifactRepository = artifactRepository;
@@ -34,48 +36,59 @@ public class StabilizationRecoverySweeper {
   @PostConstruct
   void sweep() {
     Path baseDir = artifactStore.baseDir();
-    if (baseDir == null || !Files.isDirectory(baseDir)) {
+    if (!isRealDirectory(baseDir)) {
+      if (baseDir != null && Files.isSymbolicLink(baseDir)) {
+        log.warn(
+            "[StabilizationRecovery] refusing to sweep symbolic-link base directory {}", baseDir);
+      }
       return;
     }
     Path stagingDir = artifactStore.stagingDir();
-    if (stagingDir != null && Files.isDirectory(stagingDir)) {
+    if (isRealDirectory(stagingDir)) {
       sweepDirectory(stagingDir, true);
+    } else if (stagingDir != null && Files.isSymbolicLink(stagingDir)) {
+      log.warn(
+          "[StabilizationRecovery] refusing to sweep symbolic-link staging directory {}",
+          stagingDir);
     }
     sweepDirectory(baseDir, false);
   }
 
   private void sweepDirectory(Path directory, boolean staging) {
     try (Stream<Path> entries = Files.list(directory)) {
-      entries.forEach(path -> {
-        try {
-          if (!Files.isRegularFile(path) || Files.isSymbolicLink(path)) {
-            return;
-          }
-          String fileName = path.getFileName().toString();
-          if (fileName.endsWith(".tmp")) {
-            Files.deleteIfExists(path);
-            log.info("[StabilizationRecovery] removed journal file {}", fileName);
-            return;
-          }
-          // Staging files are uncommitted by definition and have no database record.
-          if (staging) {
-            Files.deleteIfExists(path);
-            log.info("[StabilizationRecovery] removed uncommitted staging file {}", fileName);
-            return;
-          }
-          // Final files: keep only when a verified artifact row references the opaque id.
-          String uuid = fileName.endsWith(".meta")
-              ? fileName.substring(0, fileName.length() - ".meta".length())
-              : fileName;
-          if (looksLikeUuid(uuid) && artifactRepository.findByArtifactId(uuid).isPresent()) {
-            return;
-          }
-          Files.deleteIfExists(path);
-          log.info("[StabilizationRecovery] removed orphaned artifact file {}", fileName);
-        } catch (IOException e) {
-          log.warn("[StabilizationRecovery] failed to sweep {}", path, e);
-        }
-      });
+      entries.forEach(
+          path -> {
+            try {
+              if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+                  || Files.isSymbolicLink(path)) {
+                return;
+              }
+              String fileName = path.getFileName().toString();
+              if (fileName.endsWith(".tmp")) {
+                Files.deleteIfExists(path);
+                log.info("[StabilizationRecovery] removed journal file {}", fileName);
+                return;
+              }
+              // Staging files are uncommitted by definition and have no database record.
+              if (staging) {
+                Files.deleteIfExists(path);
+                log.info("[StabilizationRecovery] removed uncommitted staging file {}", fileName);
+                return;
+              }
+              // Final files: keep only when a verified artifact row references the opaque id.
+              String uuid =
+                  fileName.endsWith(".meta")
+                      ? fileName.substring(0, fileName.length() - ".meta".length())
+                      : fileName;
+              if (looksLikeUuid(uuid) && artifactRepository.findByArtifactId(uuid).isPresent()) {
+                return;
+              }
+              Files.deleteIfExists(path);
+              log.info("[StabilizationRecovery] removed orphaned artifact file {}", fileName);
+            } catch (IOException e) {
+              log.warn("[StabilizationRecovery] failed to sweep {}", path, e);
+            }
+          });
     } catch (IOException e) {
       log.warn("[StabilizationRecovery] failed to scan {}", directory, e);
     }
@@ -91,5 +104,11 @@ public class StabilizationRecoverySweeper {
     } catch (IllegalArgumentException ignored) {
       return false;
     }
+  }
+
+  private static boolean isRealDirectory(Path path) {
+    return path != null
+        && !Files.isSymbolicLink(path)
+        && Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS);
   }
 }

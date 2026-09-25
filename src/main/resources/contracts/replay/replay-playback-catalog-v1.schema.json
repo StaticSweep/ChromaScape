@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chromascape.dev/replay/replay-playback-catalog-v1.schema.json",
+  "title": "Replay Observed Playback Catalog v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "type": "string", "const": "replay-playback-catalog/v1" },
+    "entries": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/catalogEntry" }
+    },
+    "nextCursor": { "type": ["string", "null"] },
+    "hasMore": { "type": "boolean" }
+  },
+  "required": ["schema", "entries", "nextCursor", "hasMore"],
+  "$defs": {
+    "catalogEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "recordingId": { "type": "string", "minLength": 1 },
+        "sessionId": { "type": "string", "minLength": 1 },
+        "accountName": { "type": ["string", "null"] },
+        "scriptName": { "type": ["string", "null"] },
+        "startTime": { "type": "string", "format": "date-time" },
+        "endTime": { "type": ["string", "null"], "format": "date-time" },
+        "startTick": { "type": ["integer", "null"] },
+        "endTick": { "type": ["integer", "null"] },
+        "tickCount": { "type": "integer", "minimum": 0 },
+        "positionFrameCount": { "type": "integer", "minimum": 0 },
+        "logCount": { "type": "integer", "minimum": 0 },
+        "positionCoveragePct": { "type": "number", "minimum": 0, "maximum": 100 },
+        "replayable": { "type": "boolean" },
+        "replayabilityReason": { "type": "string" }
+      },
+      "required": [
+        "recordingId",
+        "sessionId",
+        "accountName",
+        "scriptName",
+        "startTime",
+        "endTime",
+        "startTick",
+        "endTick",
+        "tickCount",
+        "positionFrameCount",
+        "logCount",
+        "positionCoveragePct",
+        "replayable",
+        "replayabilityReason"
+      ]
+    }
+  }
+}

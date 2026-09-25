@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chromascape.dev/replay/replay-report-v1.schema.json",
+  "title": "Replay Report",
+  "description": "Immutable final report for a replay run. Exactly one of the three report kinds must match: an EXECUTED report (real attempt and runtime identity), a PRE-CAPABILITY INFRASTRUCTURE FAILURE report (real attempt but no observed runtime identity), or a PRE-EXECUTION CANCELLATION report (run cancelled while QUEUED; no attempt, no runtime identity, no start time).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "reportVersion": { "type": "integer", "const": 1 },
+    "runId": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "attemptId": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "mode": { "type": "string", "const": "CAUSAL_SIMULATION" },
+    "manifestChecksum": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "runtimeIdentity": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "xrspsAdapterVersion": { "type": "string", "minLength": 1 },
+            "xrspsBuildCommit": { "type": "string", "minLength": 1 },
+            "cacheRevision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+            "contentRevision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+          },
+          "required": [
+            "xrspsAdapterVersion",
+            "xrspsBuildCommit",
+            "cacheRevision",
+            "contentRevision"
+          ]
+        }
+      ]
+    },
+    "startedAt": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "format": "date-time" }
+      ]
+    },
+    "terminalAt": { "type": "string", "format": "date-time" },
+    "outcome": {
+      "type": "string",
+      "enum": ["PASSED", "FAILED", "CANCELLED", "TIMED_OUT", "INFRASTRUCTURE_FAILURE"]
+    },
+    "executedActionCount": { "type": "integer", "minimum": 0 },
+    "checkpointCount": { "type": "integer", "minimum": 0 },
+    "firstHardMismatch": { "$ref": "replay-mismatch-v1.schema.json" },
+    "mismatchTotals": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hard": { "type": "integer", "minimum": 0 },
+        "soft": { "type": "integer", "minimum": 0 },
+        "info": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["hard", "soft", "info"]
+    },
+    "finalStateHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "finalChainHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "artifactRefs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+    },
+    "terminalReason": { "type": "string", "minLength": 1 },
+    "controlAllowed": { "type": "boolean", "const": false },
+    "reportChecksum": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  },
+  "required": [
+    "reportVersion",
+    "runId",
+    "attemptId",
+    "mode",
+    "manifestChecksum",
+    "runtimeIdentity",
+    "startedAt",
+    "terminalAt",
+    "outcome",
+    "executedActionCount",
+    "checkpointCount",
+    "mismatchTotals",
+    "artifactRefs",
+    "controlAllowed",
+    "reportChecksum"
+  ],
+  "allOf": [
+    {
+      "description": "firstHardMismatch may only appear when the hard mismatch total is greater than zero.",
+      "if": {
+        "properties": {
+          "mismatchTotals": {
+            "properties": { "hard": { "const": 0 } },
+            "required": ["hard"]
+          }
+        },
+        "required": ["mismatchTotals"]
+      },
+      "then": { "not": { "required": ["firstHardMismatch"] } }
+    }
+  ],
+  "oneOf": [
+    {
+      "description": "Executed report: produced by a real kernel attempt with pinned runtime identity.",
+      "properties": {
+        "attemptId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "runtimeIdentity": { "type": "object" },
+        "startedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["attemptId", "runtimeIdentity", "startedAt"]
+    },
+    {
+      "description": "Pre-capability infrastructure failure: an attempt started, but the worker failed before returning runtime capabilities.",
+      "properties": {
+        "attemptId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "runtimeIdentity": { "type": "null" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "outcome": { "const": "INFRASTRUCTURE_FAILURE" }
+      },
+      "required": ["attemptId", "runtimeIdentity", "startedAt", "outcome"]
+    },
+    {
+      "description": "Pre-execution cancellation report: run cancelled while QUEUED, before any attempt existed.",
+      "properties": {
+        "attemptId": { "type": "null" },
+        "runtimeIdentity": { "type": "null" },
+        "startedAt": { "type": "null" },
+        "outcome": { "const": "CANCELLED" },
+        "terminalReason": { "const": "CANCEL_REQUESTED" },
+        "executedActionCount": { "const": 0 },
+        "checkpointCount": { "const": 0 },
+        "firstHardMismatch": false,
+        "finalStateHash": false,
+        "finalChainHash": false,
+        "mismatchTotals": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "hard": { "const": 0 },
+            "soft": { "const": 0 },
+            "info": { "const": 0 }
+          },
+          "required": ["hard", "soft", "info"]
+        },
+        "artifactRefs": { "type": "array", "maxItems": 0, "uniqueItems": true }
+      },
+      "required": [
+        "attemptId",
+        "runtimeIdentity",
+        "startedAt",
+        "outcome",
+        "terminalReason",
+        "executedActionCount",
+        "checkpointCount",
+        "mismatchTotals",
+        "artifactRefs"
+      ]
+    }
+  ]
+}

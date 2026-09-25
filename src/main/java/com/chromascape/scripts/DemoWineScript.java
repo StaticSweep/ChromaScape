@@ -1,17 +1,15 @@
 package com.chromascape.scripts;
 
 import com.chromascape.base.BaseScript;
-import com.chromascape.utils.core.input.Sleeper;
+import com.chromascape.utils.actions.PointSelector;
 import com.chromascape.utils.core.input.distribution.ClickDistribution;
-import com.chromascape.utils.core.screen.colour.ColourInstances;
-import com.chromascape.utils.core.screen.topology.ChromaObj;
-import com.chromascape.utils.core.screen.topology.ColourContours;
 import com.chromascape.utils.core.screen.topology.TemplateMatching;
-import com.chromascape.web.logs.LogService;
+import com.chromascape.utils.core.screen.window.ScreenManager;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
-import java.util.List;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * DemoWineScript serves as a tutorial and example script to demonstrate how to automate basic tasks
@@ -25,7 +23,7 @@ import java.util.List;
  */
 public class DemoWineScript extends BaseScript {
 
-  private final LogService logger;
+  private final Logger logger = LogManager.getLogger(this.getClass());
 
   private static final String grapes = "/images/user/Grapes.png";
   private static final String jugs = "/images/user/Jug_of_water.png";
@@ -38,16 +36,9 @@ public class DemoWineScript extends BaseScript {
 
   private boolean bankFlag = true;
 
-  /**
-   * Constructs a BaseScript.
-   *
-   * @param isFixed whether the client UI is fixed or resizable
-   * @param duration the total runtime of the script in minutes
-   * @param logger the logging service for recording events and progress
-   */
-  public DemoWineScript(boolean isFixed, int duration, LogService logger) {
-    super(isFixed, duration, logger);
-    this.logger = logger;
+  /** Constructs a BaseScript. */
+  public DemoWineScript() {
+    super();
   }
 
   /**
@@ -62,38 +53,38 @@ public class DemoWineScript extends BaseScript {
   protected void cycle() {
     if (bankFlag) {
       clickBank(); // Open the bank once at the start of the script
-      Sleeper.waitRandomMillis(700, 900);
+      waitRandomMillis(700, 900);
       bankFlag = false;
       // Cannot start in bank because UI needs to initialise
     }
 
     clickImage(grapes, "fast", 0.07); // Take out grapes
-    Sleeper.waitRandomMillis(300, 600);
+    waitRandomMillis(300, 600);
 
     clickImage(jugs, "slow", 0.065); // Take out water jugs
-    Sleeper.waitRandomMillis(400, 500);
+    waitRandomMillis(400, 500);
 
     pressEscape(); // Exit bank UI
-    Sleeper.waitRandomMillis(600, 800);
+    waitRandomMillis(600, 800);
 
     clickInventSlot(INVENT_SLOT_JUGS, "fast"); // Click the jugs of water in the inventory
-    Sleeper.waitRandomMillis(400, 500);
+    waitRandomMillis(400, 500);
 
     clickInventSlot(INVENT_SLOT_GRAPES, "slow"); // Use the jugs on the grapes to start making wine
-    Sleeper.waitRandomMillis(800, 900);
+    waitRandomMillis(800, 900);
 
     pressSpace(); // Accept the start button
-    Sleeper.waitRandomMillis(17000, 18000); // Wait for wines to combine
+    waitRandomMillis(17000, 18000); // Wait for wines to combine
 
     clickBank(); // Open the bank to drop off items
-    Sleeper.waitRandomMillis(700, 900);
+    waitRandomMillis(700, 900);
 
     clickImage(dumpBank, "medium", 0.055); // Put the fermenting wines in the bank to repeat
-    Sleeper.waitRandomMillis(650, 750);
+    waitRandomMillis(650, 750);
 
-    if (checkIfImageExists(unfermented, 0.055)) { // Repeating because bank is weird
+    if (checkIfImageInv(unfermented, 0.055)) { // Repeating because bank is weird
       controller().mouse().leftClick();
-      Sleeper.waitRandomMillis(600, 800);
+      waitRandomMillis(600, 800);
     }
   }
 
@@ -103,7 +94,7 @@ public class DemoWineScript extends BaseScript {
    */
   private void pressEscape() {
     controller().keyboard().sendModifierKey(401, "esc");
-    Sleeper.waitRandomMillis(80, 100);
+    waitRandomMillis(80, 100);
     controller().keyboard().sendModifierKey(402, "esc");
   }
 
@@ -113,7 +104,7 @@ public class DemoWineScript extends BaseScript {
    */
   private void pressSpace() {
     controller().keyboard().sendModifierKey(401, "space");
-    Sleeper.waitRandomMillis(300, 500);
+    waitRandomMillis(300, 500);
     controller().keyboard().sendModifierKey(402, "space");
   }
 
@@ -124,46 +115,27 @@ public class DemoWineScript extends BaseScript {
    * click successfully.
    */
   private void clickBank() {
-    List<ChromaObj> purpleObjs;
+    Point clickLocation = new Point();
     try {
-      purpleObjs =
-          ColourContours.getChromaObjsInColour(
-              controller().zones().getGameView(), ColourInstances.getByName("Purple"));
+      clickLocation =
+          PointSelector.getRandomPointInColour(
+              controller().zones().getGameView(), "Purple", MAX_ATTEMPTS);
     } catch (Exception e) {
-      logger.addLog(e.getMessage());
+      logger.error("Failed while generating bank click location: {}", String.valueOf(e));
       stop();
-      return;
     }
 
-    if (purpleObjs.isEmpty()) {
-      logger.addLog("No purple objects found");
+    if (clickLocation == null) {
+      logger.error("clickBank click location is null");
       stop();
-      return;
-    }
-
-    Point clickLocation;
-    ChromaObj purpleObject = purpleObjs.get(0);
-
-    int attempts = 0;
-    clickLocation = ClickDistribution.generateRandomPoint(purpleObject.boundingBox());
-    while (!ColourContours.isPointInContour(clickLocation, purpleObject.contour())
-        && attempts < MAX_ATTEMPTS) {
-      clickLocation = ClickDistribution.generateRandomPoint(purpleObject.boundingBox());
-      attempts++;
-    }
-    logger.addLog("Attempts: " + attempts);
-    if (attempts >= MAX_ATTEMPTS) {
-      logger.addLog("Failed to find a valid point in purple contour.");
-      stop();
-      return;
     }
 
     try {
       controller().mouse().moveTo(clickLocation, "medium");
       controller().mouse().leftClick();
-      logger.addLog("Clicked on purple bank object at " + clickLocation);
+      logger.info("Clicked on purple bank object at {}", clickLocation);
     } catch (Exception e) {
-      logger.addLog(e.getMessage());
+      logger.error(e.getMessage());
       stop();
     }
   }
@@ -179,22 +151,19 @@ public class DemoWineScript extends BaseScript {
   private void clickImage(String imagePath, String speed, double threshold) {
     try {
       BufferedImage gameView = controller().zones().getGameView();
-      Rectangle boundingBox = TemplateMatching.match(imagePath, gameView, threshold, false);
+      Point clickLocation = PointSelector.getRandomPointInImage(imagePath, gameView, threshold);
 
-      if (boundingBox == null || boundingBox.isEmpty()) {
-        logger.addLog("Template match failed: No valid bounding box.");
+      if (clickLocation == null) {
+        logger.error("clickImage click location is null");
         stop();
-        return;
       }
-
-      Point clickLocation = ClickDistribution.generateRandomPoint(boundingBox);
 
       controller().mouse().moveTo(clickLocation, speed);
       controller().mouse().leftClick();
-      logger.addLog("Clicked on image at " + clickLocation);
+      logger.info("Clicked on image at {}", clickLocation);
 
     } catch (Exception e) {
-      logger.addLog("clickImage failed: " + e.getMessage());
+      logger.error("clickImage failed: {}", e.getMessage());
       stop();
     }
   }
@@ -209,19 +178,24 @@ public class DemoWineScript extends BaseScript {
     try {
       Rectangle boundingBox = controller().zones().getInventorySlots().get(slot);
       if (boundingBox == null || boundingBox.isEmpty()) {
-        logger.addLog("Inventory slot " + slot + " not found.");
+        logger.info("Inventory slot {} not found.", slot);
         stop();
         return;
       }
 
       Point clickLocation = ClickDistribution.generateRandomPoint(boundingBox);
 
+      if (clickLocation == null) {
+        logger.error("clickInventSlot click location is null");
+        stop();
+      }
+
       controller().mouse().moveTo(clickLocation, speed);
       controller().mouse().leftClick();
-      logger.addLog("Clicked inventory slot " + slot + " at " + clickLocation);
+      logger.info("Clicked inventory slot {} at {}", slot, clickLocation);
 
     } catch (Exception e) {
-      logger.addLog("clickInventSlot failed: " + e.getMessage());
+      logger.error("clickInventSlot failed: {}", e.getMessage());
       stop();
     }
   }
@@ -229,24 +203,25 @@ public class DemoWineScript extends BaseScript {
   /**
    * Checks if an image exists on the screen and returns a boolean referring to if it was detected.
    *
-   * @param imagePath the path to the image being searched on screen
+   * @param imagePath the path to the image being searched
    * @param threshold the openCV threshold to decide if a match exists
-   * @return true if the image exists on screen, else false
+   * @return true if the image exists in the inventory slot 1, else false
    */
-  private boolean checkIfImageExists(String imagePath, double threshold) {
+  private boolean checkIfImageInv(String imagePath, double threshold) {
     try {
-      BufferedImage gameView = controller().zones().getGameView();
-      Rectangle boundingBox = TemplateMatching.match(imagePath, gameView, threshold, false);
+      BufferedImage inventorySlot1 =
+          ScreenManager.captureZone(controller().zones().getInventorySlots().get(0));
+      Rectangle boundingBox = TemplateMatching.match(imagePath, inventorySlot1, threshold, false);
 
       if (boundingBox == null || boundingBox.isEmpty()) {
-        logger.addLog("Template match failed: No valid bounding box.");
+        logger.error("Template match failed: No valid inventory bounding box.");
         return false;
       }
 
       return true;
 
     } catch (Exception e) {
-      logger.addLog("checkIfImageExists failed: " + e.getMessage());
+      logger.error("checkIfImageInv failed: {}", e.getMessage());
       stop();
     }
     return false;

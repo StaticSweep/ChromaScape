@@ -6,8 +6,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.LinkOption;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -22,10 +22,10 @@ import org.springframework.stereotype.Component;
 
 /**
  * Local filesystem artifact store for verified stabilization bundles (SC-572). Artifacts are
- * addressed by opaque UUID ids, written atomically, and never exposed as host paths. Hash and
- * size are computed from the final bytes; every read rechecks existence and refuses symlinks and
- * path traversal. Sidecar metadata (checksum, size, media type, evidence type, run/attempt) is
- * stored next to the artifact for retrieval without database scans.
+ * addressed by opaque UUID ids, written atomically, and never exposed as host paths. Hash and size
+ * are computed from the final bytes; every read rechecks existence and refuses symlinks and path
+ * traversal. Sidecar metadata (checksum, size, media type, evidence type, run/attempt) is stored
+ * next to the artifact for retrieval without database scans.
  */
 @Component
 public class StabilizationArtifactStore {
@@ -57,7 +57,8 @@ public class StabilizationArtifactStore {
       ensureRealDirectory(baseDir);
       ensureRealDirectory(stagingDir);
     } catch (IOException e) {
-      throw new IllegalStateException("cannot create stabilization artifact store at " + baseDir, e);
+      throw new IllegalStateException(
+          "cannot create stabilization artifact store at " + baseDir, e);
     }
   }
 
@@ -77,8 +78,8 @@ public class StabilizationArtifactStore {
    * checksumming happen in staging, before any database work; {@link #promote} is invoked only
    * inside the persistence transaction, and any failure deletes every staged/promoted artifact.
    */
-  public StoredArtifact stage(byte[] bytes, String mediaType, String evidenceType, String runId,
-      String attemptId) {
+  public StoredArtifact stage(
+      byte[] bytes, String mediaType, String evidenceType, String runId, String attemptId) {
     if (bytes == null || bytes.length == 0) {
       throw new IllegalArgumentException("cannot stage an empty stabilization artifact");
     }
@@ -89,7 +90,11 @@ public class StabilizationArtifactStore {
     try {
       ensureRealDirectory(stagingDir);
       temp = Files.createTempFile(stagingDir, "input-", ".bin");
-      Files.write(temp, bytes, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING,
+      Files.write(
+          temp,
+          bytes,
+          StandardOpenOption.WRITE,
+          StandardOpenOption.TRUNCATE_EXISTING,
           LinkOption.NOFOLLOW_LINKS);
       return stage(temp, mediaType, evidenceType, runId, attemptId, true);
     } catch (IOException e) {
@@ -110,16 +115,23 @@ public class StabilizationArtifactStore {
    * calculating the raw SHA-256 and byte count. The source is never loaded into heap memory; the
    * bytes are copied stream-to-stream and the checksum is computed over the final staged bytes.
    */
-  public StoredArtifact stage(Path source, String mediaType, String evidenceType, String runId,
-      String attemptId) {
+  public StoredArtifact stage(
+      Path source, String mediaType, String evidenceType, String runId, String attemptId) {
     return stage(source, mediaType, evidenceType, runId, attemptId, false);
   }
 
-  private StoredArtifact stage(Path source, String mediaType, String evidenceType, String runId,
-      String attemptId, boolean deleteSourceAfter) {
-    if (source == null || !Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS)
+  private StoredArtifact stage(
+      Path source,
+      String mediaType,
+      String evidenceType,
+      String runId,
+      String attemptId,
+      boolean deleteSourceAfter) {
+    if (source == null
+        || !Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS)
         || Files.isSymbolicLink(source)) {
-      throw new IllegalArgumentException("cannot stage a missing or non-regular stabilization artifact");
+      throw new IllegalArgumentException(
+          "cannot stage a missing or non-regular stabilization artifact");
     }
     long sourceSize;
     try {
@@ -147,8 +159,12 @@ public class StabilizationArtifactStore {
         throw new IllegalStateException("SHA-256 unavailable", e);
       }
       try (InputStream in = Files.newInputStream(source, LinkOption.NOFOLLOW_LINKS);
-          java.io.OutputStream out = Files.newOutputStream(tmp, StandardOpenOption.CREATE_NEW,
-              StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+          java.io.OutputStream out =
+              Files.newOutputStream(
+                  tmp,
+                  StandardOpenOption.CREATE_NEW,
+                  StandardOpenOption.WRITE,
+                  LinkOption.NOFOLLOW_LINKS)) {
         byte[] buffer = new byte[64 * 1024];
         int read;
         while ((read = in.read(buffer)) != -1) {
@@ -161,8 +177,7 @@ public class StabilizationArtifactStore {
           stagedBytes += read;
         }
       }
-      if (Files.isSymbolicLink(source)
-          || !Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS)) {
+      if (Files.isSymbolicLink(source) || !Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS)) {
         throw new IllegalArgumentException(
             "stabilization artifact source changed while staging: " + source);
       }
@@ -178,8 +193,8 @@ public class StabilizationArtifactStore {
       }
       String sha256 = "sha256:" + hex(digest.digest());
       String createdAt = Instant.now().toString();
-      return new StoredArtifact(id, sha256, stagedBytes, mediaType, evidenceType, runId,
-          attemptId, createdAt);
+      return new StoredArtifact(
+          id, sha256, stagedBytes, mediaType, evidenceType, runId, attemptId, createdAt);
     } catch (IOException e) {
       throw new IllegalStateException("failed to stage stabilization artifact " + id, e);
     } finally {
@@ -237,7 +252,8 @@ public class StabilizationArtifactStore {
       try {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         long size = 0;
-        try (InputStream in = Files.newInputStream(target, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+        try (InputStream in =
+            Files.newInputStream(target, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
           byte[] buffer = new byte[64 * 1024];
           int read;
           while ((read = in.read(buffer)) != -1) {
@@ -245,7 +261,8 @@ public class StabilizationArtifactStore {
             digest.update(buffer, 0, read);
             if (size > MAX_ARTIFACT_BYTES) {
               Files.deleteIfExists(target);
-              throw new IllegalStateException("promoted stabilization artifact exceeds size bound for " + id);
+              throw new IllegalStateException(
+                  "promoted stabilization artifact exceeds size bound for " + id);
             }
           }
         }
@@ -259,10 +276,24 @@ public class StabilizationArtifactStore {
         Files.deleteIfExists(target);
         throw new IllegalStateException("staged artifact checksum/size drift for " + id);
       }
-      writeMetadata(id, sha256, finalSize, staged.mediaType(), staged.evidenceType(),
-          staged.runId(), staged.attemptId(), staged.createdAt());
-      return new StoredArtifact(id, sha256, finalSize, staged.mediaType(),
-          staged.evidenceType(), staged.runId(), staged.attemptId(), staged.createdAt());
+      writeMetadata(
+          id,
+          sha256,
+          finalSize,
+          staged.mediaType(),
+          staged.evidenceType(),
+          staged.runId(),
+          staged.attemptId(),
+          staged.createdAt());
+      return new StoredArtifact(
+          id,
+          sha256,
+          finalSize,
+          staged.mediaType(),
+          staged.evidenceType(),
+          staged.runId(),
+          staged.attemptId(),
+          staged.createdAt());
     } catch (IOException | RuntimeException e) {
       // Once the staged file is moved, this promotion owns the new target. If hashing or metadata
       // persistence fails, remove only what this call created; never replace/delete a pre-existing
@@ -301,8 +332,8 @@ public class StabilizationArtifactStore {
   }
 
   /** Backwards-compatible direct store: stage then immediately promote. */
-  public StoredArtifact store(byte[] bytes, String mediaType, String evidenceType, String runId,
-      String attemptId) {
+  public StoredArtifact store(
+      byte[] bytes, String mediaType, String evidenceType, String runId, String attemptId) {
     return promote(stage(bytes, mediaType, evidenceType, runId, attemptId));
   }
 
@@ -377,15 +408,16 @@ public class StabilizationArtifactStore {
       try (InputStream input = Files.newInputStream(meta, LinkOption.NOFOLLOW_LINKS)) {
         node = MAPPER.readValue(input, Map.class);
       }
-      return Optional.of(new StoredArtifact(
-          id,
-          String.valueOf(node.get("sha256")),
-          ((Number) node.get("size_bytes")).longValue(),
-          String.valueOf(node.get("media_type")),
-          String.valueOf(node.get("evidence_type")),
-          String.valueOf(node.get("run_id")),
-          String.valueOf(node.get("attempt_id")),
-          String.valueOf(node.get("created_at"))));
+      return Optional.of(
+          new StoredArtifact(
+              id,
+              String.valueOf(node.get("sha256")),
+              ((Number) node.get("size_bytes")).longValue(),
+              String.valueOf(node.get("media_type")),
+              String.valueOf(node.get("evidence_type")),
+              String.valueOf(node.get("run_id")),
+              String.valueOf(node.get("attempt_id")),
+              String.valueOf(node.get("created_at"))));
     } catch (Exception ignored) {
       return Optional.empty();
     }
@@ -396,13 +428,15 @@ public class StabilizationArtifactStore {
     if (id == null || !isRealDirectory(baseDir)) {
       return;
     }
-    resolve(id).ifPresent(path -> {
-      try {
-        Files.deleteIfExists(path);
-      } catch (IOException ignored) {
-        // best-effort rollback
-      }
-    });
+    resolve(id)
+        .ifPresent(
+            path -> {
+              try {
+                Files.deleteIfExists(path);
+              } catch (IOException ignored) {
+                // best-effort rollback
+              }
+            });
     try {
       Files.deleteIfExists(resolveArtifactPath(id).resolveSibling(id + ".meta"));
     } catch (IOException ignored) {
@@ -410,8 +444,16 @@ public class StabilizationArtifactStore {
     }
   }
 
-  private void writeMetadata(UUID id, String sha256, long sizeBytes, String mediaType,
-      String evidenceType, String runId, String attemptId, String createdAt) throws IOException {
+  private void writeMetadata(
+      UUID id,
+      String sha256,
+      long sizeBytes,
+      String mediaType,
+      String evidenceType,
+      String runId,
+      String attemptId,
+      String createdAt)
+      throws IOException {
     Map<String, Object> meta = new LinkedHashMap<>();
     meta.put("artifact_id", id.toString());
     meta.put("sha256", sha256);
@@ -426,12 +468,16 @@ public class StabilizationArtifactStore {
     // A direct CREATE_NEW write can leave a partial sidecar on disk; deleting that path from the
     // promotion catch block is also race-prone because another writer could create it between the
     // existence check and the failure. The temporary name is owned exclusively by this call.
-    Path temp = metaPath.resolveSibling(
-        metaPath.getFileName() + "." + UUID.randomUUID() + ".tmp");
+    Path temp = metaPath.resolveSibling(metaPath.getFileName() + "." + UUID.randomUUID() + ".tmp");
     boolean published = false;
     try {
-      Files.writeString(temp, MAPPER.writeValueAsString(meta), StandardCharsets.UTF_8,
-          StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
+      Files.writeString(
+          temp,
+          MAPPER.writeValueAsString(meta),
+          StandardCharsets.UTF_8,
+          StandardOpenOption.CREATE_NEW,
+          StandardOpenOption.WRITE,
+          LinkOption.NOFOLLOW_LINKS);
       try {
         Files.move(temp, metaPath, StandardCopyOption.ATOMIC_MOVE);
       } catch (java.nio.file.AtomicMoveNotSupportedException e) {
@@ -449,12 +495,14 @@ public class StabilizationArtifactStore {
     try {
       ensureRealDirectory(stagingDir);
     } catch (IOException e) {
-      throw new IllegalStateException("stabilization staging directory is not safe: " + stagingDir, e);
+      throw new IllegalStateException(
+          "stabilization staging directory is not safe: " + stagingDir, e);
     }
   }
 
   private static boolean isRealDirectory(Path directory) {
-    return directory != null && !Files.isSymbolicLink(directory)
+    return directory != null
+        && !Files.isSymbolicLink(directory)
         && Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS);
   }
 

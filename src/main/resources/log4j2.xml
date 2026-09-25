@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <Appenders>
+        <!-- Console appender for standard output -->
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
+        </Console>
+
+        <!-- Custom WebSocket appender -->
+        <WebSocketLogAppender name="WebSocket"/>
+    </Appenders>
+
+    <Loggers>
+        <!-- Root logger sends logs to both console and WebSocket -->
+        <!-- Defaults to debug so local development is unchanged. The SC-968 runtime
+             acceptance sets CHROMASCAPE_LOG_LEVEL=INFO: at debug this logger wrote 474 MB in
+             15 minutes, which slows each request enough that the capture plugin (one POST per
+             600ms game tick) can never drain its queue and so can never complete. -->
+        <Root level="${env:CHROMASCAPE_LOG_LEVEL:-debug}">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="WebSocket"/>
+        </Root>
+    </Loggers>
+</Configuration>

@@ -143,31 +143,6 @@ public final class GameplayV2ReconciliationReceipt {
       String keyId,
       Instant expiresAt,
       String signingSecret) {
-    return issueTrusted(
-        idempotencyKey,
-        requestId,
-        envelopeDigest,
-        externalOutcome,
-        verifierIdentity,
-        confirmedAt,
-        keyId,
-        expiresAt,
-        Instant.now(),
-        signingSecret);
-  }
-
-  /** Deterministic issuance overload used by conformance vectors and clock-boundary tests. */
-  public static GameplayV2ReconciliationReceipt issueTrusted(
-      String idempotencyKey,
-      String requestId,
-      String envelopeDigest,
-      String externalOutcome,
-      String verifierIdentity,
-      Instant confirmedAt,
-      String keyId,
-      Instant expiresAt,
-      Instant now,
-      String signingSecret) {
     if (idempotencyKey == null
         || idempotencyKey.isBlank()
         || requestId == null
@@ -190,12 +165,11 @@ public final class GameplayV2ReconciliationReceipt {
           "IDENTITY_MISMATCH",
           "Reconciliation receipt carries an unknown external outcome: " + externalOutcome);
     }
-    if (now == null || confirmedAt.isAfter(now.plusSeconds(60))) {
+    if (confirmedAt.isAfter(Instant.now().plusSeconds(60))) {
       throw new GameplayV2ContractValidator.GameplayV2ContractViolation(
           "IDENTITY_MISMATCH", "Reconciliation receipt confirmation time is in the future");
     }
-    if (!expiresAt.isAfter(now)
-        || !expiresAt.isAfter(confirmedAt)
+    if (!expiresAt.isAfter(confirmedAt)
         || expiresAt.isAfter(confirmedAt.plusSeconds(MAX_TTL_SECONDS))) {
       throw new GameplayV2ContractValidator.GameplayV2ContractViolation(
           "IDENTITY_MISMATCH", "Trusted reconciliation receipt expiry is out of bounds");
@@ -308,47 +282,38 @@ public final class GameplayV2ReconciliationReceipt {
         receipt.signature.getBytes(StandardCharsets.UTF_8));
   }
 
-  /** Returns the idempotency identity bound by this receipt. */
   public String idempotencyKey() {
     return idempotencyKey;
   }
 
-  /** Returns the request identity bound by this receipt. */
   public String requestId() {
     return requestId;
   }
 
-  /** Returns the canonical execution-envelope digest. */
   public String envelopeDigest() {
     return envelopeDigest;
   }
 
-  /** Returns the externally verified outcome. */
   public String externalOutcome() {
     return externalOutcome;
   }
 
-  /** Returns the verifier identity that confirmed the outcome. */
   public String verifierIdentity() {
     return verifierIdentity;
   }
 
-  /** Returns when the external outcome was confirmed. */
   public Instant confirmedAt() {
     return confirmedAt;
   }
 
-  /** Returns the signing-key identifier. */
   public String keyId() {
     return keyId;
   }
 
-  /** Returns the receipt expiry instant. */
   public Instant expiresAt() {
     return expiresAt;
   }
 
-  /** Returns the HMAC-SHA-256 signature. */
   public String signature() {
     return signature;
   }

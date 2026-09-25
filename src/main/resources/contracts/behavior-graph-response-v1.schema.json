@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.leeuwbot.dev/sc967/behavior-graph-response/v1",
+  "title": "behavior-graph-response/v1 envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "definition", "state", "supersedes_graph_id", "assistant_diff", "control_allowed"],
+  "properties": {
+    "schema": {"const": "behavior-graph-response/v1"},
+    "definition": {"$ref": "behavior-graph-definition-v1.schema.json"},
+    "state": {"enum": ["DRAFT", "PUBLISHED"]},
+    "supersedes_graph_id": {"type": ["string", "null"], "pattern": "^graph_[0-9a-f]{24}$"},
+    "assistant_diff": {
+      "anyOf": [
+        {"$ref": "behavior-graph-diff-v1.schema.json"},
+        {"type": "null"}
+      ]
+    },
+    "control_allowed": {"const": false}
+  }
+}

@@ -77,22 +77,20 @@ public class ScriptStabilizationSnapshot {
   @Column(length = 200)
   private String catalogHash;
 
-  @Column
-  private Double firstAttemptPassRate;
+  @Column private Double firstAttemptPassRate;
 
-  @Column
-  private Double eventualPassRate;
+  @Column private Double eventualPassRate;
 
-  @Column
-  private Double evidenceCompleteRate;
+  @Column private Double evidenceCompleteRate;
 
-  @Column
-  private Double cleanupSuccessRate;
+  @Column private Double cleanupSuccessRate;
 
   @Column(length = 50)
   private String comparisonStatus;
 
-  @Column(length = 255)
+  // Comparability keys concatenate plan/settings/catalog/artifact hashes and runtime dimensions;
+  // a valid key is already over 350 characters before optional dimensions grow.
+  @Column(length = 1024)
   private String groupKey;
 
   @Column(length = 200)
@@ -104,8 +102,7 @@ public class ScriptStabilizationSnapshot {
   @Column(length = 200)
   private String sourceSnapshotId;
 
-  @Column
-  private Integer retryCount;
+  @Column private Integer retryCount;
 
   @Column(columnDefinition = "TEXT")
   private String matrixJson;

@@ -172,7 +172,6 @@ class GameplayV2IdempotencyTest {
             confirmedAt,
             "sc-1449-test-key",
             confirmedAt.plusSeconds(600),
-            confirmedAt,
             "test-signing-secret-0123456789abcdef-0123456789");
     assertThat(
             GameplayV2EnvelopeRules.confirmLegacyReconciliation(
@@ -222,7 +221,6 @@ class GameplayV2IdempotencyTest {
             confirmedAt,
             keyId,
             confirmedAt.plusSeconds(600),
-            now,
             secret);
     ConcurrentMap<String, String> ledger = new ConcurrentHashMap<>(Map.of(key, requestId));
     assertThat(
@@ -240,7 +238,6 @@ class GameplayV2IdempotencyTest {
             confirmedAt,
             keyId,
             confirmedAt.plusSeconds(600),
-            now,
             secret);
     assertThat(
             GameplayV2EnvelopeRules.confirmLegacyReconciliation(
@@ -262,7 +259,6 @@ class GameplayV2IdempotencyTest {
                     confirmedAt,
                     keyId,
                     confirmedAt.plusSeconds(600),
-                    now,
                     secret))
         .isInstanceOf(GameplayV2ContractViolation.class)
         .extracting("failureCode")
@@ -278,7 +274,6 @@ class GameplayV2IdempotencyTest {
                     confirmedAt,
                     keyId,
                     confirmedAt.plusSeconds(600),
-                    now,
                     secret))
         .isInstanceOf(GameplayV2ContractViolation.class)
         .extracting("failureCode")
@@ -350,7 +345,6 @@ class GameplayV2IdempotencyTest {
             confirmedAt,
             keyId,
             confirmedAt.plusSeconds(600),
-            now,
             secret);
     assertThat(
             GameplayV2EnvelopeRules.confirmLegacyReconciliation(
@@ -368,7 +362,6 @@ class GameplayV2IdempotencyTest {
             confirmedAt,
             keyId,
             confirmedAt.plusSeconds(600),
-            now,
             "wrong-signing-secret-0123456789abcdef-01234567");
     assertThat(
             GameplayV2EnvelopeRules.confirmLegacyReconciliation(
@@ -462,7 +455,6 @@ class GameplayV2IdempotencyTest {
             confirmedAt,
             keyId,
             expiresAt,
-            confirmedAt,
             signingSecret);
     assertThat(receipt.signature()).isEqualTo(expectedSignature);
     assertThat(GameplayV2ReconciliationReceipt.verifySignature(receipt, signingSecret)).isTrue();
@@ -511,82 +503,5 @@ class GameplayV2IdempotencyTest {
         .isInstanceOf(GameplayV2ContractViolation.class)
         .extracting("failureCode")
         .isEqualTo("NODE_ORDINAL_OUT_OF_ORDER");
-  }
-
-  @Test
-  void trustedReceiptIssuanceUsesAnExplicitCurrentTime() {
-    String secret = "test-signing-secret-0123456789abcdef-0123456789";
-    java.time.Instant confirmedAt = java.time.Instant.parse("2026-09-03T12:04:00Z");
-    java.time.Instant expiresAt = confirmedAt.plusSeconds(600);
-
-    GameplayV2ReconciliationReceipt receipt =
-        GameplayV2ReconciliationReceipt.issueTrusted(
-            "key",
-            "request",
-            "sha256:digest",
-            GameplayV2ReconciliationReceipt.CONFIRMED_OUTCOME,
-            "verifier",
-            confirmedAt,
-            "key-id",
-            expiresAt,
-            confirmedAt,
-            secret);
-    assertThat(GameplayV2ReconciliationReceipt.verifySignature(receipt, secret)).isTrue();
-
-    assertThatThrownBy(
-            () ->
-                GameplayV2ReconciliationReceipt.issueTrusted(
-                    "key",
-                    "request",
-                    "sha256:digest",
-                    GameplayV2ReconciliationReceipt.CONFIRMED_OUTCOME,
-                    "verifier",
-                    confirmedAt,
-                    "key-id",
-                    expiresAt,
-                    secret))
-        .isInstanceOf(GameplayV2ContractViolation.class);
-    assertThatThrownBy(
-            () ->
-                GameplayV2ReconciliationReceipt.issueTrusted(
-                    "key",
-                    "request",
-                    "sha256:digest",
-                    GameplayV2ReconciliationReceipt.CONFIRMED_OUTCOME,
-                    "verifier",
-                    confirmedAt,
-                    "key-id",
-                    expiresAt,
-                    expiresAt.plusSeconds(1),
-                    secret))
-        .isInstanceOf(GameplayV2ContractViolation.class);
-    assertThatThrownBy(
-            () ->
-                GameplayV2ReconciliationReceipt.issueTrusted(
-                    "key",
-                    "request",
-                    "sha256:digest",
-                    GameplayV2ReconciliationReceipt.CONFIRMED_OUTCOME,
-                    "verifier",
-                    confirmedAt.plusSeconds(61),
-                    "key-id",
-                    confirmedAt.plusSeconds(600),
-                    confirmedAt,
-                    secret))
-        .isInstanceOf(GameplayV2ContractViolation.class);
-    assertThatThrownBy(
-            () ->
-                GameplayV2ReconciliationReceipt.issueTrusted(
-                    "key",
-                    "request",
-                    "sha256:digest",
-                    GameplayV2ReconciliationReceipt.CONFIRMED_OUTCOME,
-                    "verifier",
-                    confirmedAt,
-                    "key-id",
-                    confirmedAt.plusSeconds(901),
-                    confirmedAt,
-                    secret))
-        .isInstanceOf(GameplayV2ContractViolation.class);
   }
 }

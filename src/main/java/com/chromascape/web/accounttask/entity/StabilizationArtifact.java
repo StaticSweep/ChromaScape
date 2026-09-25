@@ -6,32 +6,28 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * One verified stabilization artifact stored under an opaque UUID id. Never stores host paths;
- * the bytes live in the filesystem artifact store and are retrievable only through the artifact
- * id.
+ * One verified stabilization artifact stored under an opaque UUID id. Never stores host paths; the
+ * bytes live in the filesystem artifact store and are retrievable only through the artifact id.
  *
  * <p>SC-572: every verified artifact carries a nonblank run id and a durable external evidence
- * reference, and {@code (run_id, external_reference)} is unique. The constraint is enforced by a
- * versioned Flyway migration (never by {@code ddl-auto: update}); the mapping below keeps the
- * domain model consistent with that migration.
+ * reference, and {@code (run_id, external_reference)} is unique. The constraints are enforced by a
+ * versioned Flyway migration (never by {@code ddl-auto: update}); this entity deliberately does not
+ * ask Hibernate to create or alter those indexes.
  */
 @Entity
-@Table(name = "stabilization_artifact",
-    uniqueConstraints = @UniqueConstraint(
-        name = "stabilization_artifact_run_ref_key",
-        columnNames = {"run_id", "external_reference"}))
+@Table(name = "stabilization_artifact")
 public class StabilizationArtifact {
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  @Column(nullable = false, unique = true, length = 36)
+  // Uniqueness is deliberately owned by the Flyway migration rather than Hibernate ddl-auto.
+  @Column(nullable = false, length = 36)
   private String artifactId;
 
   @Column(nullable = false, length = 100)
@@ -40,9 +36,11 @@ public class StabilizationArtifact {
   @Column(length = 100)
   private String attemptId;
 
-  /** Durable external evidence reference (e.g. {@code artifact://debug-recorder/log-...}) bound to
-   *  the stored artifact UUID so the contract's evidence-reference → artifact-UUID mapping is
-   *  auditable without reconstructing a checksum lookup (SC-572). Non-null and unique per run. */
+  /**
+   * Durable external evidence reference (e.g. {@code artifact://debug-recorder/log-...}) bound to
+   * the stored artifact UUID so the contract's evidence-reference → artifact-UUID mapping is
+   * auditable without reconstructing a checksum lookup (SC-572). Non-null and unique per run.
+   */
   @Column(nullable = false, length = 512)
   private String externalReference;
 
@@ -52,8 +50,7 @@ public class StabilizationArtifact {
   @Column(length = 200)
   private String sha256;
 
-  @Column
-  private Long sizeBytes;
+  @Column private Long sizeBytes;
 
   @Column(length = 100)
   private String mediaType;

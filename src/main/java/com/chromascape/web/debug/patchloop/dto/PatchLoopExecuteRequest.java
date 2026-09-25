@@ -1,0 +1,218 @@
+package com.chromascape.web.debug.patchloop.dto;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.Map;
+import java.util.Objects;
+
+/**
+ * Request to execute a patch loop iteration.
+ *
+ * <p>Triggers the full BMAD pipeline: script run → evidence collection → analysis → retest.
+ *
+ * @since 2.1.0
+ */
+public class PatchLoopExecuteRequest {
+
+  /** Script name to run (required) */
+  @JsonProperty("scriptName")
+  private String scriptName;
+
+  /** Question/prompt for analysis (required) */
+  @JsonProperty("prompt")
+  private String prompt;
+
+  /** Additional context about the failure (optional) */
+  @JsonProperty("context")
+  private String context;
+
+  /** Evidence collection configuration (optional) */
+  @JsonProperty("evidenceConfig")
+  private EvidenceConfigDto evidenceConfig;
+
+  /** Type of prompt (default: ISSUE) */
+  @JsonProperty("promptType")
+  private PromptType promptType = PromptType.ISSUE;
+
+  /**
+   * Execution mode: "analysis_only", "propose_then_apply", or "autofix_loop" (default:
+   * analysis_only)
+   */
+  @JsonProperty("executionMode")
+  private String executionMode = "analysis_only";
+
+  /** Maximum number of attempts (default: 3) */
+  @JsonProperty("maxAttempts")
+  private Integer maxAttempts = 3;
+
+  /** Success criteria for loop termination (optional) */
+  @JsonProperty("successCriteria")
+  private Map<String, Object> successCriteria;
+
+  /** Debugger session context for linking to existing sessions (optional) */
+  @JsonProperty("sessionContext")
+  private SessionContextDto sessionContext;
+
+  /** Task plan ID for plan-linked execution (optional) */
+  @JsonProperty("taskPlanId")
+  private String taskPlanId;
+
+  /** Task plan item ID for plan-linked execution (optional) */
+  @JsonProperty("taskItemId")
+  private String taskItemId;
+
+  /** Task metadata for executor-side configuration (optional) */
+  @JsonProperty("taskMetadata")
+  private Map<String, Object> taskMetadata;
+
+  public PatchLoopExecuteRequest() {}
+
+  public PatchLoopExecuteRequest(String scriptName, String prompt) {
+    this.scriptName = scriptName;
+    this.prompt = prompt;
+  }
+
+  public String getScriptName() {
+    return scriptName;
+  }
+
+  public void setScriptName(String scriptName) {
+    this.scriptName = scriptName;
+  }
+
+  public String getPrompt() {
+    return prompt;
+  }
+
+  public void setPrompt(String prompt) {
+    this.prompt = prompt;
+  }
+
+  public String getContext() {
+    return context;
+  }
+
+  public void setContext(String context) {
+    this.context = context;
+  }
+
+  public EvidenceConfigDto getEvidenceConfig() {
+    return evidenceConfig;
+  }
+
+  public void setEvidenceConfig(EvidenceConfigDto evidenceConfig) {
+    this.evidenceConfig = evidenceConfig;
+  }
+
+  public PromptType getPromptType() {
+    return promptType;
+  }
+
+  public void setPromptType(PromptType promptType) {
+    this.promptType = promptType;
+  }
+
+  public String getExecutionMode() {
+    return executionMode;
+  }
+
+  /** Returns the normalized execution mode for compatibility with older clients. */
+  public String getNormalizedExecutionMode() {
+    if (executionMode == null) {
+      return "analysis_only";
+    }
+    if ("full_loop".equals(executionMode)) {
+      return "autofix_loop";
+    }
+    return executionMode;
+  }
+
+  public void setExecutionMode(String executionMode) {
+    this.executionMode = executionMode;
+  }
+
+  public Integer getMaxAttempts() {
+    return maxAttempts;
+  }
+
+  public void setMaxAttempts(Integer maxAttempts) {
+    this.maxAttempts = maxAttempts;
+  }
+
+  public Map<String, Object> getSuccessCriteria() {
+    return successCriteria;
+  }
+
+  public void setSuccessCriteria(Map<String, Object> successCriteria) {
+    this.successCriteria = successCriteria;
+  }
+
+  public SessionContextDto getSessionContext() {
+    return sessionContext;
+  }
+
+  public void setSessionContext(SessionContextDto sessionContext) {
+    this.sessionContext = sessionContext;
+  }
+
+  public String getTaskPlanId() {
+    return taskPlanId;
+  }
+
+  public void setTaskPlanId(String taskPlanId) {
+    this.taskPlanId = taskPlanId;
+  }
+
+  public String getTaskItemId() {
+    return taskItemId;
+  }
+
+  public void setTaskItemId(String taskItemId) {
+    this.taskItemId = taskItemId;
+  }
+
+  public Map<String, Object> getTaskMetadata() {
+    return taskMetadata;
+  }
+
+  public void setTaskMetadata(Map<String, Object> taskMetadata) {
+    this.taskMetadata = taskMetadata;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+    PatchLoopExecuteRequest that = (PatchLoopExecuteRequest) o;
+    return Objects.equals(scriptName, that.scriptName)
+        && Objects.equals(prompt, that.prompt)
+        && Objects.equals(context, that.context)
+        && Objects.equals(evidenceConfig, that.evidenceConfig);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(scriptName, prompt, context, evidenceConfig);
+  }
+
+  @Override
+  public String toString() {
+    return "PatchLoopExecuteRequest{"
+        + "scriptName='"
+        + scriptName
+        + '\''
+        + ", prompt='"
+        + prompt
+        + '\''
+        + ", context='"
+        + context
+        + '\''
+        + ", promptType="
+        + promptType
+        + ", executionMode='"
+        + executionMode
+        + '\''
+        + ", maxAttempts="
+        + maxAttempts
+        + '}';
+  }
+}

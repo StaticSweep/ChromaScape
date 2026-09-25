@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  <title>ChromaScape - Log Replay</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha384-TX8t27EcRE3e/ihU7zmQxVncDAy5uIKz4rEkgIXeMed4M0jlfIDPgv6ud+Mvd" crossorigin="anonymous" />
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="stylesheet" href="/css/log-replay.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+    crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+</head>
+
+<body>
+  <header>
+    <nav class="navbar fixed-top" id="navs">
+      <div class="container-fluid">
+        <span class="navbar-brand h1 d-flex align-items-center gap-2 p-2 m-2">
+          <img src="/imagesWeb/CS.png" alt="ChromaScape logo" style="height: 32px; width: 32px" class="me-2" />
+          ChromaScape Log Replay
+        </span>
+        <button type="button" class="btn btn-primary p-2 m-2" onclick="window.location.href='/'">
+          <i class="bi bi-house-fill me-1"></i>Dashboard
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <main class="container-fluid mt-4">
+    <div class="row">
+      <!-- Filters Section -->
+      <div class="col-md-12">
+        <div class="glass-panel">
+          <h5><i class="bi bi-funnel me-2"></i>Filters</h5>
+          <div class="row g-3">
+            <div class="col-md-3">
+              <label class="form-label">Script</label>
+              <select class="form-select" id="filterScript">
+                <option value="">All Scripts</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">Log Level</label>
+              <select class="form-select" id="filterLevel">
+                <option value="">All Levels</option>
+                <option value="INFO">INFO</option>
+                <option value="WARN">WARN</option>
+                <option value="ERROR">ERROR</option>
+                <option value="DEBUG">DEBUG</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">Start Date</label>
+              <input type="datetime-local" class="form-control" id="filterStart" />
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">End Date</label>
+              <input type="datetime-local" class="form-control" id="filterEnd" />
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">Search</label>
+              <input type="text" class="form-control" id="filterSearch" placeholder="Search messages..." />
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+              <button class="btn btn-primary w-100" onclick="applyFilters()">
+                <i class="bi bi-search"></i> Filter
+              </button>
+            </div>
+          </div>
+          <div class="row mt-3">
+            <div class="col-md-12 text-end">
+              <button class="btn btn-secondary" onclick="clearFilters()">
+                <i class="bi bi-x-circle"></i> Clear Filters
+              </button>
+              <button class="btn btn-success" onclick="exportLogs()">
+                <i class="bi bi-download"></i> Export
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats Section -->
+    <div class="row mt-3">
+      <div class="col-md-12">
+        <div class="glass-panel">
+          <h5><i class="bi bi-bar-chart me-2"></i>Statistics</h5>
+          <div class="row text-center">
+            <div class="col-md-2">
+              <div class="stat-item">
+                <div class="stat-value" id="statTotal">0</div>
+                <div class="stat-label">Total Logs</div>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <div class="stat-item">
+                <div class="stat-value text-info" id="statInfo">0</div>
+                <div class="stat-label">INFO</div>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <div class="stat-item">
+                <div class="stat-value text-warning" id="statWarn">0</div>
+                <div class="stat-label">WARN</div>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <div class="stat-item">
+                <div class="stat-value text-danger" id="statError">0</div>
+                <div class="stat-label">ERROR</div>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <div class="stat-item">
+                <div class="stat-value text-secondary" id="statDebug">0</div>
+                <div class="stat-label">DEBUG</div>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <div class="stat-item">
+                <div class="stat-value" id="statScripts">0</div>
+                <div class="stat-label">Unique Scripts</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Logs Table -->
+    <div class="row mt-3">
+      <div class="col-md-12">
+        <div class="glass-panel">
+          <h5><i class="bi bi-table me-2"></i>Log Entries</h5>
+          <div class="table-responsive">
+            <table class="table table-hover table-striped" id="logsTable">
+              <thead class="table-dark">
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Level</th>
+                  <th>Script</th>
+                  <th>Source</th>
+                  <th>Message</th>
+                </tr>
+              </thead>
+              <tbody id="logsTableBody">
+                <tr>
+                  <td colspan="5" class="text-center">Loading logs...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <nav aria-label="Page navigation">
+            <ul class="pagination justify-content-center" id="pagination">
+            </ul>
+          </nav>
+        </div>
+      </div>
+    </div>
+
+    <!-- Script Events Timeline -->
+    <div class="row mt-3">
+      <div class="col-md-12">
+        <div class="glass-panel">
+          <h5><i class="bi bi-clock-history me-2"></i>Script Events Timeline</h5>
+          <div id="timelineContainer">
+            <div class="text-center">Loading script events...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/log-replay.js"></script>
+</body>
+
+</html>

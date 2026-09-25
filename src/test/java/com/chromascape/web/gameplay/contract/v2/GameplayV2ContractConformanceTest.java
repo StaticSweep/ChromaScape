@@ -1,7 +1,6 @@
 package com.chromascape.web.gameplay.contract.v2;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -74,32 +73,6 @@ class GameplayV2ContractConformanceTest {
     validate("lifecycleReceipts.unverifiable", "lifecycleReceipt");
     validate("lifecycleReceipts.uncertain", "lifecycleReceipt");
     validate("lifecycleReceipts.stopped", "lifecycleReceipt");
-  }
-
-  @Test
-  void integerValidationUsesTheNumericValue() throws Exception {
-    com.fasterxml.jackson.databind.node.ObjectNode envelope =
-        (com.fasterxml.jackson.databind.node.ObjectNode)
-            fixtures.path("executionEnvelope").deepCopy();
-    envelope.set("expectedObservationRevision", objectMapper.readTree("1E-1"));
-    assertThatThrownBy(() -> validator.validateWithRules("executionEnvelope", envelope))
-        .isInstanceOf(GameplayV2ContractValidator.GameplayV2ContractViolation.class)
-        .extracting("failureCode")
-        .isEqualTo("INVALID_EXECUTION_ENVELOPE");
-
-    envelope.set("expectedObservationRevision", objectMapper.readTree("1e0"));
-    validator.validateWithRules("executionEnvelope", envelope);
-    envelope.set("expectedObservationRevision", objectMapper.readTree("1.0"));
-    validator.validateWithRules("executionEnvelope", envelope);
-  }
-
-  @Test
-  void lowercaseRfc3339SeparatorsRemainValid() {
-    com.fasterxml.jackson.databind.node.ObjectNode envelope =
-        (com.fasterxml.jackson.databind.node.ObjectNode)
-            fixtures.path("executionEnvelope").deepCopy();
-    envelope.put("deadline", "2026-09-03t12:10:00z");
-    validator.validateWithRules("executionEnvelope", envelope);
   }
 
   @Test

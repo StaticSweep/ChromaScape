@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  <title>ChromaScape - Debugger</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr" crossorigin="anonymous" />
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="stylesheet" href="/css/debugger.css?v=19" />
+  <link rel="stylesheet" href="/css/ai-routine.css?v=1" />
+  <link rel="stylesheet" href="/css/ai-training.css?v=1" />
+  <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-ndDqU0Gzau9qJ1lfW4pNLlhNTkCfHzAVBReH9diLvGRem5+R9g2FzA8ZGN954O5Q"
+    crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <script th:inline="javascript">
+    window.CHROMASCAPE_SUPERVISOR_BASE_URL = /*[[${supervisorBaseUrl}]]*/ 'http://127.0.0.1:8096';
+  </script>
+</head>
+
+<body data-workspace="runs">
+  <div class="debugger-page">
+    <nav class="debugger-topbar">
+      <div class="topbar-section topbar-left">
+        <span class="navbar-brand h1 d-flex align-items-center gap-2">
+          <img src="/imagesWeb/CS.png" alt="ChromaScape logo" class="brand-logo" />
+          ChromaScape Debugger
+        </span>
+        <div class="dropdown">
+          <button class="btn btn-primary dropdown-toggle" type="button" id="windowSelectorDropdown"
+            data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="bi bi-window me-1"></i><span id="selectedWindowLabel">Auto-detect</span>
+          </button>
+          <ul class="dropdown-menu" aria-labelledby="windowSelectorDropdown" id="windowList">
+            <li>
+              <h6 class="dropdown-header">Select Window</h6>
+            </li>
+            <li><a class="dropdown-item" href="#" data-window-id="" onclick="selectWindow('')">
+                <i class="bi bi-magic me-2"></i>Auto-detect
+              </a></li>
+            <li>
+              <hr class="dropdown-divider">
+            </li>
+          </ul>
+        </div>
+        <!-- FPS Control -->
+        <div class="dropdown ms-2">
+          <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="fpsDropdown"
+            data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="bi bi-speedometer2 me-1"></i><span id="currentFpsLabel">30 FPS</span>
+          </button>
+          <ul class="dropdown-menu" aria-labelledby="fpsDropdown">
+            <li><h6 class="dropdown-header">Viewport FPS</h6></li>
+            <li><a class="dropdown-item" href="#" onclick="setViewportFps(60)">60 FPS (Smooth)</a></li>
+            <li><a class="dropdown-item active" href="#" onclick="setViewportFps(30)">30 FPS (Balanced)</a></li>
+            <li><a class="dropdown-item" href="#" onclick="setViewportFps(15)">15 FPS (Low CPU)</a></li>
+            <li><a class="dropdown-item" href="#" onclick="setViewportFps(10)">10 FPS (Very Low)</a></li>
+          </ul>
+        </div>
+        <div class="session-controls">
+          <select id="sessionSelect" class="form-select" aria-label="Select recording session">
+            <option value="">Loading sessions...</option>
+          </select>
+          <button id="refreshSessionsBtn" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+          </button>
+          <button id="editReplayMetadataBtn" class="btn btn-outline-secondary" title="Edit replay name and tags" style="display:none;">
+            <i class="bi bi-pencil me-1"></i>Edit
+          </button>
+        </div>
+        <!-- Replay Metadata Editor -->
+        <div id="replayMetadataEditor" class="replay-metadata-editor" style="display:none;">
+          <div class="replay-metadata-editor-row">
+            <input type="text" id="replayNameInput" class="form-control form-control-sm" placeholder="Replay name (optional)" maxlength="160" />
+            <div class="replay-tags-input-wrap">
+              <input type="text" id="replayTagsInput" class="form-control form-control-sm" placeholder="Tags (comma-separated)" />
+              <div id="replayTagsPreview" class="replay-tags-preview"></div>
+            </div>
+            <button id="saveMetadataBtn" class="btn btn-primary btn-sm"><i class="bi bi-check me-1"></i>Save</button>
+            <button id="cancelMetadataBtn" class="btn btn-outline-secondary btn-sm">Cancel</button>
+          </div>
+        </div>
+        <!-- Replay Metadata Preview -->
+        <div id="replayMetadataPreview" class="replay-metadata-preview" style="display:none;">
+          <span id="replayDisplayName" class="replay-display-name"></span>
+          <div id="replayTagsDisplay" class="replay-tags-display"></div>
+        </div>
+        <button type="button" id="taskPlannerToggleBtn" class="btn btn-outline-secondary ms-2">
+          <i class="bi bi-kanban me-1"></i>Task Planner
+        </button>
+        <div id="sessionHealthPreview" class="session-health-preview" style="display:none;">
+          <span id="healthLifecycleState" class="health-chip"></span>
+          <span id="healthHasEvents" class="health-chip"></span>
+          <span id="healthEventCount" class="health-chip"></span>
+          <span id="healthFailureCount" class="health-chip"></span>
+        </div>
+      </div>
+
+      <div class="topbar-section mode-controls">
+        <div class="btn-group" role="group" aria-label="Debugger mode">
+          <button type="button" class="btn btn-outline-primary active" id="liveModeBtn">
+            <i class="bi bi-broadcast me-2"></i>Live
+          </button>
+          <button type="button" class="btn btn-outline-primary" id="replayModeBtn">
+            <i class="bi bi-play-circle me-2"></i>Replay
+          </button>
+        </div>
+
+        <!-- Recording Controls -->
+        <button type="button" id="recordBtn" class="btn btn-danger ms-3">
+          <i class="bi bi-record-circle me-1"></i>
+          <span id="recordBtnText">Start Recording</span>
+        </button>
+        <button type="button" id="startDebugSessionBtn" class="btn btn-outline-success ms-2">
+          <i class="bi bi-play-circle me-1"></i>
+          <span>Start Debug Session</span>
+        </button>
+        <button type="button" id="debugFeedToggleBtn" class="btn btn-outline-secondary ms-2">
+          <i class="bi bi-broadcast me-1"></i>
+          <span>Debug Feed: Off</span>
+        </button>
+        <div id="recordingStatus" class="recording-status d-none">
+          <i class="bi bi-record-fill blink"></i>
+          <span id="recordingStatusDuration">00:00</span>
+        </div>
+        <div id="debugSessionStatus" class="debug-session-status d-none">
+          <i class="bi bi-circle-fill"></i>
+          <span>Debug Session Active</span>
+        </div>
+      </div>
+
+      <div class="topbar-section tick-controls">
+        <div class="tick-readout" id="tickDisplay">Tick --</div>
+        <div class="tick-jump">
+          <input id="tickJumpInput" type="number" min="0" class="form-control form-control-sm"
+            placeholder="Jump" />
+          <button id="tickJumpBtn" class="btn btn-outline-primary btn-sm">Go</button>
+        </div>
+        <!-- Feed Status Indicator -->
+        <span id="feedStatusIndicator" class="badge bg-secondary me-2">
+          <i class="bi bi-circle-fill"></i> Feed: Disconnected
+        </span>
+        <button type="button" class="btn btn-primary" onclick="window.location.href='/'">
+          <i class="bi bi-house-fill me-1"></i>Dashboard
+        </button>
+      </div>
+    </nav>
+
+    <section class="debugger-workspace-bar" aria-label="Debugger workspaces">
+      <nav class="workspace-tabs" id="debuggerWorkspaceNav" role="tablist" aria-label="Primary debugger navigation">
+        <button class="workspace-tab active" type="button" role="tab" aria-selected="true" data-workspace="runs">
+          <i class="bi bi-rocket-takeoff"></i><span>Runs</span>
+        </button>
+        <button class="workspace-tab" type="button" role="tab" aria-selected="false" data-workspace="live">
+          <i class="bi bi-broadcast"></i><span>Live</span>
+        </button>
+        <button class="workspace-tab" type="button" role="tab" aria-selected="false" data-workspace="replays">
+          <i class="bi bi-play-circle"></i><span>Replays</span>
+        </button>
+        <button class="workspace-tab" type="button" role="tab" aria-selected="false" data-workspace="recovery">
+          <i class="bi bi-tools"></i><span>Recovery</span>
+        </button>
+        <button class="workspace-tab" type="button" role="tab" aria-selected="false" data-workspace="ai-training">
+          <i class="bi bi-diagram-3"></i><span>AI Training</span>
+        </button>
+        <button class="workspace-tab" type="button" role="tab" aria-selected="false" data-workspace="developer">
+          <i class="bi bi-code-square"></i><span>Developer Tools</span>
+        </button>
+      </nav>
+      <div class="workspace-global-status" aria-label="Connection status">
+        <span class="workspace-status-dot" id="workspaceConnectionDot"></span>
+        <span id="workspaceConnectionText">Connecting</span>
+      </div>
+    </section>
+
+    <header class="workspace-heading" id="workspaceHeading">
+      <div>
+        <p class="workspace-eyebrow" id="workspaceEyebrow">Operator workspace</p>
+        <h1 id="workspaceTitle">Runs</h1>
+        <p id="workspaceDescription">Launch a Micro6 task, follow its progress, and open evidence or recovery from one place.</p>
+      </div>
+      <div class="workspace-heading-actions" id="workspaceHeadingActions"></div>
+    </header>
+
+    <section class="workspace-empty-state" id="recoveryEmptyState" hidden>
+      <i class="bi bi-tools"></i>
+      <div>
+        <h2>No run is open for recovery</h2>
+        <p>Choose any run below or in Runs, then select <strong>Open Recovery Workspace</strong>. Cancelled runs can be reviewed and patch-planned here too.</p>
+      </div>
+      <button type="button" class="btn btn-primary" data-workspace-link="runs">Browse all runs</button>
+      <div id="recoveryRunPicker" class="task-plans-list"></div>
+    </section>
+
+    <!-- Auto-Record Tasks Panel -->
+    <div class="task-recording-panel glass-panel" id="taskRecordingPanel">
+      <div class="task-panel-header">
+        <h6><i class="bi bi-record-circle me-2"></i>Auto-Record Tasks</h6>
+        <button class="btn btn-sm btn-outline-secondary" id="resetTasksBtn">
+          <i class="bi bi-arrow-counterclockwise"></i> Reset
+        </button>
+      </div>
+      <div class="task-toggles" id="taskToggles">
+        <!-- Generated by JavaScript -->
+      </div>
+    </div>
+
+    <!-- Patch Loop Panel -->
+    <div class="patch-loop-panel glass-panel" id="patchLoopPanel" style="display:block;">
+      <div class="patch-panel-header">
+        <h6><i class="bi bi-arrow-repeat me-2"></i>Patch Loop</h6>
+        <div class="patch-panel-controls">
+          <button class="btn btn-sm btn-outline-primary" id="togglePatchLoopBtn">
+            <i class="bi bi-chevron-up"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="patch-panel-content" id="patchPanelContent">
+        <!-- Mermaid Editor -->
+        <div class="patch-section">
+          <label class="form-label">Workflow Graph (Mermaid)</label>
+          <textarea id="mermaidInput" class="form-control font-monospace" rows="5" placeholder="graph TD;&#10;  A[start] --> B[run_script]&#10;  B --> C[collect_evidence]&#10;  C --> D[analyze]&#10;  D --> E[generate_patch]&#10;  E --> F[apply_patch]&#10;  F --> G[validate]&#10;  G --> H[retest]&#10;  H --> I[evaluate_success]&#10;  I -.success.-> J[end]&#10;  I -.failure.-> D"></textarea>
+          <div class="patch-buttons mt-2">
+            <button class="btn btn-sm btn-primary" id="compileGraphBtn">
+              <i class="bi bi-gear me-1"></i>Compile
+            </button>
+            <button class="btn btn-sm btn-success" id="executeLoopBtn" disabled>
+              <i class="bi bi-play-fill me-1"></i>Execute Loop
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" id="loadTemplateBtn">
+              <i class="bi bi-file-code me-1"></i>Load Template
+            </button>
+          </div>
+        </div>
+
+        <!-- Script Configuration -->
+        <div class="patch-section">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <label class="form-label mb-0">Script</label>
+            <button class="btn btn-sm btn-outline-secondary" id="refreshPatchScriptCatalogBtn" type="button">
+              <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+            </button>
+          </div>
+          <select id="patchScriptSelect" class="form-select form-select-sm">
+            <option value="">Select script...</option>
+          </select>
+          <input type="text" id="patchScriptSearchInput" class="form-control form-control-sm mt-2" placeholder="Search scripts (name, key, category, tags)">
+          <div id="patchScriptCatalogStatus" class="form-text text-muted mt-1"></div>
+          <div id="patchLoopSeedStatus" class="form-text text-muted mt-1">
+            Patch loop is waiting for a manual selection or recovery workspace seed.
+          </div>
+          <div class="mt-2">
+            <label class="form-label small">Goal Prompt <span class="text-muted">(required for analysis graphs)</span></label>
+            <input type="text" id="goalPromptInput" class="form-control form-control-sm" placeholder="What should the loop achieve?">
+          </div>
+        </div>
+
+        <!-- Provider Status -->
+        <div class="patch-section">
+          <!-- Codex MCP Headline Badge -->
+          <div id="codexMcpHeadlineBadge" class="codex-mcp-headline-badge badge-unknown">
+            <i class="bi bi-question-circle me-1"></i>
+            <span id="codexMcpHeadlineText">Checking Codex MCP status...</span>
+          </div>
+
+          <!-- One-line detail -->
+          <div id="codexMcpDetailText" class="codex-mcp-detail">
+            Loading provider info...
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center mt-2">
+            <label class="form-label mb-0">Provider</label>
+            <span id="providerStatusBadge" class="badge bg-secondary">
+              <i class="bi bi-question-circle me-1"></i>Checking...
+            </span>
+          </div>
+          <div class="provider-detail-row">
+            <small id="providerNameText" class="text-muted">Loading provider info...</small>
+          </div>
+          <div class="provider-detail-row" id="providerDetailRow" style="display:none;">
+            <small class="text-muted">
+              <span id="providerRuntimeProvider"></span>
+              <span class="mx-1">|</span>
+              <span id="providerRuntimeModel"></span>
+              <span class="mx-1">|</span>
+              <span id="providerBridgeMode"></span>
+            </small>
+          </div>
+
+          <!-- Secondary metadata row -->
+          <div class="provider-detail-row" id="providerVerificationRow" style="display:none;">
+            <small class="text-muted">
+              <span id="providerVerificationText"></span>
+            </small>
+            <button class="btn btn-sm btn-outline-info ms-2" id="verifyCodexMcpBtn"
+              title="Run a live end-to-end Codex MCP verification through the real analyze path">
+              <i class="bi bi-shield-check me-1"></i>Verify Codex MCP
+            </button>
+          </div>
+        </div>
+
+        <!-- Execution Mode -->
+        <div class="patch-section">
+          <label class="form-label">Execution Mode</label>
+          <select id="executionModeSelect" class="form-select form-select-sm">
+            <option value="analysis_only" selected>Analysis Only</option>
+            <option value="autofix_loop">Full Loop (Apply + Retest)</option>
+          </select>
+          <small class="text-muted">Analysis only generates patches without applying them.</small>
+        </div>
+
+        <!-- Node Timeline -->
+        <div class="patch-section">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <label class="form-label mb-0">Node Timeline</label>
+            <span class="badge bg-secondary" id="nodeCountBadge">0 nodes</span>
+          </div>
+          <div id="nodeTimeline" class="node-timeline">
+            <div class="text-muted small fst-italic">No nodes executed yet</div>
+          </div>
+        </div>
+
+        <!-- Artifacts Tabs -->
+        <div class="patch-section">
+          <ul class="nav nav-tabs nav-tabs-sm" id="artifactsTabs" role="tablist">
+            <li class="nav-item">
+              <button class="nav-link active" id="analysisTab" data-bs-toggle="tab" data-bs-target="#analysisContent" type="button">
+                <i class="bi bi-lightbulb me-1"></i>Analysis
+              </button>
+            </li>
+            <li class="nav-item">
+              <button class="nav-link" id="patchTab" data-bs-toggle="tab" data-bs-target="#patchContent" type="button">
+                <i class="bi bi-code-slash me-1"></i>Patch
+              </button>
+            </li>
+            <li class="nav-item">
+              <button class="nav-link" id="validationTab" data-bs-toggle="tab" data-bs-target="#validationContent" type="button">
+                <i class="bi bi-check-circle me-1"></i>Validation
+              </button>
+            </li>
+            <li class="nav-item">
+              <button class="nav-link" id="retestTab" data-bs-toggle="tab" data-bs-target="#retestContent" type="button">
+                <i class="bi bi-arrow-repeat me-1"></i>Retest
+              </button>
+            </li>
+            <li class="nav-item">
+              <button class="nav-link" id="evidenceTab" data-bs-toggle="tab" data-bs-target="#evidenceContent" type="button">
+                <i class="bi bi-box-seam me-1"></i>Evidence
+              </button>
+            </li>
+            <li class="nav-item">
+              <button class="nav-link" id="scriptRunTab" data-bs-toggle="tab" data-bs-target="#scriptRunContent" type="button">
+                <i class="bi bi-terminal me-1"></i>Script Runs
+              </button>
+            </li>
+          </ul>
+          <div class="tab-content mt-2" id="artifactsTabContent">
+            <div class="tab-pane fade show active" id="analysisContent">
+              <div class="text-muted small">No analysis results yet</div>
+            </div>
+            <div class="tab-pane fade" id="patchContent">
+              <div class="text-muted small">No patches generated yet</div>
+            </div>
+            <div class="tab-pane fade" id="validationContent">
+              <div class="text-muted small">No validation results yet</div>
+            </div>
+            <div class="tab-pane fade" id="retestContent">
+              <div class="text-muted small">No retest results yet</div>
+            </div>
+            <div class="tab-pane fade" id="evidenceContent">
+              <div class="text-muted small">No evidence collected yet</div>
+            </div>
+            <div class="tab-pane fade" id="scriptRunContent">
+              <div class="text-muted small">No script run details yet</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Loop Controls -->
+        <div class="patch-section">
+          <label class="form-label">Execution Controls</label>
+          <div class="btn-group btn-group-sm" role="group">
+            <button class="btn btn-outline-warning" id="pauseLoopBtn" disabled>
+              <i class="bi bi-pause-fill me-1"></i>Pause
+            </button>
+            <button class="btn btn-outline-success" id="resumeLoopBtn" disabled>
+              <i class="bi bi-play-fill me-1"></i>Resume
+            </button>
+            <button class="btn btn-outline-danger" id="cancelLoopBtn" disabled>
+              <i class="bi bi-x-circle me-1"></i>Cancel
+            </button>
+          </div>
+          <div class="mt-2">
+            <select id="retryFromNodeSelect" class="form-select form-select-sm" disabled>
+              <option value="">Retry from node...</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Status Indicator -->
+        <div class="patch-section">
+          <div class="d-flex align-items-center gap-2">
+            <span class="status-indicator" id="loopStatusIndicator"></span>
+            <span id="loopStatusText">Ready</span>
+          </div>
+          <div class="progress mt-2" style="height: 4px;">
+            <div id="loopProgressBar" class="progress-bar" role="progressbar" style="width: 0%;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Account Task Planner Panel -->
+    <div class="task-planner-panel glass-panel" id="taskPlannerPanel" style="display:none;">
+      <div class="task-planner-header">
+        <h6><i class="bi bi-rocket-takeoff me-2"></i>Runs</h6>
+        <div class="task-planner-controls">
+          <button class="btn btn-sm btn-outline-secondary" id="refreshPlansBtn" title="Refresh plans">
+            <i class="bi bi-arrow-clockwise"></i>
+          </button>
+          <button class="btn btn-sm btn-outline-secondary" id="toggleTaskPlannerBtn">
+            <i class="bi bi-chevron-up"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="task-planner-content" id="taskPlannerContent">
+        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="44">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <label class="form-label mb-0">Builder Goal Runner</label>
+            <button class="btn btn-sm btn-outline-secondary" id="refreshBuilderGoalRunsBtn" title="Refresh builder runs">
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+          </div>
+          <details class="operator-help mb-3">
+            <summary>How launching and publishing work</summary>
+            <div class="small text-muted mt-2">
+              Run Task launches Micro6, waits for a dispatch-ready executor, and publishes the selected task. Launch Account only prepares the executor; Publish Task sends the task to an executor that is already online. Task settings use the editable <code>{"task_key", "settings"}</code> envelope.
+            </div>
+          </details>
+          <div class="mb-2">
+            <label class="form-label small mb-1" for="builderGoalAccountSelect">Account</label>
+            <select id="builderGoalAccountSelect" class="form-select form-select-sm">
+              <option value="">Loading launcher accounts...</option>
+            </select>
+            <div id="builderGoalAccountSummary" class="small text-muted mt-1">
+              Select an account to run a task.
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small mb-1" for="builderGoalMachineSelect">Launch Host</label>
+            <select id="builderGoalMachineSelect" class="form-select form-select-sm">
+              <option value="">Loading launcher machines...</option>
+            </select>
+            <div id="builderGoalMachineSummary" class="small text-muted mt-1">
+              Resolving the local machine that will launch the micro6 workspace.
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small mb-1" for="builderGoalTaskSearchInput">Task</label>
+            <input type="text" id="builderGoalTaskSearchInput" class="form-control form-control-sm mb-1"
+              placeholder="Search Micro6 task catalog...">
+            <select id="builderGoalTaskSelect" class="form-select form-select-sm">
+              <option value="">Select a Micro6 task</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small mb-1" for="builderGoalConfigInput">Task Settings JSON</label>
+            <textarea
+              id="builderGoalConfigInput"
+              class="form-control form-control-sm font-monospace"
+              rows="10"
+              placeholder='{"task_key":"FISHING_TRAINING","settings":{}}'></textarea>
+            <div id="builderGoalConfigMeta" class="small text-muted mt-1">
+              Choose a task to load the canonical <code>{"task_key":"...","settings":{...}}</code> envelope. Legacy raw settings and full builder payloads are still accepted; a valid <code>task_key</code> synchronizes the task selector.
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small mb-1" for="builderGoalWorldInput">World</label>
+            <input
+              type="number"
+              id="builderGoalWorldInput"
+              class="form-control form-control-sm"
+              min="300"
+              max="700"
+              step="1"
+              value="360"
+              placeholder="360">
+            <div class="small text-muted mt-1">
+              Saved with the run config and reused for rerun and recovery relaunch.
+            </div>
+          </div>
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" role="switch" id="builderGoalAutoRecord" checked>
+            <label class="form-check-label small" for="builderGoalAutoRecord">Auto record when the task starts</label>
+            <div class="small text-muted">
+              Starts a task-owned ChromaScape recording after publish. Recording setup never blocks task execution.
+            </div>
+          </div>
+          <div class="d-flex gap-2 mb-2">
+            <button class="btn btn-sm btn-primary flex-fill" id="runBuilderGoalBtn" disabled title="Launch the local Micro6 workspace for the account and publish the selected task">
+              <i class="bi bi-play-fill me-1"></i>Run Task
+            </button>
+            <button class="btn btn-sm btn-outline-primary flex-fill" id="launchBuilderGoalAccountBtn" disabled title="Launch the local Micro6 workspace for the selected account without publishing a task. The launch runs server-side and this page polls its progress until the executor is dispatch-ready.">
+              <i class="bi bi-box-arrow-up-right me-1"></i>Launch Account
+            </button>
+            <button class="btn btn-sm btn-outline-success flex-fill" id="publishBuilderGoalBtn" disabled title="Publish the selected task to an already-running Micro6 executor for this account without relaunching the client">
+              <i class="bi bi-cloud-arrow-up me-1"></i>Publish Task
+            </button>
+          </div>
+          <div id="builderGoalClientStatus" class="small text-muted mb-3">
+            Select an account and task to run.
+          </div>
+          <details class="operator-help mb-3">
+            <summary>Codex operator session</summary>
+          <div class="border rounded p-2 mt-2 bg-body-tertiary">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div>
+                <div class="form-label mb-0">Codex Session</div>
+                <div id="builderGoalCodexSessionMeta" class="small text-muted">
+                  Creating Codex orchestration session...
+                </div>
+              </div>
+              <button class="btn btn-sm btn-outline-secondary" id="refreshBuilderGoalCodexSessionBtn" type="button">
+                <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+              </button>
+            </div>
+            <div id="builderGoalCodexTranscript" class="border rounded p-2 bg-white mb-2" style="min-height: 180px; max-height: 260px; overflow:auto;">
+              <div class="text-muted small fst-italic">Codex transcript will appear here.</div>
+            </div>
+            <div class="input-group input-group-sm">
+              <input id="builderGoalCodexMessageInput" class="form-control" type="text"
+                placeholder='Try: "run it", "stop it", "open recovery", "generate patch plan", or describe the issue'>
+              <button class="btn btn-primary" id="sendBuilderGoalCodexMessageBtn" type="button">
+                <i class="bi bi-send me-1"></i>Send
+              </button>
+            </div>
+          </div>
+          </details>
+          <details class="mb-3">
+            <summary class="small text-muted" style="cursor:pointer;">Advanced: import raw builder payload</summary>
+            <div class="mt-2">
+              <textarea
+                id="builderGoalPayloadInput"
+                class="form-control form-control-sm mb-2 font-monospace"
+                rows="8"
+                placeholder='Paste builder payload JSON here'></textarea>
+              <div class="d-flex gap-2 mb-2">
+                <button class="btn btn-sm btn-outline-primary flex-fill" id="importBuilderGoalBtn">
+                  <i class="bi bi-box-arrow-in-down me-1"></i>Import
+                </button>
+                <button class="btn btn-sm btn-outline-secondary flex-fill" id="runImportedBuilderGoalBtn" disabled>
+                  <i class="bi bi-upload me-1"></i>Run Imported Payload
+                </button>
+              </div>
+              <div id="builderGoalImportResult" class="small text-muted mb-2">
+                Import a builder payload to load task settings into the editor. If the live Micro6 catalog is unavailable, ChromaScape will fall back to saved/imported task keys and warn instead of blocking the run.
+              </div>
+            </div>
+          </details>
+          <div id="builderGoalRunsList" class="task-plans-list">
+            <div class="text-muted small fst-italic">No builder goal runs yet.</div>
+          </div>
+          <div id="builderGoalLogsPanel" class="mt-3 d-none">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div>
+                <div class="form-label mb-0">Builder Goal Run Logs</div>
+                <div id="builderGoalLogsSummary" class="small text-muted">Select a run to inspect logs.</div>
+              </div>
+              <button class="btn btn-sm btn-outline-secondary" id="closeBuilderGoalLogsBtn" type="button">
+                <i class="bi bi-x-lg me-1"></i>Close
+              </button>
+            </div>
+            <div id="builderGoalLogsStatus" class="small text-muted mb-2">No run selected.</div>
+            <div class="mb-2">
+              <div class="small fw-semibold mb-1">Launch Log Tail</div>
+              <pre id="builderGoalLaunchLogTail" class="form-control form-control-sm font-monospace" style="min-height: 160px; max-height: 260px; overflow:auto;">Select a run to inspect launch logs.</pre>
+            </div>
+            <div>
+              <div class="small fw-semibold mb-1">Historical ChromaScape Logs</div>
+              <div id="builderGoalHistoricalLogs" class="border rounded p-2 bg-body-tertiary" style="max-height: 320px; overflow:auto;">
+                <div class="text-muted small fst-italic">No run selected.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Generate New Plan -->
+        <div class="task-planner-section">
+          <label class="form-label">Generate Task Plan</label>
+          <input type="text" id="taskPlanIntentInput" class="form-control form-control-sm mb-2"
+                 placeholder="What do you want to achieve? (e.g., Complete Monkey Madness)">
+          <div class="d-flex gap-2 mb-2">
+            <select id="taskPlanSourceSession" class="form-select form-select-sm">
+              <option value="">Current session</option>
+            </select>
+          </div>
+          <button class="btn btn-sm btn-primary w-100" id="generatePlanBtn">
+            <i class="bi bi-magic me-1"></i>Generate Plan
+          </button>
+        </div>
+
+        <!-- Plans List -->
+        <div class="task-planner-section">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <label class="form-label mb-0">Task Plans</label>
+            <span class="badge bg-secondary" id="planCountBadge">0 plans</span>
+          </div>
+          <div id="plansList" class="task-plans-list">
+            <div class="text-muted small fst-italic">No task plans yet. Generate one above.</div>
+          </div>
+        </div>
+
+        <!-- Plan Detail View (shown when a plan is selected) -->
+        <div class="task-planner-section" id="planDetailSection" style="display:none;">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0" id="planDetailTitle">Plan Detail</h6>
+            <div class="d-flex gap-1">
+              <button class="btn btn-sm btn-success" id="approvePlanBtn" title="Approve all items">
+                <i class="bi bi-check-all me-1"></i>Approve All
+              </button>
+              <button class="btn btn-sm btn-danger" id="rejectPlanBtn" title="Reject plan">
+                <i class="bi bi-x-circle me-1"></i>Reject
+              </button>
+            </div>
+          </div>
+          <div class="mb-2">
+            <span class="badge" id="planDetailStatus">GENERATED</span>
+            <small class="text-muted ms-2" id="planDetailIntent"></small>
+          </div>
+
+          <!-- Plan Items -->
+          <div id="planItemsList" class="plan-items-list">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="debugger-container">
+      <section class="debugger-main">
+        <div class="viewport-panel glass-panel">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h5 class="mb-0"><i class="bi bi-eye me-2"></i>Viewport</h5>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="pauseCaptureBtn" title="Pause/Resume viewport streaming">
+              <i class="bi bi-pause-fill" id="pauseIcon"></i>
+            </button>
+          </div>
+
+          <!-- Inline recovery replay state (loading / missing / failed) shown next to the canonical replay surface -->
+          <div id="recoveryReplayAlert" class="recovery-replay-alert" hidden></div>
+
+          <!-- Degraded-recording warning (video playable but contains almost no captured frames) -->
+          <div id="replayVideoWarning" class="alert alert-warning py-2 px-3 mb-2" role="status" hidden></div>
+
+          <div class="viewport-stage" id="viewportStage">
+            <div id="viewport-loader" class="loader-container">
+              <div class="glass-loader"></div>
+              <div class="loader-text">Waiting for visual input...</div>
+            </div>
+            <canvas id="viewport-canvas" class="viewport-content" style="display: none;"></canvas>
+            <video id="replayVideo" controls class="border border-secondary rounded">
+              <source src="" type="video/mp4">
+              Your browser does not support the video tag.
+            </video>
+            <canvas id="overlay-canvas"></canvas>
+          </div>
+
+          <!-- Recording Diagnostics Strip -->
+          <div id="recordingDiagnosticsStrip" class="recording-diagnostics-strip">
+            <!-- Compact row (always visible) -->
+            <div class="rds-compact-row">
+              <span class="rds-metric">
+                <span class="rds-label">Buffer</span>
+                <strong id="bufferDepth">0</strong>/<span id="bufferCapacity">-</span>
+              </span>
+              <span class="rds-metric">
+                <span class="rds-label">Dropped</span>
+                <strong id="droppedFrames" class="rds-dropped">0</strong>
+              </span>
+              <span class="rds-metric">
+                <span class="rds-label">Duration</span>
+                <strong id="diagnosticsRecordingDuration">00:00</strong>
+              </span>
+              <div class="rds-controls ms-auto">
+                <label class="rds-pin-label" title="Keep details expanded">
+                  <input type="checkbox" id="diagnosticsPinToggle" />
+                  Pin
+                </label>
+                <button class="btn btn-link btn-sm rds-expand-btn p-0 ms-2"
+                        id="diagnosticsExpandBtn" title="Expand details">
+                  <i class="bi bi-chevron-down" id="diagnosticsChevron"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Full details row (shown when expanded) -->
+            <div id="diagnosticsFullDetails" class="rds-full-details" style="display:none;">
+              <div class="progress mt-1" style="height: 14px;">
+                <div id="bufferProgressBar" class="progress-bar bg-success"
+                     role="progressbar" style="width: 0%">0%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="logs-panel glass-panel">
+          <div class="logs-header">
+            <h5><i class="bi bi-terminal me-2"></i>Logs</h5>
+            <div class="log-controls">
+              <div class="btn-group btn-group-sm" role="group" aria-label="Log level filter">
+                <button type="button" class="btn btn-outline-secondary active" data-level="all">All</button>
+                <button type="button" class="btn btn-outline-secondary" data-level="DEBUG">Dbg</button>
+                <button type="button" class="btn btn-outline-secondary" data-level="INFO">Inf</button>
+                <button type="button" class="btn btn-outline-secondary" data-level="WARN">Wrn</button>
+                <button type="button" class="btn btn-outline-secondary" data-level="ERROR">Err</button>
+              </div>
+              <div class="log-search">
+                <input id="logSearchInput" class="form-control form-control-sm" type="text" placeholder="Search" />
+                <button id="logSearchBtn" class="btn btn-outline-secondary btn-sm">
+                  <i class="bi bi-search"></i>
+                </button>
+              </div>
+              <button id="clearLogsBtn" class="btn btn-outline-danger btn-sm" title="Clear logs">
+                <i class="bi bi-trash"></i>
+              </button>
+              <button id="resetFiltersBtn" class="btn btn-outline-warning btn-sm" title="Reset all filters">
+                <i class="bi bi-arrow-counterclockwise"></i>
+              </button>
+              <label class="log-toggle log-toggle-compact" title="Automatically scroll to current tick during replay playback">
+                <input type="checkbox" id="autoFollowTicks">
+                <span>Sync Scroll to Time</span>
+              </label>
+            </div>
+          </div>
+          <!-- Log type toggles -->
+          <div class="log-type-toggles">
+            <label class="log-toggle" title="Show tick-based logs from game client">
+              <input type="checkbox" id="showTickLogs" checked>
+              <span>Tick Logs</span>
+            </label>
+            <label class="log-toggle" title="Show client logs from micro6/action logger">
+              <input type="checkbox" id="showExternalLogs">
+              <span>Client Logs</span>
+            </label>
+            <label class="log-toggle" title="Show verbose debug output">
+              <input type="checkbox" id="showVerboseLogs" checked>
+              <span>Verbose</span>
+            </label>
+          </div>
+          <details class="log-advanced-filters">
+            <summary><i class="bi bi-sliders me-1"></i>Advanced filters</summary>
+            <div class="log-advanced-filters-body">
+          <!-- Section toggles for tick cards -->
+          <div class="section-toggles mb-2" id="sectionToggles">
+            <button class="section-toggle active" data-section="actions" title="Show action log entries">Actions</button>
+            <button class="section-toggle active" data-section="quest" title="Show quest step progress">Quest</button>
+            <button class="section-toggle active" data-section="dialogue" title="Show dialogue interactions">Dialogue</button>
+            <button class="section-toggle active" data-section="inventory" title="Show inventory state">Inventory</button>
+            <button class="section-toggle active" data-section="npcs" title="Show nearby NPCs/threats">NPCs</button>
+            <button class="section-toggle active" data-section="projectiles" title="Show active projectiles">Projectiles</button>
+            <button class="section-toggle active" data-section="player" title="Show player state">Player</button>
+            <button class="section-toggle active" data-section="varbits" title="Show varbit changes">Varbits</button>
+            <button class="section-toggle active" data-section="objects" title="Show game objects">Objects</button>
+            <button class="section-toggle active" data-section="groundObjects" title="Show ground objects">Ground Objects</button>
+            <button class="section-toggle active" data-section="groundItems" title="Show ground items">Ground Items</button>
+            <button class="section-toggle active" data-section="packets" title="Show RSProx game packets (SC-1618)">Packets</button>
+            <button class="section-toggle active" data-section="animation" title="Show animation action logs">Animation</button>
+            <button class="section-toggle active" data-section="walkhere" title="Show walk-here action logs">Walk Here</button>
+            <button class="section-toggle active" data-section="menu" title="Show menu action logs">Menu</button>
+            <button class="section-toggle active" data-section="click" title="Show click action logs">Click</button>
+            <button class="section-toggle active" data-section="npcFirstOption" title="Show NPC first-option action logs">NPC Option</button>
+            <button class="section-toggle active" data-section="cancel" title="Show cancel action logs">Cancel</button>
+            <button class="section-toggle active" data-section="network" title="Show network action logs">Network</button>
+            <button class="section-toggle active" data-section="raw" title="Show raw action logs">Raw</button>
+          </div>
+          <!-- Exclude pattern input -->
+          <div class="mb-2">
+            <input type="text" id="logExcludePatterns" class="form-control form-control-sm"
+                   placeholder="Exclude patterns (comma-separated, e.g., 'varbit,dialogue')">
+          </div>
+          <!-- Source filters dropdown -->
+          <div class="source-filters-dropdown" id="sourceFiltersContainer">
+            <button class="source-filters-toggle" id="sourceFiltersToggle" type="button">
+              <i class="bi bi-funnel me-1"></i>
+              <span id="sourceFiltersSummary">Sources</span>
+              <i class="bi bi-chevron-down ms-1 dropdown-chevron"></i>
+            </button>
+            <div class="source-filters-menu" id="sourceFiltersMenu">
+              <div class="source-filters-header">
+                <span>Filter by Source</span>
+                <div class="source-filters-actions">
+                  <button class="btn btn-sm btn-link" id="showAllSources">Show All</button>
+                  <button class="btn btn-sm btn-link" id="hideAllSources">Hide All</button>
+                </div>
+              </div>
+              <div id="sourceFilters" class="source-filter-list">
+                <!-- Dynamically populated -->
+              </div>
+            </div>
+          </div>
+          <!-- Pattern Filters -->
+          <div class="source-filters-dropdown" id="patternFiltersContainer">
+            <button class="source-filters-toggle" id="patternFiltersToggle" type="button">
+              <i class="bi bi-hash me-1"></i>
+              <span id="patternFiltersSummary">Patterns</span>
+              <i class="bi bi-chevron-down ms-1 dropdown-chevron"></i>
+            </button>
+            <div class="source-filters-menu" id="patternFiltersMenu">
+              <div class="source-filters-header">
+                <span>Filter by Pattern</span>
+                <div class="source-filters-actions">
+                  <button class="btn btn-sm btn-link" id="showAllPatterns">Show All</button>
+                  <button class="btn btn-sm btn-link" id="hideAllPatterns">Hide All</button>
+                </div>
+              </div>
+              <div id="patternFilters" class="source-filter-list">
+                <!-- Pattern chips will be added here -->
+              </div>
+            </div>
+          </div>
+            </div>
+          </details>
+          <div id="logsContainer" class="console-output">
+            <div class="text-muted fst-italic">Waiting for logs...</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="scrubber-bar glass-panel">
+        <div class="scrubber-track">
+          <input id="scrubberRange" type="range" min="0" max="100" value="0" />
+          <div class="scrubber-meta">
+            <span id="scrubberTimecode">--:-- / --:--</span>
+            <span id="scrubberMode">Live</span>
+          </div>
+        </div>
+        <div class="scrubber-controls">
+          <button id="scrubberPrevBtn" class="btn btn-outline-secondary btn-sm" title="Previous tick">
+            <i class="bi bi-skip-backward"></i>
+          </button>
+          <button id="scrubberPlayBtn" class="btn btn-outline-primary btn-sm" title="Play/Pause">
+            <i class="bi bi-play-fill"></i>
+          </button>
+          <button id="scrubberNextBtn" class="btn btn-outline-secondary btn-sm" title="Next tick">
+            <i class="bi bi-skip-forward"></i>
+          </button>
+          <button id="scrubberStartBtn" class="btn btn-outline-secondary btn-sm" title="Jump to start">
+            <i class="bi bi-skip-start-btn"></i>
+          </button>
+          <button id="scrubberEndBtn" class="btn btn-outline-secondary btn-sm" title="Jump to end">
+            <i class="bi bi-skip-end-btn"></i>
+          </button>
+          <select id="scrubberSpeed" class="form-select form-select-sm">
+            <option value="0.5">0.5x</option>
+            <option value="1" selected>1x</option>
+            <option value="1.5">1.5x</option>
+            <option value="2">2x</option>
+          </select>
+          <div class="tick-jump-inline">
+            <input id="scrubberTickJumpInput" type="number" min="0" class="form-control form-control-sm"
+              placeholder="Tick #" />
+            <button id="scrubberTickJumpBtn" class="btn btn-outline-primary btn-sm">Go</button>
+          </div>
+        </div>
+        <div class="timeline-markers" id="timelineMarkers">
+          <!-- Timeline markers will be dynamically added here -->
+        </div>
+        <div class="tick-info">
+          <span>Tick: <span id="currentTick">--</span></span>
+          <span>Time: <span id="currentTime">00:00.0</span> / <span id="totalTime">00:00.0</span></span>
+          <span>Frame: <span id="currentFrame">0</span> / <span id="totalFrame">0</span></span>
+        </div>
+      </section>
+
+      <section id="recoveryModeShell" class="recovery-mode-shell" hidden>
+        <!-- Foreground banner: workspace title, run summary, primary actions -->
+        <div class="recovery-workspace-banner">
+          <div class="recovery-banner-row">
+            <span class="recovery-mode-badge"><i class="bi bi-tools me-1"></i>Recovery Workspace</span>
+            <span id="recoveryModeRunLabel" class="recovery-run-label small"></span>
+            <div class="recovery-banner-actions">
+              <button type="button" class="btn btn-sm btn-outline-primary" id="recoveryLoadRunConfigBtn"
+                title="Load this run's saved task config into the editor">
+                <i class="bi bi-download me-1"></i>Load Run Config
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="recoveryBannerRefreshEvidenceBtn"
+                title="Refresh evidence for the current ranges and selection">
+                <i class="bi bi-arrow-clockwise me-1"></i>Refresh Evidence
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-danger" id="recoveryExitBtn">
+                <i class="bi bi-box-arrow-right me-1"></i>Exit Recovery
+              </button>
+            </div>
+          </div>
+          <!-- Persistent recovery status strip -->
+          <div class="recovery-status-strip" id="recoveryStatusStrip">
+            <span class="recovery-status-chip" id="recoveryStatusRun" title="Run iteration id">
+              <i class="bi bi-hash me-1"></i>Run: --
+            </span>
+            <span class="recovery-status-chip" id="recoveryStatusTask" title="Task">
+              <i class="bi bi-list-task me-1"></i>Task: --
+            </span>
+            <span class="recovery-status-chip" id="recoveryStatusAccount" title="Account">
+              <i class="bi bi-person me-1"></i>Account: --
+            </span>
+            <span class="recovery-status-chip" id="recoveryStatusWorld" title="World">
+              <i class="bi bi-globe2 me-1"></i>World: --
+            </span>
+            <span class="recovery-status-chip" id="recoveryStatusRecording" title="Recording / debug session loaded state">
+              <i class="bi bi-camera-video me-1"></i>Recording: --
+            </span>
+            <span class="recovery-status-chip" id="recoveryStatusEvidence" title="Evidence loaded state">
+              <i class="bi bi-funnel me-1"></i>Evidence: --
+            </span>
+            <span id="recoveryCodexMcpBadge" class="recovery-codex-mcp-badge badge-unknown" title="Codex MCP connection status">
+              <i class="bi bi-question-circle me-1"></i><span id="recoveryCodexMcpText">...</span>
+            </span>
+            <button type="button" id="recoveryVerifyCodexMcpBtn" class="btn btn-sm btn-outline-info"
+              title="Run a live end-to-end Codex MCP verification" style="display:none;">
+              <i class="bi bi-shield-check"></i>
+            </button>
+            <span class="recovery-status-chip recovery-status-chip-error" id="recoveryStatusError" hidden></span>
+          </div>
+          <!-- Prominent inline error for workspace-level failures -->
+          <div id="recoveryErrorBanner" class="recovery-error-banner" hidden></div>
+        </div>
+
+        <div class="recovery-mode-body">
+          <!-- Range selector: typed + button-based selection, note, saved range cards -->
+          <div class="recovery-section recovery-range-selector">
+            <div class="recovery-section-header">
+              <h6 class="mb-0"><i class="bi bi-sliders me-1"></i>Range Selector</h6>
+              <span class="small text-muted" id="recoveryActiveRangeHint">No active range</span>
+            </div>
+            <div class="recovery-range-controls">
+              <div class="input-group input-group-sm recovery-range-field">
+                <span class="input-group-text">Start</span>
+                <input id="recoveryActiveStart" class="form-control font-monospace" type="text" placeholder="00:15" />
+              </div>
+              <div class="input-group input-group-sm recovery-range-field">
+                <span class="input-group-text">End</span>
+                <input id="recoveryActiveEnd" class="form-control font-monospace" type="text" placeholder="00:20" />
+              </div>
+              <div class="input-group input-group-sm recovery-range-field recovery-range-typed">
+                <span class="input-group-text">Typed</span>
+                <input id="recoveryTypedRange" class="form-control font-monospace" type="text"
+                  placeholder="00:15-00:20 or 15-20" />
+                <button type="button" class="btn btn-outline-secondary" id="recoveryApplyTypedRangeBtn">Apply</button>
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="recoveryMarkStartBtn"
+                title="Set range start from the current replay time">
+                <i class="bi bi-skip-start-fill me-1"></i>Mark Start
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="recoveryMarkEndBtn"
+                title="Set range end from the current replay time">
+                <i class="bi bi-skip-end-fill me-1"></i>Mark End
+              </button>
+              <button type="button" class="btn btn-sm btn-primary" id="recoverySaveRangeBtn">
+                <i class="bi bi-save me-1"></i>Save Range
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="recoveryClearRangeBtn">
+                <i class="bi bi-x-circle me-1"></i>Clear
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-warning" id="recoveryImportantBtn">
+                <i class="bi bi-star me-1"></i>Important
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="recoveryPinFrameBtn"
+                title="Copy the current replay tick/frame into the range">
+                <i class="bi bi-pin-angle me-1"></i>Pin Tick/Frame
+              </button>
+            </div>
+            <div class="recovery-range-controls">
+              <div class="input-group input-group-sm recovery-range-field-wide">
+                <span class="input-group-text">Label</span>
+                <input id="recoveryActiveLabel" class="form-control" type="text" placeholder="Range label (optional)" />
+              </div>
+              <div class="input-group input-group-sm recovery-range-field-sm">
+                <span class="input-group-text">Tick</span>
+                <input id="recoveryActiveTick" class="form-control font-monospace" type="text" placeholder="#" />
+              </div>
+              <div class="input-group input-group-sm recovery-range-field-sm">
+                <span class="input-group-text">Frame</span>
+                <input id="recoveryActiveFrame" class="form-control font-monospace" type="text" placeholder="#" />
+              </div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label small fw-semibold">Note</label>
+              <textarea id="recoveryActiveNote" class="form-control form-control-sm font-monospace" rows="2"
+                placeholder="Describe what happens in this range and why it matters."></textarea>
+            </div>
+            <div class="recovery-annotations border rounded p-2">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0"><i class="bi bi-bookmark me-1"></i>Saved Ranges</h6>
+                <span class="small text-muted" id="recoveryAnnotationCount">0 range(s)</span>
+              </div>
+              <div id="recoveryAnnotationList" class="d-flex flex-column gap-2 recovery-annotation-list">
+                <div class="text-muted small fst-italic">No ranges marked yet. Use the replay scrubber, then Mark Start / Mark End / Save Range.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Evidence + patch prompt side by side -->
+          <div class="recovery-split-row">
+            <div class="recovery-section recovery-evidence">
+              <div class="recovery-section-header">
+                <h6 class="mb-0"><i class="bi bi-funnel me-1"></i>Evidence</h6>
+                <div class="d-flex gap-2">
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="recoverySelectAllEvidenceBtn">
+                    <i class="bi bi-check2-square me-1"></i>Select All
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="recoveryClearEvidenceBtn">
+                    <i class="bi bi-square me-1"></i>Clear
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-primary" id="recoveryRefreshEvidenceBtn">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                  </button>
+                </div>
+              </div>
+              <div id="recoveryEvidenceMeta" class="small text-muted mb-2"></div>
+              <div id="recoveryEvidenceError" class="recovery-inline-error" hidden></div>
+              <div id="recoveryEvidenceGroups" class="d-flex flex-column gap-2 recovery-evidence-groups">
+                <div class="text-muted small fst-italic">Open a recovery workspace and mark a range to filter evidence.</div>
+              </div>
+            </div>
+            <div class="recovery-section recovery-prompt">
+              <div class="recovery-section-header">
+                <h6 class="mb-0"><i class="bi bi-chat-square-text me-1"></i>Patch Prompt</h6>
+              </div>
+              <div class="mb-2">
+                <label class="form-label small fw-semibold">Issue</label>
+                <textarea id="recoveryPrompt" class="form-control form-control-sm font-monospace" rows="3"
+                  placeholder="Describe the issue and what needs to change."></textarea>
+              </div>
+              <div class="mb-2">
+                <label class="form-label small fw-semibold">Additional context</label>
+                <textarea id="recoveryContext" class="form-control form-control-sm font-monospace" rows="4"
+                  placeholder="Additional observations or implementation guidance."></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Patch plan generation + review -->
+          <div class="recovery-section recovery-patchplan">
+            <div id="recoveryRepairIncident" class="alert alert-warning py-2 px-3 mb-2" hidden></div>
+            <div class="recovery-section-header">
+              <h6 class="mb-0"><i class="bi bi-lightbulb me-1"></i>Patch Plan</h6>
+              <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-primary" id="recoveryGeneratePatchBtn">
+                  <i class="bi bi-lightbulb-fill me-1"></i>Generate Patch Plan
+                </button>
+                <button type="button" class="btn btn-sm btn-success" id="recoveryApproveBtn" disabled>
+                  <i class="bi bi-play-fill me-1"></i>Approve Patch + Relaunch
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-success" id="recoveryExportPatchBtn" disabled>
+                  <i class="bi bi-file-earmark-diff me-1"></i>Export Patch
+                </button>
+              </div>
+            </div>
+            <div id="recoveryPatchPlanReview" class="small recovery-patchplan-output">
+              <div class="text-muted fst-italic">No patch plan generated yet.</div>
+            </div>
+          </div>
+
+          <!-- Relaunch status (revealed once a relaunch is in flight) -->
+          <div class="recovery-section recovery-relaunch" id="recoveryRelaunchPanel" hidden>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+              <h6 class="mb-0"><i class="bi bi-arrow-repeat me-1"></i>Relaunch &amp; Rebind</h6>
+              <span class="small text-muted" id="recoveryRelaunchStatus">Waiting for debug bind...</span>
+              <span class="small" id="recoveryPreferredSession"></span>
+              <span class="small" id="recoveryChildIteration"></span>
+            </div>
+          </div>
+
+          <!-- Raw plain-text log console -->
+          <div class="recovery-rawlogs-pane">
+            <div class="recovery-rawlogs-header">
+              <h6 class="mb-0"><i class="bi bi-file-code me-1"></i>Raw Logs</h6>
+              <span id="recoveryRawLogsMeta" class="small text-muted"></span>
+            </div>
+            <pre id="recoveryRawLogsContainer" class="recovery-raw-console"></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="debugger-bottom">
+        <div class="bot-state-panel glass-panel">
+          <h5><i class="bi bi-cpu me-2"></i>Bot State</h5>
+          <div id="botStateContent" class="state-grid">
+            <div class="text-muted fst-italic">Awaiting bot state...</div>
+          </div>
+        </div>
+        <div class="ai-inspector-panel glass-panel">
+          <h5><i class="bi bi-lightbulb me-2"></i>AI Inspector</h5>
+          <div id="aiInspectorContent" class="ai-card">
+            <div class="text-muted fst-italic">Scanning for anomalies...</div>
+          </div>
+        </div>
+        <div class="glass-panel" id="xrspsReplayWorkspace">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h5 class="mb-0"><i class="bi bi-cpu me-2"></i>xRSPS Replay Workspace</h5>
+            <span class="shadow-feature-badge on" id="replay-mode-selector">
+              <label class="form-label small mb-0 me-1">Mode</label>
+              <select id="replayModeSelect" class="form-select form-select-sm d-inline-block w-auto">
+                <option value="OBSERVED_PLAYBACK">Observed Playback</option>
+                <option value="CAUSAL_SIMULATION" selected>Causal Simulation</option>
+              </select>
+            </span>
+          </div>
+          <div class="row g-3 mt-1">
+            <div class="col-lg-5">
+              <h6>Simulation Catalog</h6>
+              <div class="table-responsive">
+                <table class="table table-dark table-hover table-sm mb-2">
+                  <thead>
+                    <tr><th>Action</th><th>Recording ID</th><th>Account</th><th>Script</th><th>Status</th></tr>
+                  </thead>
+                  <tbody id="replay-recording-list">
+                    <tr><td colspan="5" class="text-center">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="col-lg-7">
+              <div id="replay-capability-badge" class="mb-2"></div>
+              <div id="replay-preflight-panel"></div>
+              <div id="replay-compile-panel"></div>
+              <div id="replay-run-panel"></div>
+            </div>
+          </div>
+          <div class="row g-3 mt-1">
+            <div class="col-lg-6"><div id="replay-events-panel"></div></div>
+            <div class="col-lg-6"><div id="replay-report-panel"></div></div>
+          </div>
+          <div id="replay-mismatch-panel"></div>
+        </div>
+        <div class="fishing-shadow-panel glass-panel">
+          <h5><i class="bi bi-fishing me-2"></i>Fishing Shadow Agent</h5>
+          <div id="fishingShadowContent" class="fishing-shadow-content">
+            <div class="text-muted fst-italic">Loading shadow agent...</div>
+          </div>
+        </div>
+        <div class="fishing-recording-panel glass-panel">
+          <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+            <h5 class="mb-0"><i class="bi bi-clipboard2-pulse me-2"></i>Fishing Recording Lab</h5>
+            <span class="shadow-feature-badge on">READ-ONLY &middot; no game control</span>
+          </div>
+          <div id="fishingRecordingLab" class="fishing-recording-lab">
+            <div class="recording-lab-row">
+              <span class="shadow-counter">Current: <strong id="fishingLabCurrentRecording">select a replay</strong></span>
+              <div class="input-group input-group-sm recording-lab-range">
+                <span class="input-group-text">Start tick</span>
+                <input id="fishingLabStartTick" type="number" min="0" class="form-control" placeholder="full" />
+                <button id="fishingLabMarkStart" class="btn btn-outline-secondary" type="button">Mark</button>
+              </div>
+              <div class="input-group input-group-sm recording-lab-range">
+                <span class="input-group-text">End tick</span>
+                <input id="fishingLabEndTick" type="number" min="0" class="form-control" placeholder="full" />
+                <button id="fishingLabMarkEnd" class="btn btn-outline-secondary" type="button">Mark</button>
+              </div>
+              <button id="fishingLabClearRange" class="btn btn-sm btn-outline-secondary" type="button">Full recording</button>
+              <button id="fishingLabPreflight" class="btn btn-sm btn-primary" type="button">Preflight current</button>
+              <button id="fishingLabArchive" class="btn btn-sm btn-outline-warning" type="button">Archive current</button>
+              <label class="form-check form-switch mb-0">
+                <input id="fishingLabShowArchived" class="form-check-input" type="checkbox" />
+                <span class="form-check-label">Show archived</span>
+              </label>
+            </div>
+            <div class="recording-lab-row">
+              <div class="input-group input-group-sm recording-lab-id">
+                <span class="input-group-text">Training</span>
+                <input id="fishingLabTrainingId" class="form-control font-monospace" placeholder="recording_..." />
+                <button id="fishingLabUseTraining" class="btn btn-outline-secondary" type="button">Use current</button>
+                <button id="fishingLabTrain" class="btn btn-outline-success" type="button">Train</button>
+              </div>
+              <div class="input-group input-group-sm recording-lab-id">
+                <span class="input-group-text">Held-out</span>
+                <input id="fishingLabTestId" class="form-control font-monospace" placeholder="recording_..." />
+                <button id="fishingLabUseTest" class="btn btn-outline-secondary" type="button">Use current</button>
+                <button id="fishingLabReplay" class="btn btn-outline-info" type="button">Run replay</button>
+              </div>
+              <span class="shadow-counter">Model: <strong id="fishingLabModelId">--</strong></span>
+            </div>
+            <div id="fishingLabResult" class="recording-lab-result text-muted">
+              Select a finalized replay, optionally mark an inclusive tick range, then run preflight.
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="modal fade" id="builderGoalAnalysisModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-lightbulb me-2"></i>Builder Goal Recovery Workspace
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div id="builderGoalAnalysisStatus" class="small text-muted mb-3">
+            Load a failed run, add your observations, pick the relevant time window and evidence, then generate a Micro6 patch plan.
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Prompt</label>
+            <textarea id="builderGoalAnalysisPrompt" class="form-control form-control-sm font-monospace" rows="4"
+              placeholder="Describe the issue, what got stuck, and what needs to be updated."></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Context</label>
+            <textarea id="builderGoalAnalysisContext" class="form-control form-control-sm font-monospace" rows="5"
+              placeholder="Additional context, observations, or implementation guidance."></textarea>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-md-4">
+              <label class="form-label">Clip Start</label>
+              <input id="builderGoalAnalysisStartTime" class="form-control form-control-sm font-monospace" type="text"
+                placeholder="00:13">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Clip End</label>
+              <input id="builderGoalAnalysisEndTime" class="form-control form-control-sm font-monospace" type="text"
+                placeholder="00:20">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Available Range</label>
+              <div id="builderGoalAnalysisRangeHint" class="form-control form-control-sm bg-body-tertiary">
+                00:00 → 00:00
+              </div>
+            </div>
+          </div>
+          <div class="d-flex gap-2 mb-3">
+            <button class="btn btn-sm btn-outline-secondary" id="builderGoalAnalysisResetBtn" type="button">
+              <i class="bi bi-arrow-counterclockwise me-1"></i>Reset Prompt/Context
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" id="builderGoalAnalysisSelectAllBtn" type="button">
+              <i class="bi bi-check2-square me-1"></i>Select All Evidence
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" id="builderGoalAnalysisClearAllBtn" type="button">
+              <i class="bi bi-square me-1"></i>Clear All Evidence
+            </button>
+          </div>
+          <div id="builderGoalAnalysisEvidenceMeta" class="small text-muted mb-2"></div>
+          <div id="builderGoalAnalysisEvidenceGroups" class="d-flex flex-column gap-3">
+            <div class="text-muted small fst-italic">No evidence loaded yet.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="submitBuilderGoalAnalysisBtn">
+            <i class="bi bi-lightbulb-fill me-1"></i>Generate Patch Plan
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/fishing-shadow-core.js?v=1"></script>
+  <script src="/js/debugger-session-sync-core.js?v=1"></script>
+  <script src="/js/debugger-replay-core.js?v=1"></script>
+  <section id="aiTrainingPanel" class="ai-training-panel" aria-label="AI training catalog">
+    <div class="ai-training-toolbar">
+      <label>
+        <span>Recordings</span>
+        <select id="aiTrainingUsageFilter" class="form-select form-select-sm">
+          <option value="used" selected>Used in AI</option>
+          <option value="all">All recordings</option>
+        </select>
+      </label>
+      <label>
+        <span>Task</span>
+        <select id="aiTrainingTaskFilter" class="form-select form-select-sm">
+          <option value="all">All tasks</option>
+        </select>
+      </label>
+      <label>
+        <span>Status</span>
+        <select id="aiTrainingStatusFilter" class="form-select form-select-sm">
+          <option value="all">All statuses</option>
+          <option value="ACTIVE_SHADOW">Active shadow</option>
+          <option value="REPLAY_VALIDATED">Replay validated</option>
+          <option value="TRAINED">Trained</option>
+          <option value="INVALID">Invalid</option>
+        </select>
+      </label>
+      <button id="aiTrainingRefresh" type="button" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-arrow-clockwise"></i> Refresh
+      </button>
+    </div>
+
+    <div id="aiTrainingAlert" class="ai-training-alert" role="status" aria-live="polite" hidden></div>
+    <div class="ai-training-layout">
+      <aside class="ai-training-catalog" aria-label="Training lineages">
+        <div class="ai-training-catalog-heading">
+          <h2>Evidence catalog</h2>
+          <span id="aiTrainingCount" class="badge text-bg-secondary">0</span>
+        </div>
+        <div id="aiTrainingLineageList" class="ai-training-list" role="listbox" aria-label="AI lineages"></div>
+        <details class="ai-training-recordings">
+          <summary>Recording inventory <span id="aiTrainingRecordingCount">0</span></summary>
+          <div id="aiTrainingRecordingList"></div>
+        </details>
+      </aside>
+
+      <main id="aiTrainingDetail" class="ai-training-detail" tabindex="-1">
+        <div class="ai-training-empty">
+          <i class="bi bi-diagram-3"></i>
+          <h2>Select a lineage</h2>
+          <p>Choose a recording-backed model or AI Routine to inspect its provenance and safe operations.</p>
+        </div>
+      </main>
+    </div>
+  </section>
+  <section id="ai-routine-panel" aria-label="AI Routine read-only debugger">
+    <h2>AI Routine · capture / graph / replay / shadow</h2>
+    <div class="ai-routine-grid">
+      <label>Run ID <output data-ai-value="runId">—</output></label>
+      <label>Session ID <output data-ai-value="sessionId">—</output></label>
+      <label>Recording ID <output data-ai-value="recordingId">—</output></label>
+      <label>Graph ID <output data-ai-value="graphId">—</output></label>
+      <label>Model ID <output data-ai-value="modelId">—</output></label>
+      <label>Candidate ID <output data-ai-value="candidateId">—</output></label>
+    </div>
+    <p data-ai-control>READ-ONLY — control_allowed=false</p>
+    <label>Client mode<select data-ai-client-kind><option value="MICRO6_MANAGED">Micro6 managed</option><option value="RUNELITE_CAPTURE">RuneLite capture</option></select></label>
+    <label>Stabilization attempt (Micro6 only)<input data-ai-attempt /></label>
+    <label>Capture token<input data-ai-token type="password" autocomplete="off" /></label>
+    <label>Operator token (candidate workflow; not persisted)<input data-ai-operator-token type="password" autocomplete="off" /></label>
+    <label>Current-slice identity JSON<textarea data-ai-identity spellcheck="false"></textarea></label>
+    <button type="button" data-ai-start>Bind AI Routine run</button>
+    <button type="button" data-ai-capture-start>Start capture</button>
+    <button type="button" data-ai-capture-retry>Retry retained uncertain capture request</button>
+    <button type="button" data-ai-capture-status>Reconcile capture status</button>
+    <button type="button" data-ai-reconcile>Retry/reconcile uncertain request</button>
+    <label>Tick/action batch JSON (array)<textarea data-ai-batch spellcheck="false"></textarea></label>
+    <button type="button" data-ai-ticks-upload>Upload tick batch</button>
+    <button type="button" data-ai-actions-upload>Upload action batch</button>
+    <label>Final tick<input data-ai-final-tick type="number" value="0" /></label>
+    <label>Video SHA-256 (optional)<input data-ai-video-hash /></label>
+    <button type="button" data-ai-capture-complete>Complete capture</button>
+    <label>Curation include ranges JSON<input data-ai-curation-include /></label>
+    <label>Curation exclude ranges JSON<input data-ai-curation-exclude /></label>
+    <button type="button" data-ai-curate>Persist curation</button>
+    <button type="button" data-ai-graph-generate>Generate graph from recording</button>
+    <label>Graph ID (publish/model)<input data-ai-graph-id /></label>
+    <button type="button" data-ai-graph-publish>Publish graph</button>
+    <button type="button" data-ai-model-create>Create model from graph</button>
+    <label>Model ID (replay/shadow)<input data-ai-model-id /></label>
+    <button type="button" data-ai-replay-run>Run policy replay</button>
+    <button type="button" data-ai-shadow-run>Run shadow session</button>
+    <output data-ai-sse-state>DISCONNECTED</output>
+    <label>Assistant message<textarea data-ai-text></textarea></label>
+    <button type="button" data-ai-message>Send Assistant message</button>
+    <button type="button" data-ai-stop>Stop assistant generation</button>
+    <label>Proposal ID<input data-ai-proposal-id /></label>
+    <button type="button" data-ai-proposal-accept>Accept Assistant proposal</button>
+    <button type="button" data-ai-proposal-reject>Reject Assistant proposal</button>
+    <label>Candidate proposal ID<input data-ai-candidate-proposal /></label>
+    <button type="button" data-ai-candidate-approve>Approve candidate (operator)</button>
+    <button type="button" data-ai-candidate-build>Enqueue candidate build</button>
+    <button type="button" data-ai-candidate-reconcile>Reconcile candidate registration</button>
+    <pre data-ai-routine-output aria-live="polite"></pre>
+  </section>
+  <script src="/js/debugger.js?v=24"></script>
+  <script src="/js/ai-training.js?v=1"></script>
+  <script src="/js/replay-debugger.js?v=3"></script>
+  <script src="/js/ai-routine-state.js?v=1"></script>
+  <script src="/js/ai-routine.js?v=3"></script>
+  <script src="/js/patchloop.js?v=2"></script>
+<script src="/js/account-task-planner.js?v=44"></script>
+</body>
+
+</html>

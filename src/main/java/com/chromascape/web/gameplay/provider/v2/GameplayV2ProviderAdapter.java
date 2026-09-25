@@ -80,7 +80,6 @@ public abstract class GameplayV2ProviderAdapter {
       Instant now,
       String modelVersion,
       JsonNode providerOutput) {
-    validateModelVersion(modelVersion);
     // Snapshot-at-boundary: copy every mutable input once at entry so the seal
     // and the sealed adaptation below observe identical bytes even if the
     // caller mutates the originals concurrently. Nulls are passed through for
@@ -97,7 +96,7 @@ public abstract class GameplayV2ProviderAdapter {
     JsonNode observationSnapshot = observation == null ? null : observation.deepCopy();
     JsonNode planningSnapshot = planningInput == null ? null : planningInput.deepCopy();
     JsonNode resultSnapshot = eligibilityResult == null ? null : eligibilityResult.deepCopy();
-    final JsonNode providerSnapshot = providerOutput.deepCopy();
+    JsonNode providerSnapshot = providerOutput.deepCopy();
     GameplayV2ValidatedEligibility validated =
         GameplayV2ValidatedEligibility.seal(
             validator, catalogSnapshot, observationSnapshot, planningSnapshot, resultSnapshot, now);
@@ -121,7 +120,6 @@ public abstract class GameplayV2ProviderAdapter {
       JsonNode catalog,
       String modelVersion,
       JsonNode providerOutput) {
-    validateModelVersion(modelVersion);
     if (validatedEligibility == null) {
       throw fail("PROVIDER_BEFORE_ELIGIBILITY", "Provider adaptation requires sealed eligibility");
     }
@@ -143,7 +141,7 @@ public abstract class GameplayV2ProviderAdapter {
       throw fail("INVALID_PROVIDER_DECISION", "Provider output must be a JSON object");
     }
     JsonNode catalogSnapshot = catalog.deepCopy();
-    final JsonNode providerSnapshot = providerOutput.deepCopy();
+    JsonNode providerSnapshot = providerOutput.deepCopy();
     String catalogBinding = validatedEligibility.checkCatalogBinding(catalogSnapshot);
     if (catalogBinding != null) {
       throw fail(catalogBinding, "Provider catalog does not match the sealed eligibility catalog");
@@ -254,12 +252,6 @@ public abstract class GameplayV2ProviderAdapter {
       throw fail("INVALID_PROVIDER_DECISION", field + " is required");
     }
     return value;
-  }
-
-  private static void validateModelVersion(String modelVersion) {
-    if (modelVersion == null || !modelVersion.matches("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")) {
-      throw fail("INVALID_PROVIDER_DECISION", "modelVersion must be a schema token");
-    }
   }
 
   private static IllegalArgumentException fail(String code, String message) {

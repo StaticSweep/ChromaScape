@@ -32,6 +32,25 @@ curl -o "%UI_DIR%\inv.png" https://raw.githubusercontent.com/kelltom/OS-Bot-COLO
 curl -o "%UI_DIR%\minimap.png" https://raw.githubusercontent.com/kelltom/OS-Bot-COLOR/main/src/images/bot/ui_templates/minimap.png
 curl -o "%UI_DIR%\minimap_fixed.png" https://raw.githubusercontent.com/kelltom/OS-Bot-COLOR/main/src/images/bot/ui_templates/minimap_fixed.png
 
+REM Download compass degree images from RuneDark repo
+echo Cloning RuneDark repo to extract compass degrees...
+
+REM Create compass directory if it doesn't exist
+if not exist "src\main\resources\images\ui\compass_degrees" (
+    mkdir "src\main\resources\images\ui\compass_degrees"
+)
+
+REM Clone the repo into a temp folder
+git clone --depth 1 https://github.com/cemenenkoff/runedark-public.git temp_runedark
+
+REM Copy compass degree images
+xcopy /E /Y "temp_runedark\src\img\bot\ui_templates\compass_degrees\*" "src\main\resources\images\ui\compass_degrees\"
+
+REM Clean up
+rmdir /S /Q temp_runedark
+
+echo Compass degree images copied to src\main\resources\images\ui\compass_degrees\
+
 echo UI images downloaded to %UI_DIR%
 
 REM Now generate .index files for fonts

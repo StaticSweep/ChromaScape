@@ -2,12 +2,15 @@ package com.chromascape.utils.core.screen.topology;
 
 import static org.bytedeco.opencv.global.opencv_core.extractChannel;
 import static org.bytedeco.opencv.global.opencv_core.minMaxLoc;
-import static org.bytedeco.opencv.global.opencv_imgproc.COLOR_BGR2BGRA;
-import static org.bytedeco.opencv.global.opencv_imgproc.TM_SQDIFF_NORMED;
-import static org.bytedeco.opencv.global.opencv_imgproc.cvtColor;
-import static org.bytedeco.opencv.global.opencv_imgproc.matchTemplate;
+import static org.bytedeco.opencv.global.opencv_imgproc.*;
+import static org.opencv.imgproc.Imgproc.TM_SQDIFF_NORMED;
 
+import com.chromascape.utils.core.screen.capture.FrameImageAdapter;
+import com.chromascape.utils.core.screen.viewport.ViewportManager;
 import com.chromascape.utils.core.screen.window.ScreenManager;
+import com.chromascape.utils.core.state.BotState;
+import com.chromascape.utils.core.state.StateManager;
+import com.chromascape.utils.core.statistics.StatisticsManager;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -15,8 +18,9 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.bytedeco.javacpp.DoublePointer;
-import org.bytedeco.javacv.Java2DFrameUtils;
 import org.bytedeco.opencv.global.opencv_imgcodecs;
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.Point;
@@ -35,6 +39,10 @@ import org.bytedeco.opencv.opencv_core.Point;
  * return.
  */
 public class TemplateMatching {
+
+  private static final Logger logger = LogManager.getLogger(TemplateMatching.class.getName());
+
+  private static double minVal;
 
   /**
    * Performs template matching to locate a smaller image (template) within a larger image (base),
@@ -68,13 +76,29 @@ public class TemplateMatching {
       throws Exception {
 
     debug(">> Entered patternMatch()", debugMsg);
+    StateManager.setState(BotState.SEARCHING);
 
     Mat template = loadMatFromResource(templateImg);
-    Mat base = Java2DFrameUtils.toMat(baseImg);
+
+    // Prepare a mat in RGB to send to the viewport
+    Mat view = new Mat();
+    // Use the template as source and view as destination.
+    // This handles data copying/conversion safely without modifying template.
+    if (template.channels() == 4) {
+      cvtColor(template, view, COLOR_BGRA2RGB);
+    } else {
+      cvtColor(template, view, COLOR_BGR2RGB);
+    }
+    ViewportManager.getInstance().updateState(view);
+    // Release the view Mat immediately as ViewportManager handles the data.
+    view.release();
 
     if (template.empty()) {
       throw new IllegalArgumentException("Template image is empty");
     }
+
+    Mat base = FrameImageAdapter.toMat(baseImg);
+
     if (base.empty()) {
       throw new IllegalArgumentException("Base image is empty");
     }
@@ -157,9 +181,10 @@ public class TemplateMatching {
             + ")",
         debugMsg);
 
+    TemplateMatching.minVal = minVal.get();
+
     if (minVal.get() > threshold) {
-      System.out.println(
-          "No match: minVal above threshold (" + minVal.get() + " > " + threshold + ")");
+      logger.error("No match: minVal above threshold ({} > {})", minVal.get(), threshold);
       return null;
     }
     // offset for screen cords
@@ -169,6 +194,7 @@ public class TemplateMatching {
         new Rectangle(
             offset.x + minLoc.x(), offset.y + minLoc.y(), template.cols(), template.rows());
 
+    StatisticsManager.incrementObjectsDetected();
     debug("Match found at: " + match, debugMsg);
 
     template.release();
@@ -188,7 +214,7 @@ public class TemplateMatching {
    */
   private static void debug(String message, boolean debug) {
     if (debug) {
-      System.out.println(message);
+      logger.debug(message);
     }
   }
 
@@ -207,7 +233,8 @@ public class TemplateMatching {
       throw new IllegalArgumentException("Resource not found: " + resourcePath);
     }
 
-    // Create a temp file to write the resource contents (OpenCV imread needs a file path)
+    // Create a temp file to write the resource contents (OpenCV imread needs a file
+    // path)
     Path tempFile = Files.createTempFile("opencv-temp-", ".png");
     tempFile.toFile().deleteOnExit();
 
@@ -222,5 +249,15 @@ public class TemplateMatching {
     }
 
     return mat;
+  }
+
+  /**
+   * Returns the minVal of the last matched object. The minVal dictates how strongly an object
+   * matches onscreen. (lower = better)
+   *
+   * @return the minVal.
+   */
+  public static double getMinVal() {
+    return minVal;
   }
 }

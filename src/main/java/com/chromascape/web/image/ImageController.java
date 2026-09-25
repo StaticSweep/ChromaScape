@@ -22,6 +22,18 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api")
 public class ImageController {
 
+  private final ModifyImage modifyImage;
+
+  /**
+   * Constructor for the ImageController class.
+   *
+   * @param modifyImage The dependency injected Spring service class that does image operations for
+   *     the frontend.
+   */
+  public ImageController(ModifyImage modifyImage) {
+    this.modifyImage = modifyImage;
+  }
+
   /**
    * Returns the original image as a PNG byte array.
    *
@@ -46,30 +58,14 @@ public class ImageController {
   /**
    * Returns the modified image as a PNG byte array.
    *
-   * <p>Attempts to read "output/modified.png" from disk. If it does not exist, attempts to read
-   * "output/original.png". If neither exist, returns the fallback image from
-   * "resources/images/defaultImage/original.png".
+   * <p>Retrieved from the in-memory cache of the {@link ModifyImage} service. If the current
+   * screenshot is newer than the cache, the original image is returned instead.
    *
-   * @return byte array representing the modified, original, or fallback PNG image.
+   * @return byte array representing the modified or original PNG image.
    * @throws IOException if the file(s) cannot be read.
    */
   @GetMapping(value = "/modifiedImage", produces = MediaType.IMAGE_PNG_VALUE)
   public @ResponseBody byte[] modifiedImage() throws IOException {
-    File modifiedFile = new File("output/modified.png");
-    File originalFile = new File("output/original.png");
-    InputStream in;
-
-    if (modifiedFile.exists()) {
-      in = new FileInputStream(modifiedFile);
-    } else if (originalFile.exists()) {
-      in = new FileInputStream(originalFile);
-    } else {
-      in = getClass().getResourceAsStream("/images/defaultImage/original.png");
-    }
-
-    try (in) {
-      assert in != null;
-      return IOUtils.toByteArray(in);
-    }
+    return modifyImage.getModifiedImageBytes();
   }
 }

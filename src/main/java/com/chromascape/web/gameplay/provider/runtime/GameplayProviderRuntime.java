@@ -153,19 +153,42 @@ public final class GameplayProviderRuntime implements ProviderDecisionHandoff {
 
   @Override
   public Optional<PersistedDecision> findValidatedDecision(String sessionId, String turnId) {
-    return store
-        .findTurn(sessionId, turnId)
-        .filter(value -> value.state() == TurnState.DECIDED && value.decision() != null)
-        .map(
-            value ->
-                new PersistedDecision(
-                    value.sessionId(),
-                    value.turnId(),
-                    value.requestId(),
-                    value.decisionDigest(),
-                    value.semanticActionDigest(),
-                    value.decision(),
-                    value.transcriptRef()));
+    Optional<TurnView> turn = store.findTurn(sessionId, turnId);
+    if (turn.isEmpty()
+        || turn.get().state() != TurnState.DECIDED
+        || turn.get().decision() == null) {
+      return Optional.empty();
+    }
+    TurnView value = turn.get();
+    SessionView session = store.findSession(sessionId).orElse(null);
+    if (session == null) {
+      return Optional.empty();
+    }
+    // The transcript artifact itself is verified here: the exact stored bytes are re-hashed and
+    // compared against the recorded reference. A transcriptSha256 value is therefore never a
+    // digest-shaped assumption; it is the verified content hash of the durable artifact.
+    RedactedTranscriptStore.Verification transcript = transcripts.verify(value.transcriptRef());
+    String transcriptSha256 = transcript.digest();
+    return Optional.of(
+        new PersistedDecision(
+            value.sessionId(),
+            value.turnId(),
+            value.requestId(),
+            value.provider(),
+            value.modelId(),
+            value.decisionDigest(),
+            value.semanticActionDigest(),
+            value.observationDigest(),
+            session.promptDigest(),
+            session.toolsetDigest(),
+            session.knowledgeDigest(),
+            session.goalPlanDigest(),
+            session.taskSkillDigests(),
+            value.transcriptRef(),
+            transcriptSha256,
+            value.state(),
+            value.failureCode(),
+            value.decision()));
   }
 
   void recoverAtStartup() {

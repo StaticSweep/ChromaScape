@@ -1,0 +1,456 @@
+{
+  "schema": "quest.script.v1.fixtures",
+  "description": "Golden fixture corpus for the SC-266 quest script contract. valid[] must pass schema and semantic validation; invalidSchema[] must fail JSON schema; invalidSemantic[] must fail semantic validation with the listed diagnostic codes.",
+  "valid": [
+    {
+      "schema": "quest.script.v1",
+      "version": 1,
+      "id": "minimal_quest",
+      "name": "Minimal Quest",
+      "questKey": "minimal_quest",
+      "members": false,
+      "prerequisites": {},
+      "steps": [
+        {
+          "id": "start",
+          "type": "complete",
+          "description": "Nothing to do."
+        }
+      ],
+      "failureHandling": {
+        "maxRetries": 1,
+        "onPrepareFailure": "FAIL"
+      },
+      "completion": {
+        "type": "QUEST_STATE",
+        "questKey": "minimal_quest",
+        "expect": "FINISHED"
+      }
+    },
+    {
+      "schema": "quest.script.v1",
+      "version": 1,
+      "id": "full_components",
+      "name": "Full Component Reference",
+      "questKey": "full_components",
+      "members": false,
+      "description": "Exercises every SC-266 step component.",
+      "prerequisites": {
+        "quests": [
+          "cooks_assistant"
+        ],
+        "skills": [
+          {
+            "skill": "COOKING",
+            "level": 10,
+            "boostable": true
+          }
+        ],
+        "items": [
+          {
+            "name": "Bucket",
+            "itemId": 1925,
+            "quantity": 1,
+            "optional": false,
+            "consume": false
+          }
+        ],
+        "minimumQuestPoints": 1
+      },
+      "steps": [
+        {
+          "id": "talk_to_cook",
+          "type": "dialogue",
+          "description": "Start the quest with the cook.",
+          "next": "fetch_ingredients",
+          "dialogue": {
+            "npc": "Cook",
+            "npcId": 4626,
+            "continueText": "What's wrong?",
+            "options": [
+              {
+                "text": "I can help.",
+                "next": "fetch_ingredients"
+              },
+              {
+                "text": "Maybe later.",
+                "next": "FAIL"
+              }
+            ]
+          }
+        },
+        {
+          "id": "fetch_ingredients",
+          "type": "gate",
+          "description": "Only continue when all ingredients are held.",
+          "gate": {
+            "conditions": [
+              {
+                "type": "ITEM_IN_INVENTORY",
+                "itemName": "Bucket of milk",
+                "itemId": 1927,
+                "quantity": 1
+              },
+              {
+                "type": "ITEM_IN_INVENTORY",
+                "itemName": "Pot of flour",
+                "itemId": 1933,
+                "quantity": 1
+              },
+              {
+                "type": "ITEM_IN_INVENTORY",
+                "itemName": "Egg",
+                "itemId": 1944,
+                "quantity": 1
+              }
+            ],
+            "onFalse": "gather_ingredients"
+          },
+          "next": "deliver_ingredients"
+        },
+        {
+          "id": "gather_ingredients",
+          "type": "travel",
+          "description": "Travel to the Lumbridge cow field.",
+          "next": "withdraw_bucket",
+          "travel": {
+            "method": "WALK",
+            "destination": "Lumbridge cow field",
+            "regionId": 12850,
+            "x": 3253,
+            "y": 3270,
+            "plane": 0
+          }
+        },
+        {
+          "id": "withdraw_bucket",
+          "type": "inventory",
+          "description": "Withdraw an empty bucket.",
+          "next": "use_bucket",
+          "inventory": {
+            "action": "WITHDRAW",
+            "name": "Bucket",
+            "itemId": 1925,
+            "quantity": 1
+          }
+        },
+        {
+          "id": "use_bucket",
+          "type": "interact",
+          "description": "Milk the cow.",
+          "next": "fetch_ingredients",
+          "interact": {
+            "target": "NPC",
+            "name": "Cow",
+            "id": 2795,
+            "action": "Milk"
+          }
+        },
+        {
+          "id": "deliver_ingredients",
+          "type": "dialogue",
+          "description": "Hand the ingredients to the cook.",
+          "next": "wait_for_completion",
+          "dialogue": {
+            "npc": "Cook",
+            "npcId": 4626,
+            "options": [
+              {
+                "text": "Here you go."
+              }
+            ]
+          }
+        },
+        {
+          "id": "wait_for_completion",
+          "type": "wait",
+          "description": "Wait until the quest is flagged finished.",
+          "next": "finish",
+          "wait": {
+            "condition": {
+              "type": "QUEST_FINISHED",
+              "questKey": "cooks_assistant"
+            },
+            "timeoutTicks": 100
+          }
+        },
+        {
+          "id": "finish",
+          "type": "checkpoint",
+          "description": "Reserved for SC-268 durable resume.",
+          "next": "done",
+          "checkpoint": {
+            "note": "ingredients delivered"
+          }
+        },
+        {
+          "id": "done",
+          "type": "complete"
+        }
+      ],
+      "failureHandling": {
+        "maxRetries": 3,
+        "onPrepareFailure": "RETRY",
+        "retryableCodes": [
+          "TARGET_UNREACHABLE",
+          "ITEM_UNAVAILABLE"
+        ],
+        "terminalCodes": [
+          "PREREQUISITE_UNMET",
+          "DIALOGUE_STATE_MISMATCH"
+        ]
+      },
+      "completion": {
+        "type": "CONDITION",
+        "conditions": [
+          {
+            "type": "QUEST_FINISHED",
+            "questKey": "cooks_assistant"
+          }
+        ]
+      },
+      "metadata": {
+        "difficulty": "NOVICE",
+        "estimatedTicks": 3000,
+        "tags": [
+          "f2p",
+          "starter"
+        ]
+      }
+    }
+  ],
+  "invalidSchema": [
+    {
+      "name": "missing_schema_discriminator",
+      "script": {
+        "version": 1,
+        "id": "no_schema",
+        "name": "No Schema",
+        "questKey": "no_schema",
+        "prerequisites": {},
+        "steps": [
+          {
+            "id": "start",
+            "type": "complete"
+          }
+        ],
+        "failureHandling": {},
+        "completion": {
+          "type": "STEP",
+          "stepId": "start"
+        }
+      }
+    },
+    {
+      "name": "unknown_step_type",
+      "script": {
+        "schema": "quest.script.v1",
+        "version": 1,
+        "id": "bad_step",
+        "name": "Bad Step",
+        "questKey": "bad_step",
+        "prerequisites": {},
+        "steps": [
+          {
+            "id": "start",
+            "type": "summon_demon"
+          }
+        ],
+        "failureHandling": {},
+        "completion": {
+          "type": "STEP",
+          "stepId": "start"
+        }
+      }
+    },
+    {
+      "name": "dialogue_step_missing_payload",
+      "script": {
+        "schema": "quest.script.v1",
+        "version": 1,
+        "id": "dialogue_no_payload",
+        "name": "Dialogue No Payload",
+        "questKey": "dialogue_no_payload",
+        "prerequisites": {},
+        "steps": [
+          {
+            "id": "talk",
+            "type": "dialogue"
+          }
+        ],
+        "failureHandling": {},
+        "completion": {
+          "type": "STEP",
+          "stepId": "talk"
+        }
+      }
+    },
+    {
+      "name": "bad_id_pattern",
+      "script": {
+        "schema": "quest.script.v1",
+        "version": 1,
+        "id": "Bad-Id",
+        "name": "Bad Id",
+        "questKey": "bad_id",
+        "prerequisites": {},
+        "steps": [
+          {
+            "id": "start",
+            "type": "complete"
+          }
+        ],
+        "failureHandling": {},
+        "completion": {
+          "type": "STEP",
+          "stepId": "start"
+        }
+      }
+    }
+  ],
+  "invalidSemantic": [
+    {
+      "name": "duplicate_step_id",
+      "expectedIssueCodes": [
+        "DUPLICATE_STEP_ID"
+      ],
+      "script": {
+        "schema": "quest.script.v1",
+        "version": 1,
+        "id": "duplicate_ids",
+        "name": "Duplicate Ids",
+        "questKey": "duplicate_ids",
+        "prerequisites": {},
+        "steps": [
+          {
+            "id": "talk",
+            "type": "complete"
+          },
+          {
+            "id": "talk",
+            "type": "complete"
+          }
+        ],
+        "failureHandling": {},
+        "completion": {
+          "type": "STEP",
+          "stepId": "talk"
+        }
+      }
+    },
+    {
+      "name": "dangling_next",
+      "expectedIssueCodes": [
+        "DANGLING_STEP_REFERENCE"
+      ],
+      "script": {
+        "schema": "quest.script.v1",
+        "version": 1,
+        "id": "dangling_next",
+        "name": "Dangling Next",
+        "questKey": "dangling_next",
+        "prerequisites": {},
+        "steps": [
+          {
+            "id": "start",
+            "type": "complete",
+            "next": "does_not_exist"
+          }
+        ],
+        "failureHandling": {},
+        "completion": {
+          "type": "STEP",
+          "stepId": "start"
+        }
+      }
+    },
+    {
+      "name": "no_terminal_reachable",
+      "expectedIssueCodes": [
+        "UNREACHABLE_COMPLETION"
+      ],
+      "script": {
+        "schema": "quest.script.v1",
+        "version": 1,
+        "id": "no_terminal",
+        "name": "No Terminal",
+        "questKey": "no_terminal",
+        "prerequisites": {},
+        "steps": [
+          {
+            "id": "loop",
+            "type": "checkpoint",
+            "next": "loop",
+            "checkpoint": {
+              "note": "never terminates"
+            }
+          }
+        ],
+        "failureHandling": {},
+        "completion": {
+          "type": "STEP",
+          "stepId": "loop"
+        }
+      }
+    },
+    {
+      "name": "completion_step_missing",
+      "expectedIssueCodes": [
+        "DANGLING_STEP_REFERENCE"
+      ],
+      "script": {
+        "schema": "quest.script.v1",
+        "version": 1,
+        "id": "completion_missing",
+        "name": "Completion Missing",
+        "questKey": "completion_missing",
+        "prerequisites": {},
+        "steps": [
+          {
+            "id": "start",
+            "type": "complete"
+          }
+        ],
+        "failureHandling": {},
+        "completion": {
+          "type": "STEP",
+          "stepId": "nope"
+        }
+      }
+    },
+    {
+      "name": "dialogue_option_dangling_next",
+      "expectedIssueCodes": [
+        "DANGLING_STEP_REFERENCE"
+      ],
+      "script": {
+        "schema": "quest.script.v1",
+        "version": 1,
+        "id": "option_dangling",
+        "name": "Option Dangling",
+        "questKey": "option_dangling",
+        "prerequisites": {},
+        "steps": [
+          {
+            "id": "talk",
+            "type": "dialogue",
+            "dialogue": {
+              "npc": "Cook",
+              "options": [
+                {
+                  "text": "Hello",
+                  "next": "missing_step"
+                }
+              ]
+            }
+          }
+        ],
+        "failureHandling": {},
+        "completion": {
+          "type": "STEP",
+          "stepId": "talk"
+        }
+      }
+    }
+  ]
+}

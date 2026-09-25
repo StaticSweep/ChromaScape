@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chromascape.dev/replay/canonical-observation-v1.schema.json",
+  "title": "Canonical Observation",
+  "description": "Deterministic projection of world state for comparison.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "projectionVersion": { "type": "integer", "const": 1 },
+    "tick": { "type": "integer", "minimum": 0 },
+    "player": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "position": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "x": { "type": "integer" },
+            "y": { "type": "integer" },
+            "plane": { "type": "integer" }
+          },
+          "required": ["x", "y", "plane"]
+        },
+        "animation": { "type": "integer" },
+        "interaction": { "type": "string" },
+        "skills": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "level": { "type": "integer", "minimum": 1 },
+              "xp": { "type": "integer", "minimum": 0 }
+            },
+            "required": ["level", "xp"]
+          }
+        },
+        "inventory": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "slot": { "type": "integer", "minimum": 0 },
+              "itemId": { "type": "integer", "minimum": 0 },
+              "quantity": { "type": "integer", "minimum": 1 }
+            },
+            "required": ["slot", "itemId", "quantity"]
+          }
+        },
+        "equipment": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "slot": { "type": "integer", "minimum": 0 },
+              "itemId": { "type": "integer", "minimum": 0 },
+              "quantity": { "type": "integer", "minimum": 1 }
+            },
+            "required": ["slot", "itemId", "quantity"]
+          }
+        }
+      },
+      "required": ["position", "inventory", "equipment"]
+    },
+    "npcs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "stableId": { "type": "string" },
+          "npcId": { "type": "integer" },
+          "position": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "x": { "type": "integer" },
+              "y": { "type": "integer" },
+              "plane": { "type": "integer" }
+            },
+            "required": ["x", "y", "plane"]
+          }
+        },
+        "required": ["stableId", "npcId", "position"]
+      }
+    },
+    "objects": { "type": "array", "items": { "type": "object" } },
+    "taskState": { "type": "object" }
+  },
+  "required": ["projectionVersion", "tick", "player", "npcs", "objects", "taskState"]
+}

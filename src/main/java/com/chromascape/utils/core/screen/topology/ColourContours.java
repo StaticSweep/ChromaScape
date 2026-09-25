@@ -10,8 +10,12 @@ import static org.bytedeco.opencv.global.opencv_imgproc.cvtColor;
 import static org.bytedeco.opencv.global.opencv_imgproc.findContours;
 import static org.bytedeco.opencv.global.opencv_imgproc.pointPolygonTest;
 
+import com.chromascape.utils.core.screen.DisplayImage;
 import com.chromascape.utils.core.screen.colour.ColourObj;
+import com.chromascape.utils.core.screen.viewport.ViewportManager;
 import com.chromascape.utils.core.screen.window.ScreenManager;
+import com.chromascape.utils.core.state.StateManager;
+import com.chromascape.utils.core.statistics.StatisticsManager;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
@@ -29,6 +33,8 @@ import org.bytedeco.opencv.opencv_core.Rect;
  * objects representing these contours.
  */
 public class ColourContours {
+
+  public static boolean debug = true;
 
   /**
    * Finds and returns a list of ChromaObj instances representing contours in the given image that
@@ -54,7 +60,22 @@ public class ColourContours {
    * @return a Mat binary mask with pixels in range set to 255, others 0
    */
   public static Mat extractColours(BufferedImage image, ColourObj colourObj) {
-    Mat hsvImage = Java2DFrameUtils.toMat(image);
+    // Convert BufferedImage to Mat explicitly
+    try (Mat hsvImage = Java2DFrameUtils.toMat(image)) {
+      return extractColours(hsvImage, colourObj);
+    }
+  }
+
+  /**
+   * Converts the input Mat to HSV colour space and extracts a binary mask.
+   *
+   * @param inputMat the source image Mat (BGR)
+   * @param colourObj the ColourObj specifying the HSV minimum and maximum bounds
+   * @return a Mat binary mask with pixels in range set to 255, others 0
+   */
+  public static Mat extractColours(Mat inputMat, ColourObj colourObj) {
+    StateManager.setState(com.chromascape.utils.core.state.BotState.SEARCHING);
+    Mat hsvImage = inputMat.clone();
     cvtColor(hsvImage, hsvImage, COLOR_BGR2HSV);
     Mat result = new Mat(hsvImage.size(), CV_8UC1);
     Mat hsvMin = new Mat(colourObj.hsvMin());
@@ -63,6 +84,14 @@ public class ColourContours {
     hsvImage.release();
     hsvMin.release();
     hsvMax.release();
+
+    // if debugging, display the mask
+    if (debug) {
+      DisplayImage.display(Java2DFrameUtils.toBufferedImage(result));
+    }
+
+    ViewportManager.getInstance().updateState(result);
+
     return result;
   }
 
@@ -94,6 +123,7 @@ public class ColourContours {
       Rectangle contourBounds =
           new Rectangle(rect.x() + offset.x, rect.y() + offset.y, rect.width(), rect.height());
       chromaObjects.add(new ChromaObj(i, contour, contourBounds));
+      StatisticsManager.incrementObjectsDetected();
     }
     return chromaObjects;
   }
@@ -110,5 +140,14 @@ public class ColourContours {
     try (Point2f point2f = new Point2f(clientPoint.x, clientPoint.y)) {
       return pointPolygonTest(contour, point2f, false) > 0;
     }
+  }
+
+  public static boolean colourFound(BufferedImage image, ColourObj colourName) {
+    List<ChromaObj> objs = new ArrayList<ChromaObj>();
+    objs = ColourContours.getChromaObjsInColour(image, colourName);
+    if (!objs.isEmpty()) {
+      return true;
+    }
+    return false;
   }
 }

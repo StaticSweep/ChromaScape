@@ -4,6 +4,7 @@ import com.chromascape.web.image.ModifyImage;
 import java.io.IOException;
 import java.util.Map;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,13 +27,14 @@ public class SliderController {
   private final ModifyImage modifyImage;
 
   /**
-   * Constructs a new {@code SliderController} with the injected slider state.
+   * Constructs a new {@code SliderController}.
    *
    * @param sliderState shared singleton bean tracking live slider positions
+   * @param modifyImage service for applying image modifications
    */
-  public SliderController(CurrentSliderState sliderState) {
+  public SliderController(CurrentSliderState sliderState, ModifyImage modifyImage) {
     this.sliderState = sliderState;
-    this.modifyImage = new ModifyImage();
+    this.modifyImage = modifyImage;
   }
 
   /**
@@ -52,5 +54,15 @@ public class SliderController {
     modifyImage.applySliderChanges(sliderState);
 
     return ResponseEntity.ok(Map.of("status", "success"));
+  }
+
+  /**
+   * Retrieves the current configuration of all sliders.
+   *
+   * @return a map containing the current values for all HSV sliders.
+   */
+  @GetMapping("/slider")
+  public ResponseEntity<Map<String, Integer>> getSliderState() {
+    return ResponseEntity.ok(sliderState.getAll());
   }
 }

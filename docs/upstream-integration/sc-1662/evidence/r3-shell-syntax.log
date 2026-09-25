@@ -1,0 +1,9 @@
+# command: bash -n scripts/native/build-remoteinput-linux.sh
+# utc: 2026-09-15T11:03:27Z
+# revision: be4230c0198e065748ff5b49a76f434a581fee4d
+# worktree_status_sha256: 21117c54488d0ccb0ecbfa2827d15b5069f1e80458afde5458463a71dcf6bc29
+# run_sequence: 3 (second-review fixes; runs 1-2 retained unmodified apart from redaction)
+
+
+# exit: 0
+# elapsed_seconds: 0

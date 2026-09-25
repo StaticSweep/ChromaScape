@@ -1,0 +1,7 @@
+{
+  "name": "chromascape-debugger-tests",
+  "private": true,
+  "scripts": {
+    "test": "node --test src/test/js/*.test.js"
+  }
+}

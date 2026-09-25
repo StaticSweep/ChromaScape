@@ -1,0 +1,325 @@
+package com.chromascape.web.aiplayer.routine.service;
+
+import com.chromascape.web.aiplayer.contract.CanonicalJsonHasher;
+import com.chromascape.web.aiplayer.contract.CurrentSliceIdentity;
+import com.chromascape.web.aiplayer.routine.entity.RoutineModel;
+import com.chromascape.web.aiplayer.routine.entity.RoutineReplayTrace;
+import com.chromascape.web.aiplayer.routine.repository.RoutineModelRepository;
+import com.chromascape.web.aiplayer.routine.repository.RoutineReplayTraceRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class RoutineReplayShadowService {
+  private final ObjectMapper mapper;
+  private final RoutineCaptureIngestionService captures;
+  private final BehaviorGraphService graphs;
+  private final RoutineModelRepository models;
+  private final RoutineReplayTraceRepository traces;
+  private final CurrentSliceRunService runService;
+
+  public RoutineReplayShadowService(
+      ObjectMapper mapper,
+      RoutineCaptureIngestionService captures,
+      BehaviorGraphService graphs,
+      RoutineModelRepository models,
+      RoutineReplayTraceRepository traces,
+      CurrentSliceRunService runService) {
+    this.mapper = mapper;
+    this.captures = captures;
+    this.graphs = graphs;
+    this.models = models;
+    this.traces = traces;
+    this.runService = runService;
+  }
+
+  @Transactional
+  public Map<String, Object> buildModel(String graphId, CurrentSliceIdentity requestedIdentity) {
+    Map<String, Object> graph = graphs.get(graphId);
+    if (!"PUBLISHED".equals(graph.get("state"))) {
+      throw error("GRAPH_NOT_PUBLISHED", "model creation requires a published graph");
+    }
+    Object definitionValue = graph.get("definition");
+    if (!(definitionValue instanceof Map<?, ?> definition) || definition.get("identity") == null) {
+      throw error("GRAPH_INVALID", "published graph definition has no identity");
+    }
+    CurrentSliceIdentity graphIdentity =
+        mapper.convertValue(definition.get("identity"), CurrentSliceIdentity.class);
+    requestedIdentity.requireSameIdentity(graphIdentity);
+
+    ObjectNode modelContent = mapper.createObjectNode();
+    modelContent.put("schema", "fishing-model/v1");
+    modelContent.put("graph_id", graphId);
+    modelContent.set("graph", mapper.valueToTree(definition));
+    modelContent.set("identity", mapper.valueToTree(graphIdentity));
+    String modelHash = CanonicalJsonHasher.hash(modelContent, null);
+    String modelId = "model_" + modelHash.substring(7, 31);
+    CurrentSliceIdentity modelIdentity =
+        new CurrentSliceIdentity(
+            graphIdentity.schema(),
+            graphIdentity.task(),
+            graphIdentity.run(),
+            graphIdentity.client(),
+            graphIdentity.capture(),
+            graphIdentity.source(),
+            graphIdentity.graph(),
+            new CurrentSliceIdentity.Model(modelId, modelHash),
+            graphIdentity.candidate(),
+            false);
+
+    RoutineModel entity = models.findByModelId(modelId).orElseGet(RoutineModel::new);
+    entity.setModelId(modelId);
+    entity.setGraphId(graphId);
+    entity.setModelHash(modelHash);
+    entity.setIdentityJson(write(modelIdentity));
+    entity.setDefinitionJson(
+        write(
+            Map.of("schema", "fishing-model/v1", "graph", definition, "identity", modelIdentity)));
+    models.save(entity);
+    if (modelIdentity.run() != null && modelIdentity.run().runId() != null) {
+      runService.advanceIdentity(modelIdentity.run().runId(), modelIdentity, "MODEL_BOUND");
+    }
+    return response(entity, modelIdentity);
+  }
+
+  @Transactional
+  public Map<String, Object> replay(String modelId, String recordingId) {
+    RoutineModel model = model(modelId);
+    CurrentSliceIdentity modelIdentity = readIdentity(model.getIdentityJson());
+    Map<String, Object> recording = captures.recording(recordingId);
+    CurrentSliceIdentity recordingIdentity =
+        mapper.convertValue(recording.get("identity"), CurrentSliceIdentity.class);
+    recordingIdentity.requireSameIdentity(modelIdentity);
+    if (recordingIdentity.capture() == null
+        || !recordingId.equals(recordingIdentity.capture().recordingId())) {
+      throw error("IDENTITY_MISMATCH", "replay recording does not match model capture");
+    }
+
+    Map<String, Object> definition = readMap(model.getDefinitionJson());
+    List<JsonNode> expected = actionNodes(definition);
+    List<JsonNode> actual = captures.actions(recordingId);
+    List<Map<String, Object>> decisions = decisions(expected, actual);
+    int matched = matchedCount(decisions);
+    String status = passed(expected, decisions) ? "PASSED" : "FAILED";
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("schema", "routine-replay-result/v1");
+    result.put("status", status);
+    result.put("model_id", modelId);
+    result.put("recording_id", recordingId);
+    result.put("identity", modelIdentity);
+    result.put("decision_count", decisions.size());
+    result.put("matched_decision_count", matched);
+    result.put("decisions", decisions);
+    result.put("deterministic", true);
+    result.put("control_allowed", false);
+    return persistTrace(model, recordingId, "POLICY_REPLAY", modelIdentity, result);
+  }
+
+  @Transactional
+  public Map<String, Object> shadow(String modelId, String sessionId) {
+    RoutineModel model = model(modelId);
+    CurrentSliceIdentity modelIdentity = readIdentity(model.getIdentityJson());
+    Map<String, Object> session = captures.status(sessionId);
+    CurrentSliceIdentity sessionIdentity =
+        mapper.convertValue(session.get("identity"), CurrentSliceIdentity.class);
+    sessionIdentity.requireSameIdentity(modelIdentity);
+    List<JsonNode> observed = captures.actionsForSession(sessionId);
+    List<Map<String, Object>> recommendations = new ArrayList<>();
+    if (!observed.isEmpty()) {
+      JsonNode latest = observed.get(observed.size() - 1);
+      recommendations.add(
+          Map.of(
+              "tick",
+              latest.path("tick").asLong(),
+              "action",
+              latest,
+              "mode",
+              "OBSERVE_ONLY",
+              "control_allowed",
+              false));
+    }
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("schema", "routine-shadow-trace/v1");
+    result.put("status", "SHADOW");
+    result.put("model_id", modelId);
+    result.put("session_id", sessionId);
+    result.put("identity", modelIdentity);
+    result.put("recommendations", recommendations);
+    result.put(
+        "abstentions",
+        List.of(
+            Map.of(
+                "reason",
+                recommendations.isEmpty() ? "NO_ACTION_OBSERVED" : "READ_ONLY",
+                "control_allowed",
+                false)));
+    result.put("control_allowed", false);
+    return persistTrace(model, sessionId, "SHADOW", modelIdentity, result);
+  }
+
+  /**
+   * Aligns the model's actions against the recorded trace as an ordered subsequence.
+   *
+   * <p>A recording is a linear trace of everything the operator did while demonstrating, incidental
+   * clicks included: walking to the fishing spot, dismissing a menu, double-clicking the spot. The
+   * routine the evidence supports is narrower, so a model is deliberately a subsequence of its
+   * recording and ABSTAINS on the rest. This used to pair the two lists index for index and demand
+   * equal lengths, which required every model to be a verbatim transcript of its recording -- which
+   * no graph the Assistant can usefully propose ever is, and which contradicts both the ABSTAIN
+   * node type in behavior-graph-definition/v1 and the acceptance's own requirement that a draft
+   * graph's first ACTION be the demonstrated interaction. Order is still enforced, so a model whose
+   * actions occur out of sequence does not match.
+   */
+  static List<Map<String, Object>> decisions(List<JsonNode> expected, List<JsonNode> actual) {
+    List<Map<String, Object>> decisions = new ArrayList<>();
+    int cursor = 0;
+    for (JsonNode observed : actual) {
+      boolean same =
+          cursor < expected.size()
+              && CanonicalJsonHasher.canonical(expected.get(cursor))
+                  .equals(CanonicalJsonHasher.canonical(observed));
+      decisions.add(
+          decision(
+              decisions.size(),
+              observed.path("tick").asLong(),
+              same ? expected.get(cursor) : null,
+              observed,
+              same ? "MATCHED" : "ABSTAINED"));
+      if (same) cursor++;
+    }
+    // A modelled action the recording never shows is a real divergence, not an abstention.
+    for (int i = cursor; i < expected.size(); i++) {
+      decisions.add(
+          decision(
+              decisions.size(),
+              expected.get(i).path("tick").asLong(),
+              expected.get(i),
+              null,
+              "MISSING"));
+    }
+    return decisions;
+  }
+
+  /** Every modelled action matched, and a model that claims nothing never passes. */
+  static boolean passed(List<JsonNode> expected, List<Map<String, Object>> decisions) {
+    return !expected.isEmpty() && matchedCount(decisions) == expected.size();
+  }
+
+  private static int matchedCount(List<Map<String, Object>> decisions) {
+    int matched = 0;
+    for (Map<String, Object> decision : decisions) {
+      if ("MATCHED".equals(decision.get("status"))) matched++;
+    }
+    return matched;
+  }
+
+  private static Map<String, Object> decision(
+      int ordinal, Long tick, JsonNode expected, JsonNode observed, String status) {
+    Map<String, Object> decision = new LinkedHashMap<>();
+    decision.put("ordinal", ordinal);
+    decision.put("tick", tick);
+    decision.put("expected", expected);
+    decision.put("observed", observed);
+    decision.put("status", status);
+    decision.put("control_allowed", false);
+    return decision;
+  }
+
+  private List<JsonNode> actionNodes(Map<String, Object> definition) {
+    List<JsonNode> actions = new ArrayList<>();
+    JsonNode nodes =
+        mapper.valueToTree(
+            definition.get("graph") instanceof Map
+                ? ((Map<?, ?>) definition.get("graph")).get("nodes")
+                : definition.get("nodes"));
+    if (nodes != null && nodes.isArray()) {
+      for (JsonNode node : nodes) {
+        if ("ACTION".equals(node.path("type").asText())) {
+          actions.add(node.path("semantics").path("recorded_action"));
+        }
+      }
+    }
+    return actions;
+  }
+
+  private Map<String, Object> persistTrace(
+      RoutineModel model,
+      String recordingId,
+      String mode,
+      CurrentSliceIdentity identity,
+      Map<String, Object> result) {
+    String contentHash = CanonicalJsonHasher.hash(mapper.valueToTree(result), null);
+    String traceId = "trace_" + contentHash.substring(7, 31);
+    RoutineReplayTrace entity = traces.findByTraceId(traceId).orElseGet(RoutineReplayTrace::new);
+    entity.setTraceId(traceId);
+    entity.setModelId(model.getModelId());
+    entity.setRecordingId(recordingId);
+    entity.setTraceMode(mode);
+    entity.setContentHash(contentHash);
+    entity.setIdentityJson(write(identity));
+    entity.setResultJson(write(result));
+    traces.save(entity);
+    result.put("trace_id", traceId);
+    result.put("content_hash", contentHash);
+    return result;
+  }
+
+  private RoutineModel model(String modelId) {
+    return models.findByModelId(modelId).orElseThrow(() -> error("NOT_FOUND", "model not found"));
+  }
+
+  private CurrentSliceIdentity readIdentity(String json) {
+    try {
+      return mapper.readValue(json, CurrentSliceIdentity.class);
+    } catch (Exception e) {
+      throw error("IDENTITY_MISMATCH", "persisted model identity is invalid");
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> readMap(String json) {
+    try {
+      return mapper.readValue(json, Map.class);
+    } catch (Exception e) {
+      throw error("MODEL_INVALID", "persisted model is invalid");
+    }
+  }
+
+  private String write(Object value) {
+    try {
+      return mapper.writeValueAsString(value);
+    } catch (Exception e) {
+      throw error("MODEL_INVALID", "model artifact is not serializable");
+    }
+  }
+
+  private Map<String, Object> response(RoutineModel entity, CurrentSliceIdentity identity) {
+    return Map.of(
+        "schema",
+        "fishing-model/v1",
+        "model_id",
+        entity.getModelId(),
+        "graph_id",
+        entity.getGraphId(),
+        "model_hash",
+        entity.getModelHash(),
+        "identity",
+        identity,
+        "control_allowed",
+        false);
+  }
+
+  private static RoutineCaptureIngestionService.RoutineCaptureException error(
+      String code, String message) {
+    return new RoutineCaptureIngestionService.RoutineCaptureException(
+        HttpStatus.UNPROCESSABLE_ENTITY, code, message);
+  }
+}

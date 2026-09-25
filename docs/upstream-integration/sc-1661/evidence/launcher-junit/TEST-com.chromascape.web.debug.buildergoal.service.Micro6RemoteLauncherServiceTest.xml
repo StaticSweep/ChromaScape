@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.buildergoal.service.Micro6RemoteLauncherServiceTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-14T12:36:26.091Z" hostname="fedora" time="0.013">
+<testcase name="agentIsOfflineUntilCompatibleHeartbeatArrives()" classname="com.chromascape.web.debug.buildergoal.service.Micro6RemoteLauncherServiceTest" time="0.004"/>
+<testcase name="heartbeatCannotChangePinnedDestinationOrIdentity()" classname="com.chromascape.web.debug.buildergoal.service.Micro6RemoteLauncherServiceTest" time="0.004"/>
+<testcase name="authenticationFailsClosed()" classname="com.chromascape.web.debug.buildergoal.service.Micro6RemoteLauncherServiceTest" time="0.003"/>
+</testsuite>

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chromascape.dev/replay/state-hash-sample-v1.schema.json",
+  "title": "State Hash Sample",
+  "description": "A state hash and chain hash at a specific tick and sequence.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "sampleVersion": { "type": "integer", "const": 1 },
+    "tick": { "type": "integer", "minimum": 0 },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "projectionVersion": { "type": "integer" },
+    "stateHash": { "type": "string" },
+    "chainHash": { "type": "string" }
+  },
+  "required": ["sampleVersion", "tick", "sequence", "stateHash", "chainHash"]
+}

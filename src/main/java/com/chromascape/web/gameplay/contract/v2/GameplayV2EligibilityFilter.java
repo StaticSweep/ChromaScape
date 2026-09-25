@@ -9,7 +9,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import org.springframework.stereotype.Component;
 
 /**
@@ -35,7 +34,6 @@ public final class GameplayV2EligibilityFilter {
 
   private final ObjectMapper objectMapper;
 
-  /** Creates the deterministic eligibility filter with the application JSON mapper. */
   public GameplayV2EligibilityFilter(ObjectMapper objectMapper) {
     this.objectMapper = objectMapper;
   }
@@ -48,7 +46,7 @@ public final class GameplayV2EligibilityFilter {
   public JsonNode filter(
       JsonNode catalog, JsonNode observation, JsonNode planningInput, Instant evaluatedAt) {
     String reason = globalRejectionReason(catalog, observation, planningInput, evaluatedAt);
-    final EligibilityStatus global = reason == null ? null : EligibilityStatus.valueOf(reason);
+    EligibilityStatus global = reason == null ? null : EligibilityStatus.valueOf(reason);
     ObjectNode result = objectMapper.createObjectNode();
     result.put("contractVersion", GameplayV2Contracts.VERSION);
     result.put("mode", planningInput.path("mode").asText());
@@ -78,15 +76,10 @@ public final class GameplayV2EligibilityFilter {
       return EligibilityStatus.STALE_OBSERVATION.name();
     }
     JsonNode freshness = observation.path("freshness");
-    Instant capturedAt;
-    try {
-      capturedAt = Instant.parse(observation.path("capturedAt").asText());
-    } catch (Exception exception) {
-      return EligibilityStatus.STALE_OBSERVATION.name();
-    }
     if ("STALE".equals(freshness.path("status").asText())
-        || capturedAt.isAfter(evaluatedAt)
-        || capturedAt.plusMillis(freshness.path("maxAgeMs").asLong()).isBefore(evaluatedAt)) {
+        || Instant.parse(observation.path("capturedAt").asText())
+            .plusMillis(freshness.path("maxAgeMs").asLong())
+            .isBefore(evaluatedAt)) {
       return EligibilityStatus.STALE_OBSERVATION.name();
     }
     if (observation.path("knowledgeFreshnessConfidence").asDouble() < MINIMUM_KNOWLEDGE_CONFIDENCE
@@ -171,7 +164,7 @@ public final class GameplayV2EligibilityFilter {
 
   private EligibilityStatus taskStatus(
       JsonNode task, JsonNode observation, JsonNode planningInput) {
-    final String taskKey = task.path("taskKey").asText();
+    String taskKey = task.path("taskKey").asText();
     // Deterministic capability gate: every required capability must be executor-supported.
     for (JsonNode capability : task.path("requiredCapabilities")) {
       if (!SUPPORTED_CAPABILITIES.contains(capability.asText())) {
@@ -232,7 +225,7 @@ public final class GameplayV2EligibilityFilter {
       return EligibilityStatus.BUDGET_EXHAUSTED;
     }
     String environment =
-        planningInput.path("identities").path("environmentId").asText("").toUpperCase(Locale.ROOT);
+        planningInput.path("identities").path("environmentId").asText("").toUpperCase();
     if ("LIVE_TASK".equals(planningInput.path("mode").asText())
         && (environment.contains("SIM") || environment.contains("XRSPS"))) {
       return EligibilityStatus.POLICY_DENIED;

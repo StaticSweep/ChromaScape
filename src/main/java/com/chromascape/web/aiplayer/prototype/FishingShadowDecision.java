@@ -1,0 +1,41 @@
+package com.chromascape.web.aiplayer.prototype;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+/**
+ * One live shadow decision produced from a Micro6 tick.
+ *
+ * <p>A recommendation is data, not an execution command. {@code status} is {@code PREDICTED} for a
+ * recommendation or {@code ABSTAINED} for an explicit abstention. For abstentions, {@code action}
+ * and {@code targetNpc} are null and {@code abstentionReason} is populated.
+ *
+ * <p>{@code shadowRunId} identifies the shadow run that produced this decision. Reusing a textual
+ * debug session id across Micro6 restarts yields a different {@code shadowRunId}; schema-v1 records
+ * (a null {@code shadowRunId}) are treated as legacy history and never as the current live run.
+ */
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
+public record FishingShadowDecision(
+    @JsonProperty("schemaVersion") int schemaVersion,
+    @JsonProperty("type") String type,
+    @JsonProperty("status") String status,
+    @JsonProperty("modelId") String modelId,
+    @JsonProperty("sessionId") String sessionId,
+    @JsonProperty("shadowRunId") String shadowRunId,
+    @JsonProperty("tick") long tick,
+    @JsonProperty("observedAt") String observedAt,
+    @JsonProperty("action") SemanticAction action,
+    @JsonProperty("targetNpc") FishingState.NearbyNpc targetNpc,
+    @JsonProperty("abstentionReason") String abstentionReason,
+    @JsonProperty("policyDistance") Double policyDistance,
+    @JsonProperty("matchedExampleTick") Long matchedExampleTick,
+    @JsonProperty("latencyMicros") long latencyMicros) {
+
+  /** AI Routine recommendations can never dispatch gameplay input. */
+  @JsonProperty("control_allowed")
+  public boolean controlAllowed() {
+    return false;
+  }
+}

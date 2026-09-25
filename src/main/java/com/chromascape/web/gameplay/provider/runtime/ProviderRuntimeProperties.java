@@ -17,6 +17,7 @@ public final class ProviderRuntimeProperties {
   private Path transcriptRoot = Path.of(".chromascape/provider-transcripts");
   private int maxStdoutBytes = 1_048_576;
   private int maxStderrBytes = 131_072;
+  private long maxTranscriptBytes = 1_048_576;
   private long processStartTimeoutMillis = 5_000;
   private long firstEventTimeoutMillis = 30_000;
   private long toolResponseTimeoutMillis = 5_000;
@@ -31,6 +32,10 @@ public final class ProviderRuntimeProperties {
   void validate() {
     if (maxStdoutBytes < 4096 || maxStderrBytes < 4096) {
       throw new IllegalStateException("Provider output limits must be at least 4096 bytes");
+    }
+    if (maxTranscriptBytes < 4096) {
+      throw new IllegalStateException(
+          "The provider transcript size limit must be at least 4096 bytes");
     }
     if (processStartTimeoutMillis <= 0
         || firstEventTimeoutMillis <= 0
@@ -116,6 +121,14 @@ public final class ProviderRuntimeProperties {
 
   public void setMaxStderrBytes(int maxStderrBytes) {
     this.maxStderrBytes = maxStderrBytes;
+  }
+
+  public long getMaxTranscriptBytes() {
+    return maxTranscriptBytes;
+  }
+
+  public void setMaxTranscriptBytes(long maxTranscriptBytes) {
+    this.maxTranscriptBytes = maxTranscriptBytes;
   }
 
   public ProviderProcess getClaude() {

@@ -18,7 +18,6 @@ abstract class ClosedGameplayProviderAdapter implements GameplayProviderAdapter 
 
   @Override
   public final ProviderDecision adapt(String modelVersion, JsonNode providerOutput) {
-    validateModelVersion(modelVersion);
     validator.validate("providerProposal", providerOutput);
     String decisionId = requiredText(providerOutput, "decisionId");
     JsonNode semanticAction = providerOutput.path("semanticAction");
@@ -48,11 +47,5 @@ abstract class ClosedGameplayProviderAdapter implements GameplayProviderAdapter 
       throw new IllegalArgumentException(field + " is required");
     }
     return value;
-  }
-
-  private static void validateModelVersion(String modelVersion) {
-    if (modelVersion == null || !modelVersion.matches("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")) {
-      throw new IllegalArgumentException("modelVersion must be a schema token");
-    }
   }
 }

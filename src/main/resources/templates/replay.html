@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Replay - ChromaScape</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #e0e0e0;
+        }
+        body .text-muted {
+            color: #a8b4c7 !important;
+        }
+        body .form-control,
+        body .form-select {
+            color: #172033;
+            caret-color: #172033;
+            background-color: #f8fafc;
+            border-color: #b8c4d3;
+        }
+        body .form-control::placeholder {
+            color: #6b7c93;
+            opacity: 1;
+        }
+        body .form-control:focus,
+        body .form-select:focus {
+            color: #111827;
+            background-color: #fff;
+            border-color: #5da7ff;
+            box-shadow: 0 0 0 0.2rem rgba(93, 167, 255, 0.2);
+        }
+        body .form-control:disabled,
+        body .form-select:disabled {
+            color: #43526a;
+            background-color: #dce3eb;
+            opacity: 1;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        video {
+            width: 100%;
+            max-height: 600px;
+            display: block;
+        }
+        .timeline-container {
+            position: relative;
+            margin: 10px 0;
+        }
+        .timeline-slider {
+            width: 100%;
+            cursor: pointer;
+        }
+        .tick-cards-panel {
+            max-height: 500px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+        .tick-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-left: 3px solid #0d6efd;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .tick-card.active {
+            border-left-color: #ffc107;
+            background: rgba(255, 193, 7, 0.1);
+        }
+        .tick-transition {
+            background: rgba(108, 117, 125, 0.05);
+            border-left: 3px solid #6c757d;
+            border-radius: 6px;
+            padding: 8px;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+        .tick-transition-header {
+            font-weight: bold;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+        .load-more-indicator {
+            text-align: center;
+            padding: 15px;
+            color: #aaa;
+        }
+        .tick-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .tick-number {
+            font-weight: bold;
+            color: #0d6efd;
+        }
+        .tick-summary {
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 8px;
+        }
+        .tick-section {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .section-header {
+            font-weight: bold;
+            font-size: 12px;
+            color: #0d6efd;
+            margin-bottom: 4px;
+        }
+        .section-chip {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            background: rgba(13, 110, 253, 0.2);
+            color: #0d6efd;
+            font-size: 11px;
+            margin-right: 5px;
+        }
+        .category-toggles {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .cat-toggle {
+            padding: 5px 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(0, 0, 0, 0.3);
+            color: #999;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        .cat-toggle.active {
+            background: rgba(13, 110, 253, 0.3);
+            border-color: #0d6efd;
+            color: #0d6efd;
+        }
+        .cat-toggle:hover {
+            background: rgba(13, 110, 253, 0.2);
+        }
+        .log-entry {
+            padding: 5px 10px;
+            margin: 2px 0;
+            border-radius: 4px;
+            border-left: 3px solid #555;
+        }
+        .log-entry.debug {
+            border-left-color: #6c757d;
+            background: rgba(108, 117, 125, 0.1);
+        }
+        .log-entry.info {
+            border-left-color: #0d6efd;
+            background: rgba(13, 110, 253, 0.1);
+        }
+        .log-entry.warn {
+            border-left-color: #ffc107;
+            background: rgba(255, 193, 7, 0.1);
+        }
+        .log-entry.error {
+            border-left-color: #dc3545;
+            background: rgba(220, 53, 69, 0.1);
+        }
+        .log-timestamp {
+            color: #888;
+            font-size: 11px;
+        }
+        .control-btn {
+            min-width: 100px;
+        }
+        .recording-item {
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .recording-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .time-display {
+            font-family: 'Courier New', monospace;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .replay-load-status {
+            min-height: 1.4rem;
+            color: #a8b4c7;
+        }
+        .replay-load-status.ready {
+            color: #72d89b;
+        }
+        .replay-load-status.error {
+            color: #ff7b86;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+    </style>
+    <link rel="stylesheet" href="/css/replay-debugger.css">
+</head>
+<body>
+    <div class="container-fluid p-4">
+        <div class="row">
+            <div class="col-12">
+                <h2><i class="bi bi-play-circle me-2"></i>Game Replay</h2>
+            </div>
+        </div>
+
+        <!-- Recording Controls -->
+        <div class="row">
+            <div class="col-12">
+                <div class="glass-panel">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <button id="recordBtn" class="btn btn-danger control-btn">
+                                <i class="bi bi-circle-fill me-1"></i>
+                                <span id="recordBtnText">Start Recording</span>
+                            </button>
+                        </div>
+                        <div class="col-auto">
+                            <button id="refreshBtn" class="btn btn-outline-light control-btn">
+                                <i class="bi bi-arrow-clockwise me-1"></i>
+                                Refresh List
+                            </button>
+                        </div>
+                        <div class="col-auto ms-auto">
+                            <span id="recordingStatus" class="badge bg-secondary">Not Recording</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Video Player -->
+        <div class="row" id="playerSection" style="display:none;">
+            <div class="col-lg-8">
+                <div class="glass-panel">
+                    <div class="video-container">
+                        <video id="videoPlayer" controls>
+                            Your browser does not support video playback.
+                        </video>
+                    </div>
+                    <div id="replayLoadStatus" class="replay-load-status mt-2" role="status" aria-live="polite">
+                        Select a recording below to load its video.
+                    </div>
+                    <div class="timeline-container mt-3">
+                        <input type="range" id="timelineSlider" class="form-range timeline-slider" min="0" max="100" value="0" step="0.1">
+                        <div class="row align-items-center mt-2">
+                            <div class="col-auto">
+                                <button id="playPauseBtn" class="btn btn-primary">
+                                    <i class="bi bi-play-fill"></i>
+                                </button>
+                            </div>
+                            <div class="col-auto">
+                                <div class="time-display">
+                                    <span id="currentTime">00:00</span> / <span id="duration">00:00</span>
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <select id="playbackSpeed" class="form-select form-select-sm" style="width: auto;">
+                                    <option value="0.25">0.25x</option>
+                                    <option value="0.5">0.5x</option>
+                                    <option value="1" selected>1x</option>
+                                    <option value="2">2x</option>
+                                    <option value="4">4x</option>
+                                </select>
+                            </div>
+                            <div class="col-auto ms-auto">
+                                <button id="fullscreenBtn" class="btn btn-outline-light">
+                                    <i class="bi bi-fullscreen"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tick Cards Panel -->
+            <div class="col-lg-4">
+                <div class="glass-panel">
+                    <h6><i class="bi bi-layers me-2"></i>Tick Data</h6>
+
+                    <!-- Global Category Toggles -->
+                    <div class="category-toggles" id="globalCategoryToggles">
+                        <button class="cat-toggle active" data-section="actions" title="Show action log entries">Actions</button>
+                        <button class="cat-toggle active" data-section="quest" title="Show quest progress">Quest</button>
+                        <button class="cat-toggle active" data-section="dialogue" title="Show dialogue">Dialogue</button>
+                        <button class="cat-toggle active" data-section="inventory" title="Show inventory">Inventory</button>
+                        <button class="cat-toggle active" data-section="npcs" title="Show NPCs">NPCs</button>
+                        <button class="cat-toggle active" data-section="projectiles" title="Show projectiles">Projectiles</button>
+                        <button class="cat-toggle active" data-section="player" title="Show player state">Player</button>
+                        <button class="cat-toggle active" data-section="varbits" title="Show varbits">Varbits</button>
+                    </div>
+
+                    <!-- Tick Cards -->
+                    <div id="tickCardsPanel" class="tick-cards-panel">
+                        <div id="noTickDataMessage" class="alert alert-warning" style="display:none">
+                            This recording was made before tick tracking was enabled. Only video playback is available.
+                        </div>
+                        <div id="loadingTickData" class="text-center p-3">
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                            <span class="ms-2">Loading tick data...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- xRSPS Replay Debugger -->
+        <div class="row">
+            <div class="col-12">
+                <div class="glass-panel">
+                    <h5><i class="bi bi-cpu me-2"></i>xRSPS Causal Simulation</h5>
+                    <p class="text-muted small mb-2">Deterministic causal simulation on the xRSPS kernel. xRSPS is the sole simulator; the legacy OpenRune controls have been retired.</p>
+                    <div id="replay-capability-badge"></div>
+                    <h6 class="mt-3"><i class="bi bi-collection-play me-2"></i>Simulation Catalog</h6>
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Action</th>
+                                    <th>Recording ID</th>
+                                    <th>Account</th>
+                                    <th>Script</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="replay-recording-list">
+                                <tr><td colspan="5" class="text-center">Loading…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="replay-preflight-panel"></div>
+                    <div id="replay-compile-panel"></div>
+                    <div id="replay-run-panel"></div>
+                    <div id="replay-events-panel"></div>
+                    <div id="replay-report-panel"></div>
+                    <div id="replay-mismatch-panel"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recordings List -->
+        <div class="row">
+            <div class="col-12">
+                <div class="glass-panel">
+                    <h6><i class="bi bi-collection-play me-2"></i>Available Recordings</h6>
+                    <p class="text-muted small mb-2">Recordings without tick snapshots are shown as not replayable so you can diagnose capture/session issues.</p>
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Recording ID</th>
+                                    <th>Account</th>
+                                    <th>Start</th>
+                                    <th>Replay Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recordingsList">
+                                <tr>
+                                    <td colspan="5" class="text-center">No recordings found</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const DEBUG_API_BASE = '/api/debug/replay';
+        const RECORDING_SESSIONS_API = '/api/recordings/sessions';
+        const REPLAY_TICK_CATALOG_API = '/api/replay/playback/recordings';
+        let isRecording = false;
+        let currentRecordingId = null;
+        let currentSessionId = null;
+        let currentReplayEntry = null;
+
+        // DOM Elements
+        const recordBtn = document.getElementById('recordBtn');
+        const recordBtnText = document.getElementById('recordBtnText');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const recordingStatus = document.getElementById('recordingStatus');
+        const videoPlayer = document.getElementById('videoPlayer');
+        const playerSection = document.getElementById('playerSection');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const timelineSlider = document.getElementById('timelineSlider');
+        const currentTimeEl = document.getElementById('currentTime');
+        const durationEl = document.getElementById('duration');
+        const playbackSpeed = document.getElementById('playbackSpeed');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const tickCardsPanel = document.getElementById('tickCardsPanel');
+        const noTickDataMessage = document.getElementById('noTickDataMessage');
+        const loadingTickData = document.getElementById('loadingTickData');
+        const recordingsList = document.getElementById('recordingsList');
+        const globalCategoryToggles = document.getElementById('globalCategoryToggles');
+        const replayLoadStatus = document.getElementById('replayLoadStatus');
+
+        // State
+        const state = {
+            globalSectionVisibility: {
+                actions: true, quest: true, dialogue: true, inventory: true,
+                npcs: true, projectiles: true, player: true, varbits: true
+            },
+            tickDataCache: new Map(),
+            currentTick: null,
+            syncInfo: null, // Store sync info from session
+            msPerTick: 600, // Default, will be updated from sync info
+            loadedTickRange: { start: 0, end: 0 }, // Track loaded tick range
+            isLoadingMore: false,
+            hasMoreTicks: true
+        };
+
+        // Recording Controls
+        recordBtn.addEventListener('click', async () => {
+            if (isRecording) {
+                await stopRecording();
+            } else {
+                await startRecording();
+            }
+        });
+
+        refreshBtn.addEventListener('click', loadRecordings);
+
+        async function startRecording() {
+            try {
+                const response = await fetch(`${DEBUG_API_BASE}/start-recording`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        accountName: 'Replay User',
+                        scriptName: 'Manual Recording',
+                        recordingEnabled: true,
+                        sessionId: currentSessionId || null
+                    })
+                });
+                const data = await response.json();
+
+                if (data.sessionId && data.recordingId) {
+                    isRecording = true;
+                    currentSessionId = data.sessionId;
+                    currentRecordingId = data.recordingId;
+                    recordBtn.classList.remove('btn-danger');
+                    recordBtn.classList.add('btn-success');
+                    recordBtnText.textContent = 'Stop Recording';
+                    recordingStatus.textContent = 'Recording...';
+                    recordingStatus.classList.remove('bg-secondary');
+                    recordingStatus.classList.add('bg-danger');
+                    console.log('Started recording:', data);
+                }
+            } catch (error) {
+                console.error('Failed to start recording:', error);
+            }
+        }
+
+        async function stopRecording() {
+            try {
+                const response = await fetch(`${DEBUG_API_BASE}/stop-recording`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId: currentSessionId,
+                        endTick: null
+                    })
+                });
+                const data = await response.json();
+
+                if (data.status === 'stopped') {
+                    isRecording = false;
+                    currentSessionId = null;
+                    recordBtn.classList.remove('btn-success');
+                    recordBtn.classList.add('btn-danger');
+                    recordBtnText.textContent = 'Start Recording';
+                    recordingStatus.textContent = 'Not Recording';
+                    recordingStatus.classList.remove('bg-danger');
+                    recordingStatus.classList.add('bg-secondary');
+
+                    // Refresh replayable list and auto-select newest replayable recording
+                    const recordings = await loadRecordings();
+                    if (recordings && recordings.length > 0) {
+                        const newest = recordings[0];
+                        await selectReplayRecording(newest.recordingId, newest);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to stop recording:', error);
+            }
+        }
+
+        // Load recordings and mark replayability by tick snapshot availability
+        async function loadRecordings() {
+            try {
+                const response = await fetch(RECORDING_SESSIONS_API);
+                if (!response.ok) {
+                    throw new Error(`Recording catalog returned HTTP ${response.status}`);
+                }
+                const sessions = await response.json();
+
+                // Tick coverage enriches the list but never gates ordinary video playback.
+                // Authentication or xRSPS availability must not hide otherwise valid MP4 files.
+                const tickEntriesByRecording = new Map();
+                try {
+                    const tickResponse = await fetch(`${REPLAY_TICK_CATALOG_API}?limit=200&offset=0`);
+                    if (tickResponse.ok) {
+                        const tickCatalog = await tickResponse.json();
+                        (Array.isArray(tickCatalog.entries) ? tickCatalog.entries : []).forEach(entry => {
+                            if (entry.recordingId) tickEntriesByRecording.set(entry.recordingId, entry);
+                        });
+                    }
+                } catch (tickCatalogError) {
+                    console.warn('Tick coverage unavailable; video playback remains available:', tickCatalogError);
+                }
+
+                const recordings = (Array.isArray(sessions) ? sessions : []).map(session => {
+                    const tickEntry = tickEntriesByRecording.get(session.recordingId);
+                    const playable = session.playable === true;
+                    return {
+                        ...session,
+                        replayable: playable,
+                        tickCount: tickEntry?.tickCount || 0,
+                        replayabilityReason: playable
+                            ? (tickEntry?.tickCount > 0
+                                ? `Video and ${tickEntry.tickCount} synchronized ticks available`
+                                : 'Video playback available; no synchronized tick snapshots')
+                            : (session.videoError || 'Recording video is not finalized')
+                    };
+                });
+
+                if (recordings.length === 0) {
+                    recordingsList.innerHTML = '<tr><td colspan="5" class="text-center">No recordings found</td></tr>';
+                    return;
+                }
+
+                // DOM construction only: API values are assigned through
+                // textContent/attributes, never interpolated into HTML.
+                while (recordingsList.firstChild) {
+                    recordingsList.removeChild(recordingsList.firstChild);
+                }
+                for (const r of recordings) {
+                    const tr = document.createElement('tr');
+                    tr.className = 'recording-item';
+
+                    const idCell = document.createElement('td');
+                    const codeEl = document.createElement('code');
+                    codeEl.textContent = r.recordingId || '';
+                    idCell.appendChild(codeEl);
+
+                    const accountCell = document.createElement('td');
+                    accountCell.textContent = r.accountName || '-';
+
+                    const startCell = document.createElement('td');
+                    startCell.textContent = r.startTime ? new Date(r.startTime).toLocaleString() : '--';
+
+                    const statusCell = document.createElement('td');
+                    const badge = document.createElement('span');
+                    badge.className = (r.replayable === false)
+                        ? 'badge bg-warning text-dark'
+                        : 'badge bg-success';
+                    badge.textContent = (r.replayable === false)
+                        ? 'Not replayable'
+                        : (r.tickCount > 0 ? `Video + ${r.tickCount} ticks` : 'Video only');
+                    statusCell.appendChild(badge);
+                    const reasonDiv = document.createElement('div');
+                    reasonDiv.className = 'small text-muted mt-1';
+                    reasonDiv.textContent = r.replayabilityReason || '';
+                    statusCell.appendChild(reasonDiv);
+
+                    const actionCell = document.createElement('td');
+                    const btn = document.createElement('button');
+                    btn.className = 'btn btn-sm play-recording';
+                    if (r.replayable === false) {
+                        btn.classList.add('btn-outline-secondary');
+                        btn.disabled = true;
+                        btn.textContent = 'Unavailable';
+                    } else {
+                        btn.classList.add('btn-primary');
+                        btn.textContent = 'Play';
+                        btn.dataset.id = r.recordingId || '';
+                    }
+                    actionCell.appendChild(btn);
+
+                    tr.append(idCell, accountCell, startCell, statusCell, actionCell);
+                    recordingsList.appendChild(tr);
+                }
+
+                // Add select button listeners
+                document.querySelectorAll('.play-recording').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const recordingId = btn.dataset.id;
+                        const entry = recordings.find(r => r.recordingId === recordingId) || null;
+                        await selectReplayRecording(recordingId, entry);
+                    });
+                });
+
+                return recordings;
+            } catch (error) {
+                console.error('Failed to load recordings:', error);
+                recordingsList.replaceChildren();
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 5;
+                cell.className = 'text-center text-danger';
+                cell.textContent = `Could not load recordings: ${error.message}`;
+                row.appendChild(cell);
+                recordingsList.appendChild(row);
+            }
+        }
+
+        async function selectReplayRecording(recordingId, entry = null) {
+            playerSection.style.display = 'block';
+            playerSection.scrollIntoView({ behavior: 'smooth' });
+            currentRecordingId = recordingId;
+            currentReplayEntry = entry;
+
+            if (!await loadRecordingVideo(recordingId)) {
+                return;
+            }
+
+            // Background: fetch sync info and tick data without blocking playback
+            await Promise.allSettled([
+                loadSyncInfo(recordingId),
+                loadTickCardsForRecording(recordingId)
+            ]);
+        }
+
+        async function loadRecordingVideo(recordingId) {
+            replayLoadStatus.className = 'replay-load-status mt-2';
+            replayLoadStatus.textContent = 'Loading recording video…';
+            videoPlayer.pause();
+            videoPlayer.removeAttribute('src');
+            videoPlayer.load();
+
+            try {
+                const response = await fetch(`/api/recordings/${encodeURIComponent(recordingId)}`);
+                if (!response.ok) {
+                    throw new Error(`Recording metadata returned HTTP ${response.status}`);
+                }
+                const recording = await response.json();
+                if (recording.playable === false) {
+                    throw new Error(recording.videoError || 'Recording is not finalized');
+                }
+                if (!recording.videoUrl) {
+                    throw new Error(recording.videoError || 'No video file is available');
+                }
+
+                videoPlayer.src = recording.videoUrl;
+                videoPlayer.load();
+                replayLoadStatus.classList.add('ready');
+                replayLoadStatus.textContent = 'Video loaded. Press Play to begin.';
+                return true;
+            } catch (error) {
+                console.error('Failed to load recording video:', error);
+                replayLoadStatus.classList.add('error');
+                replayLoadStatus.textContent = `Cannot play this recording: ${error.message}`;
+                return false;
+            }
+        }
+
+        async function loadSyncInfo(recordingId) {
+            try {
+                const response = await fetch(`${DEBUG_API_BASE}/${recordingId}/sync`);
+                if (response.ok) {
+                    state.syncInfo = await response.json();
+                    // Calculate ms per tick if we have FPS info
+                    if (state.syncInfo.fps) {
+                        // Game ticks are typically 600ms (0.6s) in OSRS
+                        state.msPerTick = 600;
+                    }
+                    console.log('Loaded sync info:', state.syncInfo);
+                } else {
+                    console.warn('No sync info available for recording:', recordingId);
+                    state.syncInfo = null;
+                    state.msPerTick = 600; // Default fallback
+                }
+            } catch (error) {
+                console.error('Failed to load sync info:', error);
+                state.syncInfo = null;
+                state.msPerTick = 600; // Default fallback
+            }
+        }
+
+        async function loadTickCardsForRecording(recordingId, startTick = 0, endTick = null, append = false) {
+            if (state.isLoadingMore) return; // Prevent concurrent loads
+
+            state.isLoadingMore = true;
+            loadingTickData.style.display = 'block';
+            if (!append) {
+                noTickDataMessage.style.display = 'none';
+            }
+
+            try {
+                // Load 100 ticks at a time
+                const batchSize = 100;
+                const actualEndTick = endTick !== null ? endTick : startTick + batchSize;
+
+                const url = `${DEBUG_API_BASE}/tick-cards/${recordingId}?start=${startTick}&end=${actualEndTick}`;
+                const response = await fetch(url);
+
+                if (response.status === 404) {
+                    // No tick data available
+                    loadingTickData.style.display = 'none';
+                    if (!append) {
+                        noTickDataMessage.style.display = 'block';
+                        clearTickCards();
+                    }
+                    state.hasMoreTicks = false;
+                    return;
+                }
+
+                const tickCards = await response.json();
+
+                if (response.ok) {
+                    loadingTickData.style.display = 'none';
+
+                    if (tickCards && tickCards.length > 0) {
+                        renderTickCards(tickCards, append);
+                        state.loadedTickRange.start = append ? state.loadedTickRange.start : startTick;
+                        state.loadedTickRange.end = actualEndTick;
+                        state.hasMoreTicks = tickCards.length === batchSize;
+                    } else {
+                        state.hasMoreTicks = false;
+                        if (!append) {
+                            noTickDataMessage.style.display = 'block';
+                        }
+                    }
+                } else {
+                    throw new Error('Failed to load tick cards');
+                }
+            } catch (error) {
+                console.error('Failed to load tick cards:', error);
+                loadingTickData.style.display = 'none';
+                if (!append) {
+                    noTickDataMessage.style.display = 'block';
+                }
+                state.hasMoreTicks = false;
+            } finally {
+                state.isLoadingMore = false;
+            }
+        }
+
+        function clearTickCards() {
+            const existingCards = tickCardsPanel.querySelectorAll('.tick-card');
+            existingCards.forEach(card => card.remove());
+            const loadMoreIndicator = tickCardsPanel.querySelector('.load-more-indicator');
+            if (loadMoreIndicator) {
+                loadMoreIndicator.remove();
+            }
+            state.loadedTickRange = { start: 0, end: 0 };
+            state.hasMoreTicks = true;
+        }
+
+        function renderTickCards(tickCards, append = false) {
+            if (!append) {
+                clearTickCards();
+            }
+
+            if (!tickCards || tickCards.length === 0) {
+                if (!append) {
+                    noTickDataMessage.style.display = 'block';
+                }
+                return;
+            }
+
+            tickCards.forEach(tickData => {
+                const card = createTickCard(tickData);
+                // Insert before loading indicator
+                const loadingIndicator = tickCardsPanel.querySelector('.load-more-indicator');
+                if (loadingIndicator) {
+                    tickCardsPanel.insertBefore(card, loadingIndicator);
+                } else {
+                    tickCardsPanel.appendChild(card);
+                }
+                state.tickDataCache.set(tickData.tick, tickData);
+            });
+
+            // Add load more indicator if there are more ticks
+            if (state.hasMoreTicks && !tickCardsPanel.querySelector('.load-more-indicator')) {
+                const loadMore = document.createElement('div');
+                loadMore.className = 'load-more-indicator';
+                loadMore.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div><span class="ms-2">Scroll for more...</span>';
+                tickCardsPanel.appendChild(loadMore);
+            }
+        }
+
+        // Add infinite scroll for tick cards
+        tickCardsPanel.addEventListener('scroll', () => {
+            if (state.isLoadingMore || !state.hasMoreTicks || !currentRecordingId) return;
+
+            const scrollBottom = tickCardsPanel.scrollHeight - tickCardsPanel.scrollTop - tickCardsPanel.clientHeight;
+
+            // Load more when near bottom (within 100px)
+            if (scrollBottom < 100) {
+                const nextStart = state.loadedTickRange.end + 1;
+                loadTickCardsForRecording(currentRecordingId, nextStart, null, true);
+            }
+        });
+
+        function createTickCard(tickData) {
+            const card = document.createElement('div');
+            card.className = 'tick-card';
+            card.dataset.tick = tickData.tick;
+
+            // Tick header
+            const header = document.createElement('div');
+            header.className = 'tick-header';
+
+            const tickNumber = document.createElement('span');
+            tickNumber.className = 'tick-number';
+            tickNumber.textContent = `Tick ${tickData.tick}`;
+            header.appendChild(tickNumber);
+
+            // Section chips
+            const counts = tickData.sectionCounts || {};
+            Object.keys(counts).forEach(section => {
+                if (counts[section] > 0) {
+                    const chip = document.createElement('span');
+                    chip.className = 'section-chip';
+                    chip.dataset.section = section;
+                    chip.textContent = `${section}: ${counts[section]}`;
+                    header.appendChild(chip);
+                }
+            });
+
+            card.appendChild(header);
+
+            // Player summary
+            if (tickData.playerSummary) {
+                const summary = document.createElement('div');
+                summary.className = 'tick-summary';
+                summary.textContent = tickData.playerSummary;
+                card.appendChild(summary);
+            }
+
+            // Sections
+            const data = tickData.sectionData || {};
+            const sections = ['actions', 'quest', 'dialogue', 'inventory', 'npcs', 'projectiles', 'player', 'varbits'];
+
+            sections.forEach(section => {
+                if (data[section] && state.globalSectionVisibility[section]) {
+                    const sectionEl = createSection(section, data[section], tickData.tick);
+                    card.appendChild(sectionEl);
+                }
+            });
+
+            // Click to seek video to this tick
+            card.addEventListener('click', () => {
+                const videoTime = (tickData.tick * state.msPerTick) / 1000; // Convert to seconds
+                videoPlayer.currentTime = videoTime;
+            });
+
+            return card;
+        }
+
+        function createSection(sectionName, sectionData, tick) {
+            const section = document.createElement('div');
+            section.className = `tick-section section-${sectionName}`;
+            section.dataset.section = sectionName;
+
+            const header = document.createElement('div');
+            header.className = 'section-header';
+            // Static icon fragment (no API/user data) plus a text node title.
+            const iconSpan = document.createElement('i');
+            iconSpan.className = 'bi bi-circle-fill';
+            iconSpan.style.fontSize = '8px';
+            header.appendChild(iconSpan);
+            const headerTitle = document.createElement('span');
+            headerTitle.textContent = ' ' + sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
+            header.appendChild(headerTitle);
+            section.appendChild(header);
+
+            const content = document.createElement('div');
+            content.className = 'section-content';
+
+            // Render section content based on type
+            if (sectionName === 'actions' && Array.isArray(sectionData)) {
+                sectionData.forEach(log => {
+                    const logLine = document.createElement('div');
+                    logLine.className = `log-entry ${log.severity?.toLowerCase() || 'info'}`;
+                    const tag = document.createElement('span');
+                    tag.className = 'log-timestamp';
+                    tag.textContent = `[${log.subsystem || 'Game'}]`;
+                    logLine.appendChild(tag);
+                    logLine.appendChild(document.createTextNode(' ' + (log.message || '')));
+                    content.appendChild(logLine);
+                });
+            } else if (sectionName === 'player') {
+                content.innerHTML = '<div class="text-muted" style="font-size: 11px;">See summary above</div>';
+            } else {
+                // textContent only: API data never passes through an HTML sink.
+                const pre = document.createElement('pre');
+                pre.style.cssText = 'font-size: 11px; margin: 0;';
+                pre.textContent = JSON.stringify(sectionData, null, 2);
+                content.replaceChildren(pre);
+            }
+
+            section.appendChild(content);
+            return section;
+        }
+
+        // Global category toggles
+        globalCategoryToggles.addEventListener('click', (e) => {
+            if (e.target.classList.contains('cat-toggle')) {
+                const section = e.target.dataset.section;
+                e.target.classList.toggle('active');
+                state.globalSectionVisibility[section] = e.target.classList.contains('active');
+
+                // Re-render all visible sections
+                document.querySelectorAll(`.tick-section.section-${section}`).forEach(el => {
+                    el.style.display = state.globalSectionVisibility[section] ? 'block' : 'none';
+                });
+            }
+        });
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function formatDuration(durationMs) {
+            const seconds = Math.floor(durationMs / 1000);
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Video Player Controls
+        playPauseBtn.addEventListener('click', () => {
+            if (videoPlayer.paused) {
+                videoPlayer.play();
+                playPauseBtn.innerHTML = '<i class="bi bi-pause-fill"></i>';
+            } else {
+                videoPlayer.pause();
+                playPauseBtn.innerHTML = '<i class="bi bi-play-fill"></i>';
+            }
+        });
+
+        videoPlayer.addEventListener('timeupdate', () => {
+            const percent = (videoPlayer.currentTime / videoPlayer.duration) * 100;
+            timelineSlider.value = percent;
+            currentTimeEl.textContent = formatTime(videoPlayer.currentTime);
+
+            // Highlight current tick card
+            if (currentRecordingId) {
+                const videoTimeMs = videoPlayer.currentTime * 1000;
+                const currentTick = Math.floor(videoTimeMs / state.msPerTick);
+
+                if (currentTick !== state.currentTick) {
+                    state.currentTick = currentTick;
+                    highlightTickCard(currentTick);
+                }
+            }
+        });
+
+        function highlightTickCard(tick) {
+            // Remove previous highlights
+            document.querySelectorAll('.tick-card.active').forEach(card => {
+                card.classList.remove('active');
+            });
+
+            // Highlight current tick
+            const card = document.querySelector(`.tick-card[data-tick="${tick}"]`);
+            if (card) {
+                card.classList.add('active');
+                card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+
+        videoPlayer.addEventListener('loadedmetadata', () => {
+            durationEl.textContent = formatTime(videoPlayer.duration);
+            replayLoadStatus.className = 'replay-load-status ready mt-2';
+            replayLoadStatus.textContent = 'Video ready.';
+        });
+
+        videoPlayer.addEventListener('error', () => {
+            replayLoadStatus.className = 'replay-load-status error mt-2';
+            replayLoadStatus.textContent = 'The browser could not load this MP4. Check that the recording file still exists.';
+        });
+
+        timelineSlider.addEventListener('input', () => {
+            const time = (timelineSlider.value / 100) * videoPlayer.duration;
+            videoPlayer.currentTime = time;
+        });
+
+        playbackSpeed.addEventListener('change', () => {
+            videoPlayer.playbackRate = parseFloat(playbackSpeed.value);
+        });
+
+        fullscreenBtn.addEventListener('click', () => {
+            if (videoPlayer.requestFullscreen) {
+                videoPlayer.requestFullscreen();
+            }
+        });
+
+        // Load recordings on page load
+        loadRecordings();
+
+        // ==================== Legacy Simulator Certification removed ====================
+        // Certification now lives exclusively in the xRSPS replay pipeline:
+        // /api/replay/runs/{id}/report supersedes /api/simulator/verify.
+    </script>
+</body>
+</html>

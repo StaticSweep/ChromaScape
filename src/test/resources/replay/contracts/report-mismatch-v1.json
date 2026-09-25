@@ -1,0 +1,39 @@
+{
+  "reportVersion": 1,
+  "runId": "run-mismatch-uuid",
+  "attemptId": "attempt-mismatch-uuid",
+  "mode": "CAUSAL_SIMULATION",
+  "manifestChecksum": "sha256:manifest-hash",
+  "runtimeIdentity": {
+    "xrspsAdapterVersion": "1.0.0",
+    "xrspsBuildCommit": "exact-commit",
+    "cacheRevision": "sha256:abc123",
+    "contentRevision": "sha256:def456"
+  },
+  "startedAt": "2026-01-01T00:00:00Z",
+  "terminalAt": "2026-01-01T00:01:00Z",
+  "outcome": "FAILED",
+  "executedActionCount": 1,
+  "checkpointCount": 1,
+  "firstHardMismatch": {
+    "mismatchVersion": 1,
+    "level": "HARD",
+    "ruleId": "inventory-slot-v1",
+    "firstTick": 112,
+    "sequence": 0,
+    "domain": "player.inventory",
+    "jsonPointer": "/player/inventory/1/itemId",
+    "expected": 317,
+    "actual": null,
+    "relatedActionOrdinal": 2,
+    "checkpointId": "checkpoint-uuid",
+    "cascadeCount": 0
+  },
+  "mismatchTotals": {"hard": 1, "soft": 0, "info": 0},
+  "finalStateHash": "sha256:final-state-mismatch",
+  "finalChainHash": "sha256:final-chain-mismatch",
+  "artifactRefs": ["sha256:trace-hash"],
+  "terminalReason": "STOP_ON_FIRST_HARD",
+  "controlAllowed": false,
+  "reportChecksum": "sha256:report-mismatch-hash"
+}

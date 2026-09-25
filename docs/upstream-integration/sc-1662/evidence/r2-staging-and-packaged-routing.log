@@ -1,0 +1,46 @@
+# command: fixture harness for the staging contract and packaged verification routing
+# utc: 2026-09-15T03:09:28Z
+# revision: be4230c0198e065748ff5b49a76f434a581fee4d
+# worktree_status_sha256: 2f0bb57467474316cdf6ee2974d3e4ed181cf9a6b2b08dd5616d8695f32bb652
+# run_sequence: 2 (post-review fixes; run 1 logs retained unmodified)
+
+== fixture pair (helper-generated manifest, synthetic ELF) ==
+PROVENANCE_OK files=278 tree=b727319f7289959019ecfc13313993312e92c03dccd88996f676b649c5d8ee0c patch=none
+MANIFEST_WRITTEN build/native/remoteinput/linux-x86_64/remoteinput-manifest.json sha256=89ee653fd161d220a67ad6c9b539f77a5b87aa7c19a08495a6a8368de4011853 size=8256 patch=none
+
+== stage: valid pair ==
+MANIFEST_OK manifest=<repo>/build/native/remoteinput/linux-x86_64/remoteinput-manifest.json artifact=<repo>/build/native/remoteinput/linux-x86_64/libRemoteInput.so sha256=89ee653fd161d220a67ad6c9b539f77a5b87aa7c19a08495a6a8368de4011853 size=8256 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+MANIFEST_OK manifest=<repo>/build/dist/native/.sc1662-stage.14309144625411786601/remoteinput-manifest.json artifact=<repo>/build/dist/native/.sc1662-stage.14309144625411786601/libRemoteInput.so sha256=89ee653fd161d220a67ad6c9b539f77a5b87aa7c19a08495a6a8368de4011853 size=8256 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+Staged validated artifact pair into <repo>/build/dist/native/linux-x86_64
+BUILD SUCCESSFUL in 1s
+staged files: libRemoteInput.so remoteinput-manifest.json 
+staged perms: 644 build/dist/native/linux-x86_64/libRemoteInput.so 644 build/dist/native/linux-x86_64/remoteinput-manifest.json 
+
+== stage: artifact mutated after manifest (hash/size mismatch) ==
+ERROR: artifact.sizeBytes (8256) does not match the measured artifact (8262)
+FAILURE: Build failed with an exception.
+BUILD FAILED in 1s
+
+== stage: truncated JSON manifest ==
+ERROR: manifest is not valid JSON: <repo>/build/native/remoteinput/linux-x86_64/remoteinput-manifest.json (Unterminated string starting at: line 3 column 3 (char 26))
+FAILURE: Build failed with an exception.
+BUILD FAILED in 1s
+
+== stage: manifest removed (incomplete pair) ==
+FAILURE: Build failed with an exception.
+> Refusing to stage: <repo>/build/native/remoteinput/linux-x86_64/remoteinput-manifest.json is missing or empty.
+BUILD FAILED in 1s
+
+== staged pair survives failed stages ==
+8256 build/dist/native/linux-x86_64/libRemoteInput.so
+2964 build/dist/native/linux-x86_64/remoteinput-manifest.json
+leftover temp dirs: 0
+
+== packaged verification routing (assembled boot jar, no native artifact needed) ==
+boot jar: 720918167 bytes
+launcher class present: 1
+running: java -Dloader.main=...RemoteInputSmokeVerifier -cp application.jar PropertiesLauncher --mode packaged
+SMOKE_FAILED diagnostic=MISSING_LIBRARY message=[MISSING_LIBRARY] staged artifact does not exist (selected path: /tmp/sc1662-absent-distribution/native/linux-x86_64/libRemoteInput.so) (expected: linux-x86_64 ELF 64-bit LSB shared object)
+routing exit code: 1 (1 = verifier ran and failed closed on the missing artifact; 0 would mean a load succeeded)
+NOTE: no Spring banner or application startup output above: PropertiesLauncher ran the verifier directly.
+# exit_code: 0

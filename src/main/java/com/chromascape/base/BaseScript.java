@@ -1,12 +1,14 @@
 package com.chromascape.base;
 
-import static java.time.temporal.ChronoUnit.MINUTES;
-
 import com.chromascape.controller.Controller;
 import com.chromascape.utils.core.runtime.HotkeyListener;
 import com.chromascape.utils.core.runtime.ScriptStoppedException;
-import com.chromascape.web.logs.LogService;
-import java.time.LocalTime;
+import com.chromascape.utils.core.state.BotState;
+import com.chromascape.utils.core.state.StateManager;
+import com.chromascape.utils.core.statistics.StatisticsManager;
+import java.util.concurrent.ThreadLocalRandom;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Abstract base class representing a generic automation script with lifecycle management.
@@ -18,26 +20,17 @@ import java.time.LocalTime;
  * #cycle()} to define the script's main logic.
  */
 public abstract class BaseScript {
-
   private final Controller controller;
-  private final int duration; // Duration to run the script in minutes
-  private final LogService logger;
+  private static final Logger logger = LogManager.getLogger(BaseScript.class);
   private final HotkeyListener hotkeyListener;
-  private boolean running = true;
-  private LocalTime startTime;
+  private volatile boolean running = true;
+  private Thread scriptThread;
+  private boolean firstCycleCompleted;
 
-  /**
-   * Constructs a BaseScript.
-   *
-   * @param isFixed whether the client UI is fixed or resizable
-   * @param duration the total runtime of the script in minutes
-   * @param logger the logging service for recording events and progress
-   */
-  public BaseScript(final boolean isFixed, final int duration, final LogService logger) {
-    controller = new Controller(isFixed, logger);
-    this.duration = duration;
-    this.logger = logger;
-    this.hotkeyListener = new HotkeyListener(this);
+  /** Constructs a BaseScript. */
+  public BaseScript() {
+    controller = new Controller();
+    hotkeyListener = new HotkeyListener(this);
   }
 
   /**
@@ -50,68 +43,121 @@ public abstract class BaseScript {
    * <p>This method blocks until completion.
    */
   public final void run() {
-    startTime = LocalTime.now();
-    LocalTime endTime = startTime.plusMinutes(duration);
-    logger.addLog("Starting. Script will run for " + duration + " minutes.");
+    scriptThread = Thread.currentThread();
     controller.init();
     hotkeyListener.start();
+    StatisticsManager.reset();
 
     try {
-      while (running && LocalTime.now().isBefore(endTime)) {
+      while (running) {
+        StatisticsManager.incrementCycles();
         if (Thread.currentThread().isInterrupted()) {
-          logger.addLog("Thread interrupted, exiting.");
+          logger.info("Thread interrupted, exiting.");
           break;
         }
         try {
-          cycle();
+          executeCycle();
         } catch (ScriptStoppedException e) {
-          logger.addLog("Cycle interrupted: " + e.getMessage());
+          logger.error("Cycle interrupted: {}", e.getMessage());
           break;
         } catch (Exception e) {
-          logger.addLog("Exception in cycle: " + e.getMessage());
+          StateManager.setState(BotState.ERROR);
+          logger.error("Exception in cycle: {}", e.getMessage());
           break;
         }
       }
     } finally {
-      logger.addLog("Stopping and cleaning up.");
+      logger.info("Stopping and cleaning up.");
       controller.shutdown();
     }
-    logger.addLog("Finished running script.");
+    logger.info("Finished running script.");
+  }
+
+  final void executeCycle() {
+    if (!firstCycleCompleted) {
+      onFirstCycle();
+      firstCycleCompleted = true;
+    }
+    cycle();
   }
 
   /**
-   * Stops the script execution.
+   * Performs one-time setup immediately before the first call to {@link #cycle()}.
+   *
+   * <p>The hook runs only after the controller and stop hotkey are initialized. If it fails, the
+   * normal script error path tears the controller down and the first cycle is not executed.
+   */
+  protected void onFirstCycle() {
+    // Optional subclass hook.
+  }
+
+  /**
+   * Stops the script execution by interrupting the script thread.
    *
    * <p>Can be called externally (e.g., via UI controls or programmatically) to request an immediate
-   * stop of the running script via the {@code ScriptStoppedException}. If the script is already
-   * stopped, this method does nothing.
+   * stop of the running script. If the script is already stopped, this method does nothing.
    */
   public void stop() {
     if (!running) {
       return;
     }
-    logger.addLog("Stop requested");
+    logger.info("Stop requested");
     running = false;
     hotkeyListener.stop();
-    throw new ScriptStoppedException();
+
+    // Interrupt the script thread instead of throwing exception
+    if (scriptThread != null) {
+      scriptThread.interrupt();
+    }
   }
 
   /**
-   * Returns the progress of the script as a percentage of total duration completed.
+   * Pauses the current thread for the specified number of milliseconds.
    *
-   * <p>Intended for UI or monitoring purposes to indicate how far through the execution period the
-   * script currently is.
+   * <p>If the sleep is interrupted, this method throws ScriptStoppedException to enable immediate
+   * stopping.
    *
-   * @return an integer between 0 and 100 representing progress percent, or 0 if not started
+   * @param ms the duration to sleep in milliseconds
+   * @throws ScriptStoppedException if the thread is interrupted during sleep
    */
-  public int getProgressPercent() {
-    if (startTime == null) {
-      return 0;
+  public static void waitMillis(long ms) {
+    StateManager.setState(BotState.WAITING);
+    try {
+      Thread.sleep(ms);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt(); // Restore interrupt status
+      throw new ScriptStoppedException();
     }
-    LocalTime now = LocalTime.now();
-    long minsDone = MINUTES.between(startTime, now);
-    long clamped = Math.min(minsDone, duration);
-    return (int) (clamped * 100 / duration);
+  }
+
+  /**
+   * Pauses the current thread for a random duration between {@code min} and {@code max}
+   * milliseconds (inclusive).
+   *
+   * <p>This method internally calls {@link #waitMillis(long)} with a randomly generated delay.
+   *
+   * @param min the minimum number of milliseconds to sleep (inclusive)
+   * @param max the maximum number of milliseconds to sleep (inclusive)
+   * @throws IllegalArgumentException if {@code min} is greater than {@code max}
+   * @throws ScriptStoppedException if the thread is interrupted during sleep
+   */
+  public static void waitRandomMillis(long min, long max) throws ScriptStoppedException {
+    if (min > max) {
+      throw new IllegalArgumentException("min must be less than or equal to max");
+    }
+    waitMillis(ThreadLocalRandom.current().nextLong(min, max + 1));
+  }
+
+  /**
+   * Checks if the current thread has been interrupted and throws ScriptStoppedException if so. Call
+   * this method frequently in your cycle implementation, especially in loops.
+   *
+   * @throws ScriptStoppedException if the thread has been interrupted
+   */
+  public static void checkInterrupted() throws ScriptStoppedException {
+    if (Thread.currentThread().isInterrupted()) {
+      throw new ScriptStoppedException();
+    }
   }
 
   /**
@@ -120,7 +166,8 @@ public abstract class BaseScript {
    * <p>This method is called repeatedly in a loop by {@link #run()} for the specified duration.
    * Subclasses must override this method to implement their specific bot behavior.
    *
-   * <p>Note: This method is called synchronously on the running thread.
+   * <p>Note: This method is called synchronously on the running thread. Use the provided sleep
+   * methods and call {@link #checkInterrupted()} frequently to enable immediate stopping.
    */
   protected void cycle() {
     // override this
@@ -131,7 +178,7 @@ public abstract class BaseScript {
    *
    * @return The controller object.
    */
-  protected Controller controller() {
+  public Controller controller() {
     return controller;
   }
 }

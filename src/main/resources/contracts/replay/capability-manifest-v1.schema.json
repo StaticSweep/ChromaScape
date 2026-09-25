@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chromascape.dev/replay/capability-manifest-v1.schema.json",
+  "title": "Replay Capability Manifest",
+  "description": "Describes the current replay capability of the ChromaScape replay subsystem.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "controlAllowed": {
+      "type": "boolean",
+      "const": false
+    },
+    "modes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "observedPlayback": { "const": false },
+        "policyReplay": { "const": false },
+        "causalSimulation": { "const": true }
+      },
+      "required": ["observedPlayback", "policyReplay", "causalSimulation"]
+    },
+    "scenarioSchemaVersions": {
+      "type": "array",
+      "prefixItems": [
+        { "const": 1 },
+        { "const": 2 }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "semanticActionVersions": {
+      "type": "array",
+      "items": { "type": "integer" }
+    },
+    "snapshotVersions": {
+      "type": "array",
+      "items": { "type": "integer" }
+    },
+    "projectionVersions": {
+      "type": "array",
+      "items": { "type": "integer" }
+    },
+    "hashVersions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "xrsps": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "adapterVersion": { "type": "string" },
+        "buildCommit": { "type": "string" },
+        "cacheRevision": { "type": "string" },
+        "contentRevision": { "type": "string" }
+      },
+      "required": ["adapterVersion", "buildCommit", "cacheRevision", "contentRevision"]
+    },
+    "openRuneAvailable": {
+      "type": "boolean",
+      "const": false
+    },
+    "certifiable": {
+      "type": "boolean"
+    },
+    "fidelity": {
+      "type": "string",
+      "enum": ["SYNTHETIC_CONTRACT", "XRSPS_AUTHORITATIVE"]
+    },
+    "supportedActions": {
+      "type": "array",
+      "prefixItems": [
+        { "const": "WAIT_UNTIL_TICK" },
+        { "const": "WALK_TO" },
+        { "const": "INTERACT_NPC" },
+        { "const": "INTERACT_OBJECT" },
+        { "const": "INTERACT_GROUND_ITEM" },
+        { "const": "INTERACT_INVENTORY_ITEM" },
+        { "const": "INTERACT_WIDGET" },
+        { "const": "SELECT_DIALOGUE_OPTION" },
+        { "const": "CAST_SPELL" },
+        { "const": "EQUIP_ITEM" }
+      ],
+      "items": false,
+      "minItems": 10,
+      "maxItems": 10
+    },
+    "viewerTraceSchema": {
+      "const": "xrsps-replay-trace/v1"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "controlAllowed",
+    "modes",
+    "scenarioSchemaVersions",
+    "semanticActionVersions",
+    "snapshotVersions",
+    "projectionVersions",
+    "hashVersions",
+    "xrsps",
+    "openRuneAvailable",
+    "certifiable",
+    "fidelity",
+    "supportedActions",
+    "viewerTraceSchema"
+  ]
+}

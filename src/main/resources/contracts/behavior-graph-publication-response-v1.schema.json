@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.leeuwbot.dev/sc728/behavior-graph-publication-response/v1",
+  "title": "behavior-graph-publication-response/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "publication_id", "draft_id", "source_draft_revision", "graph_id", "graph_version", "graph_hash", "layout_hash", "published_at", "authority", "control_allowed"],
+  "properties": {
+    "schema": { "const": "behavior-graph-publication-response/v1" },
+    "publication_id": { "$ref": "#/$defs/identifier" }, "draft_id": { "$ref": "#/$defs/identifier" },
+    "source_draft_revision": { "type": "integer", "minimum": 1, "maximum": 9223372036854775807 },
+    "graph_id": { "$ref": "#/$defs/identifier" }, "graph_version": { "type": "integer", "minimum": 0, "maximum": 9223372036854775807 },
+    "graph_hash": { "$ref": "#/$defs/hash" }, "layout_hash": { "$ref": "#/$defs/hash" },
+    "published_at": { "type": "string", "format": "date-time" }, "authority": { "$ref": "#/$defs/authority" }, "control_allowed": { "const": false }
+  },
+  "$defs": {
+    "identifier": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" }, "hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "authority": { "type": "object", "additionalProperties": false, "required": ["can_write_source", "can_approve_patch", "can_publish_graph", "can_activate_model", "can_dispatch_input"], "properties": { "can_write_source": { "const": false }, "can_approve_patch": { "const": false }, "can_publish_graph": { "const": false }, "can_activate_model": { "const": false }, "can_dispatch_input": { "const": false } } }
+  }
+}

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.config.AnalysisProviderSelectionTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:39:36.469Z" hostname="fedora" time="0.051">
+  <properties/>
+  <testcase name="ClaudeMcpAliasAnalysisProvider has @ConditionalOnProperty annotation" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.023"/>
+  <testcase name="Both providers implement AnalysisProvider interface" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.018"/>
+  <testcase name="ClaudeMcpAnalysisProvider has @ConditionalOnProperty annotation" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.001"/>
+  <testcase name="ClaudeMcpAnalysisProvider can be instantiated with valid configuration" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.005"/>
+  <testcase name="ClaudeApiAnalysisProvider can be instantiated with valid configuration" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.002"/>
+  <testcase name="OpenAiCodexAnalysisProvider has @ConditionalOnProperty annotation" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.0"/>
+  <testcase name="ClaudeApiAnalysisProvider has @ConditionalOnProperty annotation" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.001"/>
+  <testcase name="ClaudeApiAnalysisProvider reports unavailable without API key" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.001"/>
+  <system-out><![CDATA[12:39:36.515 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:39:36.516 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

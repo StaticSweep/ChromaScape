@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chromascape.dev/replay/stable-error-v1.schema.json",
+  "title": "Stable Error Response",
+  "description": "Stable API error response with code-based semantics.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "errorVersion": { "type": "integer", "const": 1 },
+    "code": { "type": "string" },
+    "message": { "type": "string" },
+    "retryable": { "type": "boolean" },
+    "remediation": { "type": "string" },
+    "correlationId": { "type": "string" }
+  },
+  "required": ["errorVersion", "code", "message", "retryable"]
+}

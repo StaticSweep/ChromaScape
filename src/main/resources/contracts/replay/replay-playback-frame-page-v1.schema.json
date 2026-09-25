@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chromascape.dev/replay/replay-playback-frame-page-v1.schema.json",
+  "title": "Replay Observed Playback Frame Page v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "type": "string", "const": "replay-playback-frame-page/v1" },
+    "recordingId": { "type": "string", "minLength": 1 },
+    "sessionId": { "type": "string", "minLength": 1 },
+    "accountName": { "type": ["string", "null"] },
+    "startTick": { "type": ["integer", "null"] },
+    "endTick": { "type": ["integer", "null"] },
+    "frames": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/frame" }
+    },
+    "nextCursor": { "type": ["string", "null"] },
+    "hasMore": { "type": "boolean" }
+  },
+  "required": [
+    "schema",
+    "recordingId",
+    "sessionId",
+    "accountName",
+    "startTick",
+    "endTick",
+    "frames",
+    "nextCursor",
+    "hasMore"
+  ],
+  "$defs": {
+    "frame": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tick": { "type": "integer" },
+        "timestamp": { "type": ["string", "null"], "format": "date-time" },
+        "playerState": { "type": "object", "additionalProperties": true },
+        "inventory": { "type": "array" },
+        "equipment": { "type": "array" },
+        "threats": { "type": "array" },
+        "projectiles": { "type": "array" },
+        "cooldowns": { "type": "object" },
+        "quest": { "type": "object" },
+        "questHelper": { "type": "object", "additionalProperties": true },
+        "dialogue": { "type": ["object", "null"], "additionalProperties": true },
+        "spells": { "type": ["array", "null"] },
+        "vars": { "type": ["object", "null"], "additionalProperties": true },
+        "npcs": { "type": "array" },
+        "gameObjects": { "type": "array" },
+        "groundObjects": { "type": "array" },
+        "groundItems": { "type": "array" },
+        "players": { "type": "array" },
+        "widgets": { "type": "array" },
+        "schemaVersion": { "type": "integer" },
+        "logs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/tickLog" }
+        }
+      },
+      "required": [
+        "tick",
+        "timestamp",
+        "playerState",
+        "inventory",
+        "equipment",
+        "threats",
+        "projectiles",
+        "cooldowns",
+        "quest",
+        "questHelper",
+        "npcs",
+        "gameObjects",
+        "groundObjects",
+        "groundItems",
+        "players",
+        "widgets",
+        "schemaVersion",
+        "logs"
+      ]
+    },
+    "tickLog": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "integer" },
+        "tick": { "type": "integer" },
+        "timestamp": { "type": ["string", "null"], "format": "date-time" },
+        "subsystem": { "type": "string" },
+        "severity": { "type": "string" },
+        "eventType": { "type": "string" },
+        "message": { "type": "string" },
+        "details": { "type": "object", "additionalProperties": true },
+        "correlationId": { "type": ["string", "null"] },
+        "categories": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["ACTION", "DIALOGUE", "VARBIT"] }
+        }
+      },
+      "required": [
+        "id",
+        "tick",
+        "subsystem",
+        "severity",
+        "eventType",
+        "message",
+        "details",
+        "correlationId",
+        "categories"
+      ]
+    }
+  }
+}

@@ -1,6 +1,8 @@
 package com.chromascape.web;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 
 /**
@@ -11,27 +13,29 @@ import org.springframework.web.bind.annotation.GetMapping;
 @Controller
 public class ServePages {
 
-  /**
-   * Handles GET requests for the root ("/") URL. Sets the AWT system property to non-headless mode,
-   * then returns the view name for the index page.
-   *
-   * @return the logical view name "index"
-   */
+  @Value("${chromascape.patchloop.supervisor-base-url:http://127.0.0.1:8096}")
+  private String supervisorBaseUrl;
+
+  /** Handles GET requests for the root ("/") URL. */
   @GetMapping("/")
   public String serveIndexPage() {
-    System.setProperty("java.awt.headless", "false");
     return "index";
   }
 
-  /**
-   * Handles GET requests for the "/colour" URL. Sets the AWT system property to non-headless mode,
-   * then returns the view name for the colour picker page.
-   *
-   * @return the logical view name "colour"
-   */
+  /** Handles GET requests for the "/colour" URL. */
   @GetMapping("/colour")
   public String serveColourPickerPage() {
-    System.setProperty("java.awt.headless", "false");
     return "colour";
+  }
+
+  /**
+   * Handles GET requests for the "/debugger" URL and supplies its supervisor endpoint.
+   *
+   * @return the logical view name "debugger"
+   */
+  @GetMapping({"/debugger", "/debugger/runs"})
+  public String serveDebuggerPage(Model model) {
+    model.addAttribute("supervisorBaseUrl", supervisorBaseUrl);
+    return "debugger";
   }
 }

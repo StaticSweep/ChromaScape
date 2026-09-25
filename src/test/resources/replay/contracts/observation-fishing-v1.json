@@ -1,0 +1,26 @@
+{
+  "projectionVersion": 1,
+  "tick": 110,
+  "player": {
+    "position": {"x": 3086, "y": 3231, "plane": 0},
+    "animation": 621,
+    "interaction": "npc:fishing-spot:draynor:1",
+    "skills": {
+      "fishing": {"level": 10, "xp": 1200}
+    },
+    "inventory": [
+      {"slot": 0, "itemId": 303, "quantity": 1},
+      {"slot": 1, "itemId": 317, "quantity": 1}
+    ],
+    "equipment": []
+  },
+  "npcs": [
+    {
+      "stableId": "npc:fishing-spot:draynor:1",
+      "npcId": 1526,
+      "position": {"x": 3086, "y": 3231, "plane": 0}
+    }
+  ],
+  "objects": [],
+  "taskState": {"fishing": {}}
+}

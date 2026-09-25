@@ -13,19 +13,16 @@ public final class GameplayContracts {
 
   private GameplayContracts() {}
 
-  /** Supported provider identities. */
   public enum Provider {
     CLAUDE,
     CODEX
   }
 
-  /** Closed semantic actions accepted from a provider. */
   public enum ActionKind {
     START_FISHING_TASK,
     ABSTAIN
   }
 
-  /** Ordered lifecycle phases represented by receipts. */
   public enum ReceiptPhase {
     VALIDATION,
     AUTHORIZATION,
@@ -38,7 +35,6 @@ public final class GameplayContracts {
     FINALIZATION
   }
 
-  /** Closed lifecycle outcomes. */
   public enum Outcome {
     HELD,
     DELIVERED,
@@ -52,7 +48,6 @@ public final class GameplayContracts {
     STOPPED
   }
 
-  /** Provider-attributed semantic proposal with no execution authority. */
   public record ProviderDecision(
       String contractVersion,
       Provider provider,
@@ -62,7 +57,6 @@ public final class GameplayContracts {
       JsonNode semanticAction,
       List<String> evidenceRefs) {}
 
-  /** Immutable delivery boundary binding a decision to runtime identities and limits. */
   public record ExecutionEnvelope(
       String contractVersion,
       Provider provider,
@@ -92,7 +86,6 @@ public final class GameplayContracts {
       Instant deadline,
       String killSwitchScope) {}
 
-  /** Time-bounded human authority bound to one exact execution envelope. */
   public record HumanAuthority(
       String contractVersion,
       String authorityId,
@@ -105,7 +98,6 @@ public final class GameplayContracts {
       boolean oneUse,
       String signature) {}
 
-  /** Evidence-bearing lifecycle receipt. */
   public record Receipt(
       String contractVersion,
       String receiptId,

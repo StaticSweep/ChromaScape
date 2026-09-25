@@ -13,13 +13,13 @@ import com.chromascape.web.accounttask.repository.StabilizationRunAggregateRepos
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.time.LocalDateTime;
-import java.nio.charset.StandardCharsets;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -29,7 +29,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -92,10 +91,11 @@ public class StabilizationIngestionService {
           "deterministic_content_hash");
 
   private static final Set<String> BUNDLE_REQUIRED =
-      Set.of("plan", "manifest", "matrix", "transitions", "evidence", "checksums", "completeMarker");
+      Set.of(
+          "plan", "manifest", "matrix", "transitions", "evidence", "checksums", "completeMarker");
 
-  private static final ObjectMapper MAPPER = new ObjectMapper()
-      .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+  private static final ObjectMapper MAPPER =
+      new ObjectMapper().enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
   private final ScriptStabilizationRunRepository runRepository;
   private final ScriptFailureTriageRepository triageRepository;
@@ -139,7 +139,9 @@ public class StabilizationIngestionService {
     List<ArtifactPart> artifacts();
   }
 
-  /** A staged optional artifact: preserved original filename, inferred media type and staged path. */
+  /**
+   * A staged optional artifact: preserved original filename, inferred media type and staged path.
+   */
   public record ArtifactPart(String filename, String mediaType, Path path, long sizeBytes) {}
 
   @Transactional
@@ -182,8 +184,8 @@ public class StabilizationIngestionService {
   /**
    * Ingests a versioned {@code harness-run-manifest/v1} document idempotently. Unknown schema
    * versions fail clearly; required fields, outcome/terminal consistency, the recomputed content
-   * hash and evidence completeness are validated before storage; duplicates are detected by
-   * {@code schema_version + run_id + attempt_id + manifest_hash}.
+   * hash and evidence completeness are validated before storage; duplicates are detected by {@code
+   * schema_version + run_id + attempt_id + manifest_hash}.
    */
   @Transactional
   public Map<String, Object> ingestHarnessManifest(JsonNode manifest) {
@@ -193,13 +195,16 @@ public class StabilizationIngestionService {
     String schemaVersion = manifest.path("schema_version").asText("");
     if (!HARNESS_MANIFEST_SCHEMA.equals(schemaVersion)) {
       throw new IllegalArgumentException(
-          "unsupported harness manifest schema_version '" + schemaVersion + "'; expected "
+          "unsupported harness manifest schema_version '"
+              + schemaVersion
+              + "'; expected "
               + HARNESS_MANIFEST_SCHEMA);
     }
 
     for (String field : MANIFEST_REQUIRED) {
       if (!manifest.hasNonNull(field)) {
-        throw new IllegalArgumentException("harness manifest missing required field '" + field + "'");
+        throw new IllegalArgumentException(
+            "harness manifest missing required field '" + field + "'");
       }
     }
 
@@ -207,20 +212,26 @@ public class StabilizationIngestionService {
     String terminalState = manifest.path("terminal_state").asText("");
     if (!outcomeConsistent(outcome, terminalState)) {
       throw new IllegalArgumentException(
-          "harness manifest outcome '" + outcome + "' is inconsistent with terminal_state '"
-              + terminalState + "'");
+          "harness manifest outcome '"
+              + outcome
+              + "' is inconsistent with terminal_state '"
+              + terminalState
+              + "'");
     }
 
     String declaredHash = manifest.path("manifest_hash").asText("");
     String computedHash =
-        "sha256:" + StabilizationHashUtil.sha256(manifest, StabilizationHashUtil.MANIFEST_EXCLUSIONS);
+        "sha256:"
+            + StabilizationHashUtil.sha256(manifest, StabilizationHashUtil.MANIFEST_EXCLUSIONS);
     if (!declaredHash.equals(computedHash)) {
       throw new IllegalArgumentException(
-          "harness manifest hash mismatch: declared " + declaredHash + " but recomputed " + computedHash);
+          "harness manifest hash mismatch: declared "
+              + declaredHash
+              + " but recomputed "
+              + computedHash);
     }
 
-    if ("PASS".equalsIgnoreCase(outcome)
-        && !manifest.path("evidence_complete").asBoolean(false)) {
+    if ("PASS".equalsIgnoreCase(outcome) && !manifest.path("evidence_complete").asBoolean(false)) {
       throw new IllegalArgumentException(
           "harness manifest outcome PASS requires evidence_complete=true");
     }
@@ -228,13 +239,21 @@ public class StabilizationIngestionService {
     String runId = manifest.path("run_id").asText("");
     String attemptId = manifest.path("attempt_id").asText("");
     if (runId.isBlank() || attemptId.isBlank()) {
-      throw new IllegalArgumentException(
-          "harness manifest run_id and attempt_id must be nonblank");
+      throw new IllegalArgumentException("harness manifest run_id and attempt_id must be nonblank");
     }
     if (runRepository.existsBySchemaVersionAndRunIdAndAttemptIdAndManifestHash(
         schemaVersion, runId, attemptId, declaredHash)) {
-      return Map.of("runId", runId, "attemptId", attemptId, "saved", false, "duplicate", true,
-          "schemaVersion", schemaVersion);
+      return Map.of(
+          "runId",
+          runId,
+          "attemptId",
+          attemptId,
+          "saved",
+          false,
+          "duplicate",
+          true,
+          "schemaVersion",
+          schemaVersion);
     }
 
     ScriptStabilizationRun run = new ScriptStabilizationRun();
@@ -267,7 +286,8 @@ public class StabilizationIngestionService {
     run.setPrimaryFailureCode(nullIfBlank(manifest.path("primary_failure_code").asText("")));
     run.setEvidenceComplete(manifest.path("evidence_complete").asBoolean(false));
     run.setManifestHash(declaredHash);
-    run.setDeterministicContentHash(nullIfBlank(manifest.path("deterministic_content_hash").asText("")));
+    run.setDeterministicContentHash(
+        nullIfBlank(manifest.path("deterministic_content_hash").asText("")));
     run.setEnvironment(nullIfBlank(manifest.path("environment").asText("")));
     run.setTier(nullIfBlank(manifest.path("tier").asText("")));
     String baseRef = "micro6-stabilization/" + runId + "/";
@@ -285,18 +305,27 @@ public class StabilizationIngestionService {
       upsertTriage(run, run.getReportId());
     }
 
-    return Map.of("runId", runId, "attemptId", attemptId, "saved", true, "duplicate", false,
-        "schemaVersion", schemaVersion);
+    return Map.of(
+        "runId",
+        runId,
+        "attemptId",
+        attemptId,
+        "saved",
+        true,
+        "duplicate",
+        false,
+        "schemaVersion",
+        schemaVersion);
   }
 
   /**
    * Ingests a complete verified SC-572 report bundle. The marker and every raw-byte checksum are
    * verified before any JSON is parsed; schemas, manifest/matrix hashes, identities, terminal
-   * consistency and PASS evidence completeness are validated before persistence; recorder
-   * artifacts are staged into the filesystem artifact store with opaque UUID ids and metadata is
-   * persisted in one transaction. Any failure rolls back the transaction and removes staged
-   * files. An exact re-upload returns {@code duplicate=true}, changed content for the same
-   * run/attempt returns HTTP 409, and tampering/missing evidence returns HTTP 400.
+   * consistency and PASS evidence completeness are validated before persistence; recorder artifacts
+   * are staged into the filesystem artifact store with opaque UUID ids and metadata is persisted in
+   * one transaction. Any failure rolls back the transaction and removes staged files. An exact
+   * re-upload returns {@code duplicate=true}, changed content for the same run/attempt returns HTTP
+   * 409, and tampering/missing evidence returns HTTP 400.
    */
   @Transactional
   public Map<String, Object> ingestReportBundle(BundleSource source) {
@@ -315,12 +344,23 @@ public class StabilizationIngestionService {
     if (!checksums.isObject()) {
       throw new IllegalArgumentException("report bundle checksums must be a JSON object");
     }
-    Map<String, String> partNames = Map.of(
-        "plan.json", "plan", "run-manifest.json", "manifest", "reliability-matrix.json", "matrix",
-        "transitions.json", "transitions", "evidence.json", "evidence");
+    Map<String, String> partNames =
+        Map.of(
+            "plan.json",
+            "plan",
+            "run-manifest.json",
+            "manifest",
+            "reliability-matrix.json",
+            "matrix",
+            "transitions.json",
+            "transitions",
+            "evidence.json",
+            "evidence");
     for (Map.Entry<String, String> entry : partNames.entrySet()) {
       String declared = checksums.path(entry.getKey()).asText("");
-      String actual = rawSha256(source.read(entry.getValue()), StabilizationBundleStreamReader.MAX_JSON_PART_BYTES);
+      String actual =
+          rawSha256(
+              source.read(entry.getValue()), StabilizationBundleStreamReader.MAX_JSON_PART_BYTES);
       if (!declared.matches("sha256:[0-9a-f]{64}") || !declared.equals(actual)) {
         throw new IllegalArgumentException("report bundle checksum mismatch for " + entry.getKey());
       }
@@ -332,12 +372,14 @@ public class StabilizationIngestionService {
     JsonNode transitions = parseBundleJson("transitions", source.read("transitions"));
     JsonNode evidence = parseBundleJson("evidence", source.read("evidence"));
     if (!plan.isObject() || !transitions.isArray() || !evidence.isArray()) {
-      throw new IllegalArgumentException("report bundle contains invalid plan, transitions, or evidence JSON");
+      throw new IllegalArgumentException(
+          "report bundle contains invalid plan, transitions, or evidence JSON");
     }
     // Evidence is duplicated in the manifest intentionally; accepting inconsistent copies would
     // make debugger retrieval ambiguous.
     if (manifest.has("evidence") && !manifest.path("evidence").equals(evidence)) {
-      throw new IllegalArgumentException("report bundle evidence.json does not match manifest evidence");
+      throw new IllegalArgumentException(
+          "report bundle evidence.json does not match manifest evidence");
     }
 
     // Plan hash parity with the Micro6 canonicalization contract: the bundle plan document must
@@ -349,12 +391,14 @@ public class StabilizationIngestionService {
         "sha256:" + StabilizationHashUtil.sha256(plan, StabilizationHashUtil.PLAN_EXCLUSIONS);
     if (!declaredPlanHash.equals(recomputedPlanHash)) {
       throw new IllegalArgumentException(
-          "report bundle plan_hash mismatch: manifest declares " + declaredPlanHash
-              + " but the plan document recomputes to " + recomputedPlanHash);
+          "report bundle plan_hash mismatch: manifest declares "
+              + declaredPlanHash
+              + " but the plan document recomputes to "
+              + recomputedPlanHash);
     }
     if (!declaredPlanHash.equals(plan.path("planHash").asText(""))) {
       throw new IllegalArgumentException(
-          "report bundle plan.planHash does not equal manifest plan_hash");
+          "report bundle plan_hash/planHash does not equal the recomputed plan hash");
     }
     validatePlanSchema(plan);
     validateManifestArtifactDigest(manifest);
@@ -364,7 +408,8 @@ public class StabilizationIngestionService {
     // NOT_APPLICABLE plans admit zero evidence artifacts; any attached artifact is rejected even
     // though the (empty) evidence list would otherwise stage none.
     if ("NOT_APPLICABLE".equalsIgnoreCase(plan.path("evidence").path("mode").asText(""))
-        && source.artifacts() != null && !source.artifacts().isEmpty()) {
+        && source.artifacts() != null
+        && !source.artifacts().isEmpty()) {
       throw new IllegalArgumentException(
           "plan evidence mode NOT_APPLICABLE rejects supplied artifacts");
     }
@@ -378,13 +423,20 @@ public class StabilizationIngestionService {
     // run with changed content returns conflict.
     if (runRepository.existsByRunIdAndManifestHash(runId, aggregateManifestHash)) {
       return Map.of(
-          "run_id", runId,
-          "attempt_ids", attemptIds(manifest),
-          "manifest_hash", aggregateManifestHash,
-          "matrix_hash", matrix.path("matrix_hash").asText(),
-          "saved", false,
-          "duplicate", true,
-          "artifacts_verified", true);
+          "run_id",
+          runId,
+          "attempt_ids",
+          attemptIds(manifest),
+          "manifest_hash",
+          aggregateManifestHash,
+          "matrix_hash",
+          matrix.path("matrix_hash").asText(),
+          "saved",
+          false,
+          "duplicate",
+          true,
+          "artifacts_verified",
+          true);
     }
     if (runRepository.existsByRunId(runId)) {
       throw new StabilizationConflictException(
@@ -396,7 +448,8 @@ public class StabilizationIngestionService {
     // before any database work and is not yet visible under a final opaque id. Every staged and
     // promoted id is tracked from the moment it is allocated so cleanup is exact even when a
     // later artifact fails to stage.
-    StabilizationIngestionResourceTracker resourceTracker = new StabilizationIngestionResourceTracker();
+    StabilizationIngestionResourceTracker resourceTracker =
+        new StabilizationIngestionResourceTracker();
     List<StagedEvidence> staged = new ArrayList<>();
     List<StabilizationArtifact> storedArtifacts = new ArrayList<>();
     try {
@@ -406,7 +459,8 @@ public class StabilizationIngestionService {
       throw e;
     } catch (Exception e) {
       resourceTracker.rollback(artifactStore);
-      throw new IllegalArgumentException("stabilization artifact staging failed: " + e.getMessage());
+      throw new IllegalArgumentException(
+          "stabilization artifact staging failed: " + e.getMessage());
     }
 
     // Register the transaction synchronization BEFORE any promotion so a rollback (including a
@@ -415,16 +469,17 @@ public class StabilizationIngestionService {
     boolean transactionCleanupRegistered =
         TransactionSynchronizationManager.isSynchronizationActive();
     if (transactionCleanupRegistered) {
-      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-        @Override
-        public void afterCompletion(int status) {
-          if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
-            resourceTracker.rollback(artifactStore);
-          } else {
-            resourceTracker.commit(artifactStore);
-          }
-        }
-      });
+      TransactionSynchronizationManager.registerSynchronization(
+          new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+              if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
+                resourceTracker.rollback(artifactStore);
+              } else {
+                resourceTracker.commit(artifactStore);
+              }
+            }
+          });
     }
 
     try {
@@ -434,7 +489,8 @@ public class StabilizationIngestionService {
       List<StabilizationArtifactStore.StoredArtifact> promoted = new ArrayList<>();
       for (StagedEvidence stagedEvidence : staged) {
         StabilizationArtifactStore.StoredArtifact stagedArtifact = stagedEvidence.stored();
-        StabilizationArtifactStore.StoredArtifact promotedArtifact = artifactStore.promote(stagedArtifact);
+        StabilizationArtifactStore.StoredArtifact promotedArtifact =
+            artifactStore.promote(stagedArtifact);
         resourceTracker.trackPromoted(promotedArtifact.id());
         promoted.add(promotedArtifact);
       }
@@ -465,7 +521,8 @@ public class StabilizationIngestionService {
       result.put("duplicate", false);
       result.put("artifacts_verified", true);
       result.put("matrix_snapshots", matrixResult.get("snapshots"));
-      // The persisted artifact mappings in evidence order (SC-572): every stored artifact UUID bound
+      // The persisted artifact mappings in evidence order (SC-572): every stored artifact UUID
+      // bound
       // to its durable external evidence reference, returned so the producer can verify the
       // certification mapping without a separate query.
       result.put("artifacts", artifactMappings(storedArtifacts));
@@ -500,9 +557,11 @@ public class StabilizationIngestionService {
     return ids;
   }
 
-  /** Serializes the persisted artifact mappings in evidence order for the success response
-   *  (SC-572). Each mapping binds the durable external evidence reference to the stored artifact
-   *  UUID and mirrors the submitted evidence identity fields. */
+  /**
+   * Serializes the persisted artifact mappings in evidence order for the success response (SC-572).
+   * Each mapping binds the durable external evidence reference to the stored artifact UUID and
+   * mirrors the submitted evidence identity fields.
+   */
   private static List<Map<String, Object>> artifactMappings(List<StabilizationArtifact> artifacts) {
     List<Map<String, Object>> mappings = new ArrayList<>();
     if (artifacts == null) {
@@ -530,29 +589,37 @@ public class StabilizationIngestionService {
       throw new IllegalArgumentException(
           "unsupported harness manifest schema_version '"
               + manifest.path("schema_version").asText("")
-              + "'; expected " + HARNESS_MANIFEST_SCHEMA);
+              + "'; expected "
+              + HARNESS_MANIFEST_SCHEMA);
     }
     for (String field : AGGREGATE_MANIFEST_REQUIRED) {
       if (!manifest.hasNonNull(field)) {
-        throw new IllegalArgumentException("harness manifest missing required field '" + field + "'");
+        throw new IllegalArgumentException(
+            "harness manifest missing required field '" + field + "'");
       }
     }
     String outcome = manifest.path("outcome").asText("");
     String terminalState = manifest.path("terminal_state").asText("");
     if (!outcomeConsistent(outcome, terminalState)) {
       throw new IllegalArgumentException(
-          "harness manifest outcome '" + outcome + "' is inconsistent with terminal_state '"
-              + terminalState + "'");
+          "harness manifest outcome '"
+              + outcome
+              + "' is inconsistent with terminal_state '"
+              + terminalState
+              + "'");
     }
     String declaredHash = manifest.path("manifest_hash").asText("");
     String computedHash =
-        "sha256:" + StabilizationHashUtil.sha256(manifest, StabilizationHashUtil.MANIFEST_EXCLUSIONS);
+        "sha256:"
+            + StabilizationHashUtil.sha256(manifest, StabilizationHashUtil.MANIFEST_EXCLUSIONS);
     if (!declaredHash.equals(computedHash)) {
       throw new IllegalArgumentException(
-          "harness manifest hash mismatch: declared " + declaredHash + " but recomputed " + computedHash);
+          "harness manifest hash mismatch: declared "
+              + declaredHash
+              + " but recomputed "
+              + computedHash);
     }
-    if ("PASS".equalsIgnoreCase(outcome)
-        && !manifest.path("evidence_complete").asBoolean(false)) {
+    if ("PASS".equalsIgnoreCase(outcome) && !manifest.path("evidence_complete").asBoolean(false)) {
       throw new IllegalArgumentException(
           "harness manifest outcome PASS requires evidence_complete=true");
     }
@@ -561,15 +628,20 @@ public class StabilizationIngestionService {
     }
     // source_snapshot_id stays exactly UNKNOWN until SC-810; anything else is rejected.
     if (!"UNKNOWN".equals(manifest.path("source_snapshot_id").asText(""))) {
-      throw new IllegalArgumentException(
-          "harness manifest source_snapshot_id must be UNKNOWN");
+      throw new IllegalArgumentException("harness manifest source_snapshot_id must be UNKNOWN");
     }
     // External evidence requires nonblank executor/build/session/recording identities at the
     // aggregate level; a blank identity is never a wildcard for a certified bundle.
     String evidenceMode = manifest.path("evidence").path("mode").asText("EXTERNAL");
     if (!"NOT_APPLICABLE".equalsIgnoreCase(evidenceMode)) {
-      for (String field : List.of("micro6_instance_id", "build_id", "artifact_digest",
-          "debug_session_id", "recording_id", "client_id")) {
+      for (String field :
+          List.of(
+              "micro6_instance_id",
+              "build_id",
+              "artifact_digest",
+              "debug_session_id",
+              "recording_id",
+              "client_id")) {
         if (manifest.path(field).asText("").isBlank()) {
           throw new IllegalArgumentException(
               "harness manifest requires a nonblank '" + field + "' for external evidence");
@@ -584,30 +656,40 @@ public class StabilizationIngestionService {
     int declaredAttemptCount = manifest.path("attempt_count").asInt(-1);
     if (declaredAttemptCount < 0 || declaredAttemptCount != attempts.size()) {
       throw new IllegalArgumentException(
-          "harness manifest attempt_count=" + declaredAttemptCount
-              + " does not match attempts.length=" + attempts.size());
+          "harness manifest attempt_count="
+              + declaredAttemptCount
+              + " does not match attempts.length="
+              + attempts.size());
     }
     Set<String> attemptIds = new LinkedHashSet<>();
     JsonNode terminalAttempt = attempts.get(attempts.size() - 1);
     for (JsonNode attempt : attempts) {
       if (!attempt.isObject() || attempt.path("attempt_id").asText("").isBlank()) {
-        throw new IllegalArgumentException("harness manifest attempts[] entries must carry attempt_id");
+        throw new IllegalArgumentException(
+            "harness manifest attempts[] entries must carry attempt_id");
       }
       if (!attemptIds.add(attempt.path("attempt_id").asText())) {
-        throw new IllegalArgumentException("harness manifest attempts[] contains duplicate attempt_id");
+        throw new IllegalArgumentException(
+            "harness manifest attempts[] contains duplicate attempt_id");
       }
       if (attempt.hasNonNull("attempt_manifest_hash")) {
         String declared = attempt.path("attempt_manifest_hash").asText("");
         if (!declared.matches("^sha256:[0-9a-f]{64}$")) {
-          throw new IllegalArgumentException("harness manifest attempt_manifest_hash must be sha256-prefixed hex");
+          throw new IllegalArgumentException(
+              "harness manifest attempt_manifest_hash must be sha256-prefixed hex");
         }
         String recomputed =
-            "sha256:" + StabilizationHashUtil.sha256(attempt, StabilizationHashUtil.ATTEMPT_MANIFEST_EXCLUSIONS);
+            "sha256:"
+                + StabilizationHashUtil.sha256(
+                    attempt, StabilizationHashUtil.ATTEMPT_MANIFEST_EXCLUSIONS);
         if (!declared.equals(recomputed)) {
           throw new IllegalArgumentException(
               "harness manifest attempt_manifest_hash mismatch for "
                   + attempt.path("attempt_id").asText("")
-                  + ": declared " + declared + " but recomputed " + recomputed);
+                  + ": declared "
+                  + declared
+                  + " but recomputed "
+                  + recomputed);
         }
       }
       if ("PASS".equalsIgnoreCase(attempt.path("outcome").asText(""))
@@ -617,7 +699,8 @@ public class StabilizationIngestionService {
       }
       if (!"PASS".equalsIgnoreCase(attempt.path("outcome").asText(""))
           && !"UNKNOWN".equals(attempt.path("source_snapshot_id").asText("UNKNOWN"))) {
-        throw new IllegalArgumentException("harness manifest attempt source_snapshot_id must be UNKNOWN");
+        throw new IllegalArgumentException(
+            "harness manifest attempt source_snapshot_id must be UNKNOWN");
       }
     }
     // The top-level aggregate identity must match the terminal attempt.
@@ -638,19 +721,24 @@ public class StabilizationIngestionService {
       String planBuildId = plan.path("buildId").asText("");
       String planInstance = plan.path("micro6InstanceId").asText("");
       String planCatalogHash = plan.path("task").path("catalogHash").asText("");
-      requirePlanParity(manifest, plan.path("planId").asText(""), "plan_id");
-      requirePlanParity(manifest, planTaskKey, "task_key");
-      requirePlanParity(manifest, planSettingsHash, "settings_hash");
-      requirePlanParity(manifest, planBuildId, "build_id");
-      requirePlanParity(manifest, planInstance, "micro6_instance_id");
-      requirePlanParity(manifest, planCatalogHash, "catalog_hash");
+      requirePlanIdentityMatch("plan_id", manifest.path("plan_id"), plan.path("planId"));
+      requirePlanIdentityMatch(
+          "task_key", manifest.path("task_key"), plan.path("task").path("taskKey"));
+      requirePlanIdentityMatch(
+          "settings_hash",
+          manifest.path("settings_hash"),
+          plan.path("settings").path("settingsHash"));
+      requirePlanIdentityMatch("build_id", manifest.path("build_id"), plan.path("buildId"));
+      requirePlanIdentityMatch(
+          "micro6_instance_id", manifest.path("micro6_instance_id"), plan.path("micro6InstanceId"));
+      requirePlanIdentityMatch(
+          "catalog_hash", manifest.path("catalog_hash"), plan.path("task").path("catalogHash"));
       // The plan's own declared planHash must equal the manifest plan_hash. The recomputed hash of
       // the bundle plan document is verified separately before this method; requiring the plan's
       // internal planHash field to agree closes the self-hashed-but-mismatched-plan gap.
       String planDeclaredHash = plan.path("planHash").asText("");
       if (!planDeclaredHash.equals(manifest.path("plan_hash").asText(""))) {
-        throw new IllegalArgumentException(
-            "plan.planHash does not match manifest.plan_hash");
+        throw new IllegalArgumentException("plan.planHash does not match manifest.plan_hash");
       }
     } else {
       throw new IllegalArgumentException("report bundle requires a plan document");
@@ -661,10 +749,11 @@ public class StabilizationIngestionService {
     return a.asText("").equals(b.asText(""));
   }
 
-  private static void requirePlanParity(JsonNode manifest, String expected, String field) {
-    if (!expected.equals(manifest.path(field).asText(""))) {
+  private static void requirePlanIdentityMatch(
+      String field, JsonNode manifestValue, JsonNode planValue) {
+    if (!sameText(manifestValue, planValue)) {
       throw new IllegalArgumentException(
-          "harness manifest " + field + " does not match the plan");
+          "harness manifest aggregate identity field '" + field + "' does not match the plan");
     }
   }
 
@@ -690,15 +779,17 @@ public class StabilizationIngestionService {
     String buildId = plan.path("buildId").asText("");
     String catalogHash = plan.path("task").path("catalogHash").asText("");
     String instanceId = plan.path("micro6InstanceId").asText("");
-    if (planId.isBlank() || planHash.isBlank() || taskKey.isBlank()
-        || settingsHash.isBlank() || buildId.isBlank() || catalogHash.isBlank()
+    if (planId.isBlank()
+        || planHash.isBlank()
+        || taskKey.isBlank()
+        || settingsHash.isBlank()
+        || buildId.isBlank()
+        || catalogHash.isBlank()
         || instanceId.isBlank()) {
-      throw new IllegalArgumentException(
-          "report bundle plan is missing required identity fields");
+      throw new IllegalArgumentException("report bundle plan is missing required identity fields");
     }
     if (!planHash.matches("^sha256:[0-9a-f]{64}$")) {
-      throw new IllegalArgumentException(
-          "report bundle plan.planHash must be sha256:<64 hex>");
+      throw new IllegalArgumentException("report bundle plan.planHash must be sha256:<64 hex>");
     }
     if (!settingsHash.matches("^sha256:[0-9a-f]{64}$")) {
       throw new IllegalArgumentException(
@@ -711,17 +802,18 @@ public class StabilizationIngestionService {
   }
 
   /**
-   * Requires {@code manifest.artifact_digest} to be a real {@code sha256:<64 lowercase hex>}
-   * digest and never {@code UNVERIFIED}. A certified ingestion must be tied to verifiable
-   * packaged bytes.
+   * Requires {@code manifest.artifact_digest} to be a real {@code sha256:<64 lowercase hex>} digest
+   * and never {@code UNVERIFIED}. A certified ingestion must be tied to verifiable packaged bytes.
    */
   private void validateManifestArtifactDigest(JsonNode manifest) {
     String digest = manifest.path("artifact_digest").asText("");
-    if (digest.isBlank() || "UNVERIFIED".equalsIgnoreCase(digest)
+    if (digest.isBlank()
+        || "UNVERIFIED".equalsIgnoreCase(digest)
         || !digest.matches("^sha256:[0-9a-f]{64}$")) {
       throw new IllegalArgumentException(
           "harness manifest artifact_digest must be a verified sha256:<64 hex> digest, got '"
-              + digest + "'");
+              + digest
+              + "'");
     }
   }
 
@@ -736,7 +828,8 @@ public class StabilizationIngestionService {
    * evidence is incomplete, even when a later retry passed. In {@code NOT_APPLICABLE} plan mode
    * zero evidence records/artifacts are permitted and any supplied evidence is rejected.
    */
-  private void validateEvidenceAgainstManifest(JsonNode manifest, JsonNode evidence, JsonNode plan) {
+  private void validateEvidenceAgainstManifest(
+      JsonNode manifest, JsonNode evidence, JsonNode plan) {
     String runId = manifest.path("run_id").asText("");
     String buildId = manifest.path("build_id").asText("");
     String settingsHash = manifest.path("settings_hash").asText("");
@@ -746,8 +839,7 @@ public class StabilizationIngestionService {
     JsonNode planEvidence = plan == null ? null : plan.path("evidence");
     JsonNode planRequired = planEvidence == null ? null : planEvidence.path("required");
     if (planEvidence == null || !planEvidence.isObject()) {
-      throw new IllegalArgumentException(
-          "plan must declare evidence requirements explicitly");
+      throw new IllegalArgumentException("plan must declare evidence requirements explicitly");
     }
     if (planRequired != null && planRequired.isArray()) {
       for (JsonNode type : planRequired) {
@@ -760,8 +852,8 @@ public class StabilizationIngestionService {
         }
       }
     }
-    String evidenceMode = planEvidence.path("mode").asText("EXTERNAL")
-        .toUpperCase(java.util.Locale.ENGLISH);
+    String evidenceMode =
+        planEvidence.path("mode").asText("EXTERNAL").toUpperCase(java.util.Locale.ENGLISH);
     if ("NOT_APPLICABLE".equals(evidenceMode)) {
       // NOT_APPLICABLE admits only an explicit empty required-evidence plan; any supplied evidence
       // is rejected (never accepted without validation).
@@ -843,18 +935,24 @@ public class StabilizationIngestionService {
           || !taskKey.equals(record.path("task_key").asText(""))
           || !clientId.equals(record.path("client_id").asText(""))
           || !owningAttempt.path("entry_id").asText("").equals(record.path("entry_id").asText(""))
-          || !owningAttempt.path("iteration_id").asText("").equals(record.path("iteration_id").asText(""))) {
-        throw new IllegalArgumentException("evidence record ownership does not match the aggregate attempt");
+          || !owningAttempt
+              .path("iteration_id")
+              .asText("")
+              .equals(record.path("iteration_id").asText(""))) {
+        throw new IllegalArgumentException(
+            "evidence record ownership does not match the aggregate attempt");
       }
-      boolean recorderOwned = "RECORDER".equalsIgnoreCase(provenance)
-          || "DEBUG_RECORDER".equalsIgnoreCase(provenance);
+      boolean recorderOwned =
+          "RECORDER".equalsIgnoreCase(provenance) || "DEBUG_RECORDER".equalsIgnoreCase(provenance);
       if (recorderOwned) {
         if (!isOpaqueArtifactReference(reference)) {
-          throw new IllegalArgumentException("recorder evidence reference must be an opaque artifact:// reference");
+          throw new IllegalArgumentException(
+              "recorder evidence reference must be an opaque artifact:// reference");
         }
         long sizeBytes = record.path("size_bytes").asLong(0);
         if (sizeBytes <= 0) {
-          throw new IllegalArgumentException("recorder evidence record requires positive size_bytes");
+          throw new IllegalArgumentException(
+              "recorder evidence record requires positive size_bytes");
         }
         if (record.path("media_type").asText("").isBlank()) {
           throw new IllegalArgumentException("recorder evidence record requires media_type");
@@ -874,7 +972,8 @@ public class StabilizationIngestionService {
       // entry/iteration/debug-session/recording identity. Blank-to-blank equality is never
       // accepted as evidence of ownership: the identities must actually exist.
       if (!"NOT_APPLICABLE".equals(evidenceMode)) {
-        for (String field : List.of("entry_id", "iteration_id", "debug_session_id", "recording_id")) {
+        for (String field :
+            List.of("entry_id", "iteration_id", "debug_session_id", "recording_id")) {
           if (attempt.path(field).asText("").isBlank()) {
             throw new IllegalArgumentException(
                 "harness manifest attempt " + attemptId + " requires a nonblank '" + field + "'");
@@ -904,17 +1003,21 @@ public class StabilizationIngestionService {
           String recordType = record.path("type").asText().toUpperCase(java.util.Locale.ENGLISH);
           typeCounts.merge(recordType, 1, Integer::sum);
           if (!attemptId.equals(record.path("attempt_id").asText(""))) {
-            throw new IllegalArgumentException("evidence record attempt_id does not match its attempt");
+            throw new IllegalArgumentException(
+                "evidence record attempt_id does not match its attempt");
           }
-          boolean recorderOwned = "RECORDER".equalsIgnoreCase(record.path("provenance").asText(""))
-              || "DEBUG_RECORDER".equalsIgnoreCase(record.path("provenance").asText(""));
+          boolean recorderOwned =
+              "RECORDER".equalsIgnoreCase(record.path("provenance").asText(""))
+                  || "DEBUG_RECORDER".equalsIgnoreCase(record.path("provenance").asText(""));
           if (recorderOwned
-              && (expectedSessionId.isBlank() || record.path("debug_session_id").asText("").isBlank())) {
+              && (expectedSessionId.isBlank()
+                  || record.path("debug_session_id").asText("").isBlank())) {
             throw new IllegalArgumentException(
                 "recorder evidence requires a nonblank debug_session_id for attempt " + attemptId);
           }
           if (recorderOwned
-              && (expectedRecordingId.isBlank() || record.path("recording_id").asText("").isBlank())) {
+              && (expectedRecordingId.isBlank()
+                  || record.path("recording_id").asText("").isBlank())) {
             throw new IllegalArgumentException(
                 "recorder evidence requires a nonblank recording_id for attempt " + attemptId);
           }
@@ -929,20 +1032,30 @@ public class StabilizationIngestionService {
         }
         if (typeCounts.size() != requiredTypes.size()) {
           throw new IllegalArgumentException(
-              "evidence-required attempt " + attemptId + " carries " + typeCounts.size()
-                  + " distinct evidence types but the plan requires " + requiredTypes.size());
+              "evidence-required attempt "
+                  + attemptId
+                  + " carries "
+                  + typeCounts.size()
+                  + " distinct evidence types but the plan requires "
+                  + requiredTypes.size());
         }
         for (String required : requiredTypes) {
           Integer count = typeCounts.get(required);
           if (count == null) {
             throw new IllegalArgumentException(
-                "evidence-required attempt is missing required evidence type '" + required
-                    + "' for attempt " + attemptId);
+                "evidence-required attempt is missing required evidence type '"
+                    + required
+                    + "' for attempt "
+                    + attemptId);
           }
           if (count != 1) {
             throw new IllegalArgumentException(
-                "evidence-required attempt " + attemptId + " owns " + count
-                    + " records of required evidence type '" + required
+                "evidence-required attempt "
+                    + attemptId
+                    + " owns "
+                    + count
+                    + " records of required evidence type '"
+                    + required
                     + "'; exactly one is permitted");
           }
         }
@@ -958,8 +1071,8 @@ public class StabilizationIngestionService {
    * Requires the aggregate evidence array to be the exact ORDERED union of the manifest attempts'
    * evidence: attempt-0 evidence in order, then attempt-1 evidence in order, then each subsequent
    * attempt's evidence in order. A top-level record that has no owning attempt record, an attempt
-   * record missing from the aggregate, a record owned by two attempts, or a reordering is
-   * rejected. Records are compared by canonical JSON with volatile timestamps excluded.
+   * record missing from the aggregate, a record owned by two attempts, or a reordering is rejected.
+   * Records are compared by canonical JSON with volatile timestamps excluded.
    */
   private void validateEvidenceUnion(JsonNode manifest, JsonNode evidence) {
     List<JsonNode> expectedUnion = new ArrayList<>();
@@ -981,7 +1094,11 @@ public class StabilizationIngestionService {
             String priorOwner = ownerByCanonical.putIfAbsent(canonical, attemptId);
             if (priorOwner != null && !priorOwner.equals(attemptId)) {
               throw new IllegalArgumentException(
-                  "the same evidence record is owned by attempts '" + priorOwner + "' and '" + attemptId + "'");
+                  "the same evidence record is owned by attempts '"
+                      + priorOwner
+                      + "' and '"
+                      + attemptId
+                      + "'");
             }
             if (!attemptId.equals(record.path("attempt_id").asText(""))) {
               throw new IllegalArgumentException(
@@ -995,16 +1112,24 @@ public class StabilizationIngestionService {
               String priorRef = referenceOwner.putIfAbsent(reference, attemptId);
               if (priorRef != null && !priorRef.equals(attemptId)) {
                 throw new IllegalArgumentException(
-                    "duplicate evidence reference '" + reference + "' across attempts " + priorRef
-                        + " and " + attemptId);
+                    "duplicate evidence reference '"
+                        + reference
+                        + "' across attempts "
+                        + priorRef
+                        + " and "
+                        + attemptId);
               }
             }
             if (!checksum.isBlank()) {
               String priorChecksum = checksumOwner.putIfAbsent(checksum, attemptId);
               if (priorChecksum != null && !priorChecksum.equals(attemptId)) {
                 throw new IllegalArgumentException(
-                    "duplicate evidence checksum '" + checksum + "' across attempts " + priorChecksum
-                        + " and " + attemptId);
+                    "duplicate evidence checksum '"
+                        + checksum
+                        + "' across attempts "
+                        + priorChecksum
+                        + " and "
+                        + attemptId);
               }
             }
           }
@@ -1017,14 +1142,20 @@ public class StabilizationIngestionService {
     }
     if (expectedUnion.size() != actualRecords.size()) {
       throw new IllegalArgumentException(
-          "ordered evidence union length mismatch: expected " + expectedUnion.size()
-              + " (attempts in order) but top-level has " + actualRecords.size());
+          "ordered evidence union length mismatch: expected "
+              + expectedUnion.size()
+              + " (attempts in order) but top-level has "
+              + actualRecords.size());
     }
     for (int i = 0; i < expectedUnion.size(); i++) {
-      if (!canonicalEvidence(expectedUnion.get(i)).equals(canonicalEvidence(actualRecords.get(i)))) {
+      if (!canonicalEvidence(expectedUnion.get(i))
+          .equals(canonicalEvidence(actualRecords.get(i)))) {
         throw new IllegalArgumentException(
-            "ordered evidence union mismatch at index " + i + ": expected "
-                + canonicalEvidence(expectedUnion.get(i)) + " but found "
+            "ordered evidence union mismatch at index "
+                + i
+                + ": expected "
+                + canonicalEvidence(expectedUnion.get(i))
+                + " but found "
                 + canonicalEvidence(actualRecords.get(i)));
       }
     }
@@ -1040,7 +1171,9 @@ public class StabilizationIngestionService {
     String schemaVersion = matrix.path("schema_version").asText("");
     if (!RELIABILITY_MATRIX_SCHEMA.equals(schemaVersion)) {
       throw new IllegalArgumentException(
-          "unsupported reliability matrix schema_version '" + schemaVersion + "'; expected "
+          "unsupported reliability matrix schema_version '"
+              + schemaVersion
+              + "'; expected "
               + RELIABILITY_MATRIX_SCHEMA);
     }
     String declaredHash = matrix.path("matrix_hash").asText("matrix_unknown");
@@ -1048,7 +1181,9 @@ public class StabilizationIngestionService {
         "sha256:" + StabilizationHashUtil.sha256(matrix, StabilizationHashUtil.MATRIX_EXCLUSIONS);
     if (!declaredHash.equals(computedHash)) {
       throw new IllegalArgumentException(
-          "reliability matrix hash mismatch: declared " + declaredHash + " but recomputed "
+          "reliability matrix hash mismatch: declared "
+              + declaredHash
+              + " but recomputed "
               + computedHash);
     }
     if (!matrix.path("groups").isArray()) {
@@ -1067,8 +1202,8 @@ public class StabilizationIngestionService {
 
   /** True when at least one group matches the aggregate tuple and its counts/outcome metrics. */
   private static boolean matrixHasMatchingGroup(JsonNode matrix, JsonNode manifest) {
-    String aggregateOutcome = manifest.path("outcome").asText("")
-        .toUpperCase(java.util.Locale.ENGLISH);
+    String aggregateOutcome =
+        manifest.path("outcome").asText("").toUpperCase(java.util.Locale.ENGLISH);
     int aggregateAttempts = manifest.path("attempt_count").asInt(1);
     JsonNode groups = matrix.path("groups");
     if (!groups.isArray()) {
@@ -1117,8 +1252,8 @@ public class StabilizationIngestionService {
     return false;
   }
 
-  private static boolean tupleFieldMatches(JsonNode group, String groupField, JsonNode manifest,
-      String manifestField) {
+  private static boolean tupleFieldMatches(
+      JsonNode group, String groupField, JsonNode manifest, String manifestField) {
     String a = group.path(groupField).asText("");
     String b = manifest.path(manifestField).asText("");
     return a.equals(b) && !a.isBlank();
@@ -1127,11 +1262,11 @@ public class StabilizationIngestionService {
   /**
    * Verifies each evidence record is backed by an attached checksum-addressed artifact whose raw
    * bytes hash to the record checksum, that the record's media type equals the uploaded artifact
-   * part's normalized media type, and that no uploaded artifact is unused by the evidence.
-   * Matching artifacts are staged into the artifact store's staging namespace and every staged id
-   * is tracked immediately so a later failure cleans earlier stages exactly. Nothing is promoted
-   * here: promotion happens only inside the persistence transaction. Any missing/incorrect/
-   * mismatched artifact rejects the bundle (HTTP 400).
+   * part's normalized media type, and that no uploaded artifact is unused by the evidence. Matching
+   * artifacts are staged into the artifact store's staging namespace and every staged id is tracked
+   * immediately so a later failure cleans earlier stages exactly. Nothing is promoted here:
+   * promotion happens only inside the persistence transaction. Any missing/incorrect/ mismatched
+   * artifact rejects the bundle (HTTP 400).
    */
   /** One staged evidence artifact paired with its durable external evidence reference. */
   private record StagedEvidence(
@@ -1144,7 +1279,8 @@ public class StabilizationIngestionService {
       return null;
     }
     for (StagedEvidence evidence : staged) {
-      if (evidence != null && evidence.stored() != null
+      if (evidence != null
+          && evidence.stored() != null
           && evidence.stored().id().equals(stored.id())) {
         return evidence.externalReference();
       }
@@ -1153,7 +1289,9 @@ public class StabilizationIngestionService {
   }
 
   private List<StagedEvidence> stageEvidenceArtifacts(
-      List<ArtifactPart> parts, JsonNode manifest, JsonNode evidence,
+      List<ArtifactPart> parts,
+      JsonNode manifest,
+      JsonNode evidence,
       StabilizationIngestionResourceTracker resourceTracker) {
     if (parts == null) {
       parts = List.of();
@@ -1170,21 +1308,22 @@ public class StabilizationIngestionService {
       }
       String hex = checksumHexFromFilename(part.filename());
       if (hex == null) {
-        throw new IllegalArgumentException("artifact part filename must be checksum-addressed sha256_<64>.<ext>: "
-            + part.filename());
+        throw new IllegalArgumentException(
+            "artifact part filename must be checksum-addressed sha256_<64>.<ext>: "
+                + part.filename());
       }
       String actual = rawSha256(part.path(), StabilizationBundleStreamReader.MAX_PART_BYTES);
       if (!actual.endsWith(hex)) {
-        throw new IllegalArgumentException("artifact part bytes do not match checksum-addressed filename "
-            + part.filename());
+        throw new IllegalArgumentException(
+            "artifact part bytes do not match checksum-addressed filename " + part.filename());
       }
       if (part.mediaType() == null || normalizedMediaType(part.mediaType()).isEmpty()) {
-        throw new IllegalArgumentException("artifact part is missing a media type: " + part.filename());
+        throw new IllegalArgumentException(
+            "artifact part is missing a media type: " + part.filename());
       }
       ArtifactPart prior = partsByChecksum.putIfAbsent(hex, part);
       if (prior != null) {
-        throw new IllegalArgumentException(
-            "artifact part checksum collision: " + part.filename());
+        throw new IllegalArgumentException("artifact part checksum collision: " + part.filename());
       }
     }
 
@@ -1206,7 +1345,8 @@ public class StabilizationIngestionService {
         throw new IllegalArgumentException("duplicate evidence reference '" + reference + "'");
       }
       String checksum = record.path("checksum").asText("");
-      String hex = checksum.startsWith("sha256:") ? checksum.substring("sha256:".length()) : checksum;
+      String hex =
+          checksum.startsWith("sha256:") ? checksum.substring("sha256:".length()) : checksum;
       ArtifactPart part = partsByChecksum.get(hex);
       if (part == null) {
         throw new IllegalArgumentException(
@@ -1216,8 +1356,13 @@ public class StabilizationIngestionService {
       String recordMediaType = record.path("media_type").asText("application/octet-stream");
       if (!normalizedMediaType(recordMediaType).equals(normalizedMediaType(part.mediaType()))) {
         throw new IllegalArgumentException(
-            "evidence record media_type '" + recordMediaType + "' does not match the uploaded artifact part "
-                + part.filename() + " media type '" + part.mediaType() + "'");
+            "evidence record media_type '"
+                + recordMediaType
+                + "' does not match the uploaded artifact part "
+                + part.filename()
+                + " media type '"
+                + part.mediaType()
+                + "'");
       }
       // Exact byte-count verification (SC-572): the evidence record's declared size_bytes and the
       // staged part's claimed size must both equal the actual uploaded bytes' length. A mismatch is
@@ -1226,29 +1371,40 @@ public class StabilizationIngestionService {
       try {
         actualSize = Files.size(part.path());
       } catch (IOException e) {
-        throw new IllegalArgumentException(
-            "cannot read staged artifact size: " + part.filename());
+        throw new IllegalArgumentException("cannot read staged artifact size: " + part.filename());
       }
       long declaredSize = record.path("size_bytes").asLong(-1);
       if (declaredSize <= 0) {
         throw new IllegalArgumentException(
-            "evidence record requires a positive size_bytes: " + record.path("reference").asText(""));
+            "evidence record requires a positive size_bytes: "
+                + record.path("reference").asText(""));
       }
       if (declaredSize != actualSize) {
         throw new IllegalArgumentException(
             "evidence record size_bytes does not match uploaded artifact: "
-                + record.path("reference").asText("") + " declared " + declaredSize
-                + " but uploaded " + actualSize);
+                + record.path("reference").asText("")
+                + " declared "
+                + declaredSize
+                + " but uploaded "
+                + actualSize);
       }
       if (part.sizeBytes() != actualSize) {
         throw new IllegalArgumentException(
-            "staged part size mismatch: " + part.filename() + " declared " + part.sizeBytes()
-                + " but staged " + actualSize);
+            "staged part size mismatch: "
+                + part.filename()
+                + " declared "
+                + part.sizeBytes()
+                + " but staged "
+                + actualSize);
       }
       usedHexes.add(hex);
-      StabilizationArtifactStore.StoredArtifact stagedArtifact = artifactStore.stage(
-          part.path(), part.mediaType(), record.path("type").asText("EVIDENCE"),
-          record.path("run_id").asText(""), record.path("attempt_id").asText(""));
+      StabilizationArtifactStore.StoredArtifact stagedArtifact =
+          artifactStore.stage(
+              part.path(),
+              part.mediaType(),
+              record.path("type").asText("EVIDENCE"),
+              record.path("run_id").asText(""),
+              record.path("attempt_id").asText(""));
       // The persisted artifact metadata must come from the promoted bytes, never from input
       // metadata: the staged digest/size must match the uploaded artifact's actual digest/size.
       if (stagedArtifact.sizeBytes() != actualSize) {
@@ -1271,7 +1427,8 @@ public class StabilizationIngestionService {
       String hex = checksumHexFromFilename(part.filename());
       if (hex != null && !usedHexes.contains(hex)) {
         throw new IllegalArgumentException(
-            "unused attached evidence artifact is not referenced by any evidence record: " + part.filename());
+            "unused attached evidence artifact is not referenced by any evidence record: "
+                + part.filename());
       }
     }
     return staged;
@@ -1283,7 +1440,8 @@ public class StabilizationIngestionService {
       return null;
     }
     String name = filename;
-    if (name.indexOf('/') >= 0 || name.indexOf('\\') >= 0
+    if (name.indexOf('/') >= 0
+        || name.indexOf('\\') >= 0
         || name.chars().anyMatch(Character::isISOControl)) {
       return null;
     }
@@ -1298,8 +1456,10 @@ public class StabilizationIngestionService {
     String hex = base.substring("sha256_".length());
     String extension = name.substring(dot + 1);
     return hex.matches("[0-9a-f]{64}")
-        && extension.length() <= 16
-        && extension.matches("[A-Za-z0-9]+") ? hex : null;
+            && extension.length() <= 16
+            && extension.matches("[A-Za-z0-9]+")
+        ? hex
+        : null;
   }
 
   /**
@@ -1333,8 +1493,12 @@ public class StabilizationIngestionService {
     return true;
   }
 
-  private void persistAggregateManifest(JsonNode manifest, JsonNode transitions, JsonNode evidence,
-      JsonNode matrix, List<StabilizationArtifact> storedArtifacts) {
+  private void persistAggregateManifest(
+      JsonNode manifest,
+      JsonNode transitions,
+      JsonNode evidence,
+      JsonNode matrix,
+      List<StabilizationArtifact> storedArtifacts) {
     String runId = manifest.path("run_id").asText();
     String aggregateManifestHash = manifest.path("manifest_hash").asText();
     String transitionsJson;
@@ -1354,11 +1518,18 @@ public class StabilizationIngestionService {
       run.setReportId("harness-" + runId + "-" + attempt.path("attempt_id").asText());
       run.setVerified(true);
       run.setSchemaVersion(HARNESS_MANIFEST_SCHEMA);
-      run.setScriptKey(attempt.path("task_key").asText(manifest.path("task_key").asText("unknown")));
+      run.setScriptKey(
+          attempt.path("task_key").asText(manifest.path("task_key").asText("unknown")));
       run.setOutcome(attempt.path("outcome").asText(manifest.path("outcome").asText("UNKNOWN")));
-      run.setStatus(attempt.path("terminal_state").asText(manifest.path("terminal_state").asText("UNKNOWN")));
-      run.setDurationMs(attempt.path("latency_ms").isNumber() ? attempt.path("latency_ms").asLong() : null);
-      run.setFailureSignature(nullIfBlank(attempt.path("failure_signature").asText(manifest.path("failure_signature").asText(""))));
+      run.setStatus(
+          attempt.path("terminal_state").asText(manifest.path("terminal_state").asText("UNKNOWN")));
+      run.setDurationMs(
+          attempt.path("latency_ms").isNumber() ? attempt.path("latency_ms").asLong() : null);
+      run.setFailureSignature(
+          nullIfBlank(
+              attempt
+                  .path("failure_signature")
+                  .asText(manifest.path("failure_signature").asText(""))));
       run.setErrorMessage(nullIfBlank(attempt.path("primary_failure_code").asText("")));
       run.setPlanHash(nullIfBlank(manifest.path("plan_hash").asText("")));
       run.setRunId(runId);
@@ -1376,7 +1547,8 @@ public class StabilizationIngestionService {
       run.setPrimaryFailureCode(nullIfBlank(attempt.path("primary_failure_code").asText("")));
       run.setEvidenceComplete(attempt.path("evidence_complete").asBoolean(false));
       run.setManifestHash(aggregateManifestHash);
-      run.setDeterministicContentHash(nullIfBlank(manifest.path("deterministic_content_hash").asText("")));
+      run.setDeterministicContentHash(
+          nullIfBlank(manifest.path("deterministic_content_hash").asText("")));
       run.setEnvironment(nullIfBlank(manifest.path("environment").asText("")));
       run.setTier(nullIfBlank(manifest.path("tier").asText("")));
       run.setManifestReference(baseRef + "run-manifest.json");
@@ -1407,7 +1579,8 @@ public class StabilizationIngestionService {
     aggregate.setPlanId(nullIfBlank(manifest.path("plan_id").asText("")));
     aggregate.setPlanHash(nullIfBlank(manifest.path("plan_hash").asText("")));
     aggregate.setManifestHash(manifest.path("manifest_hash").asText(""));
-    aggregate.setDeterministicContentHash(nullIfBlank(manifest.path("deterministic_content_hash").asText("")));
+    aggregate.setDeterministicContentHash(
+        nullIfBlank(manifest.path("deterministic_content_hash").asText("")));
     aggregate.setTaskKey(nullIfBlank(manifest.path("task_key").asText("")));
     aggregate.setSettingsHash(nullIfBlank(manifest.path("settings_hash").asText("")));
     aggregate.setBuildId(nullIfBlank(manifest.path("build_id").asText("")));
@@ -1444,7 +1617,8 @@ public class StabilizationIngestionService {
     if (groups.isArray()) {
       for (JsonNode group : groups) {
         String groupKey = group.path("group_key").asText(null);
-        if (groupKey == null || snapshotRepository.existsByMatrixHashAndGroupKey(declaredHash, groupKey)) {
+        if (groupKey == null
+            || snapshotRepository.existsByMatrixHashAndGroupKey(declaredHash, groupKey)) {
           skipped++;
           continue;
         }
@@ -1469,7 +1643,8 @@ public class StabilizationIngestionService {
         snapshot.setPassRate24h(group.path("pass_rate").asDouble(0));
         snapshot.setPassRate7d(group.path("pass_rate").asDouble(0));
         snapshot.setTimeoutRate24h(group.path("timeout_rate").asDouble(0));
-        snapshot.setRegression(group.has("regression") ? group.path("regression").asBoolean() : false);
+        snapshot.setRegression(
+            group.has("regression") ? group.path("regression").asBoolean() : false);
         snapshot.setBaselineReportId(nullIfBlank(group.path("compared_to").asText("")));
         snapshot.setBaselinePassRate24h(0.0);
         snapshot.setFailureClusterCount(group.path("failure_signatures").size());
@@ -1485,8 +1660,15 @@ public class StabilizationIngestionService {
         stored++;
       }
     }
-    return Map.of("matrixHash", declaredHash, "snapshots", stored, "skipped", skipped,
-        "schemaVersion", matrix.path("schema_version").asText(""));
+    return Map.of(
+        "matrixHash",
+        declaredHash,
+        "snapshots",
+        stored,
+        "skipped",
+        skipped,
+        "schemaVersion",
+        matrix.path("schema_version").asText(""));
   }
 
   /**
@@ -1506,9 +1688,12 @@ public class StabilizationIngestionService {
       if (declaredSize > StabilizationBundleStreamReader.MAX_JSON_PART_BYTES) {
         throw new IllegalArgumentException("report bundle " + name + " exceeds the 5 MiB bound");
       }
-      try (InputStream input = Files.newInputStream(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
-        byte[] bytes = input.readNBytes((int) StabilizationBundleStreamReader.MAX_JSON_PART_BYTES + 1);
-        if (bytes.length != declaredSize || bytes.length > StabilizationBundleStreamReader.MAX_JSON_PART_BYTES) {
+      try (InputStream input =
+          Files.newInputStream(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+        byte[] bytes =
+            input.readNBytes((int) StabilizationBundleStreamReader.MAX_JSON_PART_BYTES + 1);
+        if (bytes.length != declaredSize
+            || bytes.length > StabilizationBundleStreamReader.MAX_JSON_PART_BYTES) {
           throw new IllegalArgumentException("report bundle " + name + " changed while being read");
         }
         return bytes;
@@ -1551,7 +1736,8 @@ public class StabilizationIngestionService {
   /** Streams a staged file through SHA-256 without loading it into heap memory. */
   private static String rawSha256(Path path, long maxBytes) {
     try {
-      if (path == null || Files.isSymbolicLink(path)
+      if (path == null
+          || Files.isSymbolicLink(path)
           || !Files.isRegularFile(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
         throw new IllegalArgumentException("staged report part is not a regular file");
       }
@@ -1625,7 +1811,8 @@ public class StabilizationIngestionService {
     return aggregateRepository.findByRunId(runId);
   }
 
-  public Optional<ScriptStabilizationRun> getRunByRunIdAndAttemptId(String runId, String attemptId) {
+  public Optional<ScriptStabilizationRun> getRunByRunIdAndAttemptId(
+      String runId, String attemptId) {
     if (runId == null || runId.isBlank() || attemptId == null || attemptId.isBlank()) {
       return Optional.empty();
     }
@@ -1679,12 +1866,18 @@ public class StabilizationIngestionService {
     return artifactRepository.findByArtifactId(artifactId);
   }
 
-  /** Resolves a stored artifact by its durable external evidence reference within a run, without
-   *  reconstructing a checksum lookup (SC-572). Lookup ALWAYS requires the run id: the global
-   *  reference fallback is forbidden because the same reference can legitimately repeat across
-   *  distinct runs. */
-  public Optional<StabilizationArtifact> getArtifactByExternalReference(String runId, String externalReference) {
-    if (runId == null || runId.isBlank() || externalReference == null || externalReference.isBlank()) {
+  /**
+   * Resolves a stored artifact by its durable external evidence reference within a run, without
+   * reconstructing a checksum lookup (SC-572). Lookup ALWAYS requires the run id: the global
+   * reference fallback is forbidden because the same reference can legitimately repeat across
+   * distinct runs.
+   */
+  public Optional<StabilizationArtifact> getArtifactByExternalReference(
+      String runId, String externalReference) {
+    if (runId == null
+        || runId.isBlank()
+        || externalReference == null
+        || externalReference.isBlank()) {
       return Optional.empty();
     }
     return artifactRepository.findByRunIdAndExternalReference(runId, externalReference);
@@ -1727,8 +1920,10 @@ public class StabilizationIngestionService {
     LocalDateTime start24h = now.minusHours(24);
     LocalDateTime start7d = now.minusDays(7);
     // Legacy /ingest-report rows are explicitly unverified and are excluded from certified KPIs.
-    List<ScriptStabilizationRun> rows24 = runRepository.findByVerifiedTrueAndExecutedAtBetween(start24h, now);
-    List<ScriptStabilizationRun> rows7d = runRepository.findByVerifiedTrueAndExecutedAtBetween(start7d, now);
+    List<ScriptStabilizationRun> rows24 =
+        runRepository.findByVerifiedTrueAndExecutedAtBetween(start24h, now);
+    List<ScriptStabilizationRun> rows7d =
+        runRepository.findByVerifiedTrueAndExecutedAtBetween(start7d, now);
 
     Map<String, Object> byScript = new HashMap<>();
     Map<String, List<ScriptStabilizationRun>> grouped24 = groupByScript(rows24);

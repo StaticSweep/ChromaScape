@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "harness-plan/v1",
+  "planId": "sc968-managed-capture-seed",
+  "tier": "CONTRACT",
+  "environment": "sc968-acceptance",
+  "executorRef": "fixture:sc968-managed-capture-v1",
+  "micro6InstanceId": "micro6-fixture-instance-1",
+  "buildId": "fixture-build-fishing-v1",
+  "task": {
+    "taskKey": "FISHING_TRAINING",
+    "catalogVersion": "catalog-v2",
+    "catalogHash": "sha256:d093936c252896a695776f14602f1a3a621fbc6ff9c27563a87a0a36bc3fe9ca",
+    "settingsSchemaVersion": "fishing-settings-v1"
+  },
+  "settings": {
+    "normalized": {
+      "account_type": "AI_PLAYER",
+      "level_target": 40,
+      "location": "BARBARIAN_VILLAGE",
+      "bank_mode": "SELF_MANAGED"
+    },
+    "settingsHash": "sha256:75bba8e9267accac145100c2c5398779b50297253b57ca1b56e5045361cfc37b"
+  },
+  "timeouts": {
+    "dispatchMs": 2000,
+    "activationMs": 5000,
+    "progressMs": 10000,
+    "totalMs": 30000
+  },
+  "retryPolicy": {
+    "maxAttempts": 1,
+    "retryableCodes": []
+  },
+  "evidence": {
+    "required": [],
+    "mode": "NOT_APPLICABLE"
+  },
+  "cleanup": {
+    "stopOnTimeout": true,
+    "requireTerminalConfirmation": true
+  },
+  "tags": ["ai-player", "fishing", "sc968", "managed-capture"],
+  "planHash": "sha256:d36eaf87451fb265a5f6e36091a4f3ea5ea83f0cde70026a0619b16125b0e3d4"
+}

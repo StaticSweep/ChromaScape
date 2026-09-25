@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.leeuwbot.dev/sc728/behavior-graph-draft-request/v1",
+  "title": "behavior-graph-draft-request/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "base_revision", "definition", "layout"],
+  "properties": {
+    "schema": { "const": "behavior-graph-draft-request/v1" },
+    "base_revision": { "type": "integer", "minimum": 1, "maximum": 9223372036854775807 },
+    "definition": { "$ref": "behavior-graph-definition-v2.schema.json" },
+    "layout": { "$ref": "behavior-graph-layout-v1.schema.json" }
+  }
+}

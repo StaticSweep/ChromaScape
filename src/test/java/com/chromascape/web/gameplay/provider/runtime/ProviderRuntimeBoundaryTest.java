@@ -11,7 +11,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Files;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -104,7 +103,7 @@ class ProviderRuntimeBoundaryTest {
   }
 
   @Test
-  void processRunnerBoundsOutputAndClassifiesTimeoutAsUncertain() {
+  void processRunnerBoundsOutputAndClassifiesTimeoutAsUncertain() throws Exception {
     ProviderRuntimeProperties properties = new ProviderRuntimeProperties();
     properties.setWorkRoot(temporary.resolve("work"));
     properties.setMaxStdoutBytes(4096);
@@ -114,13 +113,17 @@ class ProviderRuntimeBoundaryTest {
 
     var success =
         runner.run("turn-success", echo, List.of(), "decision", Instant.now().plusSeconds(10));
-    assertTrue(success.submitted(), () -> "expected submission: " + success);
-    assertTrue(success.terminal(), () -> "expected terminal result: " + success);
-    assertEquals("decision", success.stdout());
+    assertTrue(success.submitted());
+    assertTrue(success.terminal());
+    assertEquals("decision", success.stdout().strip(), success::toString);
 
     var overflow =
         runner.run(
-            "turn-overflow", echo, List.of(), "x".repeat(5000), Instant.now().plusSeconds(10));
+            "turn-overflow",
+            fixtureCommand("overflow"),
+            List.of(),
+            "x".repeat(5000),
+            Instant.now().plusSeconds(10));
     assertEquals(ProviderRuntimeModels.FailureCode.INVALID_OUTPUT, overflow.failureCode());
 
     var firstEventTimeout =
@@ -142,35 +145,18 @@ class ProviderRuntimeBoundaryTest {
         ProviderRuntimeModels.FailureCode.UNKNOWN_PROVIDER_OUTCOME, turnTimeout.failureCode());
   }
 
-  private List<String> fixtureCommand(String mode) {
-    List<String> command = new ArrayList<>();
-    command.add(
+  private List<String> fixtureCommand(String mode) throws Exception {
+    return List.of(
+        ProcessHandle.current().info().command().orElseThrow(),
+        "-cp",
         java.nio.file.Path.of(
-                System.getProperty("java.home"), "bin", isWindows() ? "java.exe" : "java")
-            .toString());
-    command.add("-cp");
-    command.add(fixtureClasspath());
-    command.add(ProviderProcessFixture.class.getName());
-    command.add(mode);
-    return command;
-  }
-
-  /**
-   * The fixture only needs its own class directory. Passing the worker's full classpath as a
-   * command-line argument exceeds the Windows 32767-character limit and fails with CreateProcess
-   * error=206, so scope it to the compiled test classes that contain the fixture.
-   */
-  private String fixtureClasspath() {
-    try {
-      java.net.URL location =
-          ProviderProcessFixture.class.getProtectionDomain().getCodeSource().getLocation();
-      return java.nio.file.Path.of(location.toURI()).toString();
-    } catch (java.net.URISyntaxException exception) {
-      throw new IllegalStateException("fixture class location is not a usable path", exception);
-    }
-  }
-
-  private boolean isWindows() {
-    return System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win");
+                ProviderProcessFixture.class
+                    .getProtectionDomain()
+                    .getCodeSource()
+                    .getLocation()
+                    .toURI())
+            .toString(),
+        ProviderProcessFixture.class.getName(),
+        mode);
   }
 }

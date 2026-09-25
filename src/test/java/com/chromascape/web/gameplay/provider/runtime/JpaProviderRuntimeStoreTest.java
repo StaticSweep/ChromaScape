@@ -37,31 +37,21 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 
 /** PostgreSQL proof for SC-1430 locking, session aggregation and durable tool-call charging. */
 @SpringBootTest(
     classes = JpaProviderRuntimeStoreTest.JpaTestApplication.class,
-    properties = {"spring.flyway.enabled=false", "spring.jpa.hibernate.ddl-auto=create-drop"})
+    properties = {
+      "spring.datasource.url=jdbc:postgresql://localhost:5433/"
+          + "chromascape_sc1430_test?sslmode=disable",
+      "spring.datasource.username=chromascape",
+      "spring.datasource.password=chromascape123",
+      "spring.flyway.enabled=false",
+      "spring.jpa.hibernate.ddl-auto=create-drop"
+    })
 @AutoConfigureTestDatabase(replace = Replace.NONE)
 class JpaProviderRuntimeStoreTest {
   private static final String DIGEST = "sha256:" + "a".repeat(64);
-  private static final String DEFAULT_JDBC_URL =
-      "jdbc:postgresql://127.0.0.1:55450/chromascape_sc1430_review?sslmode=disable";
-
-  @DynamicPropertySource
-  static void isolatedDatasource(DynamicPropertyRegistry registry) {
-    registry.add(
-        "spring.datasource.url",
-        () -> System.getProperty("chromascape.sc1430.jdbc-url", DEFAULT_JDBC_URL));
-    registry.add(
-        "spring.datasource.username",
-        () -> System.getProperty("chromascape.sc1430.jdbc-username", "chromascape"));
-    registry.add(
-        "spring.datasource.password",
-        () -> System.getProperty("chromascape.sc1430.jdbc-password", "chromascape123"));
-  }
 
   @Autowired private JpaProviderRuntimeStore store;
   @Autowired private CanonicalGameplayJson canonicalJson;

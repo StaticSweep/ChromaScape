@@ -6,6 +6,8 @@ import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.Map;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Manages the detection and mapping of key UI zones within the RuneLite client window, including
@@ -31,6 +33,20 @@ public class ZoneManager {
   /** List of rectangles representing individual inventory slot locations. */
   private List<Rectangle> inventorySlots;
 
+  /** Map of Rectangles defining the grid info box's location info. */
+  private Map<String, Rectangle> gridInfo;
+
+  /** Rectangle defining the location of the mouse-over text. */
+  private Rectangle mouseOver;
+
+  // Cached bounds for getGameView optimization
+  private Rectangle minimapBounds;
+  private Rectangle ctrlPanelBounds;
+  private Rectangle chatBounds;
+
+  /** Default template matching threshold to verify that an image is matched successfully. */
+  private static final double THRESHOLD = 0.15;
+
   /** File paths to template images used for UI element detection. */
   private final String[] zoneTemplates = {
     "/images/ui/minimap.png",
@@ -39,72 +55,100 @@ public class ZoneManager {
     "/images/ui/minimap_fixed.png"
   };
 
-  /** Threshold values corresponding to template matching sensitivity for each UI element. */
-  private final double[] zoneThresholds = {0.025, 0.100, 0.035, 0.020};
+  private static final Logger logger = LogManager.getLogger(ZoneManager.class.getName());
 
-  /**
-   * Constructs a new ZoneManager configured for either fixed or resizable mode.
-   *
-   * @param isFixed true if the client is in fixed mode, false otherwise.
-   */
-  public ZoneManager(boolean isFixed) {
-    this.isFixed = isFixed;
+  /** Constructs a new ZoneManager configured for either fixed or resizable mode. */
+  public ZoneManager() {
+    this.isFixed = checkIfFixed();
     mapper();
   }
 
   /**
    * Performs template matching to locate UI elements and maps their respective zones.
    *
-   * <p>Populates the minimap, control panel, chat tabs, and inventory slots with their bounding
-   * rectangles based on current window mode.
-   *
    * <p>Any exceptions during mapping are caught and logged to standard error.
    */
   public void mapper() {
     try {
-      chatTabs = SubZoneMapper.mapChat(locateUiElement(zoneTemplates[2], zoneThresholds[2]));
-      ctrlPanel = SubZoneMapper.mapCtrlPanel(locateUiElement(zoneTemplates[1], zoneThresholds[1]));
-      inventorySlots =
-          SubZoneMapper.mapInventory(locateUiElement(zoneTemplates[1], zoneThresholds[1]));
+      // Cache the bounds first
+      chatBounds = locateUiElement(zoneTemplates[2]);
+      ctrlPanelBounds = locateUiElement(zoneTemplates[1]);
+
+      chatTabs = SubZoneMapper.mapChat(chatBounds);
+      ctrlPanel = SubZoneMapper.mapCtrlPanel(ctrlPanelBounds);
+      inventorySlots = SubZoneMapper.mapInventory(ctrlPanelBounds);
+
+      Rectangle windowBounds = ScreenManager.getWindowBounds();
+      mouseOver = new Rectangle(windowBounds.x, windowBounds.y, 407, 26);
 
       if (isFixed) {
-        minimap =
-            SubZoneMapper.mapFixedMinimap(locateUiElement(zoneTemplates[3], zoneThresholds[3]));
+        minimapBounds = locateUiElement(zoneTemplates[3]);
+        minimap = SubZoneMapper.mapFixedMinimap(minimapBounds);
+        gridInfo =
+            SubZoneMapper.mapGridInfo(
+                new Rectangle(windowBounds.x + 9, windowBounds.y + 24, 129, 56));
       } else {
-        minimap = SubZoneMapper.mapMinimap(locateUiElement(zoneTemplates[0], zoneThresholds[0]));
+        minimapBounds = locateUiElement(zoneTemplates[0]);
+        minimap = SubZoneMapper.mapMinimap(minimapBounds);
+        gridInfo =
+            SubZoneMapper.mapGridInfo(
+                new Rectangle(windowBounds.x + 5, windowBounds.y + 20, 129, 56));
       }
     } catch (Exception e) {
-      System.err.println("[ZoneManager] Mapping failed: " + e.getMessage());
+      logger.error("[ZoneManager] Mapping failed: {}", e.getMessage());
+      logger.debug(e.getStackTrace());
     }
+  }
+
+  /**
+   * Checks the two minimap images against the client window, compares them based on accuracy.
+   *
+   * @return {@code boolean} True if Fixed classic, false if Resizable classic.
+   */
+  private boolean checkIfFixed() {
+    BufferedImage screen = ScreenManager.captureWindow();
+    double fixedMinVal = 0;
+    double resizableMinVal = 0;
+    try {
+      TemplateMatching.match(zoneTemplates[0], screen, THRESHOLD, false);
+      resizableMinVal = TemplateMatching.getMinVal();
+      TemplateMatching.match(zoneTemplates[3], screen, THRESHOLD, false);
+      fixedMinVal = TemplateMatching.getMinVal();
+    } catch (Exception e) {
+      logger.error("[ZoneManager] Check if fixed failed: {}", e.getMessage());
+    }
+    return fixedMinVal < resizableMinVal;
   }
 
   /**
    * Captures a screenshot of the current game viewport area.
    *
-   * <p>In fixed mode, captures the fixed game view rectangle. In resizable mode, captures the full
-   * window and masks out UI zones such as minimap, control panel, and chat to isolate the game
-   * viewport.
+   * <p>Captures the full window and masks out UI zones such as minimap, control panel, and chat to
+   * isolate the game viewport.
    *
    * <p>You are intended to use template matching on this image directly for sprite matching You are
    * also intended to use this as the image for colour detection.
    *
    * @return A {@link BufferedImage} representing the game viewport screenshot.
    */
-  public BufferedImage getGameView() throws Exception {
-    BufferedImage gameView;
-    if (isFixed) {
-      gameView =
-          ScreenManager.captureZone(
-              SubZoneMapper.mapFixedGameView(ScreenManager.getWindowBounds()));
-    } else {
-      BufferedImage gameViewMask = ScreenManager.captureWindow();
-      for (int i = 0; i < 3; i++) {
-        Rectangle element = locateUiElement(zoneTemplates[i], zoneThresholds[i]);
-        gameViewMask = MaskZones.maskZones(gameViewMask, ScreenManager.toClientBounds(element));
-      }
-      gameView = gameViewMask;
+  public BufferedImage getGameView() {
+    BufferedImage gameViewMask = ScreenManager.captureWindow();
+    if (ctrlPanelBounds != null) {
+      gameViewMask =
+          MaskZones.maskZones(
+              gameViewMask, ScreenManager.toClientBounds(new Rectangle(ctrlPanelBounds)));
     }
-    return gameView;
+    if (chatBounds != null) {
+      gameViewMask =
+          MaskZones.maskZones(
+              gameViewMask, ScreenManager.toClientBounds(new Rectangle(chatBounds)));
+    }
+    if (minimapBounds != null) {
+      gameViewMask =
+          MaskZones.maskZones(
+              gameViewMask, ScreenManager.toClientBounds(new Rectangle(minimapBounds)));
+    }
+    return gameViewMask;
   }
 
   /**
@@ -112,12 +156,11 @@ public class ZoneManager {
    * game window capture.
    *
    * @param templatePath The file path to the template image to match.
-   * @param threshold The matching threshold (lower values mean stricter matching).
    * @return A {@link Rectangle} representing the bounds of the matched UI element.
    * @throws Exception if the template matching fails or no match is found.
    */
-  public Rectangle locateUiElement(String templatePath, double threshold) throws Exception {
-    return TemplateMatching.match(templatePath, ScreenManager.captureWindow(), threshold, false);
+  public Rectangle locateUiElement(String templatePath) throws Exception {
+    return TemplateMatching.match(templatePath, ScreenManager.captureWindow(), THRESHOLD, false);
   }
 
   /**
@@ -158,5 +201,35 @@ public class ZoneManager {
    */
   public List<Rectangle> getInventorySlots() {
     return inventorySlots;
+  }
+
+  /**
+   * Returns the list of rectangles corresponding to fields in the Grid info area that contain
+   * location data. Useful for knowing the player's location in the game. Meant to be used by the
+   * Walker utility.
+   *
+   * @return {@link Rectangle} of the Grid info area.
+   */
+  public Map<String, Rectangle> getGridInfo() {
+    return gridInfo;
+  }
+
+  /**
+   * Returns the mouse-over zone, where text will show if the user hovers over an interactable
+   * object. Intended to be used alongside the OCR engine.
+   *
+   * @return {@link Rectangle} of the mouse-over area.
+   */
+  public Rectangle getMouseOver() {
+    return mouseOver;
+  }
+
+  /**
+   * {@link Boolean} defining whether the client is in fixed or resizable mode.
+   *
+   * @return True if fixed, false if resizable.
+   */
+  public boolean getIsFixed() {
+    return isFixed;
   }
 }

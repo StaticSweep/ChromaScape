@@ -1,0 +1,59 @@
+{
+  "manifestVersion": 1,
+  "manifestId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "recording": {
+    "recordingId": "recording_123",
+    "recordingChecksum": "sha256:recording-hash",
+    "debugSessionId": "debug_123",
+    "debugSessionChecksum": "sha256:debug-hash",
+    "startTick": 100,
+    "endTick": 250
+  },
+  "curation": {
+    "curationId": "curation-uuid",
+    "version": 1,
+    "checksum": "sha256:curation-hash"
+  },
+  "compiler": {
+    "version": "1.0.0",
+    "schemaVersion": 1
+  },
+  "runtime": {
+    "xrspsAdapterVersion": "1.0.0",
+    "xrspsBuildCommit": "exact-commit",
+    "cacheRevision": "sha256:abc123",
+    "contentRevision": "sha256:def456"
+  },
+  "determinism": {
+    "seed": "42",
+    "clockOrigin": "2026-01-01T00:00:00Z",
+    "tickDurationMs": 600,
+    "idNamespace": "fishing-test"
+  },
+  "initialState": {
+    "world": 999,
+    "player": {
+      "position": {"x": 3086, "y": 3231, "plane": 0},
+      "skills": {"fishing": {"level": 10, "xp": 1200}},
+      "inventory": [
+        {"slot": 0, "itemId": 303, "quantity": 1}
+      ],
+      "equipment": []
+    },
+    "npcs": [
+      {
+        "stableId": "npc:fishing-spot:draynor:1",
+        "npcId": 1526,
+        "position": {"x": 3086, "y": 3231, "plane": 0},
+        "spawnDirection": "SOUTH"
+      }
+    ]
+  },
+  "actions": [
+    {"type": "INTERACT_NPC", "targetStableId": "npc:fishing-spot:draynor:1", "option": "net"}
+  ],
+  "expectations": [],
+  "tolerances": {},
+  "controlAllowed": false,
+  "manifestChecksum": "sha256:manifest-hash"
+}

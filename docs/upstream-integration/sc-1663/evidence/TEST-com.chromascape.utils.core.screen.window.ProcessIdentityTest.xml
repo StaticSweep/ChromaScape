@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.screen.window.ProcessIdentityTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-16T23:51:41.605Z" hostname="fedora" time="0.012">
+  <properties/>
+  <testcase name="isLocalReflectsOrigin()" classname="com.chromascape.utils.core.screen.window.ProcessIdentityTest" time="0.001"/>
+  <testcase name="displayStringCarriesNoProcessContent()" classname="com.chromascape.utils.core.screen.window.ProcessIdentityTest" time="0.008"/>
+  <testcase name="nullHostIdAndBootIdNormalizeToEmpty()" classname="com.chromascape.utils.core.screen.window.ProcessIdentityTest" time="0.001"/>
+  <testcase name="equalityIgnoresHostIdButIncludesOriginPidStartTimeAndBootId()" classname="com.chromascape.utils.core.screen.window.ProcessIdentityTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

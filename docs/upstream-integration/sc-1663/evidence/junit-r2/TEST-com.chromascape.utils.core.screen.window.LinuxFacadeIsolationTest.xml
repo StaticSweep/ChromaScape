@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.screen.window.LinuxFacadeIsolationTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-17T11:58:00.022Z" hostname="fedora" time="0.593">
+  <properties/>
+  <testcase name="facadeEnumerationAndResolutionRunWithoutInitializingWin32()" classname="com.chromascape.utils.core.screen.window.LinuxFacadeIsolationTest" time="0.593"/>
+  <system-out><![CDATA[13:58:00.594 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 0 eligible local target(s) from 0 procfs entries (0 unreadable)
+13:58:00.604 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 0 eligible local target(s) from 0 procfs entries (0 unreadable)
+13:58:00.605 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 0 eligible local target(s) from 0 procfs entries (0 unreadable)
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

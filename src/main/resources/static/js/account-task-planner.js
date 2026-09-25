@@ -1,0 +1,7864 @@
+/**
+ * Account Task Planner - Manages task plan generation, review, and execution.
+ *
+ * Provides UI for generating task plans from evidence, reviewing items,
+ * approving/rejecting tasks, and triggering patch loop execution.
+ */
+class AccountTaskPlanner {
+  static BUILDER_GOAL_BUNDLE_VERSION = '44';
+  static BUILDER_GOAL_PRIMARY_ITEM_ID = 'builderGoalPrimary';
+  static UNASSIGNED_FILTER = '__UNASSIGNED__';
+  static BUILDER_GOAL_PUBLISH_TIMEOUT_MS = 240000;
+  static BUILDER_GOAL_LAUNCH_POLL_INTERVAL_MS = 2000;
+  static BUILDER_GOAL_LAUNCH_OPERATION_KEY = 'taskPlanner.builderGoalLaunchOperationId';
+  static BUILDER_GOAL_RUN_POLL_INTERVAL_MS = 2000;
+  static BUILDER_GOAL_RUN_TRACKER_KEY = 'taskPlanner.builderGoalRunTrackerIterationId';
+
+  static BUILDER_GOAL_STATUS_LABELS = {
+    AWAITING_EXECUTOR_CONFIRMATION: 'Executor request sent; awaiting confirmation.',
+    RECONCILING: 'Executor request sent; awaiting confirmation.',
+    ACCEPTED: 'Task published to Micro6; waiting for client-thread configuration.',
+    ASSIGNED: 'Executor assigned the task; waiting for confirmed script start.',
+    QUEUED: 'Micro6 configured and queued the task.',
+    RUNNING: 'Task started; the executor confirmed the script is running.',
+    PAUSED: 'Task paused.',
+    STOPPING: 'Stop requested; awaiting executor confirmation.',
+    PUBLISH_FAILED: 'Task publish failed.',
+    FAILED: 'Task execution failed.',
+    CANCELLED: 'Task cancelled.',
+  };
+
+  static ACTIVE_PRE_START_STATUSES = new Set([
+    'PREPARING_TARGET',
+    'WAITING_FOR_LOCAL_LAUNCH_LEASE',
+    'CHECKING_EXISTING',
+    'REUSING_EXECUTOR',
+    'PREPARING_BUILD',
+    'STOPPING_EXISTING',
+    'BUILDING_MICRO6',
+    'LAUNCHING_PROCESS',
+    'WAITING_FOR_PORT',
+    'WAITING_FOR_HEALTH',
+    'WAITING_FOR_ACCOUNT',
+    'WAITING_FOR_LOGIN',
+    'WAITING_FOR_WORLD',
+    'WAITING_FOR_SCRIPT',
+    'WAITING_FOR_DISPATCH',
+    'READY_TO_PUBLISH',
+    'PUBLISHING',
+    'AWAITING_EXECUTOR_CONFIRMATION',
+    'RECONCILING',
+    'RECEIVED',
+    'PENDING',
+    'ACCEPTED',
+    'QUEUED',
+    'ASSIGNED',
+    'RUNNING',
+    'PAUSED',
+    'WAITING_FOR_DEBUG_BIND',
+    'STOPPING',
+  ]);
+
+  static BUILDER_GOAL_LAUNCH_PHASE_LABELS = {
+    QUEUED: 'Launch queued; preparing the local Micro6 workspace',
+    CHECKING_EXISTING: 'Checking for an existing matching Micro6 executor',
+    REUSING_EXECUTOR: 'Reusing the matching dispatch-ready Micro6 executor',
+    PREPARING_BUILD: 'Validating the Micro6 launch configuration before stopping anything',
+    STOPPING_EXISTING: 'Stopping the existing Micro6 session before launching a replacement',
+    BUILDING_MICRO6: 'Building and launching the local Micro6 workspace via Gradle',
+    LAUNCHING_PROCESS: 'Micro6 process started; waiting for it to come online',
+    WAITING_FOR_PORT: 'Waiting for the Micro6 executor port',
+    WAITING_FOR_HEALTH: 'Waiting for the Micro6 executor health check',
+    WAITING_FOR_ACCOUNT: 'Waiting for world/login — Micro6 has not identified the account yet',
+    WAITING_FOR_LOGIN: 'Waiting for login (auto-login, authenticator, or manual login)',
+    WAITING_FOR_WORLD: 'Waiting for the client to log into the requested world',
+    WAITING_FOR_SCRIPT: 'Waiting for AccountBuilder execution loop readiness',
+    WAITING_FOR_DISPATCH: 'Waiting for dispatch readiness (AccountBuilder initialization)',
+    READY: 'Micro6 executor is dispatch-ready',
+    CONFLICT: 'Another workflow holds the local launch lease',
+    FAILED: 'Micro6 account launch failed',
+  };
+
+  /**
+   * Human-readable labels for every phase that can appear during a Run Task lifecycle,
+   * from launch acceptance through task publication or failure. These cover both the
+   * preparation-state values and the granular readiness phases surfaced by the backend.
+   */
+  static BUILDER_GOAL_RUN_PHASE_LABELS = {
+    PREPARING_TARGET: 'Preparing the launch target',
+    WAITING_FOR_LOCAL_LAUNCH_LEASE: 'Waiting for the local launch lease',
+    CHECKING_EXISTING: 'Checking for an existing Micro6 executor',
+    REUSING_EXECUTOR: 'Reusing the matching dispatch-ready executor',
+    PREPARING_BUILD: 'Preparing the Micro6 build',
+    STOPPING_EXISTING: 'Stopping the existing Micro6 session',
+    BUILDING_MICRO6: 'Building and launching Micro6 via Gradle',
+    LAUNCHING_PROCESS: 'Micro6 process started; waiting for it to come online',
+    WAITING_FOR_PORT: 'Waiting for the Micro6 executor port',
+    WAITING_FOR_HEALTH: 'Waiting for the Micro6 executor health check',
+    WAITING_FOR_ACCOUNT: 'Waiting for the account to be identified',
+    WAITING_FOR_LOGIN: 'Waiting for login (auto-login, authenticator, or manual)',
+    WAITING_FOR_WORLD: 'Waiting for the client to log into the requested world',
+    WAITING_FOR_SCRIPT: 'Waiting for AccountBuilder execution loop readiness',
+    WAITING_FOR_DISPATCH: 'Waiting for dispatch readiness',
+    READY_TO_PUBLISH: 'Executor is dispatch-ready; preparing to publish',
+    PUBLISHED: 'Task published successfully',
+    ACCEPTED: 'Task published to Micro6; waiting for client-thread configuration',
+    QUEUED: 'Micro6 configured and queued the task',
+    ASSIGNED: 'Executor assigned the task; waiting for confirmed script start',
+    RUNNING: 'Task started; the executor confirmed the script is running',
+    PAUSED: 'Task paused; the executor suspended the task',
+    BUILD_FAILED: 'Micro6 failed to compile before the client could start',
+    PROCESS_EXITED: 'The Micro6 process exited unexpectedly',
+  };
+
+  /**
+   * Maps each phase to a 1-based step number for the determinate step indicator.
+   * REUSING_EXECUTOR, STOPPING_EXISTING, and PREPARING_BUILD share step 4 because they
+   * are alternative branches at the same logical point in the lifecycle.
+   */
+  static BUILDER_GOAL_RUN_PHASE_STEPS = {
+    PREPARING_TARGET: 1,
+    WAITING_FOR_LOCAL_LAUNCH_LEASE: 2,
+    CHECKING_EXISTING: 3,
+    PREPARING_BUILD: 4,
+    REUSING_EXECUTOR: 4,
+    STOPPING_EXISTING: 4,
+    BUILDING_MICRO6: 5,
+    LAUNCHING_PROCESS: 6,
+    WAITING_FOR_PORT: 7,
+    WAITING_FOR_HEALTH: 8,
+    WAITING_FOR_ACCOUNT: 9,
+    WAITING_FOR_LOGIN: 9,
+    WAITING_FOR_WORLD: 9,
+    WAITING_FOR_SCRIPT: 10,
+    WAITING_FOR_DISPATCH: 10,
+    READY_TO_PUBLISH: 11,
+    PUBLISHED: 12,
+    ACCEPTED: 12,
+    QUEUED: 12,
+    ASSIGNED: 12,
+    RUNNING: 12,
+    PAUSED: 12,
+    COMPLETED: 12,
+  };
+
+  static BUILDER_GOAL_RUN_PHASE_TOTAL_STEPS = 12;
+
+  /**
+   * Formats a Builder Goal launch-operation phase into a user-facing label. Returns null when no
+   * special label is defined (caller should display the raw phase).
+   */
+  static formatBuilderGoalLaunchPhase(status) {
+    if (!status) {
+      return null;
+    }
+    const normalized = String(status).toUpperCase();
+    return AccountTaskPlanner.BUILDER_GOAL_LAUNCH_PHASE_LABELS[normalized] || null;
+  }
+
+  /**
+   * Formats a Builder Goal run status into a user-facing label. Returns null
+   * when no special label is defined for the status (caller should display the raw status).
+   */
+  static formatBuilderGoalStatus(run) {
+    if (!run || !run.status) {
+      return null;
+    }
+    const status = run.status.toUpperCase();
+    const controlAction = String(run.controlAction || '').toUpperCase();
+    if (run.controlRequested && controlAction === 'PAUSE' && status !== 'PAUSED') {
+      return 'Pause requested; awaiting executor confirmation.';
+    }
+    if (run.controlRequested && controlAction === 'RESUME' && status !== 'RUNNING') {
+      return 'Resume requested; awaiting executor confirmation.';
+    }
+    if (status === 'RECONCILING') {
+      return AccountTaskPlanner.BUILDER_GOAL_STATUS_LABELS.RECONCILING;
+    }
+    return AccountTaskPlanner.BUILDER_GOAL_STATUS_LABELS[status] || null;
+  }
+
+  /** Returns true when the run is in an active pre-start or running state. */
+  static isActivePublishState(run) {
+    if (!run || !run.status) {
+      return false;
+    }
+    return AccountTaskPlanner.ACTIVE_PRE_START_STATUSES.has(run.status.toUpperCase());
+  }
+
+  /**
+   * Returns phase-specific human text for the executor lifecycle shown in the run detail and log
+   * summary. Combines the raw executor status, activation phase, and settings configuration state
+   * so an operator can see exactly where a run stalled. Returns null when no special text applies.
+   */
+  static describeBuilderGoalExecutorPhase(run) {
+    if (!run) {
+      return null;
+    }
+    const executorStatus = String(run.executorStatus || run.publishStatus || run.status || '').toUpperCase();
+    const activation = String(run.publishActivationState || '').toUpperCase();
+    const configState = String(run.configurationState || '').toUpperCase();
+    const failed =
+      executorStatus === 'FAILED' || String(run.status || '').toUpperCase() === 'FAILED';
+
+    // ChromaScape cancelled the accepted entry after the start deadline expired. Present the
+    // explicit timeout-cancellation outcome before any raw executor failure text.
+    if (failed && run.executorCancelRequested) {
+      return 'Task start timed out. ChromaScape cancelled the accepted Micro6 executor entry.';
+    }
+    // A confirmed executor failure is shown immediately with the executor's own reason.
+    if (failed && (activation === 'FAILED' || configState === 'FAILED')) {
+      return AccountTaskPlanner.describeStructuredExecutorFailure(run) ||
+        run.executorFailureReason || run.failureReason ||
+        'Executor reported a configuration/dispatch failure.';
+    }
+    // A failed run whose executor still reports a stale pre-queue status needs cleanup/restart.
+    if (failed && (executorStatus === 'RECEIVED' || executorStatus === 'PENDING' || executorStatus === 'ACCEPTED')) {
+      return 'Executor entry is stale; restart or remove it before rerunning';
+    }
+    // Configuration is actively running on the executor.
+    if (executorStatus === 'RECEIVED' && activation === 'CONFIGURING' && configState === 'PENDING') {
+      return 'Micro6 accepted the task and is waiting for the RuneLite client thread to apply its configuration';
+    }
+    // Configuration is applied; the task is waiting for queue activation.
+    if ((executorStatus === 'QUEUED' || executorStatus === 'ASSIGNED') && configState === 'APPLIED') {
+      return 'Configuration applied; waiting for queue activation';
+    }
+    return null;
+  }
+
+  /**
+   * Builds a compact diagnostics string for the run detail/log summary covering the normalized
+   * status, raw executor status, activation phase, configuration state, and failure code/phase.
+   */
+  static builderGoalExecutorDiagnostics(run) {
+    if (!run) {
+      return '';
+    }
+    const parts = [];
+    if (run.status) parts.push(`status ${run.status}`);
+    if (run.executorStatus && run.executorStatus !== run.status) {
+      parts.push(`executor ${run.executorStatus}`);
+    }
+    if (run.publishActivationState) parts.push(`activation ${run.publishActivationState}`);
+    if (run.configurationState) parts.push(`configuration ${run.configurationState}`);
+    if (run.configurationWaitMs !== null && run.configurationWaitMs !== undefined) {
+      const waitMs = Number(run.configurationWaitMs);
+      if (Number.isFinite(waitMs)) parts.push(`configuration wait ${Math.max(0, Math.round(waitMs))}ms`);
+    }
+    if (run.configurationEnqueuedAt) parts.push(`configuration enqueued ${run.configurationEnqueuedAt}`);
+    if (run.configurationStartedAt) parts.push(`configuration started ${run.configurationStartedAt}`);
+    if (run.configurationAppliedAt) parts.push(`configuration applied ${run.configurationAppliedAt}`);
+    if (run.executorErrorCode) parts.push(`error_code ${run.executorErrorCode}`);
+    if (run.executorFailurePhase) parts.push(`phase ${run.executorFailurePhase}`);
+    return parts.join(' • ');
+  }
+
+  /**
+   * Formats a structured executor failure as "Micro6 configuration failed: CODE during PHASE — reason",
+   * preferring the executor's structured error_code/failure_phase/failure_reason over the raw
+   * failure text. Returns null when no structured failure is present.
+   */
+  static describeStructuredExecutorFailure(run) {
+    if (!run) {
+      return null;
+    }
+    const code = String(run.executorErrorCode || '').trim();
+    const phase = String(run.executorFailurePhase || '').trim();
+    const reason = String(run.executorFailureReason || run.failureReason || '').trim();
+    // Structured formatting applies only when the executor supplied a structured code or phase.
+    // A bare reason is not a structured failure and is surfaced as-is by the caller.
+    if (!code && !phase) {
+      return null;
+    }
+    let text = 'Micro6 configuration failed:';
+    if (code) text += ` ${code}`;
+    if (phase) text += ` during ${phase}`;
+    if (reason) text += ` — ${reason}`;
+    return text;
+  }
+
+  /**
+   * Returns the elapsed time (ms) since the executor dispatch started, or null when unknown.
+   */
+  static elapsedSinceDispatchStarted(run) {
+    if (!run || !run.dispatchStartedAt) {
+      return null;
+    }
+    const started = new Date(run.dispatchStartedAt).getTime();
+    if (Number.isNaN(started)) {
+      return null;
+    }
+    return Date.now() - started;
+  }
+
+  constructor() {
+    this.plans = [];
+    this.allPlans = [];
+    this.selectedPlanId = null;
+    this.selectedPlan = null;
+    this.panelVisible = false;
+    this.scriptCatalog = [];
+    this.itemSelectionState = new Map();
+    this.selectedAccountName = localStorage.getItem('taskPlanner.selectedAccount') || '';
+    this.importedBuilderGoal = null;
+    this.builderGoalAccounts = [];
+    this.builderGoalMachines = [];
+    this.builderGoalMachinesLoadError = '';
+    this.builderGoalRuns = [];
+    this.selectedBuilderGoalAccountId =
+      localStorage.getItem('taskPlanner.selectedBuilderGoalAccountId') || '';
+    this.selectedBuilderGoalMachineUuid =
+      localStorage.getItem('taskPlanner.selectedBuilderGoalMachineUuid') || '';
+    this.selectedBuilderGoalTaskKey =
+      localStorage.getItem('taskPlanner.selectedBuilderGoalTaskKey') || '';
+    this.builderGoalRefreshHandle = null;
+    this.builderGoalBundleMismatch = false;
+    this.builderGoalLaunchOperationId =
+      localStorage.getItem(AccountTaskPlanner.BUILDER_GOAL_LAUNCH_OPERATION_KEY) || '';
+    this.builderGoalLaunchPollHandle = null;
+    // Exact-run progress tracker state. The iteration id is persisted so an in-flight
+    // launch can resume after a debugger refresh.
+    const storedRunTracker = localStorage.getItem(AccountTaskPlanner.BUILDER_GOAL_RUN_TRACKER_KEY) || '';
+    let parsedRunTracker = null;
+    try {
+      parsedRunTracker = storedRunTracker ? JSON.parse(storedRunTracker) : null;
+    } catch (error) {
+      // Backward compatibility with the original ID-only localStorage format.
+    }
+    const restoredRunTrackerId =
+      parsedRunTracker && typeof parsedRunTracker === 'object'
+        ? parsedRunTracker.iterationId || ''
+        : typeof parsedRunTracker === 'string'
+          ? parsedRunTracker
+          : storedRunTracker;
+    this.builderGoalRunTrackerIterationId = restoredRunTrackerId;
+    this.builderGoalRunTrackerStatusUrl =
+      parsedRunTracker && typeof parsedRunTracker === 'object'
+        ? parsedRunTracker.statusUrl || ''
+        : '';
+    this.builderGoalRunTrackerPollHandle = null;
+    this.builderGoalRunTrackerPollGeneration = 0;
+    this.builderGoalRunTrackerPollFailures = 0;
+    this.builderGoalRunTrackerPollNextDelay = AccountTaskPlanner.BUILDER_GOAL_RUN_POLL_INTERVAL_MS;
+    this.builderGoalRunTrackerStartedAt = 0;
+    this.builderGoalRunTrackerLastPhase = null;
+    this.builderGoalConfigDirty = false;
+    this.builderGoalConfigLoadedKey = '';
+    this.builderGoalAnalysisModal = null;
+    this.builderGoalAnalysisDraft = null;
+    this.builderGoalAnalysisIterationId = null;
+    this.builderGoalCatalogAvailable = false;
+    this.builderGoalCatalogDegraded = false;
+    this.builderGoalCatalogReason = '';
+    this.builderGoalCatalogSource = '';
+    this.builderGoalLogsIterationId = null;
+    // Same-screen recovery mode state
+    this.recoveryModeActive = false;
+    this.recoveryIterationId = null;
+    this.recoveryDraft = null;
+    this.recoveryAnnotations = [];
+    this.recoveryActiveStartSeconds = null;
+    this.recoveryActiveEndSeconds = null;
+    this.recoveryActiveImportant = false;
+    this.recoveryPollHandle = null;
+    this.recoveryChildLoaded = false;
+    this.recoveryReplayStatus = 'unknown';
+    this.recoveryReplayError = '';
+    this.recoveryEvidenceStatus = 'unknown';
+    this.recoveryCodexBindError = '';
+    this.recoveryPatchLoopSeedError = '';
+    this.recoveryLastError = '';
+    this.codexSessionId = localStorage.getItem('taskPlanner.builderGoalCodexSessionId') || '';
+    this.codexSession = null;
+    this.builderGoalLaunchPollGeneration = 0;
+    this.builderGoalLaunchPollFailures = 0;
+    this.builderGoalLaunchPollNextDelay = AccountTaskPlanner.BUILDER_GOAL_LAUNCH_POLL_INTERVAL_MS;
+    this.builderGoalLaunchRefreshRequired = false;
+    // Every config prefill owns a generation. Selection changes and manual edits advance it so
+    // a late /config/last response can never overwrite the operator's newer draft.
+    this.builderGoalConfigPrefillGeneration = 0;
+  }
+
+  /**
+   * Initializes the task planner UI and event handlers.
+   */
+  init() {
+    this.bindElements();
+    this.bindEvents();
+    this.validateBuilderGoalBundleVersion();
+    console.info(
+      `[AccountTaskPlanner] Initialized planner bundle v${AccountTaskPlanner.BUILDER_GOAL_BUNDLE_VERSION}`
+    );
+    this.loadPlans();
+    this.loadSourceSessions();
+    this.loadScriptCatalog();
+    if (!this.builderGoalBundleMismatch) {
+      this.loadBuilderGoalMachines();
+      this.loadBuilderGoalAccounts();
+      this.loadBuilderGoalRuns();
+      this.initBuilderGoalCodexSession();
+    }
+    this.loadStabilizationKpis();
+    if (!this.builderGoalBundleMismatch && !this.builderGoalRefreshHandle) {
+      this.builderGoalRefreshHandle = setInterval(() => {
+        this.loadBuilderGoalRuns();
+      }, 10000);
+    }
+    if (!this.builderGoalBundleMismatch && this.builderGoalLaunchOperationId) {
+      this.startBuilderGoalLaunchPolling(this.builderGoalLaunchOperationId);
+    }
+    if (!this.builderGoalBundleMismatch && this.builderGoalRunTrackerIterationId) {
+      this.startBuilderGoalRunTracking(this.builderGoalRunTrackerIterationId, {
+        resume: true,
+        statusUrl: this.builderGoalRunTrackerStatusUrl
+      });
+    }
+  }
+
+  async readJsonResponse(response, fallbackValue) {
+    const text = await response.text();
+    const hasFallback = arguments.length > 1;
+    const trimmed = text.trim();
+    let payload = hasFallback ? fallbackValue : null;
+
+    if (trimmed) {
+      try {
+        payload = JSON.parse(trimmed);
+      } catch (error) {
+        throw new Error(`Invalid JSON response: ${error.message}`);
+      }
+    } else if (!response.ok || !hasFallback) {
+      throw new Error(response.ok ? 'Empty response body' : `HTTP ${response.status}`);
+    }
+
+    if (!response.ok) {
+      throw new Error(payload?.error || payload?.details || `HTTP ${response.status}`);
+    }
+
+    return payload;
+  }
+
+  /**
+   * Binds DOM element references.
+   */
+  bindElements() {
+    this.panel = document.getElementById('taskPlannerPanel');
+    this.toggleBtn = document.getElementById('taskPlannerToggleBtn');
+    this.togglePlannerBtn = document.getElementById('toggleTaskPlannerBtn');
+    this.refreshBtn = document.getElementById('refreshPlansBtn');
+    this.content = document.getElementById('taskPlannerContent');
+
+    // Generate form
+    this.intentInput = document.getElementById('taskPlanIntentInput');
+    this.sourceSessionSelect = document.getElementById('taskPlanSourceSession');
+    this.generateBtn = document.getElementById('generatePlanBtn');
+    this.builderGoalRunnerSection = document.getElementById('builderGoalRunnerSection');
+    this.builderGoalAccountSelect = document.getElementById('builderGoalAccountSelect');
+    this.builderGoalAccountSummary = document.getElementById('builderGoalAccountSummary');
+    this.builderGoalMachineSelect = document.getElementById('builderGoalMachineSelect');
+    this.builderGoalMachineSummary = document.getElementById('builderGoalMachineSummary');
+    this.builderGoalWorldInput = document.getElementById('builderGoalWorldInput');
+    this.builderGoalAutoRecord = document.getElementById('builderGoalAutoRecord');
+    this.builderGoalTaskSearchInput = document.getElementById('builderGoalTaskSearchInput');
+    this.builderGoalTaskSelect = document.getElementById('builderGoalTaskSelect');
+    this.builderGoalConfigInput = document.getElementById('builderGoalConfigInput');
+    this.builderGoalConfigMeta = document.getElementById('builderGoalConfigMeta');
+    this.builderGoalPayloadInput = document.getElementById('builderGoalPayloadInput');
+    this.importBuilderGoalBtn = document.getElementById('importBuilderGoalBtn');
+    this.runBuilderGoalBtn = document.getElementById('runBuilderGoalBtn');
+    this.launchBuilderGoalAccountBtn = document.getElementById('launchBuilderGoalAccountBtn');
+    this.publishBuilderGoalBtn = document.getElementById('publishBuilderGoalBtn');
+    this.runImportedBuilderGoalBtn = document.getElementById('runImportedBuilderGoalBtn');
+    this.builderGoalClientStatus = document.getElementById('builderGoalClientStatus');
+    this.builderGoalImportResult = document.getElementById('builderGoalImportResult');
+    this.builderGoalRunsList = document.getElementById('builderGoalRunsList');
+    this.builderGoalCodexSessionMeta = document.getElementById('builderGoalCodexSessionMeta');
+    this.builderGoalCodexTranscript = document.getElementById('builderGoalCodexTranscript');
+    this.builderGoalCodexMessageInput = document.getElementById('builderGoalCodexMessageInput');
+    this.sendBuilderGoalCodexMessageBtn = document.getElementById('sendBuilderGoalCodexMessageBtn');
+    this.refreshBuilderGoalCodexSessionBtn = document.getElementById('refreshBuilderGoalCodexSessionBtn');
+    this.refreshBuilderGoalRunsBtn = document.getElementById('refreshBuilderGoalRunsBtn');
+    this.builderGoalLogsPanel = document.getElementById('builderGoalLogsPanel');
+    this.builderGoalLogsSummary = document.getElementById('builderGoalLogsSummary');
+    this.builderGoalLogsStatus = document.getElementById('builderGoalLogsStatus');
+    this.builderGoalLaunchLogTail = document.getElementById('builderGoalLaunchLogTail');
+    this.builderGoalHistoricalLogs = document.getElementById('builderGoalHistoricalLogs');
+    this.closeBuilderGoalLogsBtn = document.getElementById('closeBuilderGoalLogsBtn');
+    this.builderGoalAnalysisModalElement = document.getElementById('builderGoalAnalysisModal');
+    this.builderGoalAnalysisPrompt = document.getElementById('builderGoalAnalysisPrompt');
+    this.builderGoalAnalysisContext = document.getElementById('builderGoalAnalysisContext');
+    this.builderGoalAnalysisStartTime = document.getElementById('builderGoalAnalysisStartTime');
+    this.builderGoalAnalysisEndTime = document.getElementById('builderGoalAnalysisEndTime');
+    this.builderGoalAnalysisRangeHint = document.getElementById('builderGoalAnalysisRangeHint');
+    this.builderGoalAnalysisStatus = document.getElementById('builderGoalAnalysisStatus');
+    this.builderGoalAnalysisEvidenceMeta = document.getElementById('builderGoalAnalysisEvidenceMeta');
+    this.builderGoalAnalysisEvidenceGroups = document.getElementById('builderGoalAnalysisEvidenceGroups');
+    this.builderGoalAnalysisResetBtn = document.getElementById('builderGoalAnalysisResetBtn');
+    this.builderGoalAnalysisSelectAllBtn = document.getElementById('builderGoalAnalysisSelectAllBtn');
+    this.builderGoalAnalysisClearAllBtn = document.getElementById('builderGoalAnalysisClearAllBtn');
+    this.submitBuilderGoalAnalysisBtn = document.getElementById('submitBuilderGoalAnalysisBtn');
+
+    // Same-screen recovery mode elements
+    this.recoveryShell = document.getElementById('recoveryModeShell');
+    this.recoveryRunLabel = document.getElementById('recoveryModeRunLabel');
+    this.recoveryMarkStartBtn = document.getElementById('recoveryMarkStartBtn');
+    this.recoveryMarkEndBtn = document.getElementById('recoveryMarkEndBtn');
+    this.recoverySaveRangeBtn = document.getElementById('recoverySaveRangeBtn');
+    this.recoveryClearRangeBtn = document.getElementById('recoveryClearRangeBtn');
+    this.recoveryImportantBtn = document.getElementById('recoveryImportantBtn');
+    this.recoveryPinFrameBtn = document.getElementById('recoveryPinFrameBtn');
+    this.recoveryExitBtn = document.getElementById('recoveryExitBtn');
+    this.recoveryLoadRunConfigBtn = document.getElementById('recoveryLoadRunConfigBtn');
+    this.recoveryBannerRefreshEvidenceBtn = document.getElementById('recoveryBannerRefreshEvidenceBtn');
+    this.recoveryActiveRangeHint = document.getElementById('recoveryActiveRangeHint');
+    this.recoveryActiveStart = document.getElementById('recoveryActiveStart');
+    this.recoveryActiveEnd = document.getElementById('recoveryActiveEnd');
+    this.recoveryTypedRange = document.getElementById('recoveryTypedRange');
+    this.recoveryApplyTypedRangeBtn = document.getElementById('recoveryApplyTypedRangeBtn');
+    this.recoveryActiveLabel = document.getElementById('recoveryActiveLabel');
+    this.recoveryActiveTick = document.getElementById('recoveryActiveTick');
+    this.recoveryActiveFrame = document.getElementById('recoveryActiveFrame');
+    this.recoveryActiveNote = document.getElementById('recoveryActiveNote');
+    this.recoveryAnnotationList = document.getElementById('recoveryAnnotationList');
+    this.recoveryAnnotationCount = document.getElementById('recoveryAnnotationCount');
+    this.recoveryEvidenceMeta = document.getElementById('recoveryEvidenceMeta');
+    this.recoveryEvidenceGroups = document.getElementById('recoveryEvidenceGroups');
+    this.recoveryEvidenceError = document.getElementById('recoveryEvidenceError');
+    this.recoverySelectAllEvidenceBtn = document.getElementById('recoverySelectAllEvidenceBtn');
+    this.recoveryClearEvidenceBtn = document.getElementById('recoveryClearEvidenceBtn');
+    this.recoveryRefreshEvidenceBtn = document.getElementById('recoveryRefreshEvidenceBtn');
+    this.recoveryGeneratePatchBtn = document.getElementById('recoveryGeneratePatchBtn');
+    this.recoveryApproveBtn = document.getElementById('recoveryApproveBtn');
+    this.recoveryExportPatchBtn = document.getElementById('recoveryExportPatchBtn');
+    this.recoveryRepairIncident = document.getElementById('recoveryRepairIncident');
+    this.recoveryPrompt = document.getElementById('recoveryPrompt');
+    this.recoveryContext = document.getElementById('recoveryContext');
+    this.recoveryPatchPlanReview = document.getElementById('recoveryPatchPlanReview');
+    this.recoveryRelaunchPanel = document.getElementById('recoveryRelaunchPanel');
+    this.recoveryRelaunchStatus = document.getElementById('recoveryRelaunchStatus');
+    this.recoveryPreferredSession = document.getElementById('recoveryPreferredSession');
+    this.recoveryChildIteration = document.getElementById('recoveryChildIteration');
+    // Recovery status strip + foreground alerts
+    this.recoveryStatusStrip = document.getElementById('recoveryStatusStrip');
+    this.recoveryStatusRun = document.getElementById('recoveryStatusRun');
+    this.recoveryStatusTask = document.getElementById('recoveryStatusTask');
+    this.recoveryStatusAccount = document.getElementById('recoveryStatusAccount');
+    this.recoveryStatusWorld = document.getElementById('recoveryStatusWorld');
+    this.recoveryStatusRecording = document.getElementById('recoveryStatusRecording');
+    this.recoveryStatusEvidence = document.getElementById('recoveryStatusEvidence');
+    this.recoveryStatusError = document.getElementById('recoveryStatusError');
+    this.recoveryErrorBanner = document.getElementById('recoveryErrorBanner');
+    this.recoveryReplayAlert = document.getElementById('recoveryReplayAlert');
+    this.recoveryRunPicker = document.getElementById('recoveryRunPicker');
+
+    // Plans list
+    this.plansList = document.getElementById('plansList');
+    this.planCountBadge = document.getElementById('planCountBadge');
+    this.accountSelect = document.getElementById('taskPlanAccountSelect');
+
+    // Plan detail
+    this.planDetailSection = document.getElementById('planDetailSection');
+    this.planDetailTitle = document.getElementById('planDetailTitle');
+    this.planDetailStatus = document.getElementById('planDetailStatus');
+    this.planDetailIntent = document.getElementById('planDetailIntent');
+    this.planItemsList = document.getElementById('planItemsList');
+    this.approvePlanBtn = document.getElementById('approvePlanBtn');
+    this.rejectPlanBtn = document.getElementById('rejectPlanBtn');
+
+    // Stabilization KPI panel
+    this.stabilizationFamilyFilter = document.getElementById('stabilizationFamilyFilter');
+    this.stabilizationHistoryLimit = document.getElementById('stabilizationHistoryLimit');
+    this.stabilizationRefreshBtn = document.getElementById('stabilizationRefreshBtn');
+    this.stabilizationSummary = document.getElementById('stabilizationSummary');
+    this.stabilizationScripts = document.getElementById('stabilizationScripts');
+    this.stabilizationHistory = document.getElementById('stabilizationHistory');
+    this.stabilizationRegressions = document.getElementById('stabilizationRegressions');
+    if (this.builderGoalAnalysisModalElement && window.bootstrap?.Modal) {
+      this.builderGoalAnalysisModal = new bootstrap.Modal(this.builderGoalAnalysisModalElement);
+    }
+  }
+
+  validateBuilderGoalBundleVersion() {
+    const expectedVersion =
+      this.builderGoalRunnerSection?.dataset?.plannerBundleVersion?.trim() || null;
+    if (!expectedVersion || expectedVersion === AccountTaskPlanner.BUILDER_GOAL_BUNDLE_VERSION) {
+      return;
+    }
+
+    this.builderGoalBundleMismatch = true;
+    console.error(
+      '[AccountTaskPlanner] Builder Goal Runner bundle version mismatch detected',
+      {
+        expectedVersion,
+        loadedVersion: AccountTaskPlanner.BUILDER_GOAL_BUNDLE_VERSION
+      }
+    );
+
+    if (this.builderGoalPayloadInput) {
+      this.builderGoalPayloadInput.disabled = true;
+    }
+    if (this.builderGoalAccountSelect) {
+      this.builderGoalAccountSelect.disabled = true;
+      this.builderGoalAccountSelect.innerHTML =
+        '<option value="">Refresh debugger to load the latest Builder Goal Runner</option>';
+    }
+    if (this.builderGoalMachineSelect) {
+      this.builderGoalMachineSelect.disabled = true;
+      this.builderGoalMachineSelect.innerHTML =
+        '<option value="">Refresh debugger to load the latest Builder Goal Runner</option>';
+    }
+    if (this.builderGoalTaskSearchInput) {
+      this.builderGoalTaskSearchInput.disabled = true;
+    }
+    if (this.builderGoalTaskSelect) {
+      this.builderGoalTaskSelect.disabled = true;
+      this.builderGoalTaskSelect.innerHTML =
+        '<option value="">Refresh debugger to load the latest Builder Goal Runner</option>';
+    }
+    if (this.builderGoalWorldInput) {
+      this.builderGoalWorldInput.disabled = true;
+    }
+    if (this.importBuilderGoalBtn) {
+      this.importBuilderGoalBtn.disabled = true;
+    }
+    if (this.runBuilderGoalBtn) {
+      this.runBuilderGoalBtn.disabled = true;
+    }
+    if (this.launchBuilderGoalAccountBtn) {
+      this.launchBuilderGoalAccountBtn.disabled = true;
+    }
+    if (this.runImportedBuilderGoalBtn) {
+      this.runImportedBuilderGoalBtn.disabled = true;
+    }
+    if (this.refreshBuilderGoalRunsBtn) {
+      this.refreshBuilderGoalRunsBtn.disabled = true;
+    }
+
+    this.renderBuilderGoalClientStatus(
+      'Debugger assets are out of date. Hard refresh this page to load the latest Builder Goal Runner.',
+      'danger'
+    );
+    this.renderBuilderGoalImportResult({
+      error:
+        'Builder Goal Runner is out of date. Hard refresh /debugger and try again.'
+    });
+  }
+
+  /**
+   * Binds event handlers to UI elements.
+   */
+  bindEvents() {
+    if (this.toggleBtn) {
+      this.toggleBtn.addEventListener('click', () => this.togglePanel());
+    }
+    if (this.togglePlannerBtn) {
+      this.togglePlannerBtn.addEventListener('click', () => this.toggleContent());
+    }
+    if (this.refreshBtn) {
+      this.refreshBtn.addEventListener('click', () => {
+        this.loadPlans();
+        this.loadStabilizationKpis();
+      });
+    }
+    if (this.accountSelect) {
+      this.accountSelect.addEventListener('change', () => {
+        this.selectedAccountName = this.accountSelect.value || '';
+        localStorage.setItem('taskPlanner.selectedAccount', this.selectedAccountName);
+        this.selectedPlanId = null;
+        this.selectedPlan = null;
+        if (this.planDetailSection) {
+          this.planDetailSection.style.display = 'none';
+        }
+        this.loadPlans();
+      });
+    }
+    if (this.generateBtn) {
+      this.generateBtn.addEventListener('click', () => this.generatePlan());
+    }
+    if (this.importBuilderGoalBtn) {
+      this.importBuilderGoalBtn.addEventListener('click', () => this.importBuilderGoal());
+    }
+    if (this.runBuilderGoalBtn) {
+      this.runBuilderGoalBtn.addEventListener('click', () => this.runBuilderGoal());
+    }
+    if (this.launchBuilderGoalAccountBtn) {
+      this.launchBuilderGoalAccountBtn.addEventListener('click', () => this.launchBuilderGoalAccount());
+    }
+    if (this.publishBuilderGoalBtn) {
+      this.publishBuilderGoalBtn.addEventListener('click', () => this.publishBuilderGoal());
+    }
+    if (this.runImportedBuilderGoalBtn) {
+      this.runImportedBuilderGoalBtn.addEventListener('click', () => this.runImportedBuilderGoal());
+    }
+    if (this.builderGoalAccountSelect) {
+      this.builderGoalAccountSelect.addEventListener('change', async () => {
+        this.selectedBuilderGoalAccountId = this.builderGoalAccountSelect.value || '';
+        if (this.selectedBuilderGoalAccountId) {
+          localStorage.setItem(
+            'taskPlanner.selectedBuilderGoalAccountId',
+            this.selectedBuilderGoalAccountId
+          );
+        } else {
+          localStorage.removeItem('taskPlanner.selectedBuilderGoalAccountId');
+        }
+        this.renderBuilderGoalAccountSummary();
+        await this.prefillBuilderGoalConfigForSelection();
+        this.renderBuilderGoalClientStatus();
+        this.updateBuilderGoalRunButtonState();
+      });
+    }
+    if (this.builderGoalMachineSelect) {
+      this.builderGoalMachineSelect.addEventListener('change', () => {
+        this.selectedBuilderGoalMachineUuid = this.builderGoalMachineSelect.value || '';
+        if (this.selectedBuilderGoalMachineUuid) {
+          localStorage.setItem(
+            'taskPlanner.selectedBuilderGoalMachineUuid',
+            this.selectedBuilderGoalMachineUuid
+          );
+        } else {
+          localStorage.removeItem('taskPlanner.selectedBuilderGoalMachineUuid');
+        }
+        this.renderBuilderGoalMachineSummary();
+        this.renderBuilderGoalClientStatus();
+        this.updateBuilderGoalRunButtonState();
+      });
+    }
+    if (this.builderGoalTaskSearchInput) {
+      this.builderGoalTaskSearchInput.addEventListener('input', () => {
+        this.renderBuilderGoalTaskOptions(this.builderGoalTaskSearchInput.value || '');
+      });
+    }
+    if (this.builderGoalTaskSelect) {
+      this.builderGoalTaskSelect.addEventListener('change', async () => {
+        const preserveDraft = Boolean(this.builderGoalConfigDirty);
+        this.selectedBuilderGoalTaskKey = this.builderGoalTaskSelect.value || '';
+        if (this.selectedBuilderGoalTaskKey) {
+          localStorage.setItem(
+            'taskPlanner.selectedBuilderGoalTaskKey',
+            this.selectedBuilderGoalTaskKey
+          );
+        } else {
+          localStorage.removeItem('taskPlanner.selectedBuilderGoalTaskKey');
+        }
+        // A dirty editor belongs to the operator, so changing the dropdown changes only the
+        // envelope task_key and keeps the manually edited settings intact. A clean editor is
+        // allowed to load the newly selected task's saved config below.
+        if (preserveDraft) {
+          this.syncBuilderGoalConfigTaskKey(this.selectedBuilderGoalTaskKey);
+        }
+        await this.prefillBuilderGoalConfigForSelection();
+        this.renderBuilderGoalClientStatus();
+        this.updateBuilderGoalRunButtonState();
+      });
+    }
+    if (this.builderGoalWorldInput) {
+      this.builderGoalWorldInput.addEventListener('input', () => this.handleBuilderGoalWorldInput());
+    }
+    if (this.builderGoalConfigInput) {
+      this.builderGoalConfigInput.addEventListener('input', () => this.handleBuilderGoalConfigInput());
+    }
+    if (this.refreshBuilderGoalRunsBtn) {
+      this.refreshBuilderGoalRunsBtn.addEventListener('click', () => {
+        this.refreshBuilderGoalRuns().catch(error => {
+          console.error('[AccountTaskPlanner] Manual Builder Goal refresh failed:', error);
+        });
+      });
+    }
+    if (this.refreshBuilderGoalCodexSessionBtn) {
+      this.refreshBuilderGoalCodexSessionBtn.addEventListener('click', () => this.loadBuilderGoalCodexSession());
+    }
+    if (this.sendBuilderGoalCodexMessageBtn) {
+      this.sendBuilderGoalCodexMessageBtn.addEventListener('click', () => this.sendBuilderGoalCodexMessage());
+    }
+    if (this.builderGoalCodexMessageInput) {
+      this.builderGoalCodexMessageInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          this.sendBuilderGoalCodexMessage();
+        }
+      });
+    }
+    if (this.builderGoalRunsList) {
+      this.builderGoalRunsList.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-builder-run-action]');
+        if (!button) return;
+        const iterationId = button.dataset.iterationId;
+        if (!iterationId) return;
+        const action = button.dataset.builderRunAction;
+        if (action === 'analyze') {
+          this.enterRecoveryMode(iterationId);
+        } else if (action === 'fix') {
+          this.fixAndRelaunchBuilderGoalRun(iterationId);
+        } else if (action === 'load-config') {
+          this.loadBuilderGoalRunConfig(iterationId);
+        } else if (action === 'rerun') {
+          this.rerunBuilderGoal(iterationId);
+        } else if (action === 'stop') {
+          this.stopBuilderGoalRun(iterationId);
+        } else if (action === 'pause') {
+          this.pauseBuilderGoalRun(iterationId);
+        } else if (action === 'resume') {
+          this.resumeBuilderGoalRun(iterationId);
+        } else if (action === 'view-logs') {
+          this.loadBuilderGoalRunLogs(iterationId);
+        }
+      });
+    }
+    if (this.closeBuilderGoalLogsBtn) {
+      this.closeBuilderGoalLogsBtn.addEventListener('click', () => this.closeBuilderGoalRunLogs());
+    }
+    if (this.recoveryRunPicker) {
+      this.recoveryRunPicker.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-recovery-open]');
+        if (!button) return;
+        const iterationId = button.dataset.recoveryOpen;
+        if (iterationId) {
+          this.enterRecoveryMode(iterationId);
+        }
+      });
+    }
+    document.addEventListener('debugger:workspace-changed', (event) => {
+      if (event && event.detail && event.detail.workspace === 'recovery') {
+        this.renderRecoveryRunPicker();
+      }
+    });
+    if (this.builderGoalAnalysisResetBtn) {
+      this.builderGoalAnalysisResetBtn.addEventListener('click', () => this.resetBuilderGoalAnalysisPrompt());
+    }
+    if (this.builderGoalAnalysisSelectAllBtn) {
+      this.builderGoalAnalysisSelectAllBtn.addEventListener('click', () => this.setAllBuilderGoalEvidenceSelections(true));
+    }
+    if (this.builderGoalAnalysisClearAllBtn) {
+      this.builderGoalAnalysisClearAllBtn.addEventListener('click', () => this.setAllBuilderGoalEvidenceSelections(false));
+    }
+    if (this.builderGoalAnalysisEvidenceGroups) {
+      this.builderGoalAnalysisEvidenceGroups.addEventListener('change', (event) => {
+        if (event.target?.matches('.builder-goal-analysis-evidence-checkbox')) {
+          this.updateBuilderGoalAnalysisEvidenceMeta();
+        }
+      });
+    }
+    if (this.submitBuilderGoalAnalysisBtn) {
+      this.submitBuilderGoalAnalysisBtn.addEventListener('click', () => this.submitBuilderGoalAnalysis());
+    }
+    if (this.builderGoalAnalysisModalElement) {
+      this.builderGoalAnalysisModalElement.addEventListener('hidden.bs.modal', () => {
+        this.builderGoalAnalysisDraft = null;
+        this.builderGoalAnalysisIterationId = null;
+      });
+    }
+    // Same-screen recovery mode event listeners
+    if (this.recoveryMarkStartBtn) {
+      this.recoveryMarkStartBtn.addEventListener('click', () => this.recoveryMarkStart());
+    }
+    if (this.recoveryMarkEndBtn) {
+      this.recoveryMarkEndBtn.addEventListener('click', () => this.recoveryMarkEnd());
+    }
+    if (this.recoverySaveRangeBtn) {
+      this.recoverySaveRangeBtn.addEventListener('click', () => this.recoverySaveRange());
+    }
+    if (this.recoveryClearRangeBtn) {
+      this.recoveryClearRangeBtn.addEventListener('click', () => this.recoveryClearActiveRange());
+    }
+    if (this.recoveryImportantBtn) {
+      this.recoveryImportantBtn.addEventListener('click', () => this.recoveryToggleImportant());
+    }
+    if (this.recoveryPinFrameBtn) {
+      this.recoveryPinFrameBtn.addEventListener('click', () => this.recoveryPinCurrentFrame());
+    }
+    if (this.recoveryExitBtn) {
+      this.recoveryExitBtn.addEventListener('click', () => this.exitRecoveryMode());
+    }
+    if (this.recoveryLoadRunConfigBtn) {
+      this.recoveryLoadRunConfigBtn.addEventListener('click', () => {
+        if (this.recoveryIterationId) {
+          this.loadBuilderGoalRunConfig(this.recoveryIterationId);
+        }
+      });
+    }
+    if (this.recoveryBannerRefreshEvidenceBtn) {
+      this.recoveryBannerRefreshEvidenceBtn.addEventListener('click', () => this.refreshRecoveryEvidence());
+    }
+    if (this.recoveryApplyTypedRangeBtn) {
+      this.recoveryApplyTypedRangeBtn.addEventListener('click', () => this.applyRecoveryTypedRange());
+    }
+    if (this.recoveryTypedRange) {
+      this.recoveryTypedRange.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          this.applyRecoveryTypedRange();
+        }
+      });
+    }
+    // Changing the typed start/end fields keeps the active range (and evidence) in sync.
+    if (this.recoveryActiveStart) {
+      this.recoveryActiveStart.addEventListener('change', () => this.applyRecoveryRangeInputs());
+    }
+    if (this.recoveryActiveEnd) {
+      this.recoveryActiveEnd.addEventListener('change', () => this.applyRecoveryRangeInputs());
+    }
+    // Re-render saved-range timeline markers once the replay metadata (duration) is known.
+    const recoveryReplayVideo = document.getElementById('replayVideo');
+    if (recoveryReplayVideo) {
+      recoveryReplayVideo.addEventListener('loadedmetadata', () => {
+        if (this.recoveryModeActive) {
+          // Any recording loaded through the shared replay picker becomes the recovery surface,
+          // including when the opened run had no replay of its own.
+          if (this.recoveryReplayStatus !== 'loaded') {
+            this.recoveryReplayStatus = 'loaded';
+            this.recoveryReplayError = '';
+            this.hideRecoveryReplayAlert();
+            this.setRecoveryStatusChip(this.recoveryStatusRecording, 'Recording', {
+              text: 'Loaded',
+              tone: 'ok'
+            });
+          }
+          this.renderRecoveryTimelineMarkers();
+        }
+      });
+    }
+    if (this.recoverySelectAllEvidenceBtn) {
+      this.recoverySelectAllEvidenceBtn.addEventListener('click', () => this.setAllRecoveryEvidenceSelections(true));
+    }
+    if (this.recoveryClearEvidenceBtn) {
+      this.recoveryClearEvidenceBtn.addEventListener('click', () => this.setAllRecoveryEvidenceSelections(false));
+    }
+    if (this.recoveryRefreshEvidenceBtn) {
+      this.recoveryRefreshEvidenceBtn.addEventListener('click', () => this.refreshRecoveryEvidence());
+    }
+    if (this.recoveryGeneratePatchBtn) {
+      this.recoveryGeneratePatchBtn.addEventListener('click', () => this.generateRecoveryPatchPlan());
+    }
+    if (this.recoveryApproveBtn) {
+      this.recoveryApproveBtn.addEventListener('click', () => this.approveRecoveryRelaunch());
+    }
+    if (this.recoveryExportPatchBtn) {
+      this.recoveryExportPatchBtn.addEventListener('click', () => this.exportRecoveryPatch());
+    }
+    if (this.recoveryEvidenceGroups) {
+      this.recoveryEvidenceGroups.addEventListener('change', (event) => {
+        if (event.target?.matches('.recovery-evidence-checkbox')) {
+          this.updateRecoveryEvidenceMeta();
+          this.persistRecoveryAnnotations();
+        }
+      });
+    }
+    if (this.approvePlanBtn) {
+      this.approvePlanBtn.addEventListener('click', () => this.approvePlan());
+    }
+    if (this.rejectPlanBtn) {
+      this.rejectPlanBtn.addEventListener('click', () => this.rejectPlan());
+    }
+    if (this.stabilizationRefreshBtn) {
+      this.stabilizationRefreshBtn.addEventListener('click', () => this.loadStabilizationKpis());
+    }
+    if (this.stabilizationFamilyFilter) {
+      this.stabilizationFamilyFilter.addEventListener('change', () => this.loadStabilizationKpis());
+    }
+    if (this.stabilizationHistoryLimit) {
+      this.stabilizationHistoryLimit.addEventListener('change', () => this.loadStabilizationKpis());
+    }
+  }
+
+  /**
+   * Toggles the task planner panel visibility.
+   */
+  togglePanel() {
+    this.panelVisible = !this.panelVisible;
+    if (this.panel) {
+      this.panel.style.display = this.panelVisible ? 'block' : 'none';
+    }
+    if (this.toggleBtn) {
+      this.toggleBtn.classList.toggle('active', this.panelVisible);
+    }
+  }
+
+  /**
+   * Toggles the panel content (collapse/expand).
+   */
+  toggleContent() {
+    if (!this.content || !this.togglePlannerBtn) return;
+    const isHidden = this.content.style.display === 'none';
+    this.content.style.display = isHidden ? 'flex' : 'none';
+    const icon = this.togglePlannerBtn.querySelector('i');
+    if (icon) {
+      icon.className = isHidden ? 'bi bi-chevron-up' : 'bi bi-chevron-down';
+    }
+  }
+
+  /**
+   * Loads task plans from the API.
+   */
+  async loadPlans() {
+    try {
+      const allResponse = await fetch('/api/account-tasks');
+      if (!allResponse.ok) {
+        throw new Error(`HTTP ${allResponse.status}`);
+      }
+      this.allPlans = await allResponse.json();
+      this.populateAccountOptions();
+
+      const query = new URLSearchParams();
+      if (this.selectedAccountName) {
+        query.set('accountName', this.selectedAccountName);
+      }
+      const plansUrl = query.toString() ? `/api/account-tasks?${query.toString()}` : '/api/account-tasks';
+      const response = await fetch(plansUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      this.plans = await response.json();
+      this.renderPlansList();
+
+      const selectedStillVisible = this.selectedPlanId &&
+        this.plans.some(plan => plan.planId === this.selectedPlanId);
+
+      if (!selectedStillVisible) {
+        this.selectedPlanId = this.plans.length ? this.plans[0].planId : null;
+      }
+
+      if (this.selectedPlanId) {
+        await this.loadPlanDetail(this.selectedPlanId);
+      } else if (this.planDetailSection) {
+        this.planDetailSection.style.display = 'none';
+      }
+    } catch (error) {
+      console.error('Failed to load plans:', error);
+      if (this.plansList) {
+        this.plansList.innerHTML =
+          '<div class="text-muted small">Failed to load plans. Check that the service is running.</div>';
+      }
+    }
+  }
+
+  populateAccountOptions() {
+    if (!this.accountSelect) return;
+    const previous = this.selectedAccountName || this.accountSelect.value || '';
+    const names = Array.from(new Set(
+      (this.allPlans || [])
+        .map(plan => (plan?.accountName || '').toString().trim())
+        .filter(Boolean)
+    )).sort((a, b) => a.localeCompare(b));
+    const hasUnassigned = (this.allPlans || []).some(plan => {
+      const account = (plan?.accountName || '').toString().trim();
+      return account.length === 0;
+    });
+
+    this.accountSelect.innerHTML = '<option value="">All accounts</option>';
+    if (hasUnassigned) {
+      const unknown = document.createElement('option');
+      unknown.value = AccountTaskPlanner.UNASSIGNED_FILTER;
+      unknown.textContent = 'Unknown/Unassigned';
+      this.accountSelect.appendChild(unknown);
+    }
+    names.forEach(name => {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      this.accountSelect.appendChild(option);
+    });
+
+    const validValues = new Set(['', AccountTaskPlanner.UNASSIGNED_FILTER, ...names]);
+    if (previous && validValues.has(previous)) {
+      this.accountSelect.value = previous;
+      this.selectedAccountName = previous;
+    } else {
+      this.accountSelect.value = '';
+      this.selectedAccountName = '';
+      localStorage.removeItem('taskPlanner.selectedAccount');
+    }
+  }
+
+  /**
+   * Loads available recording sessions for the source dropdown.
+   */
+  async loadSourceSessions() {
+    if (!this.sourceSessionSelect) return;
+
+    try {
+      const response = await fetch('/api/recordings/sessions');
+      if (!response.ok) return;
+
+      const sessions = await response.json();
+      this.sourceSessionSelect.innerHTML = '<option value="">Current session</option>';
+
+      sessions.forEach(session => {
+        const option = document.createElement('option');
+        option.value = session.recordingId || session.id || '';
+        let label = session.displayName || session.scriptName || session.recordingId || session.id || 'Unknown';
+        if (session.replayName && session.startTime) {
+          try {
+            const d = new Date(session.startTime);
+            const timeStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+            label = `${label} \u00B7 ${timeStr}`;
+          } catch (_) {
+            // ignore
+          }
+        }
+        option.textContent = label;
+        this.sourceSessionSelect.appendChild(option);
+      });
+    } catch (error) {
+      console.debug('Could not load source sessions:', error);
+    }
+  }
+
+  /**
+   * Loads script/task catalog from Micro6 executor proxy endpoint.
+   */
+  async loadScriptCatalog() {
+    try {
+      const response = await fetch('/api/debug/builder-goals/catalog');
+      if (!response.ok) return;
+      const payload = await response.json();
+      this.scriptCatalog = Array.isArray(payload.tasks) ? payload.tasks : [];
+      this.builderGoalCatalogAvailable = Boolean(payload.catalogAvailable);
+      this.builderGoalCatalogDegraded = Boolean(payload.degraded);
+      this.builderGoalCatalogReason = payload.degradedReason || '';
+      this.builderGoalCatalogSource = payload.source || '';
+      this.renderBuilderGoalTaskOptions(this.builderGoalTaskSearchInput?.value || '');
+      if (this.selectedBuilderGoalTaskKey) {
+        await this.prefillBuilderGoalConfigForSelection();
+      }
+      this.renderBuilderGoalClientStatus();
+    } catch (error) {
+      console.debug('Could not load script catalog:', error);
+      this.scriptCatalog = [];
+      this.builderGoalCatalogAvailable = false;
+      this.builderGoalCatalogDegraded = true;
+      this.builderGoalCatalogReason =
+        error?.message || 'Could not load the Builder Goal catalog.';
+      this.builderGoalCatalogSource = 'error';
+      this.renderBuilderGoalTaskOptions(this.builderGoalTaskSearchInput?.value || '');
+      this.renderBuilderGoalClientStatus();
+    }
+  }
+
+  async loadBuilderGoalAccounts() {
+    if (this.builderGoalBundleMismatch) return;
+    try {
+      const response = await fetch('/api/debug/builder-goals/accounts');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      this.builderGoalAccounts = await response.json();
+      this.renderBuilderGoalAccounts();
+      await this.prefillBuilderGoalConfigForSelection();
+    } catch (error) {
+      console.error('Failed to load builder goal accounts:', error);
+      this.builderGoalAccounts = [];
+      this.renderBuilderGoalAccounts(error.message);
+    }
+  }
+
+  renderBuilderGoalAccounts(loadError = null) {
+    if (!this.builderGoalAccountSelect || this.builderGoalBundleMismatch) return;
+
+    const accounts = Array.isArray(this.builderGoalAccounts) ? this.builderGoalAccounts : [];
+    const previous = this.selectedBuilderGoalAccountId;
+    const stillVisible = accounts.some(account => account.accountId === previous);
+    this.selectedBuilderGoalAccountId = stillVisible ? previous : '';
+    if (!this.selectedBuilderGoalAccountId && accounts.length === 1) {
+      this.selectedBuilderGoalAccountId = accounts[0].accountId || '';
+    }
+    if (this.selectedBuilderGoalAccountId) {
+      localStorage.setItem(
+        'taskPlanner.selectedBuilderGoalAccountId',
+        this.selectedBuilderGoalAccountId
+      );
+    } else {
+      localStorage.removeItem('taskPlanner.selectedBuilderGoalAccountId');
+    }
+
+    if (loadError) {
+      this.builderGoalAccountSelect.innerHTML =
+        '<option value="">Failed to load accounts</option>';
+      this.builderGoalAccountSelect.disabled = true;
+      this.renderBuilderGoalAccountSummary(`Failed to load accounts: ${loadError}`, 'danger');
+      this.renderBuilderGoalClientStatus();
+      this.updateBuilderGoalRunButtonState();
+      return;
+    }
+
+    if (accounts.length === 0) {
+      this.builderGoalAccountSelect.innerHTML = '<option value="">No accounts available</option>';
+      this.builderGoalAccountSelect.disabled = true;
+      this.renderBuilderGoalAccountSummary(
+        'No launcher accounts are currently available for Builder Goal Runner.',
+        'warning'
+      );
+      this.renderBuilderGoalClientStatus();
+      this.updateBuilderGoalRunButtonState();
+      return;
+    }
+
+    this.builderGoalAccountSelect.disabled = false;
+    const options = ['<option value="">Select an account</option>'];
+    accounts.forEach(account => {
+      const label = this.formatBuilderGoalAccountLabel(account);
+      options.push(
+        `<option value="${this.escapeAttr(account.accountId || '')}">${this.escapeHtml(label)}</option>`
+      );
+    });
+    this.builderGoalAccountSelect.innerHTML = options.join('');
+    this.builderGoalAccountSelect.value = this.selectedBuilderGoalAccountId || '';
+    this.renderBuilderGoalAccountSummary();
+    this.renderBuilderGoalConfigMeta();
+    this.renderBuilderGoalClientStatus();
+    this.updateBuilderGoalRunButtonState();
+  }
+
+  async loadBuilderGoalMachines() {
+    if (!this.builderGoalMachineSelect || this.builderGoalBundleMismatch) return;
+
+    try {
+      const response = await fetch('/api/debug/builder-goals/machines');
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(
+          payload?.details || payload?.error || `HTTP ${response.status}`
+        );
+      }
+      this.builderGoalMachines = await this.readJsonResponse(response, []);
+      this.builderGoalMachinesLoadError = '';
+      this.renderBuilderGoalMachines();
+    } catch (error) {
+      console.error('Failed to load builder goal launcher machines:', error);
+      this.builderGoalMachines = [];
+      this.builderGoalMachinesLoadError = error?.message || 'Failed to load launcher machines';
+      this.renderBuilderGoalMachines(this.builderGoalMachinesLoadError);
+    }
+  }
+
+  getSelectedBuilderGoalAccount() {
+    const selectedId = this.builderGoalAccountSelect
+      ? this.builderGoalAccountSelect.value
+      : this.selectedBuilderGoalAccountId;
+    return (this.builderGoalAccounts || []).find(account => account.accountId === selectedId) || null;
+  }
+
+  renderBuilderGoalMachines(loadError = null) {
+    if (!this.builderGoalMachineSelect || this.builderGoalBundleMismatch) return;
+
+    const machines = Array.isArray(this.builderGoalMachines) ? this.builderGoalMachines : [];
+    this.selectedBuilderGoalMachineUuid = AccountTaskPlanner.selectBuilderGoalMachineUuid(
+      machines,
+      this.selectedBuilderGoalMachineUuid
+    );
+    if (this.selectedBuilderGoalMachineUuid) {
+      localStorage.setItem(
+        'taskPlanner.selectedBuilderGoalMachineUuid',
+        this.selectedBuilderGoalMachineUuid
+      );
+    } else {
+      localStorage.removeItem('taskPlanner.selectedBuilderGoalMachineUuid');
+    }
+
+    if (loadError) {
+      this.builderGoalMachineSelect.innerHTML =
+        '<option value="">Failed to load launcher machines</option>';
+      this.builderGoalMachineSelect.disabled = true;
+      this.renderBuilderGoalMachineSummary(
+        `Failed to load launcher machines: ${loadError}`,
+        'danger'
+      );
+      this.renderBuilderGoalClientStatus();
+      this.updateBuilderGoalRunButtonState();
+      return;
+    }
+
+    if (machines.length === 0) {
+      this.builderGoalMachineSelect.innerHTML =
+        '<option value="">No launcher machines available</option>';
+      this.builderGoalMachineSelect.disabled = true;
+      this.renderBuilderGoalMachineSummary(
+        'No launcher machines are currently reported by launcher-control. Builder Goal Runner cannot launch until launcher-control reports at least one machine.',
+        'warning'
+      );
+      this.renderBuilderGoalClientStatus();
+      this.updateBuilderGoalRunButtonState();
+      return;
+    }
+
+    // All returned machines stay visible for diagnostics; only Builder Goal runnable local
+    // machines are selectable. Remote/disabled/offline options are disabled.
+    this.builderGoalMachineSelect.disabled = false;
+    const options = ['<option value="">Select a local launch host</option>'];
+    machines.forEach(machine => {
+      const disabledAttr = machine.builderGoalRunnable ? '' : ' disabled';
+      const selectedAttr =
+        machine.machineUuid && machine.machineUuid === this.selectedBuilderGoalMachineUuid
+          ? ' selected'
+          : '';
+      options.push(
+        `<option value="${this.escapeAttr(machine.machineUuid || '')}"${disabledAttr}${selectedAttr}>${this.escapeHtml(this.formatBuilderGoalMachineLabel(machine))}</option>`
+      );
+    });
+    this.builderGoalMachineSelect.innerHTML = options.join('');
+    this.builderGoalMachineSelect.value = this.selectedBuilderGoalMachineUuid || '';
+    this.renderBuilderGoalMachineSummary();
+    this.renderBuilderGoalClientStatus();
+    this.updateBuilderGoalRunButtonState();
+  }
+
+  getSelectedBuilderGoalMachine() {
+    const selectedUuid = this.builderGoalMachineSelect
+      ? this.builderGoalMachineSelect.value
+      : this.selectedBuilderGoalMachineUuid;
+    return (this.builderGoalMachines || []).find(machine => machine.machineUuid === selectedUuid) || null;
+  }
+
+  renderBuilderGoalAccountSummary(message = null, tone = 'muted') {
+    if (!this.builderGoalAccountSummary) return;
+    if (message) {
+      this.builderGoalAccountSummary.innerHTML =
+        `<span class="text-${tone}">${this.escapeHtml(message)}</span>`;
+      return;
+    }
+    const account = this.getSelectedBuilderGoalAccount();
+    if (!account) {
+      this.builderGoalAccountSummary.innerHTML =
+        '<span class="text-muted">Select an account from launcher control to inspect launch readiness and run availability.</span>';
+      return;
+    }
+    const parts = [];
+    if (account.displayName || account.accountName) {
+      parts.push(account.displayName || account.accountName);
+    }
+    if (account.accountHash) {
+      parts.push(`hash ${account.accountHash}`);
+    }
+    if (account.source) {
+      parts.push(this.formatBuilderGoalAccountSourceLabel(account.source));
+    }
+    if (account.executorOnline !== undefined) {
+      parts.push(account.executorOnline ? 'executor online' : 'executor offline');
+    } else if (account.online) {
+      parts.push('executor online');
+    } else {
+      parts.push('executor offline');
+    }
+    if (!account.launchReady) {
+      if (!account.runnable && account.disabledReason) {
+        parts.push(account.disabledReason);
+      } else {
+        parts.push(account.launchDisabledReason || 'setup needed');
+      }
+    }
+    this.builderGoalAccountSummary.innerHTML =
+      `<span class="text-muted">${this.escapeHtml(parts.join(' • '))}</span>`;
+  }
+
+  renderBuilderGoalMachineSummary(message = null, tone = 'muted') {
+    if (!this.builderGoalMachineSummary) return;
+    if (message) {
+      this.builderGoalMachineSummary.innerHTML =
+        `<span class="text-${tone}">${this.escapeHtml(message)}</span>`;
+      return;
+    }
+    const machine = this.getSelectedBuilderGoalMachine();
+    if (!machine) {
+      this.builderGoalMachineSummary.innerHTML =
+        '<span class="text-muted">ChromaScape will auto-select the local machine for Builder Goal launches when one is available.</span>';
+      return;
+    }
+    const parts = [];
+    parts.push(machine.displayName || machine.machineUuid || 'Unknown machine');
+    if (machine.machineUuid) {
+      parts.push(machine.machineUuid);
+    }
+    if (machine.status) {
+      parts.push(String(machine.status).toLowerCase());
+    }
+    if (machine.defaultSelected) {
+      parts.push('auto-selected');
+    }
+    if (!machine.builderGoalRunnable && machine.builderGoalDisabledReason) {
+      parts.push(machine.builderGoalDisabledReason);
+    }
+    this.builderGoalMachineSummary.innerHTML =
+      `<span class="text-muted">${this.escapeHtml(parts.join(' • '))}</span>`;
+  }
+
+  formatBuilderGoalAccountLabel(account) {
+    const label = account.displayName || account.accountName || account.email || account.accountId || 'Unknown account';
+    const tags = [];
+    if (account.source) {
+      tags.push(this.formatBuilderGoalAccountSourceLabel(account.source));
+    }
+    if (account.executorOnline !== undefined) {
+      tags.push(account.executorOnline ? 'executor online' : 'executor offline');
+    } else {
+      tags.push(account.online ? 'executor online' : 'executor offline');
+    }
+    if (!account.launchReady) {
+      tags.push('setup needed');
+    }
+    return tags.length ? `${label} • ${tags.join(' • ')}` : label;
+  }
+
+  formatBuilderGoalAccountSourceLabel(source) {
+    return String(source || '')
+      .split('+')
+      .filter(Boolean)
+      .map(part => part.replaceAll('_', ' '))
+      .map(part => (part === 'launcher' ? 'launcher control' : part))
+      .join(' + ');
+  }
+
+  formatBuilderGoalMachineLabel(machine) {
+    const label = machine.displayName || machine.machineUuid || 'Unknown machine';
+    const tags = [];
+    if (machine.online !== undefined) {
+      tags.push(machine.online ? 'online' : 'offline');
+    } else if (machine.status) {
+      tags.push(String(machine.status).toUpperCase());
+    }
+    tags.push(machine.localMachine ? 'local dev host' : 'remote host');
+    if (machine.defaultSelected) {
+      tags.push('default');
+    }
+    if (!machine.builderGoalRunnable) {
+      tags.push('setup needed');
+    }
+    if (machine.machineUuid && machine.machineUuid !== label) {
+      tags.push(machine.machineUuid);
+    }
+    return tags.length ? `${label} • ${tags.join(' • ')}` : label;
+  }
+
+  renderBuilderGoalTaskOptions(searchQuery = '') {
+    if (!this.builderGoalTaskSelect) return;
+
+    const query = (searchQuery || '').trim().toLowerCase();
+    const tasks = (this.scriptCatalog || []).filter(task => {
+      const haystack = [
+        task?.display_name,
+        task?.panel_display_name,
+        task?.task_key,
+        task?.category
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return !query || haystack.includes(query);
+    });
+
+    if (tasks.length === 0) {
+      this.builderGoalTaskSelect.innerHTML =
+        '<option value="">No Micro6 tasks match the current search</option>';
+      this.builderGoalTaskSelect.disabled = true;
+      this.selectedBuilderGoalTaskKey = '';
+      this.renderBuilderGoalConfigMeta();
+      return;
+    }
+
+    this.builderGoalTaskSelect.disabled = false;
+    const options = ['<option value="">Select a Micro6 task</option>'];
+    const groups = new Map();
+    tasks.forEach(task => {
+      const category = (task?.category || 'other').toString();
+      if (!groups.has(category)) groups.set(category, []);
+      groups.get(category).push(task);
+    });
+    Array.from(groups.keys())
+      .sort((a, b) => a.localeCompare(b))
+      .forEach(category => {
+        const optionHtml = groups
+          .get(category)
+          .slice()
+          .sort((a, b) =>
+            (a?.display_name || a?.task_key || '')
+              .toString()
+              .localeCompare((b?.display_name || b?.task_key || '').toString())
+          )
+          .map(task => {
+            const selected =
+              this.selectedBuilderGoalTaskKey &&
+              this.selectedBuilderGoalTaskKey === task?.task_key
+                ? ' selected'
+                : '';
+            return `<option value="${this.escapeAttr(task?.task_key || '')}"${selected}>${this.escapeHtml(this.buildCatalogTaskLabel(task))}</option>`;
+          })
+          .join('');
+        options.push(`<optgroup label="${this.escapeAttr(category)}">${optionHtml}</optgroup>`);
+      });
+    this.builderGoalTaskSelect.innerHTML = options.join('');
+    this.builderGoalTaskSelect.value = this.selectedBuilderGoalTaskKey || '';
+    this.renderBuilderGoalConfigMeta();
+  }
+
+  getSelectedBuilderGoalTask() {
+    const selectedKey = this.builderGoalTaskSelect
+      ? this.builderGoalTaskSelect.value
+      : this.selectedBuilderGoalTaskKey;
+    return this.getCatalogTaskByKey(selectedKey);
+  }
+
+  buildBuilderGoalTaskPlaceholder(taskKey, options = {}) {
+    const resolvedTaskKey = (taskKey || '').toString().trim();
+    if (!resolvedTaskKey) return null;
+    const displayName =
+      options.displayName ||
+      options.panelDisplayName ||
+      resolvedTaskKey;
+    return {
+      client_type: 'micro6',
+      execution_mode: 'queue',
+      queueable: true,
+      source: options.source || 'imported_payload',
+      task_key: resolvedTaskKey,
+      display_name: displayName,
+      panel_display_name: options.panelDisplayName || displayName,
+      category: options.category || 'saved_imported',
+      runnable: options.runnable !== false,
+      placeholder: true,
+      supports_task_metadata: false,
+      settings_unavailable_reason:
+        options.settingsUnavailableReason || 'catalog_unavailable'
+    };
+  }
+
+  ensureBuilderGoalTaskPlaceholder(taskKey, options = {}) {
+    const existing = this.findCatalogTaskByKeyFlexible(taskKey);
+    if (existing) {
+      return existing;
+    }
+    const placeholder = this.buildBuilderGoalTaskPlaceholder(taskKey, options);
+    if (!placeholder) {
+      return null;
+    }
+    this.scriptCatalog = [placeholder, ...(Array.isArray(this.scriptCatalog) ? this.scriptCatalog : [])];
+    this.renderBuilderGoalTaskOptions(this.builderGoalTaskSearchInput?.value || '');
+    return placeholder;
+  }
+
+  selectBuilderGoalTask(taskKey) {
+    const resolvedTask =
+      this.findCatalogTaskByKeyFlexible(taskKey) ||
+      this.ensureBuilderGoalTaskPlaceholder(taskKey);
+    if (!resolvedTask?.task_key) {
+      return null;
+    }
+    this.selectedBuilderGoalTaskKey = resolvedTask.task_key;
+    localStorage.setItem('taskPlanner.selectedBuilderGoalTaskKey', this.selectedBuilderGoalTaskKey);
+    if (this.builderGoalTaskSearchInput && this.builderGoalTaskSearchInput.value) {
+      this.builderGoalTaskSearchInput.value = '';
+      this.renderBuilderGoalTaskOptions('');
+    }
+    if (this.builderGoalTaskSelect) {
+      this.builderGoalTaskSelect.value = resolvedTask.task_key;
+    }
+    return resolvedTask;
+  }
+
+  getBuilderGoalConfigContextKey(accountId = null, taskKey = null) {
+    const resolvedAccountId = accountId || this.selectedBuilderGoalAccountId || '';
+    const resolvedTaskKey = taskKey || this.selectedBuilderGoalTaskKey || '';
+    return `${resolvedAccountId}::${resolvedTaskKey}`;
+  }
+
+  async prefillBuilderGoalConfigForSelection(options = {}) {
+    const force = Boolean(options.force);
+    this.builderGoalConfigPrefillGeneration =
+      (this.builderGoalConfigPrefillGeneration || 0) + 1;
+    const generation = this.builderGoalConfigPrefillGeneration;
+    const selectedTask = this.getSelectedBuilderGoalTask();
+    const selectedAccount = this.getSelectedBuilderGoalAccount();
+    if (!this.builderGoalConfigInput) {
+      return;
+    }
+
+    const nextKey = this.getBuilderGoalConfigContextKey(
+      selectedAccount?.accountId,
+      selectedTask?.task_key
+    );
+    const isCurrentPrefill = () =>
+      generation === this.builderGoalConfigPrefillGeneration &&
+      nextKey === this.getBuilderGoalConfigContextKey() &&
+      (force || !this.builderGoalConfigDirty);
+
+    if (!selectedTask || !selectedAccount) {
+      const currentDraft = this.parseBuilderGoalConfigInput();
+      const taskEnvelopeNeedsSync =
+        Boolean(selectedTask) &&
+        !this.builderGoalConfigDirty &&
+        !currentDraft.error &&
+        currentDraft.taskKey !== selectedTask.task_key;
+      if ((!this.builderGoalConfigInput.value.trim() || force || taskEnvelopeNeedsSync) && isCurrentPrefill()) {
+        this.setBuilderGoalConfigEditor({}, {
+          accountId: selectedAccount?.accountId || '',
+          taskKey: selectedTask?.task_key || this.selectedBuilderGoalTaskKey || '',
+          dirty: false,
+          invalidatePrefill: false
+        });
+      }
+      this.renderBuilderGoalConfigMeta();
+      return;
+    }
+
+    if (!force && this.builderGoalConfigDirty) {
+      this.renderBuilderGoalConfigMeta();
+      return;
+    }
+    if (!force && this.builderGoalConfigLoadedKey === nextKey && this.builderGoalConfigInput.value.trim()) {
+      this.renderBuilderGoalConfigMeta();
+      return;
+    }
+
+    try {
+      const query = new URLSearchParams({
+        accountId: selectedAccount.accountId || '',
+        taskKey: selectedTask.task_key || ''
+      });
+      const response = await fetch(`/api/debug/builder-goals/config/last?${query.toString()}`);
+      if (response.ok) {
+        const payload = await response.json();
+        if (
+          isCurrentPrefill() &&
+          payload?.configAvailable &&
+          payload.settings &&
+          typeof payload.settings === 'object' &&
+          !Array.isArray(payload.settings)
+        ) {
+          const savedConfig = this.filterSavedBuilderGoalSettings(payload.settings, selectedTask);
+          this.setBuilderGoalWorldValue(payload.world);
+          this.setBuilderGoalConfigEditor(savedConfig.settings, {
+            accountId: payload.accountId || selectedAccount.accountId,
+            taskKey: payload.taskKey || selectedTask.task_key,
+            displayName: payload.displayName,
+            savedSettingsWarning: savedConfig.discardedKeys.length
+              ? `Removed obsolete saved setting${savedConfig.discardedKeys.length === 1 ? '' : 's'}: ${savedConfig.discardedKeys.join(', ')}.`
+              : null,
+            dirty: false,
+            invalidatePrefill: false
+          });
+          return;
+        }
+      }
+    } catch (error) {
+      console.debug('Could not load latest builder goal config:', error);
+    }
+
+    // The request may have completed after a task/account change or a manual edit. In either
+    // case leave the newer editor content alone instead of applying this stale fallback.
+    if (!isCurrentPrefill()) {
+      return;
+    }
+    this.setBuilderGoalWorldValue(360);
+    this.setBuilderGoalConfigEditor({}, {
+      accountId: selectedAccount.accountId,
+      taskKey: selectedTask.task_key,
+      displayName: selectedTask.display_name || selectedTask.panel_display_name || selectedTask.task_key,
+      dirty: false,
+      invalidatePrefill: false
+    });
+  }
+
+  // Saved task settings can outlive a catalog schema change. Only this automatic prefill path
+  // is repaired; settings an operator pastes or edits manually must reach server validation
+  // unchanged so a typo or unsupported field is never silently discarded.
+  filterSavedBuilderGoalSettings(settings, task) {
+    settings = settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {};
+    const fields = task?.args_schema?.fields;
+    if (!Array.isArray(fields)) {
+      return { settings, discardedKeys: [] };
+    }
+    const allowedKeys = new Set(
+      fields
+        .map(field => field?.key)
+        .filter(key => typeof key === 'string' && key.trim())
+    );
+    const filteredSettings = {};
+    const discardedKeys = [];
+    const taskKey = String(task?.task_key || '').toUpperCase();
+    // A task schema can declare either targetLevel (some construction/crafting/herblore tasks) or
+    // the canonical stopConditionValue; only fold a legacy alias into a field the schema accepts.
+    const canonicalLevelKey = allowedKeys.has('targetLevel')
+      ? 'targetLevel'
+      : allowedKeys.has('stopConditionValue')
+        ? 'stopConditionValue'
+        : (taskKey === 'FISHING_TRAINING' || taskKey === 'FISH_TRAINING')
+          ? 'stopConditionValue'
+          : null;
+    const legacyStopKeys = ['targetLevel', 'target_level'].filter(
+      key => !allowedKeys.has(key) && Object.prototype.hasOwnProperty.call(settings, key)
+    );
+    const legacyStopValues = legacyStopKeys.map(key => settings[key]);
+    const legacyStopValueIsConsistent =
+      legacyStopValues.length > 0 && legacyStopValues.every(value => Object.is(value, legacyStopValues[0]));
+    Object.entries(settings).forEach(([key, value]) => {
+      if (allowedKeys.has(key)) {
+        filteredSettings[key] = value;
+      } else if (
+        canonicalLevelKey &&
+        canonicalLevelKey !== key &&
+        (key === 'targetLevel' || key === 'target_level') &&
+        legacyStopValueIsConsistent
+      ) {
+        // Saved settings may predate the schema's canonical level field. Migrate this narrow legacy
+        // alias only during automatic restoration; pasted/manual settings still go to server
+        // validation unchanged and unknown keys remain rejected there.
+        if (!Object.prototype.hasOwnProperty.call(filteredSettings, canonicalLevelKey)) {
+          filteredSettings[canonicalLevelKey] = legacyStopValues[0];
+        }
+        discardedKeys.push(key);
+      } else {
+        discardedKeys.push(key);
+      }
+    });
+    return { settings: filteredSettings, discardedKeys };
+  }
+
+  setBuilderGoalConfigEditor(settings, options = {}) {
+    if (!this.builderGoalConfigInput) return;
+    if (options.invalidatePrefill !== false) {
+      this.builderGoalConfigPrefillGeneration =
+        (this.builderGoalConfigPrefillGeneration || 0) + 1;
+    }
+    let configObject =
+      settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {};
+    let embeddedTaskKey = null;
+    // Accept an envelope here as well as the server's nested settings object. This keeps the
+    // editor API tolerant of saved/imported payloads while always rendering one canonical shape.
+    const isEnvelopeLike =
+      (configObject.settings && typeof configObject.settings === 'object' && !Array.isArray(configObject.settings)) ||
+      configObject.task_key ||
+      configObject.taskKey ||
+      configObject.builder_execution ||
+      configObject.queue_payload_preview;
+    if (isEnvelopeLike) {
+      const normalized = this.normalizePastedConfig(configObject);
+      if (!normalized.error) {
+        configObject = normalized.settings;
+        embeddedTaskKey = normalized.taskKey;
+      }
+    }
+    const hasExplicitTaskKey = Object.prototype.hasOwnProperty.call(options, 'taskKey');
+    const resolvedTaskKey = hasExplicitTaskKey
+      ? (options.taskKey || '')
+      : (embeddedTaskKey || this.getSelectedBuilderGoalTask()?.task_key || this.selectedBuilderGoalTaskKey || '');
+    const editorObject = {};
+    if (resolvedTaskKey) {
+      editorObject.task_key = resolvedTaskKey;
+    }
+    editorObject.settings = configObject;
+    this.builderGoalConfigInput.value = JSON.stringify(editorObject, null, 2);
+    this.builderGoalConfigDirty = Boolean(options.dirty);
+    this.builderGoalConfigLoadedKey = this.getBuilderGoalConfigContextKey(
+      options.accountId,
+      resolvedTaskKey
+    );
+    this.builderGoalSavedSettingsWarning = options.savedSettingsWarning || null;
+    this.renderBuilderGoalConfigMeta({
+      savedDisplayName: options.displayName || null,
+      loadedFromRun: options.loadedFromRun || false,
+      loadedRunLabel: options.loadedRunLabel || null
+    });
+  }
+
+  /**
+   * Changes only the task_key in a dirty editor draft. Legacy raw settings are wrapped in the
+   * canonical envelope so their values survive a task-selector change.
+   */
+  syncBuilderGoalConfigTaskKey(taskKey) {
+    const resolvedTaskKey = (taskKey || '').toString().trim();
+    if (!this.builderGoalConfigInput) {
+      return false;
+    }
+    const parsed = this.parseBuilderGoalConfigInput();
+    if (parsed.error) {
+      // Do not destroy an invalid draft; the operator still needs to see and correct it.
+      return false;
+    }
+    if (parsed.taskKey === (resolvedTaskKey || null) && parsed.settings && typeof parsed.settings === 'object') {
+      return true;
+    }
+    this.setBuilderGoalConfigEditor(parsed.settings || {}, {
+      accountId: this.selectedBuilderGoalAccountId,
+      taskKey: resolvedTaskKey,
+      dirty: true
+    });
+    return true;
+  }
+
+  renderBuilderGoalConfigMeta(extra = {}) {
+    if (!this.builderGoalConfigMeta) return;
+    const selectedTask = this.getSelectedBuilderGoalTask();
+    const selectedAccount = this.getSelectedBuilderGoalAccount();
+    const parts = [];
+    if (extra.loadedFromRun && extra.loadedRunLabel) {
+      parts.push(`Loaded saved config from ${extra.loadedRunLabel}.`);
+    } else if (extra.savedDisplayName || selectedTask?.display_name || selectedTask?.task_key) {
+      parts.push(
+        `Editing config for ${extra.savedDisplayName || selectedTask?.display_name || selectedTask?.task_key}.`
+      );
+    } else {
+      parts.push('Choose a task to load a {"task_key", "settings"} editor envelope, or paste legacy settings JSON.');
+    }
+    if (selectedAccount?.displayName || selectedAccount?.accountName) {
+      parts.push(`Account: ${selectedAccount.displayName || selectedAccount.accountName}.`);
+    }
+    const world = this.getBuilderGoalWorldValue();
+    if (world) {
+      parts.push(`World: ${world}.`);
+    }
+    if (this.builderGoalConfigDirty) {
+      parts.push('Unsaved draft changes are being kept in this session.');
+    } else {
+      parts.push('The editor will prefill from the last saved run for this account and task when available.');
+    }
+    if (this.builderGoalSavedSettingsWarning) {
+      parts.push(this.builderGoalSavedSettingsWarning);
+    }
+    parts.push('Manual edits may change task_key; ChromaScape will keep settings and synchronize the task selector.');
+    this.builderGoalConfigMeta.innerHTML = `<span class="text-muted">${this.escapeHtml(parts.join(' '))}</span>`;
+  }
+
+  parseBuilderGoalConfigInput() {
+    const raw = this.builderGoalConfigInput ? this.builderGoalConfigInput.value.trim() : '';
+    if (!raw) {
+      return { settings: {}, taskKey: null, requirements: {} };
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      return { error: `Invalid JSON: ${error.message}` };
+    }
+
+    const normalized = this.normalizePastedConfig(parsed);
+    if (normalized.error) {
+      return normalized;
+    }
+    const effectiveTaskKey =
+      normalized.taskKey || this.getSelectedBuilderGoalTask?.()?.task_key || this.selectedBuilderGoalTaskKey || '';
+    const canonicalSettings = this.normalizeLevelAliasSettings(
+      normalized.settings,
+      this.resolveCatalogTaskForNormalization(effectiveTaskKey) || effectiveTaskKey
+    );
+    if (canonicalSettings.error) {
+      return canonicalSettings;
+    }
+    return { ...normalized, settings: canonicalSettings.settings };
+  }
+
+  shouldAutoRecordBuilderGoal() {
+    return this.builderGoalAutoRecord?.checked !== false;
+  }
+
+  getBuilderGoalWorldValue() {
+    if (!this.builderGoalWorldInput) {
+      return 360;
+    }
+    const raw = String(this.builderGoalWorldInput.value || '').trim();
+    if (!raw) {
+      return 360;
+    }
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed) || parsed < 300 || parsed > 700) {
+      return null;
+    }
+    return parsed;
+  }
+
+  setBuilderGoalWorldValue(world) {
+    if (!this.builderGoalWorldInput) return;
+    const numericWorld = Number.parseInt(world, 10);
+    this.builderGoalWorldInput.value = String(
+      Number.isFinite(numericWorld) && numericWorld >= 300 && numericWorld <= 700
+        ? numericWorld
+        : 360
+    );
+  }
+
+  handleBuilderGoalWorldInput() {
+    this.renderBuilderGoalConfigMeta();
+    this.renderBuilderGoalClientStatus();
+    this.updateBuilderGoalRunButtonState();
+  }
+
+  handleBuilderGoalConfigInput() {
+    this.builderGoalConfigDirty = true;
+    this.builderGoalSavedSettingsWarning = null;
+    this.builderGoalConfigPrefillGeneration =
+      (this.builderGoalConfigPrefillGeneration || 0) + 1;
+    // A valid manually entered task_key is authoritative for the selector. Unknown keys become
+    // placeholders so an operator can still run/import a task while the live catalog is degraded.
+    const parsed = this.parseBuilderGoalConfigInput();
+    if (!parsed.error && parsed.taskKey && parsed.taskKey !== this.selectedBuilderGoalTaskKey) {
+      this.selectBuilderGoalTask(parsed.taskKey);
+    }
+    this.renderBuilderGoalConfigMeta();
+    this.renderBuilderGoalClientStatus();
+    this.updateBuilderGoalRunButtonState();
+  }
+
+  async refreshBuilderGoalRuns() {
+    const loaders = [
+      this.loadBuilderGoalAccounts(),
+      this.loadBuilderGoalMachines(),
+      this.loadBuilderGoalRuns(),
+      this.loadScriptCatalog()
+    ];
+    const settled = await Promise.allSettled(loaders);
+    let coreLoadersSucceeded = true;
+    for (let i = 0; i < settled.length; i++) {
+      if (settled[i].status === 'rejected') {
+        // Only the three core loaders gate the manual-refresh gate; the catalog loader is
+        // optional and surfaces its own degraded-state display.
+        if (i < 3) {
+          coreLoadersSucceeded = false;
+        }
+        console.error(
+          '[AccountTaskPlanner] Builder Goal refresh loader failed',
+          settled[i].reason
+        );
+      }
+    }
+    // A successful manual refresh clears the refresh-required gate so Publish re-enables.
+    if (coreLoadersSucceeded) {
+      this.builderGoalLaunchRefreshRequired = false;
+    }
+    this.renderBuilderGoalClientStatus();
+    this.updateBuilderGoalRunButtonState();
+  }
+
+  async loadBuilderGoalRuns(options = {}) {
+    if (!this.builderGoalRunsList) return;
+    const throwOnError = Boolean(options.throwOnError);
+
+    try {
+      const response = await fetch('/api/debug/builder-goals/runs?limit=20');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      this.builderGoalRuns = await this.readJsonResponse(response, []);
+      this.renderBuilderGoalRuns();
+      if (this.builderGoalLogsIterationId) {
+        this.loadBuilderGoalRunLogs(this.builderGoalLogsIterationId, { silent: true });
+      }
+    } catch (error) {
+      console.error('Failed to load builder goal runs:', error);
+      this.builderGoalRunsList.innerHTML =
+        '<div class="text-muted small">Failed to load builder goal runs.</div>';
+      if (throwOnError) {
+        throw error;
+      }
+    }
+  }
+
+  renderBuilderGoalClientStatus(message = null, tone = null) {
+    if (!this.builderGoalClientStatus) return;
+    if (this.builderGoalBundleMismatch) {
+      this.builderGoalClientStatus.innerHTML =
+        '<span class="text-danger">Debugger assets are out of date. Hard refresh this page to enable Builder Goal Runner.</span>';
+      return;
+    }
+    if (message) {
+      this.builderGoalClientStatus.innerHTML = `<span class="text-${tone || 'muted'}">${this.escapeHtml(message)}</span>`;
+      return;
+    }
+
+    // Keep catalog degradation visible even when an account has not been selected yet or
+    // another readiness condition returns early below.
+    const degradedCatalogWarning =
+      this.builderGoalCatalogDegraded && this.builderGoalCatalogReason
+        ? `<div class="text-warning mb-1">${this.escapeHtml(this.builderGoalCatalogReason)}</div>`
+        : '';
+    const render = html => {
+      this.builderGoalClientStatus.innerHTML = `${degradedCatalogWarning}${html}`;
+    };
+
+    if (this.builderGoalMachinesLoadError) {
+      render(
+        `<span class="text-danger">${this.escapeHtml(this.builderGoalMachinesLoadError)}</span>`
+      );
+      return;
+    }
+
+    const selectedAccount = this.getSelectedBuilderGoalAccount();
+    const selectedMachine = this.getSelectedBuilderGoalMachine();
+    const selectedTask = this.getSelectedBuilderGoalTask();
+    const world = this.getBuilderGoalWorldValue();
+    if (!selectedAccount) {
+      render(
+        '<span class="text-muted">Select an account, choose a task, set the task settings and world, and then run the task.</span>'
+      );
+      return;
+    }
+
+    const executorOnline =
+      selectedAccount.executorOnline !== undefined
+        ? selectedAccount.executorOnline === true
+        : selectedAccount.online === true;
+
+    if (!selectedAccount.runnable) {
+      render(
+        `<span class="text-warning">${this.escapeHtml(
+          selectedAccount.disabledReason || 'This account is visible but not runnable yet.'
+        )}</span>`
+      );
+      return;
+    }
+
+    // Resolve the effective task the same way the Run/Publish handlers do: the catalog
+    // selection wins, otherwise a task_key embedded in the JSON editor is honored.
+    const parsedConfig = this.parseBuilderGoalConfigInput();
+    const importedTaskKey =
+      !parsedConfig.error && parsedConfig.taskKey ? parsedConfig.taskKey : null;
+    const effectiveTask = selectedTask || (importedTaskKey ? { task_key: importedTaskKey } : null);
+    const hasTask = Boolean(effectiveTask);
+    const hasWorld = Boolean(world);
+    const configValid = !parsedConfig.error;
+
+    // Mirror the button-state contract exactly: status wording must never claim Publish is
+    // available when the same inputs leave the Publish Task button disabled.
+    const availability = AccountTaskPlanner.computeBuilderGoalActionAvailability({
+      account: selectedAccount,
+      machine: selectedMachine,
+      hasTask,
+      hasWorld,
+      configValid,
+      importedRunnable: Boolean(this.importedBuilderGoal?.result?.runnableNow)
+    });
+
+    if (!configValid) {
+      render(
+        `<span class="text-warning">${this.escapeHtml(parsedConfig.error || 'Task settings JSON is invalid.')} Select a task with valid settings before running or publishing.</span>`
+      );
+      return;
+    }
+
+    if (!selectedAccount.launchReady) {
+      const missingCredentialsHint =
+        'Add the account email and password in launcher control to enable Run Task and Launch Account.';
+      const reason = selectedAccount.launchDisabledReason
+        ? `${selectedAccount.launchDisabledReason}. ${missingCredentialsHint}`
+        : missingCredentialsHint;
+      if (availability.canPublishTask) {
+        render(
+          `<span class="text-warning">${this.escapeHtml(reason)} Publish Task is available for the already-running Micro6 executor, which does not require launcher-control credentials.</span>`
+        );
+      } else if (executorOnline && !hasTask) {
+        render(
+          `<span class="text-warning">${this.escapeHtml(reason)} A matching Micro6 executor is online. Select a task before publishing.</span>`
+        );
+      } else if (executorOnline && !hasWorld) {
+        render(
+          `<span class="text-warning">${this.escapeHtml(reason)} A matching Micro6 executor is online. Enter a valid world between 300 and 700 before publishing.</span>`
+        );
+      } else {
+        render(
+          `<span class="text-warning">${this.escapeHtml(reason)} No dispatch-ready Micro6 executor is online for this account, so Publish Task is unavailable until an executor heartbeats or you launch one.</span>`
+        );
+      }
+      return;
+    }
+
+    if (!selectedMachine) {
+      if (availability.canPublishTask) {
+        render(
+          '<span class="text-warning">No local launch host is available for Builder Goal Runner yet. Run Task and Launch Account are unavailable, but Publish Task is available for the already-running Micro6 executor.</span>'
+        );
+      } else if (executorOnline && !hasTask) {
+        render(
+          '<span class="text-warning">A matching Micro6 executor is online. Select a task before publishing.</span>'
+        );
+      } else if (executorOnline && !hasWorld) {
+        render(
+          '<span class="text-warning">A matching Micro6 executor is online. Enter a valid world between 300 and 700 before publishing.</span>'
+        );
+      } else {
+        render(
+          '<span class="text-warning">No local launch host is available for Builder Goal Runner yet.</span>'
+        );
+      }
+      return;
+    }
+
+    if (!selectedMachine.builderGoalRunnable) {
+      const machineReason =
+        selectedMachine.builderGoalDisabledReason || 'The selected launcher machine is not ready for local Builder Goal launches.';
+      if (availability.canPublishTask) {
+        render(
+          `<span class="text-warning">${this.escapeHtml(machineReason)} Run Task and Launch Account are unavailable, but Publish Task is available for the already-running Micro6 executor.</span>`
+        );
+      } else if (executorOnline && !hasTask) {
+        render(
+          `<span class="text-warning">${this.escapeHtml(machineReason)} A matching Micro6 executor is online. Select a task before publishing.</span>`
+        );
+      } else if (executorOnline && !hasWorld) {
+        render(
+          `<span class="text-warning">${this.escapeHtml(machineReason)} A matching Micro6 executor is online. Enter a valid world between 300 and 700 before publishing.</span>`
+        );
+      } else {
+        render(`<span class="text-warning">${this.escapeHtml(machineReason)}</span>`);
+      }
+      return;
+    }
+
+    if (!hasTask) {
+      const message = executorOnline
+        ? 'A matching Micro6 executor is online. Select a task before publishing.'
+        : 'Select a Micro6 task to run.';
+      render(`<span class="text-warning">${this.escapeHtml(message)}</span>`);
+      return;
+    }
+
+    if (!hasWorld) {
+      const message = executorOnline
+        ? 'A matching Micro6 executor is online. Enter a valid world between 300 and 700 before publishing.'
+        : 'Enter a valid world between 300 and 700 before running the task.';
+      render(`<span class="text-warning">${this.escapeHtml(message)}</span>`);
+      return;
+    }
+
+    if (!executorOnline) {
+      render(
+        '<span class="text-warning">No dispatch-ready Micro6 executor is online for this account. Use Launch Account or Run Task first, then Publish Task becomes available.</span>'
+      );
+      return;
+    }
+
+    if (availability.canPublishTask) {
+      render(
+        '<span class="text-success">Publish Task is available for the already-running Micro6 executor.</span>'
+      );
+      return;
+    }
+
+    render(
+      '<span class="text-warning">Select a task, set the JSON settings, and enter a valid world between 300 and 700 before publishing.</span>'
+    );
+  }
+
+  updateBuilderGoalRunButtonState() {
+    if (!this.runBuilderGoalBtn) return;
+    if (this.builderGoalBundleMismatch) {
+      this.runBuilderGoalBtn.disabled = true;
+      if (this.launchBuilderGoalAccountBtn) {
+        this.launchBuilderGoalAccountBtn.disabled = true;
+      }
+      if (this.publishBuilderGoalBtn) {
+        this.publishBuilderGoalBtn.disabled = true;
+      }
+      if (this.runImportedBuilderGoalBtn) {
+        this.runImportedBuilderGoalBtn.disabled = true;
+      }
+      return;
+    }
+    const selectedAccount = this.getSelectedBuilderGoalAccount();
+    const selectedMachine = this.getSelectedBuilderGoalMachine();
+    const selectedTask = this.getSelectedBuilderGoalTask();
+    const parsedConfig = this.parseBuilderGoalConfigInput();
+    const importedTaskKey =
+      !parsedConfig.error && parsedConfig.taskKey ? parsedConfig.taskKey : null;
+    const world = this.getBuilderGoalWorldValue();
+    const availability = AccountTaskPlanner.computeBuilderGoalActionAvailability({
+      account: selectedAccount,
+      machine: selectedMachine,
+      hasTask: Boolean(selectedTask || importedTaskKey),
+      hasWorld: Boolean(world),
+      configValid: !parsedConfig.error,
+      importedRunnable: Boolean(this.importedBuilderGoal?.result?.runnableNow)
+    });
+    const canLaunchAccount = availability.canLaunchAccount;
+    const canPrimaryRun = availability.canRunTask;
+    const canPublish = availability.canPublishTask;
+    // While an asynchronous launch operation is active, Launch Account and Run Task stay disabled
+    // so a duplicate client cannot be started for the same account.
+    const launchOperationActive = Boolean(this.builderGoalLaunchOperationId);
+    const runTrackerActive = Boolean(this.builderGoalRunTrackerIterationId);
+    this.runBuilderGoalBtn.disabled = !canPrimaryRun || launchOperationActive || runTrackerActive;
+    if (this.launchBuilderGoalAccountBtn) {
+      this.launchBuilderGoalAccountBtn.disabled =
+        !canLaunchAccount || launchOperationActive || runTrackerActive;
+    }
+    if (this.publishBuilderGoalBtn) {
+      // Publish stays disabled after a READY refresh failure until a manual refresh succeeds.
+      this.publishBuilderGoalBtn.disabled =
+        !canPublish || Boolean(this.builderGoalLaunchRefreshRequired) || runTrackerActive;
+    }
+    if (this.runImportedBuilderGoalBtn) {
+      this.runImportedBuilderGoalBtn.disabled =
+        !availability.canRunImported || launchOperationActive || runTrackerActive;
+    }
+  }
+
+  /**
+   * Pure helper computing Builder Goal action availability from the planner's live state.
+   *
+   * <p>Action rules intentionally live here so Launch / Run / Publish / Imported cannot drift
+   * independently. Publish never depends on launcher credentials or launcher-machine readiness.
+   *
+   * @returns {{executorOnline: boolean, machineRunnable: boolean, canLaunchAccount: boolean,
+   *   canRunTask: boolean, canPublishTask: boolean, canRunImported: boolean}}
+   */
+  static computeBuilderGoalActionAvailability({ account, machine, hasTask, hasWorld, configValid = true, importedRunnable }) {
+    const executorOnline =
+      account?.executorOnline !== undefined
+        ? account.executorOnline === true
+        : account?.online === true;
+    const selectedAccountEligible =
+      account?.selectedAccountEligible !== undefined
+        ? account.selectedAccountEligible === true
+        : executorOnline;
+    const runnable = Boolean(account && account.runnable);
+    const launchReady = runnable && Boolean(account.launchReady);
+    const machineRunnable = Boolean(
+      machine && machine.builderGoalRunnable
+    );
+    const canLaunchAccount = launchReady && machineRunnable && Boolean(hasWorld);
+    const canRunTask = canLaunchAccount && Boolean(hasTask) && Boolean(configValid);
+    const canPublishTask =
+      runnable && selectedAccountEligible && Boolean(hasTask) && Boolean(hasWorld) && Boolean(configValid);
+    const canRunImported =
+      canLaunchAccount && Boolean(hasWorld) && Boolean(importedRunnable) && Boolean(configValid);
+    return {
+      executorOnline,
+      machineRunnable,
+      canLaunchAccount,
+      canRunTask,
+      canPublishTask,
+      canRunImported
+    };
+  }
+
+  /**
+   * Pure helper resolving the Builder Goal launch-host selection from the current machine list.
+   *
+   * <p>Selection precedence:
+   * <ol>
+   *   <li>the previously persisted UUID, only when that machine is still present and
+   *       {@code builderGoalRunnable === true};</li>
+   *   <li>the first machine with {@code defaultSelected === true} that is Builder Goal
+   *       runnable;</li>
+   *   <li>the only machine with {@code builderGoalRunnable === true};</li>
+   *   <li>otherwise an empty selection for the operator to choose among enabled local options.
+   * </ol>
+   *
+   * <p>Remote, offline, disabled, or stale-persisted machines are never auto-selected.
+   *
+   * @returns {string} the resolved machine UUID, or '' when nothing is eligible.
+   */
+  static selectBuilderGoalMachineUuid(machines, previousMachineUuid) {
+    const list = Array.isArray(machines) ? machines : [];
+    const runnable = machine => Boolean(machine && machine.builderGoalRunnable === true);
+    const previous = (previousMachineUuid || '').trim();
+    if (previous) {
+      const preserved = list.find(machine => machine?.machineUuid === previous);
+      if (runnable(preserved)) {
+        return previous;
+      }
+    }
+    const defaultMachine = list.find(machine => runnable(machine) && machine.defaultSelected === true);
+    if (defaultMachine?.machineUuid) {
+      return defaultMachine.machineUuid;
+    }
+    const runnableMachines = list.filter(runnable);
+    if (runnableMachines.length === 1) {
+      return runnableMachines[0].machineUuid || '';
+    }
+    return '';
+  }
+
+  renderBuilderGoalRuns() {
+    if (!this.builderGoalRunsList) return;
+    if (!Array.isArray(this.builderGoalRuns) || this.builderGoalRuns.length === 0) {
+      this.builderGoalRunsList.innerHTML =
+        '<div class="text-muted small fst-italic">No builder goal runs yet.</div>';
+      return;
+    }
+
+    this.builderGoalRunsList.innerHTML = this.builderGoalRuns.map(run => {
+      const status = (run.status || 'QUEUED').toLowerCase();
+      // Every analysable run can open the recovery workspace; a cancelled run is inspectable and
+      // patch-plannable even though it is not relaunched, and nothing disappears because the
+      // executor lifecycle ended as CANCELLED rather than FAILED.
+      const canReview = Boolean(run.canAnalyze || run.recoveryWorkspaceAvailable);
+      const canApprove = Boolean(run.approvalAvailable);
+      const canRerun = Boolean(run.canRerun);
+      const canLoadConfig = Boolean(run.configAvailable);
+      const canStop = Boolean(run.canStop);
+      const publishStatus = String(run.publishStatus || run.status || '').toUpperCase();
+      const canPause = publishStatus === 'RUNNING' && !run.stopping;
+      const canResume = publishStatus === 'PAUSED' && !run.stopping;
+      const stopLabel = run.stopping ? 'Removing...' : 'Remove Task';
+      const stopDisabled = !canStop || Boolean(run.stopping);
+      const showingLogs = this.builderGoalLogsIterationId === run.iterationId;
+      const actionStepLine = this.renderBuilderGoalActionStep(run);
+      const blockedReasonLine = this.renderBuilderGoalBlockedReason(run);
+      const analysisUsageLine = this.renderBuilderGoalAnalysisUsage(run);
+      const failureText = run.launchFailureDetail || run.failureReason;
+      const failureLine = failureText
+        ? `<div class="plan-card-intent text-danger">${this.renderMultilineInline(failureText)}</div>`
+        : '';
+      const stopSendErrorLine = run.stopSendError
+        ? `<div class="plan-card-intent text-warning">${this.escapeHtml(run.stopSendError)}</div>`
+        : '';
+      const diagnosisLine = run.diagnosisSummary
+        ? `<div class="plan-card-intent">${this.escapeHtml(run.diagnosisSummary)}</div>`
+        : '';
+      const recoveryParts = [run.recoveryPhase, run.recoveryMessage].filter(Boolean);
+      const recoveryLine = recoveryParts.length
+        ? `<div class="small text-muted mt-1"><i class="bi bi-tools me-1"></i>${this.escapeHtml(recoveryParts.join(' • '))}</div>`
+        : '';
+      const incident = run.repairIncident || null;
+      const incidentLine = incident
+        ? `<div class="small text-warning mt-1"><i class="bi bi-exclamation-triangle me-1"></i>${this.escapeHtml(`${incident.type || 'INCIDENT'} • ${incident.reason || 'Review required'}`)}</div>`
+        : '';
+      const revisionLine = run.micro6RevisionId
+        ? `<div class="small text-muted mt-1"><i class="bi bi-git me-1"></i>${this.escapeHtml(run.micro6RevisionId)}</div>`
+        : '';
+      const targetParts = [run.targetAccountName, run.targetBaseUrl].filter(Boolean);
+      const targetLine = targetParts.length
+        ? `<div class="small text-muted mt-1"><i class="bi bi-broadcast-pin me-1"></i>${this.escapeHtml(targetParts.join(' • '))}</div>`
+        : '';
+      const launchParts = [run.launcherMachineUuid, run.launcherCommandId, run.launcherCommandStatus].filter(Boolean);
+      const launchLine = launchParts.length
+        ? `<div class="small text-muted mt-1"><i class="bi bi-box-arrow-up-right me-1"></i>${this.escapeHtml(launchParts.join(' • '))}</div>`
+        : '';
+      const worldLine = run.world
+        ? `<div class="small text-muted mt-1"><i class="bi bi-globe2 me-1"></i>${this.escapeHtml(`world ${run.world}`)}</div>`
+        : '';
+      const publishMeta = [];
+      if (run.publishEntryId) {
+        publishMeta.push(`entry ${run.publishEntryId}`);
+      }
+      if (run.publishedAt) {
+        publishMeta.push(`published ${this.formatTimeAgo(run.publishedAt)}`);
+      }
+      const publishLine = publishMeta.length
+        ? `<div class="small text-muted mt-1"><i class="bi bi-list-task me-1"></i>${this.escapeHtml(publishMeta.join(' • '))}</div>`
+        : '';
+      const progressText = this.describeBuilderGoalRunProgress(run);
+
+      return `
+        <div class="plan-card">
+          <div class="plan-card-header">
+            <span class="plan-card-title">${this.escapeHtml(run.displayName || run.taskKey || 'Builder Goal')}</span>
+            <span class="plan-card-status ${status}">${this.escapeHtml(AccountTaskPlanner.formatBuilderGoalStatus(run) || run.status || 'QUEUED')}</span>
+          </div>
+          <div class="small text-muted">${this.escapeHtml(run.taskKey || '')}</div>
+          ${targetLine}
+          ${launchLine}
+          ${worldLine}
+          ${publishLine}
+          ${failureLine}
+          ${stopSendErrorLine}
+          ${diagnosisLine}
+          ${recoveryLine}
+          ${incidentLine}
+          ${revisionLine}
+          ${analysisUsageLine}
+          <div class="plan-card-meta">
+            <span>${this.escapeHtml(progressText)}</span>
+            <span>${run.createdAt ? this.escapeHtml(this.formatTimeAgo(run.createdAt)) : ''}</span>
+          </div>
+          ${actionStepLine}
+          <div class="d-flex gap-2 mt-2">
+            <button class="btn btn-sm btn-outline-secondary flex-fill" data-builder-run-action="load-config" data-iteration-id="${this.escapeAttr(run.iterationId || '')}" ${canLoadConfig ? '' : 'disabled'}>
+              <i class="bi bi-download me-1"></i>Load Into Editor
+            </button>
+            <button class="btn btn-sm btn-outline-dark flex-fill" data-builder-run-action="rerun" data-iteration-id="${this.escapeAttr(run.iterationId || '')}" ${canRerun ? '' : 'disabled'}>
+              <i class="bi bi-play-circle me-1"></i>Rerun
+            </button>
+          </div>
+          <div class="d-flex gap-2 mt-2">
+            <button class="btn btn-sm btn-outline-info flex-fill" data-builder-run-action="view-logs" data-iteration-id="${this.escapeAttr(run.iterationId || '')}">
+              <i class="bi bi-journal-text me-1"></i>${showingLogs ? 'Refresh Logs' : 'View Logs'}
+            </button>
+          </div>
+          <div class="d-flex gap-2 mt-2">
+            <button class="btn btn-sm btn-outline-warning flex-fill" data-builder-run-action="pause" data-iteration-id="${this.escapeAttr(run.iterationId || '')}" ${canPause ? '' : 'disabled'}>
+              <i class="bi bi-pause-circle me-1"></i>Pause
+            </button>
+            <button class="btn btn-sm btn-outline-success flex-fill" data-builder-run-action="resume" data-iteration-id="${this.escapeAttr(run.iterationId || '')}" ${canResume ? '' : 'disabled'}>
+              <i class="bi bi-play-circle me-1"></i>Resume
+            </button>
+            <button class="btn btn-sm btn-outline-danger flex-fill" data-builder-run-action="stop" data-iteration-id="${this.escapeAttr(run.iterationId || '')}" ${stopDisabled ? 'disabled' : ''}>
+              <i class="bi bi-stop-circle me-1"></i>${this.escapeHtml(stopLabel)}
+            </button>
+          </div>
+          <div class="d-flex gap-2 mt-2">
+            <button class="btn btn-sm btn-outline-primary flex-fill" data-builder-run-action="analyze" data-iteration-id="${this.escapeAttr(run.iterationId || '')}" ${canReview ? '' : 'disabled'}>
+              <i class="bi bi-lightbulb me-1"></i>${this.escapeHtml(this.builderGoalReviewLabel(run))}
+            </button>
+            <button class="btn btn-sm btn-outline-success flex-fill" data-builder-run-action="fix" data-iteration-id="${this.escapeAttr(run.iterationId || '')}" ${canApprove ? '' : 'disabled'}>
+              <i class="bi bi-arrow-repeat me-1"></i>${this.escapeHtml(this.builderGoalApprovalLabel(run))}
+            </button>
+          </div>
+          ${blockedReasonLine}
+        </div>
+      `;
+    }).join('');
+    this.renderRecoveryRunPicker();
+  }
+
+  /**
+   * Renders the Recovery workspace's run picker so the operator can open the recovery workspace for
+   * any analysable run (including cancelled ones), not just failed runs.
+   */
+  renderRecoveryRunPicker() {
+    if (!this.recoveryRunPicker) return;
+    const runs = Array.isArray(this.builderGoalRuns)
+      ? this.builderGoalRuns.filter(run => run && run.canAnalyze)
+      : [];
+    if (runs.length === 0) {
+      this.recoveryRunPicker.innerHTML =
+        '<div class="text-muted small fst-italic">No runs are available for recovery yet.</div>';
+      return;
+    }
+    this.recoveryRunPicker.innerHTML = runs.map(run => {
+      const status = (run.status || 'QUEUED').toLowerCase();
+      const statusLabel = AccountTaskPlanner.formatBuilderGoalStatus(run) || run.status || 'QUEUED';
+      return `
+        <div class="plan-card">
+          <div class="plan-card-header">
+            <span class="plan-card-title">${this.escapeHtml(run.displayName || run.taskKey || 'Builder Goal')}</span>
+            <span class="plan-card-status ${status}">${this.escapeHtml(statusLabel)}</span>
+          </div>
+          <div class="small text-muted">${this.escapeHtml(run.taskKey || '')}</div>
+          <div class="d-flex gap-2 mt-2">
+            <button class="btn btn-sm btn-outline-primary flex-fill" type="button"
+              data-recovery-open="${this.escapeAttr(run.iterationId || '')}">
+              <i class="bi bi-tools me-1"></i>Open Recovery Workspace
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  renderBuilderGoalActionStep(run) {
+    if (run.recoveryPhase === 'AWAITING_OPERATOR_PROMPT') {
+      return '<div class="small text-muted mt-2">1. Open the recovery workspace, describe the issue, and choose the evidence/time clip to send for patch planning.</div>';
+    }
+    if (run.approvalAvailable) {
+      return '<div class="small text-muted mt-2">2. Review the generated patch plan and apply it to restart and republish the task.</div>';
+    }
+    if (run.analysisAvailable && run.patchDraftAvailable) {
+      return '<div class="small text-muted mt-2">Patch plan is ready; waiting for apply/relaunch.</div>';
+    }
+    if (run.analysisAvailable) {
+      return '<div class="small text-muted mt-2">Patch planning completed, but MCP did not produce a patch draft.</div>';
+    }
+    if (run.canAnalyze) {
+      return '<div class="small text-muted mt-2">Open the recovery workspace to review evidence and author a patch request.</div>';
+    }
+    return '';
+  }
+
+  renderBuilderGoalBlockedReason(run) {
+    const reasons = [];
+    if (!run.canRerun && run.rerunBlockedReason) {
+      reasons.push(run.rerunBlockedReason);
+    }
+    if (!run.canAnalyze && run.analyzeBlockedReason) {
+      reasons.push(run.analyzeBlockedReason);
+    }
+    if (!run.approvalAvailable && run.approvalBlockedReason && !reasons.includes(run.approvalBlockedReason)) {
+      reasons.push(run.approvalBlockedReason);
+    }
+    if (run.stopSendError && !reasons.includes(run.stopSendError)) {
+      reasons.push(run.stopSendError);
+    }
+    if (reasons.length === 0) {
+      return '';
+    }
+    return `<div class="small text-muted mt-2">${this.escapeHtml(reasons.join(' • '))}</div>`;
+  }
+
+  renderBuilderGoalAnalysisUsage(run) {
+    const parts = [];
+    if (run.analysisMode === 'OPERATOR_EDITED_MCP') {
+      parts.push('Patch plan generated from operator-authored recovery request');
+    }
+    if (run.analysisCustomized) {
+      parts.push('Used custom operator prompt/context');
+    }
+    if (Number.isFinite(run.analysisSelectedEvidenceCount) && Number.isFinite(run.analysisTotalEvidenceCount)) {
+      parts.push(`Selected evidence: ${run.analysisSelectedEvidenceCount}/${run.analysisTotalEvidenceCount}`);
+    }
+    if (Number.isFinite(run.analysisTimeRangeStartSeconds) && Number.isFinite(run.analysisTimeRangeEndSeconds)) {
+      parts.push(`Clip: ${this.formatSecondsAsClock(run.analysisTimeRangeStartSeconds)} → ${this.formatSecondsAsClock(run.analysisTimeRangeEndSeconds)}`);
+    }
+    if (parts.length === 0) {
+      return '';
+    }
+    return `<div class="small text-muted mt-1"><i class="bi bi-pencil-square me-1"></i>${this.escapeHtml(parts.join(' • '))}</div>`;
+  }
+
+  async importBuilderGoal() {
+    if (this.builderGoalBundleMismatch) {
+      this.renderBuilderGoalClientStatus(
+        'Hard refresh this page to load the latest Builder Goal Runner before importing a task.',
+        'danger'
+      );
+      return;
+    }
+    const raw = this.builderGoalPayloadInput ? this.builderGoalPayloadInput.value.trim() : '';
+    if (!raw) {
+      alert('Paste a builder payload first.');
+      return;
+    }
+
+    let payload;
+    try {
+      payload = JSON.parse(raw);
+    } catch (error) {
+      alert('Invalid JSON: ' + error.message);
+      return;
+    }
+
+    if (this.importBuilderGoalBtn) {
+      this.importBuilderGoalBtn.disabled = true;
+    }
+
+    try {
+      const response = await fetch('/api/debug/builder-goals/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+
+      this.importedBuilderGoal = { payload, result };
+      let resolvedTask = this.selectBuilderGoalTask(result.taskKey);
+      if (!resolvedTask && result.taskKey) {
+        resolvedTask = this.ensureBuilderGoalTaskPlaceholder(result.taskKey, {
+          displayName: result.displayName || result.title || result.taskKey,
+          source: 'imported_payload',
+          runnable: Boolean(result.runnableNow)
+        });
+        if (resolvedTask?.task_key) {
+          this.selectBuilderGoalTask(resolvedTask.task_key);
+        }
+      }
+      this.setBuilderGoalConfigEditor(result.settings || {}, {
+        accountId: this.selectedBuilderGoalAccountId,
+        taskKey: resolvedTask?.task_key || result.taskKey || '',
+        displayName: result.displayName || result.title || result.taskKey || null,
+        dirty: true
+      });
+      this.renderBuilderGoalImportResult(result);
+      this.renderBuilderGoalClientStatus(
+        `Imported config for ${result.displayName || result.taskKey || 'the selected task'}. Review the JSON editor and click Run Task when ready.`,
+        'info'
+      );
+      this.updateBuilderGoalRunButtonState();
+    } catch (error) {
+      console.error('Failed to import builder payload:', error);
+      this.importedBuilderGoal = null;
+      this.renderBuilderGoalImportResult({ error: error.message });
+      this.updateBuilderGoalRunButtonState();
+    } finally {
+      if (this.importBuilderGoalBtn) {
+        this.importBuilderGoalBtn.disabled = false;
+      }
+    }
+  }
+
+  renderBuilderGoalImportResult(result) {
+    if (!this.builderGoalImportResult) return;
+    if (this.builderGoalBundleMismatch) {
+      this.builderGoalImportResult.innerHTML =
+        '<span class="text-danger">Builder Goal Runner is out of date. Hard refresh /debugger and try again.</span>';
+      return;
+    }
+    if (!result) {
+      this.builderGoalImportResult.textContent =
+        'Import a builder payload to validate it against the Micro6 catalog.';
+      return;
+    }
+
+    if (result.error) {
+      this.builderGoalImportResult.innerHTML =
+        `<span class="text-danger">${this.escapeHtml(result.error)}</span>`;
+      return;
+    }
+
+    const warning = result.catalogWarning
+      ? `<div class="text-warning">${this.escapeHtml(result.catalogWarning)}</div>`
+      : '';
+
+    const disabledReason = result.disabledReason
+      ? `, disabled: ${this.escapeHtml(result.disabledReason)}`
+      : '';
+    this.builderGoalImportResult.innerHTML = `
+      <div><strong>${this.escapeHtml(result.displayName || result.title || result.taskKey || 'Builder Goal')}</strong></div>
+      <div class="text-muted">
+        task_key=${this.escapeHtml(result.taskKey || '')},
+        matched ${this.escapeHtml(String(result.matchedSettingsCount ?? 0))},
+        ignored ${this.escapeHtml(String(result.ignoredSettingsCount ?? 0))},
+        runnable=${this.escapeHtml(String(Boolean(result.runnableNow)))}${disabledReason}
+      </div>
+      ${warning}
+    `;
+  }
+
+  async launchBuilderGoalAccount() {
+    if (this.builderGoalBundleMismatch) {
+      this.renderBuilderGoalClientStatus(
+        'Hard refresh this page to load the latest Builder Goal Runner before launching an account.',
+        'danger'
+      );
+      return;
+    }
+    const selectedAccount = this.getSelectedBuilderGoalAccount();
+    const selectedMachine = this.getSelectedBuilderGoalMachine();
+    const world = this.getBuilderGoalWorldValue();
+    if (!selectedAccount) {
+      alert('Select an account first.');
+      return;
+    }
+    if (!selectedAccount.runnable) {
+      alert(selectedAccount.disabledReason || 'This account cannot be launched yet.');
+      return;
+    }
+    if (!selectedAccount.launchReady) {
+      alert(
+        (selectedAccount.launchDisabledReason || 'This account is not launch-ready yet.') +
+          ' Add the account email and password in launcher control.'
+      );
+      return;
+    }
+    if (!selectedMachine) {
+      alert('Select a launcher machine first.');
+      return;
+    }
+    if (!selectedMachine.builderGoalRunnable) {
+      alert(
+        selectedMachine.builderGoalDisabledReason ||
+          'This launcher machine cannot run local Builder Goal launches yet.'
+      );
+      return;
+    }
+    if (!world) {
+      const message = 'Enter a valid world between 300 and 700.';
+      this.renderBuilderGoalClientStatus(message, 'danger');
+      alert(message);
+      return;
+    }
+
+    if (this.launchBuilderGoalAccountBtn) {
+      this.launchBuilderGoalAccountBtn.disabled = true;
+      this.launchBuilderGoalAccountBtn.innerHTML =
+        '<i class="bi bi-hourglass me-1"></i>Launching...';
+    }
+    this.renderBuilderGoalClientStatus(
+      `Launching ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} on ${selectedMachine.displayName || selectedMachine.machineUuid} in world ${world}...`,
+      'info'
+    );
+    console.info('[AccountTaskPlanner] Launch Account clicked', {
+      accountId: selectedAccount.accountId || null,
+      launcherMachineUuid: selectedMachine.machineUuid || null,
+      world
+    });
+
+    try {
+      const response = await fetch('/api/debug/builder-goals/launch-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountId: selectedAccount.accountId,
+          launcherMachineUuid: selectedMachine.machineUuid,
+          world
+        })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      if (result.operationId) {
+        const terminalStatuses = new Set(['READY', 'CONFLICT', 'FAILED']);
+        if (terminalStatuses.has(String(result.status || '').toUpperCase())) {
+          const generation = this.builderGoalLaunchPollGeneration;
+          await this.handleBuilderGoalLaunchOperationView(result, generation);
+        } else {
+          this.startBuilderGoalLaunchPolling(result.operationId);
+          this.renderBuilderGoalClientStatus(
+            `Launch accepted for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}. Polling launch operation ${result.operationId}.`,
+            'info'
+          );
+        }
+      } else {
+        await Promise.all([
+          this.loadBuilderGoalAccounts(),
+          this.loadBuilderGoalMachines(),
+          this.loadBuilderGoalRuns()
+        ]);
+        this.renderBuilderGoalClientStatus(
+          `Launch completed for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}.`,
+          'success'
+        );
+      }
+    } catch (error) {
+      console.error('Failed to launch builder goal account:', error);
+      const message = error.message;
+      this.renderBuilderGoalClientStatus(`Failed to launch account: ${message}`, 'danger');
+      alert('Failed to launch account: ' + message);
+    } finally {
+      this.updateBuilderGoalRunButtonState();
+    }
+  }
+
+  /**
+   * Begins polling a launch operation every two seconds. The operation id survives page refreshes
+   * through localStorage so an in-flight launch is never lost when the browser reloads.
+   */
+  startBuilderGoalLaunchPolling(operationId) {
+    this.stopBuilderGoalLaunchPolling(false);
+    this.builderGoalLaunchOperationId = operationId;
+    localStorage.setItem(AccountTaskPlanner.BUILDER_GOAL_LAUNCH_OPERATION_KEY, operationId);
+    if (this.launchBuilderGoalAccountBtn) {
+      this.launchBuilderGoalAccountBtn.disabled = true;
+      this.launchBuilderGoalAccountBtn.innerHTML =
+        '<i class="bi bi-hourglass me-1"></i>Launching...';
+    }
+    this.updateBuilderGoalRunButtonState();
+    this.pollBuilderGoalLaunchOperation();
+  }
+
+  stopBuilderGoalLaunchPolling(clearStorage = true) {
+    if (this.builderGoalLaunchPollHandle) {
+      clearTimeout(this.builderGoalLaunchPollHandle);
+      this.builderGoalLaunchPollHandle = null;
+    }
+    this.builderGoalLaunchOperationId = '';
+    this.builderGoalLaunchPollFailures = 0;
+    this.builderGoalLaunchPollNextDelay = AccountTaskPlanner.BUILDER_GOAL_LAUNCH_POLL_INTERVAL_MS;
+    // Increment generation so any in-flight poll response is discarded
+    this.builderGoalLaunchPollGeneration += 1;
+    if (clearStorage) {
+      localStorage.removeItem(AccountTaskPlanner.BUILDER_GOAL_LAUNCH_OPERATION_KEY);
+    }
+  }
+
+  scheduleNextBuilderGoalLaunchPoll(delayMs) {
+    if (this.builderGoalLaunchPollHandle) {
+      clearTimeout(this.builderGoalLaunchPollHandle);
+    }
+    this.builderGoalLaunchPollHandle = setTimeout(
+      () => this.pollBuilderGoalLaunchOperation(),
+      delayMs
+    );
+  }
+
+  async pollBuilderGoalLaunchOperation() {
+    const operationId = this.builderGoalLaunchOperationId;
+    if (!operationId) {
+      return;
+    }
+    const currentGeneration = this.builderGoalLaunchPollGeneration;
+    let view = null;
+    try {
+      const response = await fetch(
+        `/api/debug/builder-goals/launch-operations/${encodeURIComponent(operationId)}`
+      );
+      // Ignore late responses from stopped or replaced polling sessions
+      if (this.builderGoalLaunchOperationId !== operationId ||
+          this.builderGoalLaunchPollGeneration !== currentGeneration) {
+        return;
+      }
+      if (response.status === 404) {
+        this.stopBuilderGoalLaunchPolling();
+        this.renderBuilderGoalClientStatus(
+          'The previous launch operation is no longer tracked. ChromaScape may have restarted or the status expired. Click Launch Account to start a fresh launch.',
+          'warning'
+        );
+        if (this.launchBuilderGoalAccountBtn) {
+          this.launchBuilderGoalAccountBtn.innerHTML =
+            '<i class="bi bi-box-arrow-up-right me-1"></i>Launch Account';
+        }
+        this.updateBuilderGoalRunButtonState();
+        return;
+      }
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      view = result;
+      // Recheck generation after JSON parsing to discard late responses
+      if (this.builderGoalLaunchOperationId !== operationId ||
+          this.builderGoalLaunchPollGeneration !== currentGeneration) {
+        return;
+      }
+      // Reset failure count on successful poll
+      this.builderGoalLaunchPollFailures = 0;
+      this.builderGoalLaunchPollNextDelay = AccountTaskPlanner.BUILDER_GOAL_LAUNCH_POLL_INTERVAL_MS;
+    } catch (error) {
+      // Recheck generation in rejection path before changing counters or scheduling
+      if (this.builderGoalLaunchOperationId !== operationId ||
+          this.builderGoalLaunchPollGeneration !== currentGeneration) {
+        return;
+      }
+      console.error('Failed to poll builder goal launch operation:', error);
+      this.builderGoalLaunchPollFailures += 1;
+      // Bounded backoff: double delay up to 30 seconds
+      this.builderGoalLaunchPollNextDelay = Math.min(
+        AccountTaskPlanner.BUILDER_GOAL_LAUNCH_POLL_INTERVAL_MS * Math.pow(2, Math.min(this.builderGoalLaunchPollFailures, 4)),
+        30000
+      );
+      if (this.builderGoalLaunchPollFailures >= 3) {
+        this.renderBuilderGoalClientStatus(
+          `Reconnecting to launch operation... (attempt ${this.builderGoalLaunchPollFailures})`,
+          'info'
+        );
+      }
+      this.scheduleNextBuilderGoalLaunchPoll(this.builderGoalLaunchPollNextDelay);
+      return;
+    }
+    await this.handleBuilderGoalLaunchOperationView(view, currentGeneration);
+  }
+
+  async handleBuilderGoalLaunchOperationView(view, currentGeneration = null) {
+    if (!view || !view.status) {
+      this.scheduleNextBuilderGoalLaunchPoll(this.builderGoalLaunchPollNextDelay);
+      return;
+    }
+    // Every polling lifecycle owns one generation. Use the supplied generation or capture the
+    // current generation; never default to zero.
+    const generation =
+      typeof currentGeneration === 'number' ? currentGeneration : this.builderGoalLaunchPollGeneration;
+    const status = String(view.status).toUpperCase();
+    const phaseLabel =
+      AccountTaskPlanner.formatBuilderGoalLaunchPhase(status) || view.status;
+    const accountLabel = view.accountName || view.accountId || 'account';
+    const worldSuffix = view.world ? ` in world ${view.world}` : '';
+    if (status === 'READY') {
+      // Stop polling and record the expected post-stop generation before refreshing.
+      this.stopBuilderGoalLaunchPolling();
+      const expectedGeneration = this.builderGoalLaunchPollGeneration;
+      const reuseSuffix = view.reusedExecutor ? ' (reused an existing ready executor)' : '';
+      // Keep both Launch and Publish disabled until all refreshes settle
+      if (this.launchBuilderGoalAccountBtn) {
+        this.launchBuilderGoalAccountBtn.disabled = true;
+        this.launchBuilderGoalAccountBtn.innerHTML =
+          '<i class="bi bi-hourglass me-1"></i>Refreshing...';
+      }
+      if (this.publishBuilderGoalBtn) {
+        this.publishBuilderGoalBtn.disabled = true;
+      }
+      try {
+        await Promise.all([
+          this.loadBuilderGoalAccounts(),
+          this.loadBuilderGoalMachines(),
+          this.loadBuilderGoalRuns()
+        ]);
+        // Require exact expected generation equality before rendering so stale work never
+        // renders, schedules, or changes buttons.
+        if (this.builderGoalLaunchPollGeneration !== expectedGeneration) {
+          return;
+        }
+    this.builderGoalLaunchRefreshRequired = false;
+        this.renderBuilderGoalClientStatus(
+          `Launch completed for ${accountLabel}${worldSuffix}. The Micro6 executor is dispatch-ready${reuseSuffix}. Publish Task is now available.`,
+          'success'
+        );
+        if (this.launchBuilderGoalAccountBtn) {
+          this.launchBuilderGoalAccountBtn.disabled = false;
+          this.launchBuilderGoalAccountBtn.innerHTML =
+            '<i class="bi bi-box-arrow-up-right me-1"></i>Launch Account';
+        }
+        this.updateBuilderGoalRunButtonState();
+      } catch (error) {
+        console.warn('Failed to refresh builder goal data after launch:', error);
+        // READY refresh failure: gate Publish behind a manual refresh, restore Launch.
+        this.builderGoalLaunchRefreshRequired = true;
+        this.renderBuilderGoalClientStatus(
+          `Launch completed for ${accountLabel}${worldSuffix} but data refresh failed. Manually refresh before publishing.`,
+          'warning'
+        );
+        if (this.launchBuilderGoalAccountBtn) {
+          this.launchBuilderGoalAccountBtn.disabled = false;
+          this.launchBuilderGoalAccountBtn.innerHTML =
+            '<i class="bi bi-box-arrow-up-right me-1"></i>Launch Account';
+        }
+        this.updateBuilderGoalRunButtonState();
+      }
+      return;
+    }
+    if (status === 'FAILED') {
+      this.stopBuilderGoalLaunchPolling();
+      const readinessPhase = String(view.readinessPhase || '').toUpperCase();
+      const failureKind = String(view.failureKind || '').toUpperCase();
+      const isBuildFailure =
+        readinessPhase === 'BUILD_FAILED' ||
+        ['GRADLE_TASK_FAILED', 'BUILD_OUTPUT_LOCK', 'LAUNCH_CONFIGURATION_INVALID', 'GRADLE_TIMEOUT'].includes(failureKind);
+      if (isBuildFailure) {
+        const logHtml = view.launcherLogFile
+          ? `<br><code>${this.escapeHtml(view.launcherLogFile)}</code>`
+          : '';
+        if (this.builderGoalClientStatus) {
+          this.builderGoalClientStatus.innerHTML =
+            `<span class="text-danger">Micro6 build failed before the client could launch.${logHtml}</span>`;
+        }
+      } else {
+        const reason = view.message || phaseLabel;
+        this.renderBuilderGoalClientStatus(`Failed to launch account: ${reason}`, 'danger');
+      }
+      if (this.launchBuilderGoalAccountBtn) {
+        this.launchBuilderGoalAccountBtn.innerHTML =
+          '<i class="bi bi-box-arrow-up-right me-1"></i>Launch Account';
+      }
+      this.updateBuilderGoalRunButtonState();
+      return;
+    }
+    if (status === 'CONFLICT') {
+      this.stopBuilderGoalLaunchPolling();
+      // Render the server message exactly once; do not append duplicate guidance
+      const reason = view.message || phaseLabel;
+      this.renderBuilderGoalClientStatus(reason, 'warning');
+      if (this.launchBuilderGoalAccountBtn) {
+        this.launchBuilderGoalAccountBtn.innerHTML =
+          '<i class="bi bi-box-arrow-up-right me-1"></i>Launch Account';
+      }
+      this.updateBuilderGoalRunButtonState();
+      return;
+    }
+    this.renderBuilderGoalClientStatus(
+      `Launching ${accountLabel}${worldSuffix}: ${view.message || phaseLabel}`,
+      'info'
+    );
+    // Schedule next poll for active operations
+    this.scheduleNextBuilderGoalLaunchPoll(this.builderGoalLaunchPollNextDelay);
+  }
+
+  // -------------------------------------------------------------------------
+  // Exact-run progress tracking (polled from GET /runs/{iterationId}).
+  // This owns the primary progress panel after Run Task returns an accepted
+  // response. The ten-second run-list refresh remains as a secondary overview.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Begins polling the exact run every two seconds. The iteration id survives page
+   * refreshes through localStorage so an in-flight launch is never lost.
+   */
+  startBuilderGoalRunTracking(iterationId, options = {}) {
+    this.stopBuilderGoalRunTracking(false);
+    this.builderGoalRunTrackerIterationId = iterationId;
+    this.builderGoalRunTrackerStatusUrl =
+      typeof options.statusUrl === 'string' &&
+      options.statusUrl.startsWith('/api/debug/builder-goals/')
+        ? options.statusUrl
+        : '';
+    this.builderGoalRunTrackerStartedAt = options.resume ? 0 : Date.now();
+    localStorage.setItem(
+      AccountTaskPlanner.BUILDER_GOAL_RUN_TRACKER_KEY,
+      JSON.stringify({ iterationId, statusUrl: this.builderGoalRunTrackerStatusUrl })
+    );
+    if (this.runBuilderGoalBtn) {
+      this.runBuilderGoalBtn.disabled = true;
+    }
+    this.updateBuilderGoalRunButtonState();
+    this.pollBuilderGoalRun();
+  }
+
+  stopBuilderGoalRunTracking(clearStorage = true) {
+    if (this.builderGoalRunTrackerPollHandle) {
+      clearTimeout(this.builderGoalRunTrackerPollHandle);
+      this.builderGoalRunTrackerPollHandle = null;
+    }
+    this.builderGoalRunTrackerIterationId = '';
+    this.builderGoalRunTrackerStatusUrl = '';
+    this.builderGoalRunTrackerPollFailures = 0;
+    this.builderGoalRunTrackerPollNextDelay = AccountTaskPlanner.BUILDER_GOAL_RUN_POLL_INTERVAL_MS;
+    this.builderGoalRunTrackerPollGeneration += 1;
+    if (clearStorage) {
+      localStorage.removeItem(AccountTaskPlanner.BUILDER_GOAL_RUN_TRACKER_KEY);
+    }
+  }
+
+  scheduleNextBuilderGoalRunPoll(delayMs) {
+    if (this.builderGoalRunTrackerPollHandle) {
+      clearTimeout(this.builderGoalRunTrackerPollHandle);
+    }
+    this.builderGoalRunTrackerPollHandle = setTimeout(
+      () => this.pollBuilderGoalRun(),
+      delayMs
+    );
+  }
+
+  async pollBuilderGoalRun() {
+    const iterationId = this.builderGoalRunTrackerIterationId;
+    if (!iterationId) {
+      return;
+    }
+    const currentGeneration = this.builderGoalRunTrackerPollGeneration;
+    let run = null;
+    try {
+      const statusUrl = this.builderGoalRunTrackerStatusUrl ||
+        `/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}`;
+      const response = await fetch(statusUrl);
+      if (this.builderGoalRunTrackerIterationId !== iterationId ||
+          this.builderGoalRunTrackerPollGeneration !== currentGeneration) {
+        return;
+      }
+      if (response.status === 400 || response.status === 404) {
+        const result = await response.json().catch(() => ({}));
+        // Confirmed missing/expired run — stop polling.
+        this.stopBuilderGoalRunTracking();
+        this.renderBuilderGoalClientStatus(
+          'The tracked run is no longer available. It may have expired or ChromaScape may have restarted.',
+          'warning'
+        );
+        if (this.runBuilderGoalBtn) {
+          this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
+        }
+        this.updateBuilderGoalRunButtonState();
+        return;
+      }
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      if (this.builderGoalRunTrackerIterationId !== iterationId ||
+          this.builderGoalRunTrackerPollGeneration !== currentGeneration) {
+        return;
+      }
+      this.builderGoalRunTrackerPollFailures = 0;
+      this.builderGoalRunTrackerPollNextDelay = AccountTaskPlanner.BUILDER_GOAL_RUN_POLL_INTERVAL_MS;
+      run = result;
+    } catch (error) {
+      if (this.builderGoalRunTrackerIterationId !== iterationId ||
+          this.builderGoalRunTrackerPollGeneration !== currentGeneration) {
+        return;
+      }
+      console.error('Failed to poll builder goal run progress:', error);
+      this.builderGoalRunTrackerPollFailures += 1;
+      this.builderGoalRunTrackerPollNextDelay = Math.min(
+        AccountTaskPlanner.BUILDER_GOAL_RUN_POLL_INTERVAL_MS *
+          Math.pow(2, Math.min(this.builderGoalRunTrackerPollFailures, 4)),
+        30000
+      );
+      if (this.builderGoalRunTrackerPollFailures >= 3) {
+        if (this.builderGoalClientStatus) {
+          const phase = this.builderGoalRunTrackerLastPhase || 'preparing';
+          this.builderGoalClientStatus.innerHTML =
+            `<span class="text-info"><i class="bi bi-arrow-repeat me-1"></i>` +
+            `Reconnecting to run progress... (attempt ${this.builderGoalRunTrackerPollFailures})` +
+            ` — last phase: ${this.escapeHtml(phase)}</span>`;
+        }
+      }
+      this.scheduleNextBuilderGoalRunPoll(this.builderGoalRunTrackerPollNextDelay);
+      return;
+    }
+    this.handleBuilderGoalRunView(run, currentGeneration);
+  }
+
+  async handleBuilderGoalRunView(run, currentGeneration = null) {
+    if (!run) {
+      this.scheduleNextBuilderGoalRunPoll(this.builderGoalRunTrackerPollNextDelay);
+      return;
+    }
+    const generation =
+      typeof currentGeneration === 'number'
+        ? currentGeneration
+        : this.builderGoalRunTrackerPollGeneration;
+    const phase = this.resolveBuilderGoalRunPhase(run);
+    this.builderGoalRunTrackerLastPhase = phase;
+    const publishStatus = String(run.publishStatus || '').toUpperCase();
+    const readinessPhase = String(run.targetReadinessPhase || '').toUpperCase();
+    const status = String(run.status || '').toUpperCase();
+
+    const taskStarted =
+      run.taskStartedObserved === true || run.taskStartConfirmed === true;
+
+    // Confirmed completion is terminal and displayed as success.
+    if (publishStatus === 'COMPLETED') {
+      this.stopBuilderGoalRunTracking();
+      this.renderBuilderGoalRunProgress(run, { terminal: true, tone: 'success' });
+      if (this.runBuilderGoalBtn) {
+        this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
+      }
+      this.updateBuilderGoalRunButtonState();
+      try {
+        await this.loadBuilderGoalRuns();
+      } catch (e) {
+        console.warn('Failed to refresh runs after completion:', e);
+      }
+      return;
+    }
+
+    // PAUSED is an active, non-terminal executor state. Keep tracking and controls available,
+    // but never route it through the started/running confirmation branch.
+    if (publishStatus === 'PAUSED') {
+      this.renderBuilderGoalRunProgress(run, { terminal: false, tone: 'warning' });
+      if (this.builderGoalRunTrackerIterationId !== run.iterationId ||
+          this.builderGoalRunTrackerPollGeneration !== generation) {
+        return;
+      }
+      this.scheduleNextBuilderGoalRunPoll(this.builderGoalRunTrackerPollNextDelay);
+      return;
+    }
+
+    // "Task started" is displayed only after RUNNING is confirmed by the executor.
+    if (publishStatus === 'RUNNING' && taskStarted) {
+      this.stopBuilderGoalRunTracking();
+      const accountLabel = run.accountName || run.targetAccountName || run.accountId || 'account';
+      this.renderBuilderGoalClientStatus(
+        `Task started for ${accountLabel}. The Micro6 executor confirmed the script is running — monitor the runs list for execution progress.`,
+        'success'
+      );
+      if (this.runBuilderGoalBtn) {
+        this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
+      }
+      this.updateBuilderGoalRunButtonState();
+      try {
+        await this.loadBuilderGoalRuns();
+      } catch (e) {
+        console.warn('Failed to refresh runs after task start:', e);
+      }
+      return;
+    }
+
+    // Terminal: build failure
+    if (readinessPhase === 'BUILD_FAILED') {
+      this.stopBuilderGoalRunTracking();
+      this.renderBuilderGoalRunFailure(run);
+      if (this.runBuilderGoalBtn) {
+        this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
+      }
+      this.updateBuilderGoalRunButtonState();
+      try {
+        await this.loadBuilderGoalRuns();
+      } catch (e) {
+        console.warn('Failed to refresh runs after build failure:', e);
+      }
+      return;
+    }
+
+    // Terminal: process exited (non-build failure)
+    if (readinessPhase === 'PROCESS_EXITED') {
+      this.stopBuilderGoalRunTracking();
+      const detail = run.targetReadinessReason || run.launchFailureDetail ||
+        'The Micro6 process exited before the executor became ready.';
+      this.renderBuilderGoalClientStatus(
+        `Micro6 launch failed: ${detail}`,
+        'danger'
+      );
+      if (this.runBuilderGoalBtn) {
+        this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
+      }
+      this.updateBuilderGoalRunButtonState();
+      try {
+        await this.loadBuilderGoalRuns();
+      } catch (e) {
+        console.warn('Failed to refresh runs after process exit:', e);
+      }
+      return;
+    }
+
+    // Terminal: publish failed
+    if (publishStatus === 'PUBLISH_FAILED') {
+      this.stopBuilderGoalRunTracking();
+      this.renderBuilderGoalClientStatus(
+        `Task publish failed: ${run.publishError || 'unknown error'}`,
+        'danger'
+      );
+      if (this.runBuilderGoalBtn) {
+        this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
+      }
+      this.updateBuilderGoalRunButtonState();
+      try {
+        await this.loadBuilderGoalRuns();
+      } catch (e) {
+        console.warn('Failed to refresh runs after publish failure:', e);
+      }
+      return;
+    }
+
+    // Terminal: cancelled
+    if (run.cancelled) {
+      this.stopBuilderGoalRunTracking();
+      this.renderBuilderGoalClientStatus('Run cancelled.', 'warning');
+      if (this.runBuilderGoalBtn) {
+        this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
+      }
+      this.updateBuilderGoalRunButtonState();
+      return;
+    }
+
+    // Terminal: a generic preparation failure that did not map to one of the named phases.
+    if (status === 'FAILED') {
+      this.stopBuilderGoalRunTracking();
+      this.renderBuilderGoalRunFailure(run, { buildFailure: false });
+      if (this.runBuilderGoalBtn) {
+        this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
+      }
+      this.updateBuilderGoalRunButtonState();
+      try {
+        await this.loadBuilderGoalRuns();
+      } catch (e) {
+        console.warn('Failed to refresh runs after generic failure:', e);
+      }
+      return;
+    }
+
+    // Accepted/queued/assigned remain active: keep polling until the executor confirms RUNNING or
+    // a terminal state. HTTP acceptance alone is never presented as a task start.
+    if (['ACCEPTED', 'QUEUED', 'ASSIGNED'].includes(publishStatus)) {
+      this.renderBuilderGoalRunProgress(run, { terminal: false });
+      if (this.builderGoalRunTrackerIterationId !== run.iterationId ||
+          this.builderGoalRunTrackerPollGeneration !== generation) {
+        return;
+      }
+      this.scheduleNextBuilderGoalRunPoll(this.builderGoalRunTrackerPollNextDelay);
+      return;
+    }
+
+    // Active: render progress panel and schedule next poll
+    this.renderBuilderGoalRunProgress(run, { terminal: false });
+    if (this.builderGoalRunTrackerIterationId !== run.iterationId ||
+        this.builderGoalRunTrackerPollGeneration !== generation) {
+      return;
+    }
+    this.scheduleNextBuilderGoalRunPoll(this.builderGoalRunTrackerPollNextDelay);
+  }
+
+  /**
+   * Resolves the current phase from a run summary. Prefers the publish/activation status, then the
+   * granular readiness phase, then the preparation state.
+   */
+  resolveBuilderGoalRunPhase(run) {
+    if (!run) return null;
+    const publishStatus = String(run.publishStatus || '').toUpperCase();
+    if (['COMPLETED', 'RUNNING', 'PAUSED', 'ASSIGNED', 'QUEUED', 'ACCEPTED', 'PUBLISHED'].includes(publishStatus)) {
+      return publishStatus;
+    }
+    if (run.publishedAt) return 'PUBLISHED';
+    const readinessPhase = String(run.targetReadinessPhase || '').toUpperCase();
+    if (readinessPhase && readinessPhase !== 'NULL') return readinessPhase;
+    const prepState = String(run.targetPreparationState || '').toUpperCase();
+    if (prepState && prepState !== 'NULL') return prepState;
+    return null;
+  }
+
+  formatBuilderGoalRunPhaseLabel(phase) {
+    if (!phase) return 'Preparing';
+    const normalized = String(phase).toUpperCase();
+    return AccountTaskPlanner.BUILDER_GOAL_RUN_PHASE_LABELS[normalized] || normalized;
+  }
+
+  /**
+   * Renders the live progress panel into #builderGoalClientStatus.
+   */
+  renderBuilderGoalRunProgress(run, options = {}) {
+    if (!this.builderGoalClientStatus) return;
+    const phase = this.resolveBuilderGoalRunPhase(run);
+    const label = this.formatBuilderGoalRunPhaseLabel(phase);
+    const terminal = Boolean(options.terminal);
+    const tone = options.tone || (terminal ? 'success' : 'info');
+    const accountLabel = run.accountName || run.targetAccountName || run.accountId || 'account';
+    const worldSuffix = run.world ? ` • World ${run.world}` : '';
+    const taskLabel = run.displayName || run.taskKey || 'task';
+    const detailMessage =
+      AccountTaskPlanner.describeBuilderGoalExecutorPhase(run) ||
+      run.targetPreparationMessage ||
+      run.targetReadinessReason ||
+      '';
+
+    // Elapsed time
+    let elapsedText = '';
+    const startedAt = run.createdAt
+      ? new Date(run.createdAt).getTime()
+      : this.builderGoalRunTrackerStartedAt;
+    if (startedAt) {
+      const elapsedMs = Date.now() - startedAt;
+      if (elapsedMs > 0) {
+        const seconds = Math.floor(elapsedMs / 1000);
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        elapsedText = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+      }
+    }
+
+    // Elapsed time since the executor began dispatching (configuration start).
+    let dispatchElapsedText = '';
+    const dispatchElapsedMs = AccountTaskPlanner.elapsedSinceDispatchStarted(run);
+    if (dispatchElapsedMs !== null && dispatchElapsedMs > 0) {
+      const seconds = Math.floor(dispatchElapsedMs / 1000);
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      dispatchElapsedText = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+    }
+
+    // Step indicator
+    const stepNum = AccountTaskPlanner.BUILDER_GOAL_RUN_PHASE_STEPS[String(phase).toUpperCase()] || 0;
+    const totalSteps = AccountTaskPlanner.BUILDER_GOAL_RUN_PHASE_TOTAL_STEPS;
+    const barWidth = stepNum > 0 ? Math.round((stepNum / totalSteps) * 100) : 5;
+    const stepHtml = stepNum > 0
+      ? `<div class="progress mt-1" style="height: 6px;"><div class="progress-bar bg-${tone === 'success' ? 'success' : 'primary'}" role="progressbar" style="width: ${barWidth}%;"></div></div>
+         <small class="text-muted">Step ${stepNum} of ${totalSteps}</small>`
+      : '';
+
+    // Metadata chips
+    const metaParts = [];
+    metaParts.push(`<i class="bi bi-person me-1"></i>${this.escapeHtml(accountLabel)}`);
+    if (run.world) metaParts.push(`<i class="bi bi-globe2 me-1"></i>World ${this.escapeHtml(String(run.world))}`);
+    metaParts.push(`<i class="bi bi-list-task me-1"></i>${this.escapeHtml(taskLabel)}`);
+    if (elapsedText) metaParts.push(`<i class="bi bi-clock me-1"></i>${this.escapeHtml(elapsedText)}`);
+    if (dispatchElapsedText) {
+      metaParts.push(`<i class="bi bi-hourglass-split me-1"></i>dispatch ${this.escapeHtml(dispatchElapsedText)}`);
+    }
+    const executorDiagnostics = AccountTaskPlanner.builderGoalExecutorDiagnostics(run);
+    if (run.attemptId) metaParts.push(`<i class="bi bi-tag me-1"></i>attempt ${this.escapeHtml(String(run.attemptId))}`);
+    if (run.effectiveGradleTask) metaParts.push(`<i class="bi bi-gear me-1"></i>${this.escapeHtml(run.effectiveGradleTask)}`);
+    if (run.launcherPid) metaParts.push(`<i class="bi bi-cpu me-1"></i>PID ${this.escapeHtml(String(run.launcherPid))}`);
+
+    // View Launch Log action
+    const iterationId = run.iterationId || this.builderGoalRunTrackerIterationId;
+    const viewLogHtml = iterationId
+      ? `<a href="javascript:void(0)" onclick="window.accountTaskPlanner.loadBuilderGoalRunLogs('${this.escapeHtml(iterationId)}')" class="small text-decoration-none ms-2"><i class="bi bi-file-text me-1"></i>View Launch Log</a>`
+      : '';
+
+    const spinnerHtml = terminal
+      ? '<i class="bi bi-check-circle-fill me-1"></i>'
+      : '<span class="spinner-border spinner-border-sm me-1"></span>';
+
+    this.builderGoalClientStatus.innerHTML =
+      `<div class="text-${tone}"><strong>${spinnerHtml}${this.escapeHtml(label)}</strong>${viewLogHtml}</div>` +
+      (detailMessage ? `<div class="small text-muted mt-1">${this.escapeHtml(detailMessage)}</div>` : '') +
+      (executorDiagnostics ? `<div class="small text-muted mt-1 font-monospace">${this.escapeHtml(executorDiagnostics)}</div>` : '') +
+      `<div class="small text-muted mt-1">${metaParts.join(' • ')}</div>` +
+      stepHtml;
+  }
+
+  /**
+   * Renders an actionable build-failure panel with the sanitized compiler summary
+   * and a View Launch Log action.
+   */
+  renderBuilderGoalRunFailure(run, options = {}) {
+    if (!this.builderGoalClientStatus) return;
+    // When the executor reported a concrete configuration/dispatch failure, surface the executor's
+    // own reason immediately rather than the generic build-failure copy.
+    const executorPhase = options.buildFailure === false
+      ? AccountTaskPlanner.describeBuilderGoalExecutorPhase(run)
+      : null;
+    const summary = executorPhase || run.executorFailureReason || run.failureReason ||
+      run.targetReadinessReason || run.launchFailureDetail ||
+      'Micro6 failed to compile before the client could start.';
+    const iterationId = run.iterationId || this.builderGoalRunTrackerIterationId;
+    const viewLogHtml = iterationId
+      ? `<a href="javascript:void(0)" onclick="window.accountTaskPlanner.loadBuilderGoalRunLogs('${this.escapeHtml(iterationId)}')" class="text-decoration-none"><i class="bi bi-file-text me-1"></i>View Launch Log</a>`
+      : '';
+    const compileRecovery = run.failureCode === 'PRODUCTION_COMPILE_FAILED';
+    const logPathHtml = !compileRecovery && run.launchLogFile
+      ? `<div class="small text-muted mt-1"><code>${this.escapeHtml(run.launchLogFile)}</code></div>`
+      : '';
+    const failureMetadata = [];
+    if (run.failureCode) {
+      failureMetadata.push(`code ${run.failureCode}`);
+    }
+    if (run.failurePhase) {
+      failureMetadata.push(`phase ${run.failurePhase}`);
+    }
+    if (run.correlationId) {
+      failureMetadata.push(`correlation ${run.correlationId}`);
+    }
+    const failureMetadataHtml = failureMetadata.length > 0
+      ? `<div class="small text-muted mt-1 font-monospace">${this.escapeHtml(failureMetadata.join(' • '))}</div>`
+      : '';
+    const buildFailure = options.buildFailure !== false;
+    const title = buildFailure
+      ? 'Micro6 failed to compile before the client could start.'
+      : 'Builder Goal run failed.';
+    const diagnostics = AccountTaskPlanner.builderGoalExecutorDiagnostics(run);
+    this.builderGoalClientStatus.innerHTML =
+      `<div class="text-danger"><strong><i class="bi bi-exclamation-octagon me-1"></i>` +
+      `${this.escapeHtml(title)}</strong></div>` +
+      `<div class="small mt-1">${this.escapeHtml(summary)}</div>` +
+      failureMetadataHtml +
+      (diagnostics ? `<div class="small text-muted mt-1 font-monospace">${this.escapeHtml(diagnostics)}</div>` : '') +
+      logPathHtml +
+      (viewLogHtml && !compileRecovery ? `<div class="small mt-1">${viewLogHtml}</div>` : '') +
+      (compileRecovery && iterationId ? this.compileRecoveryPanelHtml(iterationId) : '');
+    if (compileRecovery && iterationId) {
+      void this.refreshCompileRecovery(iterationId);
+    }
+  }
+
+  compileRecoveryPanelHtml(iterationId) {
+    const id = this.escapeAttr(String(iterationId));
+    return `<section class="mt-3 border rounded p-3 bg-light" data-compile-recovery="${id}" aria-live="polite">
+      <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+        <strong>Micro6 production compilation failed</strong>
+        <span class="badge bg-danger">FAILED</span>
+      </div>
+      <div class="small text-muted mt-1" data-compile-recovery-summary>Loading sanitized diagnostics…</div>
+      <button type="button" class="btn btn-primary btn-sm mt-3" onclick="window.accountTaskPlanner.startCompileRepair('${id}')">
+        <i class="bi bi-magic me-1"></i>Fix compile errors with AI
+      </button>
+      <div class="d-flex gap-2 flex-wrap mt-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.accountTaskPlanner.copyCompileArtifact('${id}','compiler-errors')">Copy errors</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.accountTaskPlanner.copyCompileArtifact('${id}','full')">Copy full log</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.accountTaskPlanner.copyCompileArtifact('${id}','prompt')">Copy AI prompt</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.accountTaskPlanner.downloadCompileArtifact('${id}')">Download sanitized log</button>
+      </div>
+      <pre class="small mt-3 mb-0 p-2 bg-white border rounded" data-compile-recovery-errors hidden></pre>
+      <div class="mt-3" data-compile-recovery-plan hidden></div>
+      <div class="mt-3" data-compile-recovery-validation hidden></div>
+      <div class="small mt-2" data-compile-recovery-status></div>
+      <div class="mt-2 d-flex gap-2 flex-wrap" data-compile-recovery-actions></div>
+    </section>`;
+  }
+
+  static RECOVERY_ACTIVE_STATES = ['ANALYZING', 'VALIDATION_QUEUED', 'VALIDATING', 'RERUN_REQUESTED'];
+  static VALIDATION_STAGES = ['ISOLATED_CHECKOUT', 'STRICT_PATCH_APPLY', 'COMPILE_STATIC_TESTS', 'ARTIFACT_FINALIZATION'];
+
+  async refreshCompileRecovery(iterationId) {
+    const panel = this.builderGoalClientStatus?.querySelector(`[data-compile-recovery="${CSS.escape(String(iterationId))}"]`);
+    if (!panel) return;
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery`);
+      const state = await response.json();
+      if (!response.ok) throw new Error(state.message || `HTTP ${response.status}`);
+      panel._compileRecovery = state;
+      const errorsArtifact = (state.artifacts || []).find(a => a.kind === 'COMPILER_DIAGNOSTICS');
+      const summary = panel.querySelector('[data-compile-recovery-summary]');
+      const errors = state.diagnosticSummary?.errorCount;
+      if (summary) {
+        const sha = (state.artifacts || []).find(a => a.kind === 'ORIGINAL_COMPILE_LOG')?.sha256;
+        summary.textContent =
+          `${errors ?? 'Compiler'} error${errors === 1 ? '' : 's'} • ${state.incident?.state || 'NO_INCIDENT'}` +
+          ` • Run ${iterationId}${sha ? ` • SHA-256 ${sha.slice(7, 19)}…` : ''}`;
+      }
+      if (errorsArtifact) {
+        const body = await this.fetchCompileArtifact(iterationId, errorsArtifact.artifactId, 'full');
+        const pre = panel.querySelector('[data-compile-recovery-errors]');
+        if (pre) { pre.textContent = body.text; pre.hidden = false; }
+      }
+      this.renderCompileRecoveryState(panel, iterationId, state);
+      if (state.incident && AccountTaskPlanner.RECOVERY_ACTIVE_STATES.includes(state.incident.state)) {
+        window.clearTimeout(panel._compileRecoveryPoll);
+        panel._compileRecoveryPoll = window.setTimeout(() => this.refreshCompileRecovery(iterationId), 1500);
+      }
+    } catch (error) {
+      this.setCompileRecoveryStatus(panel, `Could not load compile evidence: ${error.message}`, 'danger');
+    }
+  }
+
+  async renderCompileRecoveryState(panel, iterationId, state) {
+    const actions = panel.querySelector('[data-compile-recovery-actions]');
+    const planPanel = panel.querySelector('[data-compile-recovery-plan]');
+    const validationPanel = panel.querySelector('[data-compile-recovery-validation]');
+    if (!actions) return;
+    const allowed = new Set(state.allowedActions || []);
+    const incidentState = state.incident?.state;
+    this.renderValidationTimeline(validationPanel, state.validationJob, state.iterationId);
+    if (state.proposal && ['AWAITING_REVIEW', 'VALIDATION_QUEUED', 'VALIDATING', 'BUILD_VALIDATED', 'VALIDATION_FAILED'].includes(incidentState)) {
+      await this.renderProposalReview(panel, iterationId, state, allowed);
+    } else if (planPanel) { planPanel.hidden = true; planPanel.innerHTML = ''; }
+    if (incidentState === 'BUILD_VALIDATED' && state.candidate) {
+      actions.innerHTML =
+        `<button class="btn btn-success btn-sm" ${allowed.has('RERUN_CANDIDATE') ? '' : 'disabled'} onclick="window.accountTaskPlanner.rerunWithCandidate('${this.escapeAttr(iterationId)}','${this.escapeAttr(state.candidate.candidateId)}')">Rerun Task with Candidate</button>` +
+        `<div class="small text-muted mt-2 w-100">Build validation is not behavioral certification or promotion.</div>` +
+        (state.incident?.state === 'NEEDS_RECONCILIATION' ? `<div class="small text-warning w-100">A previous rerun request needs reconciliation; do not start another run.</div>` : '');
+      this.setCompileRecoveryStatus(panel, `Validated candidate ${state.candidate.candidateId} ready.`, 'success');
+    } else if (incidentState === 'NEEDS_RECONCILIATION') {
+      actions.innerHTML = '';
+      this.setCompileRecoveryStatus(panel, 'Rerun outcome is uncertain; the run needs reconciliation before any new attempt.', 'warning');
+    } else if (incidentState === 'ANALYZING') {
+      actions.innerHTML = '';
+      this.setCompileRecoveryStatus(panel, 'Run-bound Codex session is preparing an evidence-backed proposal…', 'info');
+    } else if (incidentState === 'VALIDATION_FAILED') {
+      actions.innerHTML = '';
+      this.setCompileRecoveryStatus(panel, `Isolated validation failed (${state.validationJob?.failureCode || 'failure'}). Request a new proposal; the previous approval is not reused.`, 'danger');
+    }
+  }
+
+  async renderProposalReview(panel, iterationId, state, allowed) {
+    const planPanel = panel.querySelector('[data-compile-recovery-plan]');
+    if (!planPanel) return;
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/proposals/${encodeURIComponent(state.proposal.proposalId)}`);
+      const proposal = await response.json();
+      if (!response.ok) throw new Error(proposal.message || `HTTP ${response.status}`);
+      const canReview = state.incident?.state === 'AWAITING_REVIEW';
+      planPanel.innerHTML = AccountTaskPlanner.buildProposalReviewHtml(proposal, canReview, allowed, iterationId);
+      planPanel.hidden = false;
+    } catch (error) {
+      this.setCompileRecoveryStatus(panel, `Proposal review failed: ${error.message}`, 'danger');
+    }
+  }
+
+  static buildProposalReviewHtml(proposal, canReview, allowed, iterationId) {
+    const escape = (value) => String(value === null || value === undefined ? '' : value)
+      .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+    const id = escape(iterationId || '');
+    const citations = Array.isArray(proposal.citations) ? proposal.citations : Object.keys(proposal.citations || {});
+    const policyViolations = (proposal.policyReport?.violations || []);
+    const diff = String(proposal.canonicalDiff || '');
+    const diffPreview = diff.length > 20000 ? diff.slice(0, 20000) + '\n… (diff truncated for display)' : diff;
+    const buttons = !canReview ? '' : `
+        <div class="d-flex gap-2 flex-wrap mt-2">
+          <button class="btn btn-success btn-sm" ${allowed && allowed.has('APPROVE') ? '' : 'disabled'} onclick="window.accountTaskPlanner.approveProposal('${id}','${escape(proposal.proposalId)}')">Approve exact proposal</button>
+          <button class="btn btn-outline-danger btn-sm" ${allowed && allowed.has('REJECT') ? '' : 'disabled'} onclick="window.accountTaskPlanner.reviewProposal('${id}','${escape(proposal.proposalId)}','reject')">Reject</button>
+          <button class="btn btn-outline-secondary btn-sm" ${allowed && allowed.has('REQUEST_CHANGES') ? '' : 'disabled'} onclick="window.accountTaskPlanner.reviewProposal('${id}','${escape(proposal.proposalId)}','request-changes')">Request changes</button>
+        </div>`;
+    return `
+        <div class="fw-semibold">Review proposed compile repair</div>
+        <div class="small text-muted font-monospace mt-1">proposal ${escape(proposal.proposalId)} • checksum ${escape(proposal.proposalHash || '')} • base ${escape(proposal.baseCommit || '')}</div>
+        ${proposal.rationale ? `<div class="small mt-1">${escape(proposal.rationale)}</div>` : ''}
+        <div class="small mt-1">Evidence citations: ${escape(String(citations.length))} • Policy: ${policyViolations.length === 0 ? 'passed' : 'REJECTED'} • Expires ${escape(proposal.expiresAt || '')}</div>
+        ${policyViolations.length ? `<div class="small text-danger">Policy: ${escape(policyViolations.map(v => v.code || v.detail || String(v)).join('; '))}</div>` : ''}
+        <pre class="small mt-2 p-2 bg-white border rounded mb-0" style="max-height:22rem;overflow:auto">${escape(diffPreview)}</pre>
+        ${buttons}`;
+  }
+
+  renderValidationTimeline(container, job, iterationId) {
+    if (!container) return;
+    if (!job) { container.hidden = true; container.innerHTML = ''; return; }
+    const stages = AccountTaskPlanner.VALIDATION_STAGES;
+    const current = job.currentStage;
+    const items = stages.map(stage => {
+      const done = current && stages.indexOf(stage) < stages.indexOf(current);
+      const active = stage === current && !['SUCCEEDED', 'FAILED', 'CANCELLED'].includes(job.state);
+      const icon = done ? 'bi-check-circle-fill text-success' : active ? 'spinner-border spinner-border-sm' : 'bi-circle text-muted';
+      return `<li class="list-unstyled small mt-1"><i class="bi ${icon} me-1"></i>${this.escapeHtml(stage)}</li>`;
+    }).join('');
+    container.innerHTML =
+      `<div class="fw-semibold small">Isolated validation • ${this.escapeHtml(job.state)}</div>` +
+      `<ul class="mb-0">${items}</ul>` +
+      (job.cancelRequested ? `<div class="small text-warning mt-1">Cancellation requested…</div>` : '') +
+      (['QUEUED', 'CLAIMED', 'RUNNING', 'CANCELLING'].includes(job.state) ? `<button type="button" class="btn btn-outline-danger btn-sm mt-1" onclick="window.accountTaskPlanner.cancelValidation('${this.escapeAttr(String(iterationId || ''))}','${this.escapeAttr(String(job.jobId || ''))}')">Cancel validation</button>` : '');
+    container.hidden = false;
+  }
+
+  operatorHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
+    const token = window.CHROMASCAPE_OPERATOR_TOKEN || localStorage.getItem('chromascape.operatorToken');
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return headers;
+  }
+
+  setCompileRecoveryStatus(panel, message, tone = 'muted') {
+    const status = panel?.querySelector('[data-compile-recovery-status]');
+    if (status) { status.className = `small mt-2 text-${tone}`; status.textContent = message; }
+  }
+
+  async fetchCompileArtifact(iterationId, artifactId, view) {
+    const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/artifacts/${encodeURIComponent(artifactId)}?view=${encodeURIComponent(view)}`);
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.message || `HTTP ${response.status}`);
+    return body;
+  }
+
+  async copyCompileArtifact(iterationId, view) {
+    const panel = this.builderGoalClientStatus?.querySelector(`[data-compile-recovery="${CSS.escape(String(iterationId))}"]`);
+    try {
+      const state = panel?._compileRecovery || await (await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery`)).json();
+      const kind = view === 'full' ? 'ORIGINAL_COMPILE_LOG' : view === 'prompt' ? 'AI_PROMPT' : 'COMPILER_DIAGNOSTICS';
+      const artifact = (state.artifacts || []).find(a => a.kind === kind);
+      if (!artifact) throw new Error('Requested sanitized artifact is unavailable');
+      const body = await this.fetchCompileArtifact(iterationId, artifact.artifactId, view);
+      await this.copyTextWithFallback(body.text);
+      this.setCompileRecoveryStatus(panel, `${view === 'full' ? 'Full sanitized log' : view === 'prompt' ? 'AI prompt' : 'Compiler errors'} copied.`, 'success');
+    } catch (error) { this.setCompileRecoveryStatus(panel, `Copy failed: ${error.message}`, 'danger'); }
+  }
+
+  async copyTextWithFallback(text) {
+    if (navigator.clipboard?.writeText) { try { await navigator.clipboard.writeText(text); return; } catch (_) {} }
+    const area = document.createElement('textarea'); area.value = text; area.setAttribute('readonly', ''); area.style.position = 'fixed'; area.style.opacity = '0'; document.body.appendChild(area); area.select();
+    const copied = document.execCommand && document.execCommand('copy'); document.body.removeChild(area);
+    if (!copied) throw new Error('Clipboard permission denied');
+  }
+
+  async startCompileRepair(iterationId) {
+    const panel = this.builderGoalClientStatus?.querySelector(`[data-compile-recovery="${CSS.escape(String(iterationId))}"]`);
+    try {
+      const bound = await this.bindBuilderGoalCodexRun(iterationId, { silent: true });
+      if (!bound?.bound || !this.codexSessionId) throw new Error(bound?.reason || 'No Codex session is available');
+      this.setCompileRecoveryStatus(panel, 'Run-bound Codex session is preparing an evidence-backed proposal…', 'info');
+      const nonce = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/proposals`, {
+        method: 'POST',
+        headers: this.operatorHeaders(),
+        body: JSON.stringify({ codexSessionId: this.codexSessionId, idempotencyKey: `ui-${iterationId}-${nonce}`, operatorContext: 'Requested from compile failure panel' })
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || body.code || `HTTP ${response.status}`);
+      await this.refreshCompileRecovery(iterationId);
+    } catch (error) { this.setCompileRecoveryStatus(panel, `AI repair failed: ${error.message}`, 'danger'); }
+  }
+
+  async approveProposal(iterationId, proposalId) {
+    const panel = this.builderGoalClientStatus?.querySelector(`[data-compile-recovery="${CSS.escape(String(iterationId))}"]`);
+    try {
+      const state = panel?._compileRecovery;
+      const proposalHash = state?.proposal?.proposalHash;
+      if (!proposalHash) throw new Error('The exact proposal checksum is unavailable; reload before approving');
+      this.setCompileRecoveryStatus(panel, 'Recording exact approval…', 'info');
+      const approveResponse = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/proposals/${encodeURIComponent(proposalId)}/approve`, {
+        method: 'POST',
+        headers: this.operatorHeaders(),
+        body: JSON.stringify({ proposalHash, reason: 'Fix all production compiler errors reported by the failed run' })
+      });
+      const approved = await approveResponse.json();
+      if (!approveResponse.ok) throw new Error(approved.message || approved.code || `HTTP ${approveResponse.status}`);
+      this.setCompileRecoveryStatus(panel, 'Approval recorded. Queuing isolated validation…', 'info');
+      const nonce = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const queueResponse = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/proposals/${encodeURIComponent(proposalId)}/validation-jobs`, {
+        method: 'POST',
+        headers: this.operatorHeaders(),
+        body: JSON.stringify({ approvalId: approved.approvalId, idempotencyKey: `validate-${proposalHash}-${nonce}` })
+      });
+      const queued = await queueResponse.json();
+      if (!queueResponse.ok) throw new Error(queued.message || queued.code || `HTTP ${queueResponse.status}`);
+      await this.refreshCompileRecovery(iterationId);
+    } catch (error) { this.setCompileRecoveryStatus(panel, `Approval failed: ${error.message}`, 'danger'); }
+  }
+
+  async reviewProposal(iterationId, proposalId, action) {
+    const panel = this.builderGoalClientStatus?.querySelector(`[data-compile-recovery="${CSS.escape(String(iterationId))}"]`);
+    try {
+      this.setCompileRecoveryStatus(panel, action === 'reject' ? 'Rejecting proposal…' : 'Requesting changes…', 'info');
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/proposals/${encodeURIComponent(proposalId)}/${action}`, {
+        method: 'POST', headers: this.operatorHeaders(), body: '{}'
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || body.code || `HTTP ${response.status}`);
+      await this.refreshCompileRecovery(iterationId);
+    } catch (error) { this.setCompileRecoveryStatus(panel, `${action} failed: ${error.message}`, 'danger'); }
+  }
+
+  async cancelValidation(iterationId, jobId) {
+    const panel = this.builderGoalClientStatus?.querySelector(`[data-compile-recovery="${CSS.escape(String(iterationId))}"]`);
+    try {
+      this.setCompileRecoveryStatus(panel, 'Cancelling isolated validation…', 'info');
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/validation-jobs/${encodeURIComponent(jobId)}/cancel`, {
+        method: 'POST', headers: this.operatorHeaders(), body: '{}'
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || body.code || `HTTP ${response.status}`);
+      await this.refreshCompileRecovery(iterationId);
+    } catch (error) { this.setCompileRecoveryStatus(panel, `Cancel failed: ${error.message}`, 'danger'); }
+  }
+
+  async rerunWithCandidate(iterationId, candidateId) {
+    const panel = this.builderGoalClientStatus?.querySelector(`[data-compile-recovery="${CSS.escape(String(iterationId))}"]`);
+    try {
+      const state = panel?._compileRecovery;
+      const digest = state?.candidate?.candidateDigest;
+      if (!digest) throw new Error('The candidate digest is unavailable; reload before rerunning');
+      this.setCompileRecoveryStatus(panel, 'Starting the verified candidate as a child run…', 'info');
+      const nonce = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/candidates/${encodeURIComponent(candidateId)}/reruns`, {
+        method: 'POST',
+        headers: this.operatorHeaders(),
+        body: JSON.stringify({ candidateDigest: digest, idempotencyKey: `rerun-${digest}-${nonce}` })
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || body.code || `HTTP ${response.status}`);
+      if (body.childIterationId) await this.bindBuilderGoalCodexRun(body.childIterationId, {silent:true});
+      await this.loadBuilderGoalRuns();
+      this.renderBuilderGoalClientStatus(
+        `Candidate rerun accepted${body.childIterationId ? ` as ${body.childIterationId}` : ''}` +
+        (body.state === 'NEEDS_RECONCILIATION' ? ' (outcome uncertain; reconciling)' : '.') + '', 'success');
+    } catch (error) {
+      this.setCompileRecoveryStatus(panel, `Rerun failed: ${error.message}`, 'danger');
+    }
+  }
+
+  downloadCompileArtifact(iterationId) {
+    const panel = this.builderGoalClientStatus?.querySelector(`[data-compile-recovery="${CSS.escape(String(iterationId))}"]`);
+    const artifact = (panel?._compileRecovery?.artifacts || []).find(a => a.kind === 'ORIGINAL_COMPILE_LOG');
+    if (!artifact) { this.setCompileRecoveryStatus(panel, 'Sanitized log is unavailable.', 'danger'); return; }
+    window.location.assign(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/artifacts/${encodeURIComponent(artifact.artifactId)}/download`);
+  }
+
+  /**
+   * Returns the safest useful summary for a structured Builder Goal start failure. The backend
+   * keeps the legacy error field, so prefer its sanitized detail while retaining the stable code
+   * and phase for operators and tests.
+   */
+  static describeBuilderGoalStartFailure(result, status) {
+    const body = result && typeof result === 'object' ? result : {};
+    const primary = [body.details, body.error, body.code, `HTTP ${status}`]
+      .find(value => value !== null && value !== undefined && String(value).trim() !== '');
+    const parts = [String(primary || `HTTP ${status}`)];
+    if (body.code && String(body.code) !== String(primary)) {
+      parts.push(`code ${body.code}`);
+    }
+    if (body.phase) {
+      parts.push(`phase ${body.phase}`);
+    }
+    if (body.correlationId) {
+      parts.push(`correlation ${body.correlationId}`);
+    }
+    return parts.join(' • ');
+  }
+
+  /** Renders a structured preflight failure before the exact failed run is polled. */
+  renderBuilderGoalStartFailure(result, status) {
+    if (!this.builderGoalClientStatus) return;
+    const body = result && typeof result === 'object' ? result : {};
+    const message = AccountTaskPlanner.describeBuilderGoalStartFailure(body, status);
+    const iterationId = body.iterationId || '';
+    const viewLogHtml = iterationId
+      ? `<a href="javascript:void(0)" onclick="window.accountTaskPlanner.loadBuilderGoalRunLogs('${this.escapeAttr(String(iterationId))}')" class="text-decoration-none"><i class="bi bi-file-text me-1"></i>View Launch Log</a>`
+      : '';
+    const statusUrl = typeof body.statusUrl === 'string' &&
+      body.statusUrl.startsWith('/api/debug/builder-goals/')
+      ? body.statusUrl
+      : '';
+    const statusLink = statusUrl
+      ? `<a href="${this.escapeAttr(statusUrl)}" target="_blank" rel="noopener" class="ms-2">View Run</a>`
+      : '';
+    this.builderGoalClientStatus.innerHTML =
+      `<div class="text-danger"><strong><i class="bi bi-exclamation-octagon me-1"></i>` +
+      `${this.escapeHtml(message)}</strong>${statusLink}</div>` +
+      (viewLogHtml ? `<div class="small mt-1">${viewLogHtml}</div>` : '');
+  }
+
+  async runBuilderGoal() {
+    if (this.builderGoalBundleMismatch) {
+      this.renderBuilderGoalClientStatus(
+        'Hard refresh this page to load the latest Builder Goal Runner before running a task.',
+        'danger'
+      );
+      return;
+    }
+    const selectedAccount = this.getSelectedBuilderGoalAccount();
+    const selectedMachine = this.getSelectedBuilderGoalMachine();
+    if (!selectedAccount) {
+      alert('Select an account first.');
+      return;
+    }
+    if (!selectedAccount.runnable) {
+      alert(selectedAccount.disabledReason || 'This account cannot be launched yet.');
+      return;
+    }
+    if (!selectedAccount.launchReady) {
+      alert(
+        (selectedAccount.launchDisabledReason || 'This account is not launch-ready yet.') +
+          ' Add the account email and password in launcher control.'
+      );
+      return;
+    }
+    if (!selectedMachine) {
+      alert('Select a launcher machine first.');
+      return;
+    }
+    if (!selectedMachine.builderGoalRunnable) {
+      alert(
+        selectedMachine.builderGoalDisabledReason ||
+          'This launcher machine cannot run local Builder Goal launches yet.'
+      );
+      return;
+    }
+
+    const parsedConfig = this.parseBuilderGoalConfigInput();
+    if (parsedConfig.error) {
+      this.renderBuilderGoalClientStatus(parsedConfig.error, 'danger');
+      alert(parsedConfig.error);
+      return;
+    }
+
+    let selectedTask = this.getSelectedBuilderGoalTask();
+    if (parsedConfig.taskKey) {
+      selectedTask =
+        this.selectBuilderGoalTask(parsedConfig.taskKey) ||
+        this.ensureBuilderGoalTaskPlaceholder(parsedConfig.taskKey, {
+          displayName:
+            this.importedBuilderGoal?.result?.displayName ||
+            this.importedBuilderGoal?.result?.title ||
+            parsedConfig.taskKey,
+          source: 'imported_payload',
+          runnable: true
+        }) ||
+        selectedTask;
+    }
+
+    const world = this.getBuilderGoalWorldValue();
+    if (!selectedTask) {
+      const message = 'Select a Micro6 task first, or paste JSON that includes task_key.';
+      this.renderBuilderGoalClientStatus(message, 'danger');
+      alert(message);
+      return;
+    }
+    if (!world) {
+      const message = 'Enter a valid world between 300 and 700.';
+      this.renderBuilderGoalClientStatus(message, 'danger');
+      alert(message);
+      return;
+    }
+
+    if (this.runBuilderGoalBtn) {
+      this.runBuilderGoalBtn.disabled = true;
+      this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-hourglass me-1"></i>Launching...';
+    }
+    this.renderBuilderGoalClientStatus(
+      `Launching the local micro6 workspace for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} on ${selectedMachine.displayName || selectedMachine.machineUuid} in world ${world} and then publishing ${selectedTask.display_name || selectedTask.task_key}...`,
+      'info'
+    );
+    console.info('[AccountTaskPlanner] Run Task clicked', {
+      accountId: selectedAccount.accountId || null,
+      launcherMachineUuid: selectedMachine.machineUuid || null,
+      taskKey: selectedTask.task_key || null,
+      world
+    });
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(
+      () => controller.abort(),
+      AccountTaskPlanner.BUILDER_GOAL_PUBLISH_TIMEOUT_MS
+    );
+    let publishSucceeded = false;
+    let publishWarning = null;
+
+    try {
+      const settings = parsedConfig.settings && typeof parsedConfig.settings === 'object'
+        ? parsedConfig.settings
+        : {};
+      const response = await fetch('/api/debug/builder-goals/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          accountId: selectedAccount.accountId,
+          launcherMachineUuid: selectedMachine.machineUuid,
+          world,
+          taskKey: selectedTask.task_key,
+          settings,
+          autoRecord: this.shouldAutoRecordBuilderGoal(),
+          displayName:
+            selectedTask.display_name ||
+            selectedTask.panel_display_name ||
+            selectedTask.task_key,
+          source: 'catalog_task',
+          initiatedBy: 'user',
+          inputOrigin: 'manual',
+          userClicked: true,
+          scriptClicked: false
+        })
+      });
+      const responseText = await response.text();
+      const trimmedResponseText = responseText.trim();
+      let result = {};
+      if (trimmedResponseText) {
+        try {
+          result = JSON.parse(trimmedResponseText);
+        } catch (parseError) {
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          throw new Error('Invalid JSON response');
+        }
+      } else if (response.ok) {
+        throw new Error('Empty response body');
+      }
+      if (!response.ok) {
+        // A failed preflight has already been persisted by the backend. Start exact-run polling
+        // even for HTTP 422 so the failure remains visible in the same run-history UI as a normal
+        // accepted launch.
+        if (result && result.iterationId) {
+          this.startBuilderGoalRunTracking(result.iterationId, {
+            statusUrl: result.statusUrl
+          });
+        }
+        const failure = new Error(
+          AccountTaskPlanner.describeBuilderGoalStartFailure(result, response.status)
+        );
+        failure.builderGoalFailure = result;
+        failure.httpStatus = response.status;
+        throw failure;
+      }
+      if (result.published === false) {
+        await this.loadBuilderGoalRuns();
+        throw new Error(result.publishError || 'Publish failed');
+      }
+      publishSucceeded = true;
+      if (result?.run?.iterationId) {
+        await this.bindBuilderGoalCodexRun(result.run.iterationId, { silent: true });
+      }
+      this.builderGoalConfigDirty = false;
+      this.builderGoalConfigLoadedKey = this.getBuilderGoalConfigContextKey(
+        selectedAccount.accountId,
+        selectedTask.task_key
+      );
+      this.renderBuilderGoalConfigMeta();
+      const trackedIterationId = result?.run?.iterationId;
+      if (trackedIterationId) {
+        this.startBuilderGoalRunTracking(trackedIterationId, {
+          statusUrl: result.statusUrl
+        });
+      } else {
+        this.renderBuilderGoalClientStatus(
+          `Launch accepted for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}. ChromaScape is now waiting for that account's local micro6 executor to become dispatch-ready and will publish ${selectedTask.display_name || selectedTask.task_key} automatically when it is ready.`,
+          'success'
+        );
+      }
+    } catch (error) {
+      console.error('Failed to publish builder goal task:', error);
+      const timedOut = error && error.name === 'AbortError';
+      const structuredFailure = error && error.builderGoalFailure;
+      const message = timedOut
+        ? 'Publish timed out before Micro6 acknowledged the task.'
+        : structuredFailure
+          ? AccountTaskPlanner.describeBuilderGoalStartFailure(
+              structuredFailure,
+              error.httpStatus || 500
+            )
+          : error.message || 'HTTP request failed';
+      await this.loadBuilderGoalRuns();
+      if (structuredFailure) {
+        this.renderBuilderGoalStartFailure(structuredFailure, error.httpStatus || 500);
+      } else {
+        this.renderBuilderGoalClientStatus(`Failed to run task: ${message}`, 'danger');
+      }
+      alert('Failed to run task: ' + message);
+    } finally {
+      clearTimeout(timeoutHandle);
+      if (publishSucceeded) {
+        try {
+          await this.loadBuilderGoalRuns({ throwOnError: true });
+        } catch (error) {
+          console.warn('Builder-goal launch accepted, but failed to refresh builder goal runs:', error);
+          publishWarning = error?.message || 'Failed to refresh builder goal runs.';
+        }
+        if (publishWarning) {
+          this.renderBuilderGoalClientStatus(
+            `Launch was accepted, but failed to refresh the run list: ${publishWarning}`,
+            'warning'
+          );
+        }
+      }
+      if (this.runBuilderGoalBtn) {
+        this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
+      }
+      this.updateBuilderGoalRunButtonState();
+    }
+  }
+
+
+  /**
+   * Publishes the selected task to an already-running Micro6 executor without (re)launching a
+   * local client. Mirrors runBuilderGoal()'s validation, but calls the publish-only endpoint.
+   * If the executor is not ready, the run is deferred (published=false) and the operator is told
+   * to launch a client first; optionally a launch fallback can be requested.
+   */
+  async publishBuilderGoal() {
+    if (this.builderGoalBundleMismatch) {
+      this.renderBuilderGoalClientStatus(
+        'Hard refresh this page to load the latest Builder Goal Runner before publishing a task.',
+        'danger'
+      );
+      return;
+    }
+    const selectedAccount = this.getSelectedBuilderGoalAccount();
+    if (!selectedAccount) {
+      alert('Select an account first.');
+      return;
+    }
+    if (!selectedAccount.runnable) {
+      alert(selectedAccount.disabledReason || 'This account cannot be published to yet.');
+      return;
+    }
+    const executorOnline =
+      selectedAccount.executorOnline !== undefined
+        ? selectedAccount.executorOnline === true
+        : selectedAccount.online === true;
+    if (!executorOnline) {
+      const message =
+        'No dispatch-ready Micro6 executor is online for this account. Use Launch Account or Run Task first.';
+      this.renderBuilderGoalClientStatus(message, 'danger');
+      alert(message);
+      return;
+    }
+
+    const parsedConfig = this.parseBuilderGoalConfigInput();
+    if (parsedConfig.error) {
+      this.renderBuilderGoalClientStatus(parsedConfig.error, 'danger');
+      alert(parsedConfig.error);
+      return;
+    }
+
+    let selectedTask = this.getSelectedBuilderGoalTask();
+    if (parsedConfig.taskKey) {
+      selectedTask =
+        this.selectBuilderGoalTask(parsedConfig.taskKey) ||
+        this.ensureBuilderGoalTaskPlaceholder(parsedConfig.taskKey, {
+          displayName:
+            this.importedBuilderGoal?.result?.displayName ||
+            this.importedBuilderGoal?.result?.title ||
+            parsedConfig.taskKey,
+          source: 'imported_payload',
+          runnable: true
+        }) ||
+        selectedTask;
+    }
+
+    const world = this.getBuilderGoalWorldValue();
+    if (!selectedTask) {
+      const message = 'Select a Micro6 task first, or paste JSON that includes task_key.';
+      this.renderBuilderGoalClientStatus(message, 'danger');
+      alert(message);
+      return;
+    }
+    if (!world) {
+      const message = 'Enter a valid world between 300 and 700.';
+      this.renderBuilderGoalClientStatus(message, 'danger');
+      alert(message);
+      return;
+    }
+
+    if (this.publishBuilderGoalBtn) {
+      this.publishBuilderGoalBtn.disabled = true;
+      this.publishBuilderGoalBtn.innerHTML = '<i class="bi bi-hourglass me-1"></i>Publishing...';
+    }
+    this.renderBuilderGoalClientStatus(
+      `Publishing ${selectedTask.display_name || selectedTask.task_key} to the already-running local micro6 executor for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}...`,
+      'info'
+    );
+    console.info('[AccountTaskPlanner] Publish Task clicked', {
+      accountId: selectedAccount.accountId || null,
+      launcherMachineUuid: this.getSelectedBuilderGoalMachine()?.machineUuid || null,
+      taskKey: selectedTask.task_key || null,
+      world
+    });
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(
+      () => controller.abort(),
+      AccountTaskPlanner.BUILDER_GOAL_PUBLISH_TIMEOUT_MS
+    );
+
+    try {
+      const settings = parsedConfig.settings && typeof parsedConfig.settings === 'object'
+        ? parsedConfig.settings
+        : {};
+      const selectedMachine = this.getSelectedBuilderGoalMachine();
+      const response = await fetch('/api/debug/builder-goals/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          accountId: selectedAccount.accountId,
+          ...(selectedMachine?.machineUuid
+            ? { launcherMachineUuid: selectedMachine.machineUuid }
+            : {}),
+          world,
+          taskKey: selectedTask.task_key,
+          settings,
+          autoRecord: this.shouldAutoRecordBuilderGoal(),
+          allowLaunchFallback: false
+        })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      if (result?.run?.iterationId) {
+        await this.bindBuilderGoalCodexRun(result.run.iterationId, { silent: true });
+      }
+      if (result.published === false) {
+        await this.loadBuilderGoalRuns();
+        const reason = result.publishError || 'Micro6 executor is not publish-ready yet.';
+        this.renderBuilderGoalClientStatus(
+          `Publish deferred: ${reason} Launch or attach the local micro6 client first, then publish again.`,
+          'warning'
+        );
+      } else {
+        this.builderGoalConfigDirty = false;
+        this.builderGoalConfigLoadedKey = this.getBuilderGoalConfigContextKey(
+          selectedAccount.accountId,
+          selectedTask.task_key
+        );
+        this.renderBuilderGoalConfigMeta();
+        this.renderBuilderGoalClientStatus(
+          `Task accepted/queued for ${selectedTask.display_name || selectedTask.task_key} on the running micro6 executor for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}. Waiting for the executor to confirm script start.`,
+          'success'
+        );
+      }
+    } catch (error) {
+      console.error('Failed to publish builder goal task:', error);
+      const timedOut = error && error.name === 'AbortError';
+      const message = timedOut
+        ? 'Publish timed out before Micro6 acknowledged the task.'
+        : error.message;
+      await this.loadBuilderGoalRuns();
+      this.renderBuilderGoalClientStatus(
+        `Failed to publish task: ${message}`,
+        'danger'
+      );
+      alert('Failed to publish task: ' + message);
+    } finally {
+      clearTimeout(timeoutHandle);
+      if (this.publishBuilderGoalBtn) {
+        this.publishBuilderGoalBtn.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i>Publish Task';
+      }
+      this.updateBuilderGoalRunButtonState();
+    }
+  }
+
+  async runImportedBuilderGoal() {
+    if (this.builderGoalBundleMismatch) {
+      this.renderBuilderGoalClientStatus(
+        'Hard refresh this page to load the latest Builder Goal Runner before running an imported payload.',
+        'danger'
+      );
+      return;
+    }
+    const selectedAccount = this.getSelectedBuilderGoalAccount();
+    const selectedMachine = this.getSelectedBuilderGoalMachine();
+    const world = this.getBuilderGoalWorldValue();
+    if (!selectedAccount) {
+      alert('Select an account first.');
+      return;
+    }
+    if (!selectedAccount.runnable) {
+      alert(selectedAccount.disabledReason || 'This account cannot be launched yet.');
+      return;
+    }
+    if (!selectedAccount.launchReady) {
+      alert(
+        (selectedAccount.launchDisabledReason || 'This account is not launch-ready yet.') +
+          ' Add the account email and password in launcher control.'
+      );
+      return;
+    }
+    if (!selectedMachine) {
+      alert('Select a launcher machine first.');
+      return;
+    }
+    if (!selectedMachine.builderGoalRunnable) {
+      alert(
+        selectedMachine.builderGoalDisabledReason ||
+          'This launcher machine cannot run local Builder Goal launches yet.'
+      );
+      return;
+    }
+    if (!this.importedBuilderGoal?.payload) {
+      alert('Import a builder payload first.');
+      return;
+    }
+    if (!world) {
+      const message = 'Enter a valid world between 300 and 700.';
+      this.renderBuilderGoalClientStatus(message, 'danger');
+      alert(message);
+      return;
+    }
+
+    if (this.runImportedBuilderGoalBtn) {
+      this.runImportedBuilderGoalBtn.disabled = true;
+      this.runImportedBuilderGoalBtn.innerHTML = '<i class="bi bi-hourglass me-1"></i>Running...';
+    }
+    this.renderBuilderGoalClientStatus(
+      `Launching the local micro6 workspace for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} on ${selectedMachine.displayName || selectedMachine.machineUuid} in world ${world} and then publishing the imported payload...`,
+      'info'
+    );
+    console.info('[AccountTaskPlanner] Run Imported Payload clicked', {
+      accountId: selectedAccount.accountId || null,
+      launcherMachineUuid: selectedMachine.machineUuid || null,
+      taskKey: this.importedBuilderGoal?.result?.taskKey || null,
+      world
+    });
+
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(
+      () => controller.abort(),
+      AccountTaskPlanner.BUILDER_GOAL_PUBLISH_TIMEOUT_MS
+    );
+    let publishSucceeded = false;
+    let publishWarning = null;
+
+    try {
+      const response = await fetch('/api/debug/builder-goals/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          accountId: selectedAccount.accountId,
+          launcherMachineUuid: selectedMachine.machineUuid,
+          world,
+          builderPayload: this.importedBuilderGoal.payload,
+          autoRecord: this.shouldAutoRecordBuilderGoal(),
+          initiatedBy: 'user',
+          inputOrigin: 'manual',
+          userClicked: true,
+          scriptClicked: false
+        })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      if (result.published === false) {
+        await this.loadBuilderGoalRuns();
+        throw new Error(result.publishError || 'Publish failed');
+      }
+      publishSucceeded = true;
+      if (result?.run?.iterationId) {
+        await this.bindBuilderGoalCodexRun(result.run.iterationId, { silent: true });
+      }
+      this.renderBuilderGoalClientStatus(
+        `Launch accepted for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}. ChromaScape is now waiting for that account's local micro6 executor to become dispatch-ready and will publish the imported payload automatically when it is ready.`,
+        'success'
+      );
+    } catch (error) {
+      console.error('Failed to run imported builder goal:', error);
+      const timedOut = error && error.name === 'AbortError';
+      const message = timedOut
+        ? 'Publish timed out before Micro6 acknowledged the imported task.'
+        : error.message;
+      await this.loadBuilderGoalRuns();
+      this.renderBuilderGoalClientStatus(`Failed to run imported payload: ${message}`, 'danger');
+      alert('Failed to run imported payload: ' + message);
+    } finally {
+      clearTimeout(timeoutHandle);
+      if (publishSucceeded) {
+        try {
+          await this.loadBuilderGoalRuns({ throwOnError: true });
+        } catch (error) {
+          console.warn('Imported builder-goal launch accepted, but failed to refresh builder goal runs:', error);
+          publishWarning = error?.message || 'Failed to refresh builder goal runs.';
+        }
+        if (publishWarning) {
+          this.renderBuilderGoalClientStatus(
+            `Launch was accepted, but failed to refresh the run list: ${publishWarning}`,
+            'warning'
+          );
+        }
+      }
+      if (this.runImportedBuilderGoalBtn) {
+        this.runImportedBuilderGoalBtn.innerHTML =
+          '<i class="bi bi-upload me-1"></i>Run Imported Payload';
+      }
+      this.updateBuilderGoalRunButtonState();
+    }
+  }
+
+  async initBuilderGoalCodexSession() {
+    if (!this.builderGoalCodexTranscript) {
+      return;
+    }
+    if (!this.codexSessionId) {
+      try {
+        const response = await fetch('/api/debug/builder-goals/codex/sessions', {
+          method: 'POST'
+        });
+        const result = await this.readJsonResponse(response);
+        this.codexSessionId = result.sessionId || '';
+        if (!this.codexSessionId) {
+          throw new Error('Codex session response did not include a session id');
+        }
+        if (this.codexSessionId) {
+          localStorage.setItem('taskPlanner.builderGoalCodexSessionId', this.codexSessionId);
+        }
+      } catch (error) {
+        console.error('Failed to create Builder Goal Codex session:', error);
+        if (this.builderGoalCodexSessionMeta) {
+          this.builderGoalCodexSessionMeta.textContent = `Failed to create Codex session: ${error.message}`;
+        }
+        return;
+      }
+    }
+    await this.loadBuilderGoalCodexSession();
+  }
+
+  async loadBuilderGoalCodexSession(options = {}) {
+    const retryOnMissing = options.retryOnMissing !== false;
+    if (!this.codexSessionId) {
+      await this.initBuilderGoalCodexSession();
+      return;
+    }
+    try {
+      const response = await fetch(`/api/debug/builder-goals/codex/sessions/${encodeURIComponent(this.codexSessionId)}`);
+      const result = await this.readJsonResponse(response);
+      this.codexSession = result;
+      this.renderBuilderGoalCodexSession(result);
+    } catch (error) {
+      const missingSession =
+        retryOnMissing &&
+        /Codex session not found/i.test(error?.message || '');
+      if (missingSession) {
+        this.codexSessionId = '';
+        this.codexSession = null;
+        localStorage.removeItem('taskPlanner.builderGoalCodexSessionId');
+        await this.initBuilderGoalCodexSession();
+        return;
+      }
+      console.error('Failed to load Builder Goal Codex session:', error);
+      if (this.builderGoalCodexSessionMeta) {
+        this.builderGoalCodexSessionMeta.textContent = `Failed to load Codex session: ${error.message}`;
+      }
+    }
+  }
+
+  renderBuilderGoalCodexSession(session) {
+    if (this.builderGoalCodexSessionMeta) {
+      const parts = [
+        session?.sessionId ? `Session ${session.sessionId}` : null,
+        session?.activeIterationId ? `run ${session.activeIterationId}` : 'no active run'
+      ].filter(Boolean);
+      this.builderGoalCodexSessionMeta.textContent = parts.join(' • ');
+    }
+    if (!this.builderGoalCodexTranscript) {
+      return;
+    }
+    const messages = Array.isArray(session?.messages) ? session.messages : [];
+    if (messages.length === 0) {
+      this.builderGoalCodexTranscript.innerHTML =
+        '<div class="text-muted small fst-italic">Codex transcript will appear here.</div>';
+      return;
+    }
+    this.builderGoalCodexTranscript.innerHTML = messages.map(message => {
+      const role = message.role === 'user' ? 'You' : 'Codex';
+      const tone = message.role === 'user' ? 'text-primary' : 'text-dark';
+      return `
+        <div class="mb-2">
+          <div class="small fw-semibold ${tone}">${this.escapeHtml(role)}</div>
+          <div class="small">${this.escapeHtml(message.content || '')}</div>
+        </div>
+      `;
+    }).join('');
+    this.builderGoalCodexTranscript.scrollTop = this.builderGoalCodexTranscript.scrollHeight;
+  }
+
+  buildBuilderGoalCodexContext() {
+    const selectedAccount = this.getSelectedBuilderGoalAccount();
+    const selectedMachine = this.getSelectedBuilderGoalMachine();
+    const selectedTask = this.getSelectedBuilderGoalTask();
+    const parsedConfig = this.parseBuilderGoalConfigInput();
+    const world = this.getBuilderGoalWorldValue();
+    const payload = {
+      accountId: selectedAccount?.accountId || null,
+      launcherMachineUuid: selectedMachine?.machineUuid || null,
+      taskKey: selectedTask?.task_key || parsedConfig?.taskKey || null,
+      displayName: selectedTask?.display_name || selectedTask?.panel_display_name || selectedTask?.task_key || null,
+      world: world || null,
+      settings: !parsedConfig?.error && parsedConfig?.settings && typeof parsedConfig.settings === 'object'
+        ? parsedConfig.settings
+        : {},
+      context: this.recoveryContext?.value || '',
+      selectedEvidenceIds: this.collectRecoverySelectedEvidenceIds(),
+      annotations: Array.isArray(this.recoveryAnnotations) ? this.recoveryAnnotations : []
+    };
+    if (this.recoveryPrompt?.value) {
+      payload.prompt = this.recoveryPrompt.value;
+    }
+    return payload;
+  }
+
+  async sendBuilderGoalCodexMessage() {
+    const message = (this.builderGoalCodexMessageInput?.value || '').trim();
+    if (!message) {
+      return;
+    }
+    if (!this.codexSessionId) {
+      await this.initBuilderGoalCodexSession();
+      if (!this.codexSessionId) {
+        return;
+      }
+    }
+    if (this.sendBuilderGoalCodexMessageBtn) {
+      this.sendBuilderGoalCodexMessageBtn.disabled = true;
+    }
+    try {
+      const response = await fetch(
+        `/api/debug/builder-goals/codex/sessions/${encodeURIComponent(this.codexSessionId)}/messages`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message,
+            ...this.buildBuilderGoalCodexContext()
+          })
+        }
+      );
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      this.builderGoalCodexMessageInput.value = '';
+      await this.loadBuilderGoalCodexSession();
+      if (result.activeIterationId) {
+        await this.bindBuilderGoalCodexRun(result.activeIterationId, { silent: true });
+      }
+      await this.loadBuilderGoalRuns();
+    } catch (error) {
+      console.error('Failed to send Builder Goal Codex message:', error);
+      this.renderBuilderGoalClientStatus(`Codex message failed: ${error.message}`, 'danger');
+      alert('Codex message failed: ' + error.message);
+    } finally {
+      if (this.sendBuilderGoalCodexMessageBtn) {
+        this.sendBuilderGoalCodexMessageBtn.disabled = false;
+      }
+    }
+  }
+
+  async bindBuilderGoalCodexRun(iterationId, options = {}) {
+    if (!iterationId) {
+      return { bound: false, reason: 'No run selected to bind.' };
+    }
+    if (!this.codexSessionId) {
+      await this.initBuilderGoalCodexSession();
+      if (!this.codexSessionId) {
+        return { bound: false, reason: 'No Codex session is available to bind to this run.' };
+      }
+    }
+    try {
+      const response = await fetch(
+        `/api/debug/builder-goals/codex/sessions/${encodeURIComponent(this.codexSessionId)}/bind-run`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ iterationId })
+        }
+      );
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      this.codexSession = result;
+      this.renderBuilderGoalCodexSession(result);
+      if (!options.silent) {
+        this.renderBuilderGoalClientStatus(`Codex session bound to run ${iterationId}.`, 'info');
+      }
+      return { bound: true, reason: '' };
+    } catch (error) {
+      console.error('Failed to bind Builder Goal Codex run:', error);
+      return { bound: false, reason: error?.message || String(error) };
+    }
+  }
+
+  async loadBuilderGoalRunConfig(iterationId) {
+    if (!iterationId) return;
+    // Immediate visible feedback: make sure the planner panel (with the editor and the
+    // status banner) is on screen before the network round-trip completes.
+    this.showBuilderGoalRunActionBanner(`Loading the saved config for run ${iterationId}...`, 'info');
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/config`);
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+
+      const account = (this.builderGoalAccounts || []).find(
+        candidate => candidate.accountId === result.accountId
+      );
+      const accountAvailable = Boolean(account);
+      const task =
+        this.selectBuilderGoalTask(result.taskKey) ||
+        this.ensureBuilderGoalTaskPlaceholder(result.taskKey, {
+          displayName: result.displayName || result.taskKey,
+          source: 'saved_config',
+          runnable: true
+        });
+      if (!task) {
+        throw new Error(`Saved task is no longer available: ${result.taskKey}`);
+      }
+      let machineAvailable = true;
+      if (result.launcherMachineUuid) {
+        const machine = (this.builderGoalMachines || []).find(
+          candidate => candidate.machineUuid === result.launcherMachineUuid
+        );
+        machineAvailable = Boolean(machine);
+        if (machine) {
+          this.selectedBuilderGoalMachineUuid = result.launcherMachineUuid;
+          localStorage.setItem(
+            'taskPlanner.selectedBuilderGoalMachineUuid',
+            this.selectedBuilderGoalMachineUuid
+          );
+          if (this.builderGoalMachineSelect) {
+            this.builderGoalMachineSelect.value = this.selectedBuilderGoalMachineUuid;
+          }
+        }
+      }
+      if (this.builderGoalWorldInput) {
+        this.builderGoalWorldInput.value = String(result.world || 360);
+      }
+
+      this.selectedBuilderGoalAccountId = result.accountId || '';
+      if (accountAvailable) {
+        localStorage.setItem('taskPlanner.selectedBuilderGoalAccountId', this.selectedBuilderGoalAccountId);
+      }
+      if (this.builderGoalAccountSelect && accountAvailable) {
+        this.builderGoalAccountSelect.value = this.selectedBuilderGoalAccountId;
+      }
+
+      this.setBuilderGoalConfigEditor(result.settings || {}, {
+        accountId: result.accountId,
+        taskKey: result.taskKey,
+        displayName: result.displayName,
+        loadedFromRun: true,
+        loadedRunLabel:
+          result.createdAt
+            ? `${result.displayName || result.taskKey} (${this.formatTimeAgo(result.createdAt)})`
+            : (result.displayName || result.taskKey || 'saved run')
+      });
+      this.renderBuilderGoalAccountSummary();
+      this.renderBuilderGoalMachineSummary();
+      // Replay-first: switch the existing /debugger replay surface to this run's
+      // recording/session so the failed run is the visible primary result of the
+      // action. Falls back to the cached run summary when the config response does
+      // not carry a recording/session id (e.g. older server builds).
+      const cachedRun = Array.isArray(this.builderGoalRuns)
+        ? this.builderGoalRuns.find(item => item.iterationId === iterationId)
+        : null;
+      const replayResult = await this.focusBuilderGoalRunReplay({
+        runRecordingId: result.runRecordingId || (cachedRun && cachedRun.runRecordingId),
+        recordingId: result.recordingId || (cachedRun && cachedRun.recordingId),
+        runSessionId: result.runSessionId || (cachedRun && cachedRun.runSessionId),
+        debugSessionId: result.debugSessionId || (cachedRun && cachedRun.debugSessionId)
+      });
+      const staleLauncherWarnings = [];
+      if (!accountAvailable) {
+        staleLauncherWarnings.push('The saved launcher account is no longer available in launcher control.');
+      }
+      if (!machineAvailable) {
+        staleLauncherWarnings.push('The saved launcher machine is no longer available in launcher control.');
+      }
+      const accountLabel =
+        (account && (account.displayName || account.accountName || account.accountId)) ||
+        result.accountName ||
+        result.accountId ||
+        'the saved account';
+      const warningText = staleLauncherWarnings.length > 0
+        ? ` ${staleLauncherWarnings.join(' ')}`
+        : '';
+      const configMessage =
+        `Loaded the saved config for ${result.displayName || result.taskKey} on ` +
+        `${accountLabel} into the editor ` +
+        `with world ${result.world || 360}.`;
+      // Visibly focus the task config editor so the operator can see the loaded run config.
+      this.focusBuilderGoalConfigEditor();
+      if (replayResult.loaded) {
+        this.showBuilderGoalRunActionBanner(
+          `${configMessage} ${replayResult.reason}${warningText} Review the JSON and click Run Task when ready.`,
+          staleLauncherWarnings.length === 0 ? 'success' : 'warning'
+        );
+      } else {
+        this.showBuilderGoalRunActionBanner(
+          `${configMessage} ${replayResult.reason}${warningText}`,
+          'warning'
+        );
+      }
+      this.updateBuilderGoalRunButtonState();
+    } catch (error) {
+      console.error('Failed to load builder goal run config:', error);
+      this.showBuilderGoalRunActionBanner(`Failed to load saved config: ${error.message}`, 'danger');
+    }
+  }
+
+  /**
+   * Renders a prominent, visible banner for Builder Goal run actions. Ensures the task
+   * planner panel is open and scrolls the banner into view so success/error feedback
+   * is never hidden inside a collapsed panel.
+   */
+  showBuilderGoalRunActionBanner(message, tone = 'info') {
+    this.ensureTaskPlannerPanelVisible();
+    this.renderBuilderGoalClientStatus(message, tone);
+    if (this.builderGoalClientStatus && typeof this.builderGoalClientStatus.scrollIntoView === 'function') {
+      this.builderGoalClientStatus.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  /** Opens the task planner panel if it is currently hidden. */
+  ensureTaskPlannerPanelVisible() {
+    if (this.panel && this.panel.style.display === 'none') {
+      this.panel.style.display = 'block';
+      this.panelVisible = true;
+      if (this.toggleBtn) {
+        this.toggleBtn.classList.add('active');
+      }
+    }
+  }
+
+  /**
+   * Visibly focuses the task config editor: opens the planner panel, scrolls the editor
+   * into view, flashes it, and focuses it so a loaded run config is an obvious result.
+   */
+  focusBuilderGoalConfigEditor() {
+    const editor = this.builderGoalConfigInput;
+    if (!editor) return;
+    this.ensureTaskPlannerPanelVisible();
+    if (typeof editor.scrollIntoView === 'function') {
+      editor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    editor.classList.remove('config-editor-flash');
+    // Force a reflow so the flash animation restarts on consecutive loads.
+    void editor.offsetWidth;
+    editor.classList.add('config-editor-flash');
+    if (typeof editor.focus === 'function') {
+      editor.focus({ preventScroll: true });
+    }
+  }
+
+  async rerunBuilderGoal(iterationId) {
+    if (!iterationId) return;
+    this.renderBuilderGoalClientStatus(
+      'Reusing the saved builder-goal config, launching the local micro6 workspace, and republishing the task...',
+      'info'
+    );
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/rerun`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      if (result?.run?.iterationId) {
+        await this.bindBuilderGoalCodexRun(result.run.iterationId, { silent: true });
+      }
+      await this.loadBuilderGoalRuns();
+      const run = result.run || {};
+      this.renderBuilderGoalClientStatus(
+        `Rerun accepted for ${run.displayName || run.taskKey || 'the selected task'} on ${run.accountName || run.targetAccountName || 'the selected account'}. ChromaScape is waiting for that account's local micro6 executor to become dispatch-ready and will republish automatically when it is ready.`,
+        'success'
+      );
+    } catch (error) {
+      console.error('Failed to rerun builder goal:', error);
+      await this.loadBuilderGoalRuns();
+      this.renderBuilderGoalClientStatus(`Failed to rerun task: ${error.message}`, 'danger');
+      alert('Failed to rerun task: ' + error.message);
+    }
+  }
+
+  async pauseBuilderGoalRun(iterationId) {
+    return this.controlBuilderGoalRun(iterationId, 'pause');
+  }
+
+  async resumeBuilderGoalRun(iterationId) {
+    return this.controlBuilderGoalRun(iterationId, 'resume');
+  }
+
+  async controlBuilderGoalRun(iterationId, action) {
+    if (!iterationId) return;
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      await this.loadBuilderGoalRuns();
+      this.renderBuilderGoalClientStatus(
+        result.message || (action === 'pause' ? 'Task paused.' : 'Task resumed.'),
+        'success'
+      );
+    } catch (error) {
+      await this.loadBuilderGoalRuns();
+      this.renderBuilderGoalClientStatus(`Failed to ${action} task: ${error.message}`, 'danger');
+    }
+  }
+
+  async stopBuilderGoalRun(iterationId) {
+    if (!iterationId) return;
+    const run = Array.isArray(this.builderGoalRuns)
+      ? this.builderGoalRuns.find(item => item.iterationId === iterationId)
+      : null;
+    const alreadyStopping = Boolean(run && (run.stopping || run.cancelled));
+    const confirmMessage = alreadyStopping
+      ? 'This task is already being removed. Request removal again?'
+      : 'Remove this Builder Goal task? The local Micro6 client will remain running.';
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+    this.renderBuilderGoalClientStatus('Requesting removal for the selected Builder Goal task...', 'info');
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/stop`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'Stopped from debugger' })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      await this.loadBuilderGoalRuns();
+      if (this.builderGoalLogsIterationId === iterationId) {
+        await this.loadBuilderGoalRunLogs(iterationId, { silent: true });
+      }
+      const message = result.message
+        || (run && run.publishEntryId
+          ? 'Removal requested. Waiting for Micro6 to confirm cancellation.'
+          : 'Task removed before publish.');
+      this.renderBuilderGoalClientStatus(message, 'success');
+    } catch (error) {
+      console.error('Failed to remove builder goal run:', error);
+      await this.loadBuilderGoalRuns();
+      this.renderBuilderGoalClientStatus(`Failed to remove task: ${error.message}`, 'danger');
+      alert('Failed to remove task: ' + error.message);
+    }
+  }
+
+  closeBuilderGoalRunLogs() {
+    this.builderGoalLogsIterationId = null;
+    if (this.builderGoalLogsPanel) {
+      this.builderGoalLogsPanel.classList.add('d-none');
+    }
+    if (this.builderGoalLogsSummary) {
+      this.builderGoalLogsSummary.textContent = 'Select a run to inspect logs.';
+    }
+    if (this.builderGoalLogsStatus) {
+      this.builderGoalLogsStatus.innerHTML = '<span class="text-muted">No run selected.</span>';
+    }
+    if (this.builderGoalLaunchLogTail) {
+      this.builderGoalLaunchLogTail.textContent = 'Select a run to inspect launch logs.';
+    }
+    if (this.builderGoalHistoricalLogs) {
+      this.builderGoalHistoricalLogs.innerHTML =
+        '<div class="text-muted small fst-italic">No run selected.</div>';
+    }
+    this.renderBuilderGoalRuns();
+  }
+
+  async loadBuilderGoalRunLogs(iterationId, options = {}) {
+    if (!iterationId) return;
+    const silent = Boolean(options.silent);
+    const run = Array.isArray(this.builderGoalRuns)
+      ? this.builderGoalRuns.find(item => item.iterationId === iterationId)
+      : null;
+    this.builderGoalLogsIterationId = iterationId;
+    if (this.builderGoalLogsPanel) {
+      this.builderGoalLogsPanel.classList.remove('d-none');
+    }
+    if (this.builderGoalLogsSummary) {
+      this.builderGoalLogsSummary.textContent = run
+        ? `${run.displayName || run.taskKey || 'Builder Goal'} / ${run.accountName || run.targetAccountName || 'unknown account'}`
+        : iterationId;
+    }
+    if (this.builderGoalLogsStatus && !silent) {
+      this.builderGoalLogsStatus.innerHTML =
+        '<span class="text-info">Loading run logs and launch output...</span>';
+    }
+    try {
+      const response = await fetch(
+        `/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/logs`
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || `HTTP ${response.status}`);
+      }
+      this.renderBuilderGoalRunLogs(payload);
+      this.renderBuilderGoalRuns();
+    } catch (error) {
+      console.error('Failed to load builder goal run logs:', error);
+      if (this.builderGoalLogsStatus) {
+        this.builderGoalLogsStatus.innerHTML = `<span class="text-danger">${this.escapeHtml(`Failed to load run logs: ${error.message}`)}</span>`;
+      }
+    }
+  }
+
+  renderBuilderGoalRunLogs(payload) {
+    const run = payload?.run || {};
+    const filter = payload?.filter || {};
+    const launchLog = payload?.launchLog || {};
+    const historicalLogs = Array.isArray(payload?.historicalLogs) ? payload.historicalLogs : [];
+
+    if (this.builderGoalLogsPanel) {
+      this.builderGoalLogsPanel.classList.remove('d-none');
+    }
+    if (this.builderGoalLogsSummary) {
+      this.builderGoalLogsSummary.textContent = `${run.displayName || run.taskKey || 'Builder Goal'} / ${run.accountName || run.targetAccountName || 'unknown account'}`;
+    }
+    if (this.builderGoalLogsStatus) {
+      const parts = [];
+      if (run.status) parts.push(`status ${run.status}`);
+      if (run.targetPreparationState) parts.push(`prep ${run.targetPreparationState}`);
+      if (run.publishStatus) parts.push(`publish ${run.publishStatus}`);
+      const executorDiagnostics = AccountTaskPlanner.builderGoalExecutorDiagnostics(run);
+      if (executorDiagnostics) parts.push(executorDiagnostics);
+      const phaseText = AccountTaskPlanner.describeBuilderGoalExecutorPhase(run);
+      if (phaseText) parts.push(phaseText);
+      if (filter.matchMode) {
+        parts.push(
+          filter.matchMode === 'run_filtered'
+            ? `${payload.matchedLogCount || 0} matched logs`
+            : `${payload.windowLogCount || 0} window logs`
+        );
+      }
+      if (run.launchFailureDetail || run.failureReason) {
+        parts.push((run.launchFailureDetail || run.failureReason).split('\n')[0]);
+      }
+      this.builderGoalLogsStatus.innerHTML = `<span class="text-muted">${this.escapeHtml(parts.join(' • '))}</span>`;
+    }
+    if (this.builderGoalLaunchLogTail) {
+      if (launchLog?.available) {
+        this.builderGoalLaunchLogTail.textContent = Array.isArray(launchLog.lines) && launchLog.lines.length
+          ? launchLog.lines.join('\n')
+          : '(launch log file is currently empty)';
+      } else {
+        this.builderGoalLaunchLogTail.textContent = launchLog?.message || 'Launch log is unavailable.';
+      }
+    }
+    if (this.builderGoalHistoricalLogs) {
+      if (!historicalLogs.length) {
+        this.builderGoalHistoricalLogs.innerHTML =
+          '<div class="text-muted small fst-italic">No persisted ChromaScape logs matched this run yet.</div>';
+        return;
+      }
+      this.builderGoalHistoricalLogs.innerHTML = historicalLogs
+        .map(log => {
+          const meta = [log.timestamp ? this.formatAbsoluteTime(log.timestamp) : null, log.level, log.source]
+            .filter(Boolean)
+            .join(' • ');
+          const structured = log.structuredData
+            ? `<div class="small text-muted font-monospace mt-1">${this.escapeHtml(log.structuredData)}</div>`
+            : '';
+          return `
+            <div class="border-bottom pb-2 mb-2">
+              <div class="small text-muted">${this.escapeHtml(meta)}</div>
+              <div>${this.escapeHtml(log.message || '')}</div>
+              ${structured}
+            </div>
+          `;
+        })
+        .join('');
+    }
+  }
+
+  describeBuilderGoalRunProgress(run) {
+    const runStatus = (run.status || '').toUpperCase();
+    const preparationState = (run.targetPreparationState || '').toUpperCase();
+    const launcherOnline = Boolean(run.launcherOnline);
+    const localExecutorReady = Boolean(run.localExecutorReady);
+    const localExecutorObserved = Boolean(run.localExecutorObserved);
+    if (runStatus === 'FAILED' && preparationState === 'PROCESS_EXITED') {
+      return run.launchFailureDetail || run.failureReason || run.targetPreparationMessage || 'Local Micro6 relaunch process exited';
+    }
+    if (preparationState === 'PREPARING_TARGET') {
+      return 'Preparing Micro6 target';
+    }
+    if (preparationState === 'LAUNCHING_PROCESS') {
+      return run.targetPreparationMessage || 'Launching local micro6 workspace';
+    }
+    if (preparationState === 'WAITING_FOR_PORT') {
+      if (launcherOnline) {
+        return 'Launcher account is online; waiting for the local micro6 executor port';
+      }
+      return run.targetPreparationMessage || 'Waiting for local executor port';
+    }
+    if (preparationState === 'WAITING_FOR_HEALTH') {
+      if (localExecutorObserved) {
+        return run.targetPreparationMessage || 'Local executor is present; waiting for healthy /health';
+      }
+      return run.targetPreparationMessage || 'Waiting for local executor health';
+    }
+    if (preparationState === 'WAITING_FOR_ACCOUNT') {
+      return run.targetPreparationMessage || 'Waiting for selected account to appear on executor health';
+    }
+    if (preparationState === 'WAITING_FOR_WORLD') {
+      return run.targetPreparationMessage || 'Waiting for the client to log into the requested world';
+    }
+    if (preparationState === 'WAITING_FOR_SCRIPT') {
+      return run.targetPreparationMessage || 'Waiting for AccountBuilder execution loop readiness';
+    }
+    if (preparationState === 'WAITING_FOR_DISPATCH') {
+      return run.targetPreparationMessage || 'Waiting for executor dispatch readiness';
+    }
+    if (preparationState === 'WAITING_FOR_AGENT') {
+      return 'Waiting for Microbot Agent Server';
+    }
+    if (preparationState === 'LOGGING_IN') {
+      return 'Logging into Micro6 profile';
+    }
+    if (preparationState === 'READY_TO_PUBLISH' && (run.status || '').toUpperCase() === 'READY_TO_PUBLISH') {
+      return run.targetPreparationMessage || 'Target is ready to publish';
+    }
+    if (localExecutorReady && !run.publishEntryId && (run.status || '').toUpperCase() === 'QUEUED') {
+      return 'Local executor is ready; waiting for automatic publish';
+    }
+    const recoveryPhase = (run.recoveryPhase || '').toUpperCase();
+    if (recoveryPhase === 'AWAITING_OPERATOR_PROMPT') {
+      return 'Awaiting operator patch request';
+    }
+    if (recoveryPhase === 'PATCH_PLAN_READY') {
+      return 'Patch plan is ready for application';
+    }
+    if (recoveryPhase === 'APPLYING_PATCH') {
+      return 'Applying approved patch to Micro6 source';
+    }
+    if (recoveryPhase === 'RESTARTING_TARGET') {
+      return 'Restarting Micro6 target';
+    }
+    if (recoveryPhase === 'RELOGGING_IN') {
+      return 'Logging back into Micro6 after restart';
+    }
+    if (recoveryPhase === 'WAITING_FOR_EXECUTOR') {
+      return 'Waiting for Micro6 executor heartbeat to return';
+    }
+    if (recoveryPhase === 'REPUBLISHING') {
+      return 'Republishing patched task';
+    }
+    if (recoveryPhase === 'RELAUNCHED') {
+      return 'Recovery approved and task relaunched';
+    }
+    if (recoveryPhase === 'RECOVERY_FAILED') {
+      return 'Recovery failed';
+    }
+    if (runStatus === 'PUBLISHED') {
+      return 'Published to Micro6 queue';
+    }
+    if (runStatus === 'WAITING_FOR_TASK_START') {
+      return 'Task accepted/queued; waiting for the Micro6 executor to confirm script start';
+    }
+    if (runStatus === 'WAITING_FOR_DEBUG_BIND') {
+      return 'Task started; waiting for ChromaScape debug binding';
+    }
+    if (runStatus === 'RUNNING') {
+      return 'Running from Micro6 queue';
+    }
+    if (runStatus === 'PAUSED') {
+      return 'Task paused.';
+    }
+    if (runStatus === 'COMPLETED') {
+      return 'Published run completed';
+    }
+    if (runStatus === 'FAILED') {
+      return 'Published run failed';
+    }
+    if (runStatus === 'PUBLISH_FAILED') {
+      return 'Publish failed';
+    }
+    return 'Waiting for Micro6 status';
+  }
+
+  renderMultilineInline(text) {
+    return this.escapeHtml(text || '').replace(/\n/g, '<br>');
+  }
+
+  async openBuilderGoalAnalysisEditor(iterationId) {
+    if (!iterationId) {
+      return;
+    }
+    this.builderGoalAnalysisIterationId = iterationId;
+    this.builderGoalAnalysisDraft = null;
+    this.renderBuilderGoalAnalysisStatus('Loading analysis draft...', 'info');
+    this.setBuilderGoalAnalysisSubmitState(true, 'Loading...');
+    if (this.builderGoalAnalysisEvidenceMeta) {
+      this.builderGoalAnalysisEvidenceMeta.textContent = '';
+    }
+    if (this.builderGoalAnalysisEvidenceGroups) {
+      this.builderGoalAnalysisEvidenceGroups.innerHTML =
+        '<div class="text-muted small fst-italic">Loading evidence...</div>';
+    }
+    if (this.builderGoalAnalysisPrompt) {
+      this.builderGoalAnalysisPrompt.value = '';
+    }
+    if (this.builderGoalAnalysisContext) {
+      this.builderGoalAnalysisContext.value = '';
+    }
+    if (this.builderGoalAnalysisStartTime) {
+      this.builderGoalAnalysisStartTime.value = '';
+    }
+    if (this.builderGoalAnalysisEndTime) {
+      this.builderGoalAnalysisEndTime.value = '';
+    }
+    if (this.builderGoalAnalysisRangeHint) {
+      this.builderGoalAnalysisRangeHint.textContent = '00:00 → 00:00';
+    }
+
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/analysis-draft`, {
+        method: 'POST'
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      this.builderGoalAnalysisDraft = result;
+      if (this.builderGoalAnalysisPrompt) {
+        this.builderGoalAnalysisPrompt.value = result.prompt || '';
+      }
+      if (this.builderGoalAnalysisContext) {
+        this.builderGoalAnalysisContext.value = result.context || '';
+      }
+      if (this.builderGoalAnalysisStartTime) {
+        this.builderGoalAnalysisStartTime.value = result.timeRangeStartDisplay || '00:00';
+      }
+      if (this.builderGoalAnalysisEndTime) {
+        this.builderGoalAnalysisEndTime.value = result.timeRangeEndDisplay || result.timeRangeMaxDisplay || '00:00';
+      }
+      if (this.builderGoalAnalysisRangeHint) {
+        this.builderGoalAnalysisRangeHint.textContent =
+          `00:00 → ${result.timeRangeMaxDisplay || '00:00'}`;
+      }
+      this.renderBuilderGoalAnalysisEvidence(result);
+      if (result.canAnalyze === false && result.analysisBlockedReason) {
+        this.renderBuilderGoalAnalysisStatus(result.analysisBlockedReason, 'warning');
+      } else {
+        this.renderBuilderGoalAnalysisStatus('Describe the issue, choose the exact clip/evidence, then generate a patch plan for Micro6.', 'muted');
+      }
+      this.setBuilderGoalAnalysisSubmitState(Boolean(result.canAnalyze) === false, 'Generate Patch Plan');
+      this.builderGoalAnalysisModal?.show();
+    } catch (error) {
+      console.error('Failed to analyze builder goal run:', error);
+      this.renderBuilderGoalAnalysisStatus(`Failed to load analysis draft: ${error.message}`, 'danger');
+      this.setBuilderGoalAnalysisSubmitState(true, 'Generate Patch Plan');
+      alert('Failed to load analysis draft: ' + error.message);
+    }
+  }
+
+  renderBuilderGoalAnalysisEvidence(draft) {
+    const groups = Array.isArray(draft?.evidenceGroups) ? draft.evidenceGroups : [];
+    const selectedCount = Number(draft?.selectedEvidenceCount ?? 0);
+    const totalCount = Number(draft?.totalEvidenceCount ?? 0);
+
+    if (this.builderGoalAnalysisEvidenceMeta) {
+      this.builderGoalAnalysisEvidenceMeta.textContent =
+        `${selectedCount} of ${totalCount} evidence items selected`;
+    }
+
+    if (!this.builderGoalAnalysisEvidenceGroups) {
+      return;
+    }
+    if (groups.length === 0) {
+      this.builderGoalAnalysisEvidenceGroups.innerHTML =
+        '<div class="text-muted small fst-italic">No evidence was collected for this failed run.</div>';
+      return;
+    }
+
+    this.builderGoalAnalysisEvidenceGroups.innerHTML = groups.map(group => {
+      const items = Array.isArray(group.items) ? group.items : [];
+      const itemsHtml = items.length
+        ? items.map(item => `
+            <label class="form-check border rounded p-2 mb-2">
+              <input class="form-check-input builder-goal-analysis-evidence-checkbox" type="checkbox"
+                value="${this.escapeAttr(item.id || '')}" ${item.selected ? 'checked' : ''}>
+              <span class="form-check-label">
+                <div class="fw-semibold">${this.escapeHtml(item.title || '(untitled evidence)')}</div>
+                <div class="small text-muted">${this.escapeHtml(item.subtitle || '')}</div>
+                ${item.detail ? `<div class="small mt-1 font-monospace">${this.escapeHtml(item.detail)}</div>` : ''}
+              </span>
+            </label>
+          `).join('')
+        : '<div class="text-muted small fst-italic">No evidence in this group.</div>';
+
+      return `
+        <div class="border rounded p-3">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="fw-semibold">${this.escapeHtml(group.label || group.key || 'Evidence')}</div>
+            <div class="small text-muted">${items.length} item(s)</div>
+          </div>
+          ${itemsHtml}
+        </div>
+      `;
+    }).join('');
+    this.updateBuilderGoalAnalysisEvidenceMeta();
+  }
+
+  resetBuilderGoalAnalysisPrompt() {
+    if (!this.builderGoalAnalysisDraft) {
+      return;
+    }
+    if (this.builderGoalAnalysisPrompt) {
+      this.builderGoalAnalysisPrompt.value = this.builderGoalAnalysisDraft.prompt || '';
+    }
+    if (this.builderGoalAnalysisContext) {
+      this.builderGoalAnalysisContext.value = this.builderGoalAnalysisDraft.context || '';
+    }
+    if (this.builderGoalAnalysisStartTime) {
+      this.builderGoalAnalysisStartTime.value = this.builderGoalAnalysisDraft.timeRangeStartDisplay || '00:00';
+    }
+    if (this.builderGoalAnalysisEndTime) {
+      this.builderGoalAnalysisEndTime.value =
+        this.builderGoalAnalysisDraft.timeRangeEndDisplay || this.builderGoalAnalysisDraft.timeRangeMaxDisplay || '00:00';
+    }
+  }
+
+  setAllBuilderGoalEvidenceSelections(selected) {
+    if (!this.builderGoalAnalysisEvidenceGroups) {
+      return;
+    }
+    this.builderGoalAnalysisEvidenceGroups
+      .querySelectorAll('.builder-goal-analysis-evidence-checkbox')
+      .forEach(checkbox => {
+        checkbox.checked = Boolean(selected);
+      });
+    this.updateBuilderGoalAnalysisEvidenceMeta();
+  }
+
+  updateBuilderGoalAnalysisEvidenceMeta() {
+    if (!this.builderGoalAnalysisEvidenceGroups || !this.builderGoalAnalysisEvidenceMeta) {
+      return;
+    }
+    const total = this.builderGoalAnalysisEvidenceGroups
+      .querySelectorAll('.builder-goal-analysis-evidence-checkbox').length;
+    const selected = this.builderGoalAnalysisEvidenceGroups
+      .querySelectorAll('.builder-goal-analysis-evidence-checkbox:checked').length;
+    this.builderGoalAnalysisEvidenceMeta.textContent = `${selected} of ${total} evidence items selected`;
+  }
+
+  renderBuilderGoalAnalysisStatus(message, tone = 'muted') {
+    if (!this.builderGoalAnalysisStatus) {
+      return;
+    }
+    this.builderGoalAnalysisStatus.innerHTML = `<span class="text-${tone}">${this.escapeHtml(message || '')}</span>`;
+  }
+
+  setBuilderGoalAnalysisSubmitState(disabled, label = 'Generate Patch Plan') {
+    if (!this.submitBuilderGoalAnalysisBtn) {
+      return;
+    }
+    this.submitBuilderGoalAnalysisBtn.disabled = Boolean(disabled);
+    this.submitBuilderGoalAnalysisBtn.innerHTML = `<i class="bi bi-lightbulb-fill me-1"></i>${this.escapeHtml(label)}`;
+  }
+
+  collectSelectedBuilderGoalEvidenceIds() {
+    if (!this.builderGoalAnalysisEvidenceGroups) {
+      return [];
+    }
+    return Array.from(
+      this.builderGoalAnalysisEvidenceGroups.querySelectorAll('.builder-goal-analysis-evidence-checkbox:checked')
+    ).map(checkbox => checkbox.value).filter(Boolean);
+  }
+
+  async submitBuilderGoalAnalysis() {
+    if (!this.builderGoalAnalysisIterationId) {
+      return;
+    }
+
+    const selectedEvidenceIds = this.collectSelectedBuilderGoalEvidenceIds();
+    if (selectedEvidenceIds.length === 0) {
+      this.renderBuilderGoalAnalysisStatus('Select at least one evidence item before running analysis.', 'warning');
+      return;
+    }
+
+    const timeRangeStartSeconds = this.parseClockToSeconds(this.builderGoalAnalysisStartTime?.value);
+    const timeRangeEndSeconds = this.parseClockToSeconds(this.builderGoalAnalysisEndTime?.value);
+    if (timeRangeStartSeconds == null || timeRangeEndSeconds == null) {
+      this.renderBuilderGoalAnalysisStatus('Enter a valid clip range like 00:13 to 00:20.', 'warning');
+      return;
+    }
+    if (timeRangeEndSeconds <= timeRangeStartSeconds) {
+      this.renderBuilderGoalAnalysisStatus('Clip end must be after clip start.', 'warning');
+      return;
+    }
+
+    this.setBuilderGoalAnalysisSubmitState(true, 'Generating...');
+    this.renderBuilderGoalAnalysisStatus('Generating a Micro6 patch plan from your prompt, clip, and selected evidence...', 'info');
+
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(this.builderGoalAnalysisIterationId)}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: this.builderGoalAnalysisPrompt ? this.builderGoalAnalysisPrompt.value : '',
+          context: this.builderGoalAnalysisContext ? this.builderGoalAnalysisContext.value : '',
+          selectedEvidenceIds,
+          timeRangeStartSeconds,
+          timeRangeEndSeconds
+        })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+
+      await this.loadBuilderGoalRuns();
+      this.builderGoalAnalysisModal?.hide();
+      if (result.patchId) {
+        this.renderBuilderGoalClientStatus('Patch plan updated. Apply Plan + Relaunch is now available.', 'success');
+      } else {
+        this.renderBuilderGoalClientStatus('Patch planning completed, but MCP did not produce a patch draft.', 'warning');
+      }
+    } catch (error) {
+      console.error('Failed to analyze builder goal run:', error);
+      this.renderBuilderGoalAnalysisStatus(`Failed to generate a patch plan: ${error.message}`, 'danger');
+      alert('Failed to generate a patch plan: ' + error.message);
+    } finally {
+      this.setBuilderGoalAnalysisSubmitState(false, 'Generate Patch Plan');
+    }
+  }
+
+  async fixAndRelaunchBuilderGoalRun(iterationId) {
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/approve-recovery`, {
+        method: 'POST'
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      await this.loadBuilderGoalRuns();
+      this.renderBuilderGoalClientStatus('Patch plan approved. ChromaScape is applying the patch, restarting Micro6, logging back in, and republishing the task.', 'success');
+    } catch (error) {
+      console.error('Failed to fix and relaunch builder goal run:', error);
+      alert('Failed to approve builder goal recovery: ' + error.message);
+    }
+  }
+
+  builderGoalReviewLabel(run) {
+    return 'Open Recovery Workspace';
+  }
+
+  builderGoalApprovalLabel(run) {
+    if (run.approvalAvailable) {
+      return 'Apply Plan + Relaunch';
+    }
+    if ((run.recoveryPhase || '') === 'RECOVERY_RELAUNCHED') {
+      return 'Relaunched';
+    }
+    return 'Awaiting Patch Plan';
+  }
+
+  parseClockToSeconds(value) {
+    const raw = (value || '').trim();
+    if (!raw) {
+      return 0;
+    }
+    const parts = raw.split(':').map(part => part.trim());
+    if (parts.length !== 2) {
+      return null;
+    }
+    const minutes = Number(parts[0]);
+    const seconds = Number(parts[1]);
+    if (!Number.isFinite(minutes) || !Number.isFinite(seconds) || minutes < 0 || seconds < 0 || seconds >= 60) {
+      return null;
+    }
+    return (minutes * 60) + seconds;
+  }
+
+  formatSecondsAsClock(totalSeconds) {
+    const safeSeconds = Math.max(0, Number(totalSeconds) || 0);
+    const minutes = Math.floor(safeSeconds / 60);
+    const seconds = safeSeconds % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+
+  /**
+   * Lenient time parser for recovery range fields. Accepts "MM:SS", "M:SS",
+   * "HH:MM:SS", or bare seconds ("15", "90.5"). Returns whole seconds or null.
+   */
+  parseRecoveryTimeInput(value) {
+    const raw = (value == null ? '' : String(value)).trim();
+    if (!raw) {
+      return null;
+    }
+    if (/^\d+(\.\d+)?$/.test(raw)) {
+      const seconds = Number(raw);
+      return Number.isFinite(seconds) && seconds >= 0 ? Math.floor(seconds) : null;
+    }
+    const parts = raw.split(':').map(part => part.trim());
+    if (parts.length < 2 || parts.length > 3) {
+      return null;
+    }
+    const numbers = parts.map(part => Number(part));
+    if (numbers.some(num => !Number.isFinite(num) || num < 0)) {
+      return null;
+    }
+    let totalSeconds;
+    if (parts.length === 2) {
+      const [minutes, seconds] = numbers;
+      if (seconds >= 60) {
+        return null;
+      }
+      totalSeconds = (minutes * 60) + seconds;
+    } else {
+      const [hours, minutes, seconds] = numbers;
+      if (minutes >= 60 || seconds >= 60) {
+        return null;
+      }
+      totalSeconds = (hours * 3600) + (minutes * 60) + seconds;
+    }
+    return Math.floor(totalSeconds);
+  }
+
+  /**
+   * Parses a typed recovery range such as "00:15-00:20", "15-20", "00:15 - 00:20",
+   * "00:15–00:20", "00:15 → 00:20", or "00:15 to 00:20".
+   * Returns { startSeconds, endSeconds } or null when unparseable.
+   */
+  parseRecoveryRangeInput(value) {
+    const raw = (value == null ? '' : String(value)).trim();
+    if (!raw) {
+      return null;
+    }
+    const segments = raw
+      .split(/\s*(?:–|—|→|\bto\b)\s*|\s*-\s*/i)
+      .map(part => part.trim())
+      .filter(part => part.length > 0);
+    if (segments.length !== 2) {
+      return null;
+    }
+    const startSeconds = this.parseRecoveryTimeInput(segments[0]);
+    const endSeconds = this.parseRecoveryTimeInput(segments[1]);
+    if (startSeconds == null || endSeconds == null) {
+      return null;
+    }
+    return { startSeconds, endSeconds };
+  }
+
+  /* ========================================================================
+   * Same-screen Recovery Mode. The operator stays on /debugger and switches
+   * the existing replay surface into a recovery editing mode.
+   * ====================================================================== */
+
+  /**
+   * Returns the first non-blank string representation of a value, or null.
+   * Mirrors the backend firstNonBlank semantics for replay target resolution.
+   */
+  firstNonBlankString(value) {
+    if (value == null) {
+      return null;
+    }
+    const text = String(value).trim();
+    return text === '' ? null : text;
+  }
+
+  /**
+   * Scrolls the existing /debugger replay surface into view so the operator can
+   * see the recording that was just loaded. Targets the main debugger viewport
+   * section that houses the replay video, with sensible fallbacks.
+   */
+  scrollReplaySurfaceIntoView() {
+    const scrollTarget =
+      document.getElementById('replayVideo') ||
+      document.querySelector('.scrubber-bar') ||
+      document.getElementById('recoveryModeShell') ||
+      document.querySelector('.debugger-container') ||
+      document.getElementById('replayModeBtn');
+    if (scrollTarget && typeof scrollTarget.scrollIntoView === 'function') {
+      scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  resetRecoveryWorkspaceUi() {
+    this.renderRecoveryRangeHint('No active range');
+    if (this.recoveryActiveStart) {
+      this.recoveryActiveStart.value = '';
+    }
+    if (this.recoveryActiveEnd) {
+      this.recoveryActiveEnd.value = '';
+    }
+    if (this.recoveryTypedRange) {
+      this.recoveryTypedRange.value = '';
+    }
+    if (this.recoveryActiveLabel) {
+      this.recoveryActiveLabel.value = '';
+    }
+    if (this.recoveryActiveTick) {
+      this.recoveryActiveTick.value = '';
+    }
+    if (this.recoveryActiveFrame) {
+      this.recoveryActiveFrame.value = '';
+    }
+    if (this.recoveryActiveNote) {
+      this.recoveryActiveNote.value = '';
+    }
+    if (this.recoveryImportantBtn) {
+      this.recoveryImportantBtn.classList.remove('active');
+    }
+    if (this.recoveryAnnotationCount) {
+      this.recoveryAnnotationCount.textContent = '0 range(s)';
+    }
+    if (this.recoveryAnnotationList) {
+      this.recoveryAnnotationList.innerHTML =
+        '<div class="text-muted small fst-italic">Loading recovery annotations...</div>';
+    }
+    if (this.recoveryEvidenceMeta) {
+      this.recoveryEvidenceMeta.textContent = '';
+    }
+    this.hideRecoveryEvidenceError();
+    if (this.recoveryEvidenceGroups) {
+      this.recoveryEvidenceGroups.innerHTML =
+        '<div class="text-muted small fst-italic">Loading recovery evidence...</div>';
+    }
+    if (this.recoveryPrompt) {
+      this.recoveryPrompt.value = '';
+    }
+    if (this.recoveryContext) {
+      this.recoveryContext.value = '';
+    }
+    if (this.recoveryPatchPlanReview) {
+      this.recoveryPatchPlanReview.innerHTML =
+        '<div class="text-muted fst-italic">Loading recovery workspace...</div>';
+    }
+    if (this.recoveryRelaunchPanel) {
+      this.recoveryRelaunchPanel.hidden = true;
+    }
+    if (this.recoveryRelaunchStatus) {
+      this.recoveryRelaunchStatus.textContent = 'Waiting for debug bind...';
+    }
+    if (this.recoveryPreferredSession) {
+      this.recoveryPreferredSession.textContent = '';
+    }
+    if (this.recoveryChildIteration) {
+      this.recoveryChildIteration.textContent = '';
+    }
+  }
+
+  seedPatchLoopFromRecoveryWorkspace(workspace) {
+    const patchLoop = window.ChromaScapePatchLoop;
+    if (!patchLoop || typeof patchLoop.seedRecoveryWorkspace !== 'function') {
+      return {
+        seeded: false,
+        reason: 'The patch-loop workspace is not available on this page.'
+      };
+    }
+    const seed = workspace?.patchLoopSeed;
+    if (!seed || typeof seed !== 'object') {
+      return {
+        seeded: false,
+        reason: 'No patch-loop seed was returned for this recovery workspace.'
+      };
+    }
+    const seeded = patchLoop.seedRecoveryWorkspace(seed);
+    return {
+      seeded: Boolean(seeded),
+      reason: seeded
+        ? `Patch loop seeded for ${seed.displayName || seed.taskKey || 'the failed run'}.`
+        : 'Patch-loop seed data could not be applied.'
+    };
+  }
+
+  /**
+   * Shared replay-first focus helper for Builder Goal run actions. Resolves the
+   * best available replay target, switches the existing /debugger replay surface
+   * into replay mode, loads the recording or debug session, and scrolls the
+   * replay surface into view.
+   *
+   * Preferred replay target resolution order:
+   *   1. runRecordingId
+   *   2. recordingId (workspace/root)
+   *   3. runSessionId
+   *   4. debugSessionId (workspace/root)
+   *
+   * @param {object} target - Flattened object that may contain any of:
+   *   runRecordingId, recordingId, runSessionId, debugSessionId.
+   * @returns {Promise<{loaded: boolean, kind: string|null, reason: string}>}
+   *   Describes whether a replay target was loaded so callers can render an
+   *   appropriate status message instead of silently doing nothing.
+   */
+  async focusBuilderGoalRunReplay(target) {
+    const replay = window.ChromaScapeReplay;
+    if (!replay || typeof replay.switchMode !== 'function') {
+      return {
+        loaded: false,
+        kind: null,
+        reason: 'The replay surface is not available on this page.'
+      };
+    }
+
+    const runRecordingId = this.firstNonBlankString(target?.runRecordingId);
+    const recordingId = this.firstNonBlankString(target?.recordingId);
+    const runSessionId = this.firstNonBlankString(target?.runSessionId);
+    const debugSessionId = this.firstNonBlankString(target?.debugSessionId);
+
+    const resolvedRecordingId = runRecordingId || recordingId || null;
+    const resolvedSessionId = runSessionId || debugSessionId || null;
+
+    if (!resolvedRecordingId && !resolvedSessionId) {
+      return {
+        loaded: false,
+        kind: null,
+        reason:
+          'No recording or debug session is available for this run to open in replay.'
+      };
+    }
+
+    try {
+      replay.switchMode('replay');
+      if (resolvedRecordingId) {
+        const loadResult = replay.loadRecording(resolvedRecordingId);
+        const loadedRecording =
+          loadResult && typeof loadResult.then === 'function'
+            ? await loadResult
+            : Boolean(loadResult);
+        if (loadedRecording) {
+          this.scrollReplaySurfaceIntoView();
+          return {
+            loaded: true,
+            kind: 'recording',
+            reason: `Loaded recording ${resolvedRecordingId} into the replay viewer.`
+          };
+        }
+      }
+
+      if (!resolvedSessionId) {
+        return {
+          loaded: false,
+          kind: null,
+          reason: `Replay could not be opened for recording ${resolvedRecordingId}.`
+        };
+      }
+
+      const loadResult = replay.loadDebugSession(resolvedSessionId);
+      const loadedSession =
+        loadResult && typeof loadResult.then === 'function'
+          ? await loadResult
+          : Boolean(loadResult);
+      if (loadedSession) {
+        this.scrollReplaySurfaceIntoView();
+        return {
+          loaded: true,
+          kind: 'session',
+          reason: `Loaded debug session ${resolvedSessionId} into the replay viewer.`
+        };
+      }
+
+      return {
+        loaded: false,
+        kind: null,
+        reason: resolvedRecordingId
+          ? `Replay could not be opened for recording ${resolvedRecordingId} or debug session ${resolvedSessionId}.`
+          : `Replay could not be opened for debug session ${resolvedSessionId}.`
+      };
+    } catch (error) {
+      console.error('[BuilderGoal] Failed to focus replay surface:', error);
+      return {
+        loaded: false,
+        kind: null,
+        reason: `Replay could not be opened: ${error?.message || error}`
+      };
+    }
+  }
+
+  getRecoveryReplayState() {
+    if (window.ChromaScapeReplay && typeof window.ChromaScapeReplay.getReplayState === 'function') {
+      return window.ChromaScapeReplay.getReplayState();
+    }
+    return { currentTimeSeconds: null, currentTick: null, currentFrame: null, replayDebugSessionId: null };
+  }
+
+  async enterRecoveryMode(iterationId) {
+    if (!iterationId) {
+      return;
+    }
+    // Keep the clicked run selected and switch into the foreground recovery workspace
+    // immediately, before any network round-trip, so the transition is always visible.
+    this.recoveryModeActive = true;
+    this.recoveryIterationId = iterationId;
+    this.recoveryAnnotations = [];
+    this.recoveryActiveStartSeconds = null;
+    this.recoveryActiveEndSeconds = null;
+    this.recoveryActiveImportant = false;
+    this.recoveryChildLoaded = false;
+    this.recoveryReplayStatus = 'loading';
+    this.recoveryReplayError = '';
+    this.recoveryEvidenceStatus = 'loading';
+    this.recoveryCodexBindError = '';
+    this.recoveryPatchLoopSeedError = '';
+    this.recoveryLastError = '';
+    this.showRecoveryWorkspaceShell(iterationId, { phase: 'loading' });
+    this.setRecoveryGenerateState(true, 'Loading...');
+    this.setRecoveryApproveState(true);
+    this.setRecoveryExportState(true);
+    // Populate the shared replay picker so the operator can load any recording while the
+    // workspace is open, even when the cancelled run has no replay of its own.
+    try {
+      window.ChromaScapeReplay?.refreshRecordings?.();
+    } catch (error) {
+      console.debug('[BuilderGoal] Could not refresh the replay picker:', error);
+    }
+
+    // Bind the Codex session; a bind failure is reported in the status strip but does
+    // not block manual prompt/evidence review.
+    const codexBindResult = await this.bindBuilderGoalCodexRun(iterationId, { silent: true });
+    this.recoveryCodexBindError =
+      codexBindResult && codexBindResult.bound === false
+        ? (codexBindResult.reason || 'Codex session binding failed.')
+        : '';
+
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/recovery-workspace`, {
+        method: 'POST'
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      this.recoveryDraft = result;
+      this.renderRepairIncident(result.repairIncident || result.run?.repairIncident);
+      // Seed patch loop immediately so inputs are pre-filled during replay load.
+      const patchLoopSeedResult = this.seedPatchLoopFromRecoveryWorkspace(result);
+      this.recoveryPatchLoopSeedError = patchLoopSeedResult.seeded ? '' : (patchLoopSeedResult.reason || '');
+      // Drive the existing replay surface first so the failed run's recording/scrubber
+      // is the editing surface before recovery controls hydrate under it.
+      const replayResult = await this.focusBuilderGoalRunReplay({
+        runRecordingId: result.run?.runRecordingId,
+        recordingId: result.recordingId,
+        runSessionId: result.run?.runSessionId,
+        debugSessionId: result.debugSessionId
+      });
+      const replayReason = replayResult.reason || '';
+      // 'unbound' means the run has no replay of its own to auto-load; that is not a failure,
+      // the operator is expected to load any recording from the shared replay picker. A run
+      // that does have a replay target but cannot open it stays 'missing'/'error'.
+      this.recoveryReplayStatus = replayResult.loaded
+        ? 'loaded'
+        : (replayReason.indexOf('No recording or debug session') === 0
+          ? 'unbound'
+          : (replayReason.indexOf('Replay could not be opened') === 0 ? 'missing' : 'error'));
+      this.recoveryReplayError = replayResult.loaded ? '' : (replayReason || 'Replay could not be loaded.');
+      if (this.recoveryReplayStatus === 'unbound') {
+        // Nothing to auto-load, but foreground the replay surface so the operator can pick any
+        // recording to inspect in the open workspace.
+        window.ChromaScapeReplay?.switchMode?.('replay');
+      }
+      // Hydrate recovery workspace UI after replay load completes (or fails).
+      const runName = result.run?.displayName || result.run?.taskKey || iterationId;
+      if (this.recoveryPrompt) {
+        this.recoveryPrompt.value = result.prompt || '';
+      }
+      if (this.recoveryContext) {
+        this.recoveryContext.value = result.context || '';
+      }
+      this.recoveryAnnotations = Array.isArray(result.annotations) ? result.annotations : [];
+      this.renderRecoveryAnnotations();
+      this.renderRecoveryEvidence(result);
+      this.recoveryEvidenceStatus = 'loaded';
+      this.applyRecoverySelectedEvidenceIds(result.selectedEvidenceIds);
+      this.restoreRecoveryActiveRange(result.activeRangeStartSeconds, result.activeRangeEndSeconds);
+      if (result.analysisAvailable) {
+        this.renderRecoveryPatchPlan(result.run || result);
+      } else if (this.recoveryPatchPlanReview) {
+        this.recoveryPatchPlanReview.innerHTML =
+          '<div class="text-muted fst-italic">No patch plan generated yet. Describe the issue, select evidence, then Generate Patch Plan.</div>';
+      }
+      this.setRecoveryApproveState(!Boolean(result.approvalAvailable));
+      this.setRecoveryExportState(!Boolean(result.repairPatchExportAvailable));
+      this.setRecoveryGenerateState(Boolean(result.canAnalyze) === false, 'Generate Patch Plan');
+      this.startRecoveryPolling();
+      this.showRecoveryWorkspaceShell(iterationId, {
+        phase: 'ready',
+        draft: result,
+        replayResult,
+        patchLoopSeedResult
+      });
+      // Build descriptive status message for the planner panel as well.
+      const statusParts = [];
+      statusParts.push(`Recovery workspace opened for ${runName}.`);
+      if (replayResult.loaded) {
+        statusParts.push('Replay loaded.');
+      } else if (this.recoveryReplayStatus === 'unbound') {
+        statusParts.push('No replay is bound to this run; load any recording from the Replay selector.');
+      } else {
+        statusParts.push(`Replay could not be loaded: ${replayResult.reason}.`);
+      }
+      statusParts.push(
+        patchLoopSeedResult.seeded
+          ? 'Patch loop seeded.'
+          : `Patch loop was not seeded: ${patchLoopSeedResult.reason}.`
+      );
+      this.renderBuilderGoalClientStatus(
+        statusParts.join(' '),
+        patchLoopSeedResult.seeded && (replayResult.loaded || this.recoveryReplayStatus === 'unbound')
+          ? 'info'
+          : 'warning'
+      );
+    } catch (error) {
+      console.error('Failed to open recovery workspace:', error);
+      // Do not silently stay on the same screen: keep recovery mode open, keep the
+      // clicked run selected, and show a prominent inline error in the workspace.
+      this.recoveryLastError = error.message || String(error);
+      this.recoveryReplayStatus = 'unknown';
+      this.recoveryEvidenceStatus = 'error';
+      this.showRecoveryWorkspaceShell(iterationId, { phase: 'error', error: this.recoveryLastError });
+      this.setRecoveryGenerateState(false, 'Generate Patch Plan');
+    }
+  }
+
+  /**
+   * Foreground helper that drives every visible transition of the recovery workspace:
+   * unhides the shell, reflows the page into recovery layout, renders the persistent
+   * status strip, shows loading/error state inline, and scrolls the workspace into view.
+   *
+   * @param {string} iterationId - The run the workspace is bound to (stays selected).
+   * @param {object} state - { phase: 'loading'|'ready'|'error', draft, replayResult,
+   *   patchLoopSeedResult, error }
+   */
+  showRecoveryWorkspaceShell(iterationId, state = {}) {
+    const phase = state.phase || 'loading';
+    if (this.recoveryShell) {
+      this.recoveryShell.hidden = false;
+    }
+    document.body.classList.add('recovery-mode-active');
+    window.DebuggerWorkspace?.activate?.('recovery', { syncMode: false });
+
+    if (phase === 'loading') {
+      this.resetRecoveryWorkspaceUi();
+      this.hideRecoveryError();
+      if (this.recoveryRunLabel) {
+        this.recoveryRunLabel.textContent = `Opening recovery workspace for run ${iterationId}...`;
+      }
+      this.setRecoveryStatusStrip({
+        run: iterationId,
+        task: '...',
+        account: '...',
+        world: '...',
+        recording: { text: 'Loading...', tone: 'warn' },
+        evidence: { text: 'Loading...', tone: 'warn' },
+        error: ''
+      });
+      this.showRecoveryReplayAlert('Loading recovery workspace and replay...', 'info');
+    } else if (phase === 'ready') {
+      const draft = state.draft || {};
+      const run = draft.run || {};
+      const replayResult = state.replayResult || { loaded: false, reason: 'Replay state unknown.' };
+      const patchLoopSeedResult = state.patchLoopSeedResult || { seeded: true };
+      const runName = run.displayName || run.taskKey || iterationId;
+      this.hideRecoveryError();
+      if (this.recoveryRunLabel) {
+        this.recoveryRunLabel.textContent = `Recovering: ${runName}`;
+      }
+      const errors = [];
+      if (this.recoveryCodexBindError) {
+        errors.push(`Codex bind: ${this.recoveryCodexBindError}`);
+      }
+      if (!patchLoopSeedResult.seeded && patchLoopSeedResult.reason) {
+        errors.push(`Patch loop seed: ${patchLoopSeedResult.reason}`);
+      }
+      const totalEvidence = Number(draft.totalEvidenceCount ?? 0);
+      this.setRecoveryStatusStrip({
+        run: iterationId,
+        task: run.displayName || run.taskKey || '--',
+        account: run.accountName || run.targetAccountName || '--',
+        world: run.world != null ? String(run.world) : '--',
+        recording: replayResult.loaded
+          ? { text: 'Loaded', tone: 'ok' }
+          : (this.recoveryReplayStatus === 'unbound'
+            ? { text: 'Select Replay', tone: 'warn' }
+            : (this.recoveryReplayStatus === 'missing'
+              ? { text: 'Missing', tone: 'error' }
+              : { text: 'Failed', tone: 'error' })),
+        evidence: { text: `Loaded (${totalEvidence})`, tone: totalEvidence > 0 ? 'ok' : 'warn' },
+        error: errors.join(' | ')
+      });
+      if (replayResult.loaded) {
+        this.hideRecoveryReplayAlert();
+      } else if (this.recoveryReplayStatus === 'unbound') {
+        // No bound replay is an expected state for a cancelled run: point the operator at the
+        // shared picker instead of reporting a failure.
+        this.showRecoveryReplayAlert(
+          'No replay is bound to this run. Load any recording from the Replay selector to inspect it here.',
+          'info'
+        );
+      } else {
+        // Keep recovery mode open and show the failure inline near the replay panel.
+        this.showRecoveryReplayAlert(
+          replayResult.reason || 'Replay could not be loaded.',
+          this.recoveryReplayStatus === 'missing' ? 'danger' : 'warn'
+        );
+      }
+      // Render saved-range markers on the scrubber once annotations are hydrated.
+      this.renderRecoveryTimelineMarkers();
+    } else if (phase === 'error') {
+      const message = state.error || 'Unknown error';
+      if (this.recoveryRunLabel) {
+        this.recoveryRunLabel.textContent = `Recovery workspace failed for run ${iterationId}`;
+      }
+      this.setRecoveryStatusStrip({
+        run: iterationId,
+        task: '--',
+        account: '--',
+        world: '--',
+        recording: { text: 'Unknown', tone: 'warn' },
+        evidence: { text: 'Unavailable', tone: 'error' },
+        error: message
+      });
+      this.showRecoveryError(`Failed to open recovery workspace: ${message}`);
+      this.showRecoveryReplayAlert(`Recovery workspace could not be loaded: ${message}`, 'danger');
+      if (this.recoveryPatchPlanReview) {
+        this.recoveryPatchPlanReview.innerHTML =
+          `<div class="text-danger">Failed to load recovery workspace: ${this.escapeHtml(message)}</div>`;
+      }
+    }
+
+    this.scrollRecoveryWorkspaceIntoView();
+  }
+
+  /** Scrolls the canonical replay/logs row into view as the foreground recovery surface. */
+  scrollRecoveryWorkspaceIntoView() {
+    const target =
+      document.querySelector('.debugger-main') ||
+      document.querySelector('.viewport-panel') ||
+      this.recoveryShell;
+    if (target && typeof target.scrollIntoView === 'function') {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+
+  /**
+   * Renders the persistent recovery status strip chips.
+   * Each value is either a plain string or { text, tone: 'ok'|'warn'|'error' }.
+   */
+  setRecoveryStatusStrip(fields = {}) {
+    this.setRecoveryStatusChip(this.recoveryStatusRun, 'Run', fields.run);
+    this.setRecoveryStatusChip(this.recoveryStatusTask, 'Task', fields.task);
+    this.setRecoveryStatusChip(this.recoveryStatusAccount, 'Account', fields.account);
+    this.setRecoveryStatusChip(this.recoveryStatusWorld, 'World', fields.world);
+    this.setRecoveryStatusChip(this.recoveryStatusRecording, 'Recording', fields.recording);
+    this.setRecoveryStatusChip(this.recoveryStatusEvidence, 'Evidence', fields.evidence);
+    if (this.recoveryStatusError) {
+      const errorText = (fields.error || '').trim();
+      this.recoveryStatusError.hidden = errorText.length === 0;
+      this.recoveryStatusError.textContent = errorText;
+      this.recoveryStatusError.title = errorText;
+    }
+  }
+
+  setRecoveryStatusChip(el, label, value) {
+    if (!el) return;
+    const normalized = value && typeof value === 'object' ? value : { text: value };
+    const text = (normalized.text == null || normalized.text === '') ? '--' : String(normalized.text);
+    el.innerHTML = `${label}: ${this.escapeHtml(text)}`;
+    el.title = `${label}: ${text}`;
+    el.classList.remove('chip-ok', 'chip-warn', 'chip-error');
+    if (normalized.tone && ['ok', 'warn', 'error'].includes(normalized.tone)) {
+      el.classList.add(`chip-${normalized.tone}`);
+    }
+  }
+
+  showRecoveryError(message) {
+    if (!this.recoveryErrorBanner) return;
+    this.recoveryErrorBanner.innerHTML =
+      `<i class="bi bi-exclamation-octagon me-1"></i>${this.escapeHtml(message)}`;
+    this.recoveryErrorBanner.hidden = false;
+  }
+
+  hideRecoveryError() {
+    if (this.recoveryErrorBanner) {
+      this.recoveryErrorBanner.hidden = true;
+      this.recoveryErrorBanner.textContent = '';
+    }
+    if (this.recoveryStatusError) {
+      this.recoveryStatusError.hidden = true;
+      this.recoveryStatusError.textContent = '';
+    }
+  }
+
+  /** Shows an inline state message next to the canonical replay panel. */
+  showRecoveryReplayAlert(message, tone = 'warn') {
+    if (!this.recoveryReplayAlert) return;
+    this.recoveryReplayAlert.classList.remove('alert-info', 'alert-danger');
+    if (tone === 'info') {
+      this.recoveryReplayAlert.classList.add('alert-info');
+    } else if (tone === 'danger') {
+      this.recoveryReplayAlert.classList.add('alert-danger');
+    }
+    this.recoveryReplayAlert.innerHTML =
+      `<i class="bi bi-camera-video me-1"></i>${this.escapeHtml(message)}`;
+    this.recoveryReplayAlert.hidden = false;
+  }
+
+  hideRecoveryReplayAlert() {
+    if (this.recoveryReplayAlert) {
+      this.recoveryReplayAlert.hidden = true;
+      this.recoveryReplayAlert.textContent = '';
+    }
+  }
+
+  /** Shows an evidence-panel error while keeping previously loaded evidence visible. */
+  showRecoveryEvidenceError(message) {
+    if (!this.recoveryEvidenceError) return;
+    this.recoveryEvidenceError.innerHTML =
+      `<i class="bi bi-exclamation-triangle me-1"></i>${this.escapeHtml(message)}`;
+    this.recoveryEvidenceError.hidden = false;
+  }
+
+  hideRecoveryEvidenceError() {
+    if (this.recoveryEvidenceError) {
+      this.recoveryEvidenceError.hidden = true;
+      this.recoveryEvidenceError.textContent = '';
+    }
+  }
+
+
+  exitRecoveryMode() {
+    this.recoveryModeActive = false;
+    this.recoveryIterationId = null;
+    this.recoveryDraft = null;
+    this.recoveryAnnotations = [];
+    this.recoveryActiveStartSeconds = null;
+    this.recoveryActiveEndSeconds = null;
+    this.recoveryActiveImportant = false;
+    this.recoveryChildLoaded = false;
+    this.recoveryReplayStatus = 'unknown';
+    this.recoveryReplayError = '';
+    this.recoveryEvidenceStatus = 'unknown';
+    this.recoveryCodexBindError = '';
+    this.recoveryPatchLoopSeedError = '';
+    this.recoveryLastError = '';
+    this.stopRecoveryPolling();
+    if (this.recoveryShell) {
+      this.recoveryShell.hidden = true;
+    }
+    document.body.classList.remove('recovery-mode-active');
+    window.DebuggerWorkspace?.activate?.('runs', { syncMode: false });
+    if (this.recoveryRunLabel) {
+      this.recoveryRunLabel.textContent = '';
+    }
+    this.hideRecoveryError();
+    this.hideRecoveryReplayAlert();
+    this.hideRecoveryEvidenceError();
+    this.clearRecoveryTimelineMarkers();
+    window.ChromaScapePatchLoop?.clearSeed?.();
+  }
+
+  /**
+   * Switches the existing /debugger replay surface to the failed run's
+   * recording/session. Thin wrapper around the shared focusBuilderGoalRunReplay
+   * helper so recovery callers use the same replay-first behavior, resolution
+   * order, scroll-into-view, and fallback messaging as Load Into Editor.
+   */
+  loadRecoveryRunReplay(workspace) {
+    return this.focusBuilderGoalRunReplay({
+      runRecordingId: workspace?.run?.runRecordingId,
+      recordingId: workspace?.recordingId,
+      runSessionId: workspace?.run?.runSessionId,
+      debugSessionId: workspace?.debugSessionId
+    });
+  }
+
+  /** Restores the persisted active range into the inline range editor. */
+  restoreRecoveryActiveRange(startSeconds, endSeconds) {
+    const start = startSeconds != null ? Number(startSeconds) : null;
+    const end = endSeconds != null ? Number(endSeconds) : null;
+    if (start != null && Number.isFinite(start)) {
+      this.recoveryActiveStartSeconds = start;
+      if (this.recoveryActiveStart) {
+        this.recoveryActiveStart.value = this.formatSecondsAsClock(start);
+      }
+    }
+    if (end != null && Number.isFinite(end)) {
+      this.recoveryActiveEndSeconds = end;
+      if (this.recoveryActiveEnd) {
+        this.recoveryActiveEnd.value = this.formatSecondsAsClock(end);
+      }
+    }
+    if (start != null || end != null) {
+      this.updateRecoveryRangeHint();
+    }
+  }
+
+  /** Applies a saved promoted-evidence id list as the single source of truth for checkboxes. */
+  applyRecoverySelectedEvidenceIds(ids) {
+    if (!this.recoveryEvidenceGroups) {
+      return;
+    }
+    const wanted = Array.isArray(ids) ? ids.map(String) : [];
+    const wantedSet = new Set(wanted);
+    this.recoveryEvidenceGroups
+      .querySelectorAll('.recovery-evidence-checkbox')
+      .forEach(checkbox => {
+        checkbox.checked = wantedSet.has(checkbox.value);
+      });
+    this.updateRecoveryEvidenceMeta();
+  }
+
+  recoveryMarkStart() {
+    const state = this.getRecoveryReplayState();
+    const seconds = state.currentTimeSeconds != null ? Math.floor(state.currentTimeSeconds) : null;
+    if (seconds == null) {
+      this.renderRecoveryRangeHint('No replay time available. Start replay first.');
+      return;
+    }
+    this.recoveryActiveStartSeconds = seconds;
+    if (this.recoveryActiveStart) {
+      this.recoveryActiveStart.value = this.formatSecondsAsClock(seconds);
+    }
+    this.updateRecoveryRangeHint();
+  }
+
+  recoveryMarkEnd() {
+    const state = this.getRecoveryReplayState();
+    const seconds = state.currentTimeSeconds != null ? Math.floor(state.currentTimeSeconds) : null;
+    if (seconds == null) {
+      this.renderRecoveryRangeHint('No replay time available. Start replay first.');
+      return;
+    }
+    this.recoveryActiveEndSeconds = seconds;
+    if (this.recoveryActiveEnd) {
+      this.recoveryActiveEnd.value = this.formatSecondsAsClock(seconds);
+    }
+    this.updateRecoveryRangeHint();
+  }
+
+  recoveryClearActiveRange() {
+    this.recoveryActiveStartSeconds = null;
+    this.recoveryActiveEndSeconds = null;
+    this.recoveryActiveImportant = false;
+    ['recoveryActiveStart', 'recoveryActiveEnd', 'recoveryActiveLabel', 'recoveryActiveTick', 'recoveryActiveFrame', 'recoveryActiveNote'].forEach(key => {
+      if (this[key]) this[key].value = '';
+    });
+    if (this.recoveryImportantBtn) {
+      this.recoveryImportantBtn.classList.remove('active');
+    }
+    this.updateRecoveryRangeHint();
+  }
+
+  recoveryToggleImportant() {
+    this.recoveryActiveImportant = !this.recoveryActiveImportant;
+    if (this.recoveryImportantBtn) {
+      this.recoveryImportantBtn.classList.toggle('active', this.recoveryActiveImportant);
+    }
+  }
+
+  recoveryPinCurrentFrame() {
+    const state = this.getRecoveryReplayState();
+    if (state.currentTick != null && this.recoveryActiveTick) {
+      this.recoveryActiveTick.value = String(state.currentTick);
+    }
+    if (state.currentFrame != null && this.recoveryActiveFrame) {
+      this.recoveryActiveFrame.value = String(state.currentFrame);
+    }
+  }
+
+  updateRecoveryRangeHint() {
+    const start = this.recoveryActiveStartSeconds;
+    const end = this.recoveryActiveEndSeconds;
+    this.renderRecoveryRangeHint(
+      start != null && end != null
+        ? `Active: ${this.formatSecondsAsClock(start)} → ${this.formatSecondsAsClock(end)}`
+        : start != null
+          ? `Start marked at ${this.formatSecondsAsClock(start)}`
+          : end != null
+            ? `End marked at ${this.formatSecondsAsClock(end)}`
+            : 'No active range');
+  }
+
+  renderRecoveryRangeHint(message) {
+    if (this.recoveryActiveRangeHint) {
+      this.recoveryActiveRangeHint.textContent = message;
+    }
+  }
+
+  /**
+   * Applies the combined typed range input ("00:15-00:20", "15-20", ...) into the
+   * active range fields, then persists and refreshes evidence for the new range.
+   */
+  applyRecoveryTypedRange() {
+    const parsed = this.parseRecoveryRangeInput(this.recoveryTypedRange?.value);
+    if (!parsed) {
+      this.renderRecoveryRangeHint('Type a range like 00:15-00:20 or 15-20.');
+      return;
+    }
+    if (parsed.endSeconds <= parsed.startSeconds) {
+      this.renderRecoveryRangeHint('End must be after start.');
+      return;
+    }
+    this.recoveryActiveStartSeconds = parsed.startSeconds;
+    this.recoveryActiveEndSeconds = parsed.endSeconds;
+    if (this.recoveryActiveStart) {
+      this.recoveryActiveStart.value = this.formatSecondsAsClock(parsed.startSeconds);
+    }
+    if (this.recoveryActiveEnd) {
+      this.recoveryActiveEnd.value = this.formatSecondsAsClock(parsed.endSeconds);
+    }
+    this.updateRecoveryRangeHint();
+    this.persistRecoveryAnnotations();
+    this.refreshRecoveryEvidence();
+  }
+
+  /**
+   * Re-parses the separate start/end fields (lenient: "00:15" or "15") after the
+   * operator edits them, keeping the active range and evidence in sync.
+   */
+  applyRecoveryRangeInputs() {
+    const startSeconds = this.parseRecoveryTimeInput(this.recoveryActiveStart?.value);
+    const endSeconds = this.parseRecoveryTimeInput(this.recoveryActiveEnd?.value);
+    if (startSeconds == null && endSeconds == null) {
+      // Both fields blank or unparseable: treat as no active range without spamming.
+      this.recoveryActiveStartSeconds = null;
+      this.recoveryActiveEndSeconds = null;
+      this.updateRecoveryRangeHint();
+      return;
+    }
+    if (startSeconds != null && endSeconds != null && endSeconds <= startSeconds) {
+      this.renderRecoveryRangeHint('End must be after start.');
+      return;
+    }
+    this.recoveryActiveStartSeconds = startSeconds;
+    this.recoveryActiveEndSeconds = endSeconds;
+    this.updateRecoveryRangeHint();
+    if (startSeconds != null && endSeconds != null) {
+      this.persistRecoveryAnnotations();
+      this.refreshRecoveryEvidence();
+    }
+  }
+
+  async recoverySaveRange() {
+    const startSeconds = this.parseRecoveryTimeInput(this.recoveryActiveStart?.value);
+    const endSeconds = this.parseRecoveryTimeInput(this.recoveryActiveEnd?.value);
+    if (startSeconds == null || endSeconds == null) {
+      this.renderRecoveryRangeHint('Mark both start and end before saving.');
+      return;
+    }
+    if (endSeconds <= startSeconds) {
+      this.renderRecoveryRangeHint('End must be after start.');
+      return;
+    }
+    const tickVal = this.parseRecoveryNumber(this.recoveryActiveTick?.value);
+    const frameVal = this.parseRecoveryNumber(this.recoveryActiveFrame?.value);
+    const annotation = {
+      id: 'ann_' + Date.now(),
+      label: (this.recoveryActiveLabel?.value || '').trim(),
+      note: (this.recoveryActiveNote?.value || '').trim(),
+      important: Boolean(this.recoveryActiveImportant),
+      startSeconds,
+      endSeconds,
+      startTick: tickVal,
+      endTick: tickVal,
+      startFrame: frameVal,
+      endFrame: frameVal
+    };
+    this.recoveryAnnotations.push(annotation);
+    this.renderRecoveryAnnotations();
+    this.recoveryClearActiveRange();
+    await this.persistRecoveryAnnotations();
+    await this.refreshRecoveryEvidence();
+  }
+
+  parseRecoveryNumber(value) {
+    if (value == null || value === '') return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  renderRecoveryAnnotations() {
+    if (this.recoveryAnnotationCount) {
+      this.recoveryAnnotationCount.textContent = `${this.recoveryAnnotations.length} range(s)`;
+    }
+    // Keep the scrubber timeline markers in sync with the saved range cards.
+    this.renderRecoveryTimelineMarkers();
+    if (!this.recoveryAnnotationList) return;
+    if (this.recoveryAnnotations.length === 0) {
+      this.recoveryAnnotationList.innerHTML =
+        '<div class="text-muted small fst-italic">No ranges marked yet. Use the replay scrubber, then Mark Start / Mark End / Save Range.</div>';
+      return;
+    }
+    this.recoveryAnnotationList.innerHTML = this.recoveryAnnotations.map((a, idx) => `
+      <div class="recovery-annotation-card border rounded p-2 ${a.important ? 'border-warning' : ''}">
+        <div class="d-flex justify-content-between align-items-start">
+          <div class="fw-semibold small">
+            ${a.important ? '<i class="bi bi-star-fill text-warning me-1"></i>' : ''}${this.escapeHtml(a.label || `Range ${idx + 1}`)}
+            <span class="text-muted ms-1">${this.formatSecondsAsClock(a.startSeconds)} → ${this.formatSecondsAsClock(a.endSeconds)}</span>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" data-recovery-annotation-remove="${this.escapeAttr(a.id)}">
+            <i class="bi bi-trash"></i>
+          </button>
+        </div>
+        ${a.note ? `<div class="small text-muted mt-1">${this.escapeHtml(a.note)}</div>` : ''}
+        ${(a.startTick != null || a.startFrame != null) ? `<div class="small text-muted">Tick: ${a.startTick ?? '-'} • Frame: ${a.startFrame ?? '-'}</div>` : ''}
+      </div>
+    `).join('');
+    this.recoveryAnnotationList.querySelectorAll('[data-recovery-annotation-remove]').forEach(btn => {
+      btn.addEventListener('click', () => this.removeRecoveryAnnotation(btn.dataset.recoveryAnnotationRemove));
+    });
+  }
+
+  removeRecoveryAnnotation(id) {
+    this.recoveryAnnotations = this.recoveryAnnotations.filter(a => a.id !== id);
+    this.renderRecoveryAnnotations();
+    this.persistRecoveryAnnotations();
+    this.refreshRecoveryEvidence();
+  }
+
+  /**
+   * Renders saved ranges as timeline markers on the scrubber, positioned by
+   * percentage of the total replay duration. Clicking a marker seeks the replay.
+   */
+  renderRecoveryTimelineMarkers() {
+    const container = document.getElementById('timelineMarkers');
+    if (!container) return;
+    this.clearRecoveryTimelineMarkers();
+    if (!this.recoveryModeActive || this.recoveryAnnotations.length === 0) {
+      return;
+    }
+    const totalSeconds = this.getRecoveryTimelineTotalSeconds();
+    if (!totalSeconds || totalSeconds <= 0) {
+      return;
+    }
+    this.recoveryAnnotations.forEach(annotation => {
+      const start = Number(annotation.startSeconds);
+      const end = Number(annotation.endSeconds);
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+        return;
+      }
+      const leftPct = Math.min(100, Math.max(0, (start / totalSeconds) * 100));
+      const widthPct = Math.min(100 - leftPct, Math.max(0.5, ((end - start) / totalSeconds) * 100));
+      const marker = document.createElement('div');
+      marker.className = 'timeline-marker-range' + (annotation.important ? ' important' : '');
+      marker.style.left = `${leftPct}%`;
+      marker.style.width = `${widthPct}%`;
+      const rangeLabel = `${this.formatSecondsAsClock(start)}-${this.formatSecondsAsClock(end)}`;
+      marker.title =
+        `${annotation.label || 'Range'} (${rangeLabel})` +
+        `${annotation.note ? `: ${annotation.note}` : ''}`;
+      marker.addEventListener('click', () => this.seekRecoveryReplay(start));
+      container.appendChild(marker);
+    });
+  }
+
+  clearRecoveryTimelineMarkers() {
+    const container = document.getElementById('timelineMarkers');
+    if (!container) return;
+    container.querySelectorAll('.timeline-marker-range').forEach(el => el.remove());
+  }
+
+  /**
+   * Best-effort total replay duration in seconds: prefers the loaded video duration,
+   * falls back to the scrubber's total time readout (debug-session replays).
+   */
+  getRecoveryTimelineTotalSeconds() {
+    const video = document.getElementById('replayVideo');
+    if (video && Number.isFinite(video.duration) && video.duration > 0) {
+      return video.duration;
+    }
+    const totalEl = document.getElementById('totalTime');
+    if (totalEl && totalEl.textContent) {
+      const parsed = this.parseRecoveryTimeInput(totalEl.textContent.trim());
+      if (parsed != null && parsed > 0) {
+        return parsed;
+      }
+    }
+    return null;
+  }
+
+  /** Seeks the canonical replay surface to the given second (video or debug session). */
+  seekRecoveryReplay(seconds) {
+    const target = Math.max(0, Number(seconds) || 0);
+    const video = document.getElementById('replayVideo');
+    if (video && Number.isFinite(video.duration) && video.duration > 0) {
+      video.currentTime = Math.min(target, video.duration);
+      return;
+    }
+    // Debug-session replays are tick based (600ms per tick).
+    const tickJumpInput = document.getElementById('scrubberTickJumpInput');
+    const tickJumpBtn = document.getElementById('scrubberTickJumpBtn');
+    if (tickJumpInput && tickJumpBtn) {
+      tickJumpInput.value = String(Math.round(target / 0.6));
+      tickJumpBtn.click();
+    }
+  }
+
+  async persistRecoveryAnnotations() {
+    if (!this.recoveryIterationId) return;
+    try {
+      await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(this.recoveryIterationId)}/recovery-annotations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          annotations: this.recoveryAnnotations,
+          activeRangeStartSeconds: this.recoveryActiveStartSeconds,
+          activeRangeEndSeconds: this.recoveryActiveEndSeconds,
+          selectedEvidenceIds: this.collectRecoverySelectedEvidenceIds()
+        })
+      });
+    } catch (error) {
+      console.error('Failed to persist recovery annotations:', error);
+    }
+  }
+
+  async refreshRecoveryEvidence() {
+    if (!this.recoveryIterationId) return;
+    this.hideRecoveryEvidenceError();
+    this.setRecoveryStatusChip(this.recoveryStatusEvidence, 'Evidence', { text: 'Refreshing...', tone: 'warn' });
+    try {
+      // Evidence refresh uses the currently selected/saved ranges: the active range
+      // fields take precedence, then the union of saved annotation ranges (backend).
+      const activeStart = this.parseRecoveryTimeInput(this.recoveryActiveStart?.value);
+      const activeEnd = this.parseRecoveryTimeInput(this.recoveryActiveEnd?.value);
+      const body = {
+        annotations: this.recoveryAnnotations,
+        selectedEvidenceIds: this.collectRecoverySelectedEvidenceIds()
+      };
+      if (activeStart != null) body.activeRangeStartSeconds = activeStart;
+      if (activeEnd != null) body.activeRangeEndSeconds = activeEnd;
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(this.recoveryIterationId)}/recovery-evidence`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      this.renderRecoveryEvidence(result);
+      this.recoveryEvidenceStatus = 'loaded';
+      const totalEvidence = Number(result.totalEvidenceCount ?? 0);
+      this.setRecoveryStatusChip(this.recoveryStatusEvidence, 'Evidence', {
+        text: `Loaded (${totalEvidence})`,
+        tone: totalEvidence > 0 ? 'ok' : 'warn'
+      });
+    } catch (error) {
+      console.error('Failed to resolve recovery evidence:', error);
+      // Keep the existing evidence visible; report the failure inline in the panel.
+      this.recoveryEvidenceStatus = 'error';
+      this.showRecoveryEvidenceError(
+        `Evidence refresh failed: ${error.message}. Previously loaded evidence is still shown.`
+      );
+      this.setRecoveryStatusChip(this.recoveryStatusEvidence, 'Evidence', { text: 'Refresh failed', tone: 'error' });
+    }
+  }
+
+  renderRecoveryEvidence(draft) {
+    const groups = Array.isArray(draft?.evidenceGroups) ? draft.evidenceGroups : [];
+    const selectedCount = Number(draft?.selectedEvidenceCount ?? 0);
+    const totalCount = Number(draft?.totalEvidenceCount ?? 0);
+    if (this.recoveryEvidenceMeta) {
+      this.recoveryEvidenceMeta.textContent = `${selectedCount} of ${totalCount} evidence items selected`;
+    }
+    if (!this.recoveryEvidenceGroups) return;
+    if (groups.length === 0) {
+      this.recoveryEvidenceGroups.innerHTML =
+        '<div class="text-muted small fst-italic">No evidence was collected for this failed run.</div>';
+      return;
+    }
+    this.recoveryEvidenceGroups.innerHTML = groups.map(group => {
+      const items = Array.isArray(group.items) ? group.items : [];
+      const itemsHtml = items.length
+        ? items.map(item => `
+            <label class="form-check border rounded p-2 mb-1">
+              <input class="form-check-input recovery-evidence-checkbox" type="checkbox"
+                value="${this.escapeAttr(item.id || '')}" ${item.selected ? 'checked' : ''}>
+              <span class="form-check-label">
+                <div class="fw-semibold small">${this.escapeHtml(item.title || '(untitled evidence)')}</div>
+                <div class="small text-muted">${this.escapeHtml(item.subtitle || '')}</div>
+                ${item.detail ? `<div class="small mt-1 font-monospace">${this.escapeHtml(item.detail)}</div>` : ''}
+              </span>
+            </label>
+          `).join('')
+        : '<div class="text-muted small fst-italic">No evidence in this group.</div>';
+      return `
+        <div class="border rounded p-2">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <div class="fw-semibold small">${this.escapeHtml(group.label || group.key || 'Evidence')}</div>
+            <div class="small text-muted">${items.length} item(s)</div>
+          </div>
+          ${itemsHtml}
+        </div>
+      `;
+    }).join('');
+    this.updateRecoveryEvidenceMeta();
+  }
+
+  setAllRecoveryEvidenceSelections(selected) {
+    if (!this.recoveryEvidenceGroups) return;
+    this.recoveryEvidenceGroups
+      .querySelectorAll('.recovery-evidence-checkbox')
+      .forEach(checkbox => { checkbox.checked = Boolean(selected); });
+    this.updateRecoveryEvidenceMeta();
+    this.persistRecoveryAnnotations();
+  }
+
+  updateRecoveryEvidenceMeta() {
+    if (!this.recoveryEvidenceGroups || !this.recoveryEvidenceMeta) return;
+    const total = this.recoveryEvidenceGroups.querySelectorAll('.recovery-evidence-checkbox').length;
+    const selected = this.recoveryEvidenceGroups.querySelectorAll('.recovery-evidence-checkbox:checked').length;
+    this.recoveryEvidenceMeta.textContent = `${selected} of ${total} evidence items selected`;
+  }
+
+  collectRecoverySelectedEvidenceIds() {
+    if (!this.recoveryEvidenceGroups) return [];
+    return Array.from(
+      this.recoveryEvidenceGroups.querySelectorAll('.recovery-evidence-checkbox:checked')
+    ).map(checkbox => checkbox.value).filter(Boolean);
+  }
+
+  async generateRecoveryPatchPlan() {
+    if (!this.recoveryIterationId) return;
+    // Manual issue text is required before producing a meaningful patch plan.
+    const promptText = (this.recoveryPrompt?.value || '').trim();
+    if (!promptText) {
+      this.renderRecoveryPatchPlan(null, 'Describe the issue in the Patch Prompt before generating a patch plan.', 'warning');
+      if (this.recoveryPrompt && typeof this.recoveryPrompt.focus === 'function') {
+        this.recoveryPrompt.focus();
+      }
+      return;
+    }
+    const selectedEvidenceIds = this.collectRecoverySelectedEvidenceIds();
+    if (selectedEvidenceIds.length === 0) {
+      this.renderRecoveryPatchPlan(null, 'Select at least one evidence item before generating a patch plan.', 'warning');
+      return;
+    }
+    // Patch generation uses the currently selected/saved ranges (lenient parsing).
+    const activeStart = this.parseRecoveryTimeInput(this.recoveryActiveStart?.value);
+    const activeEnd = this.parseRecoveryTimeInput(this.recoveryActiveEnd?.value);
+    this.setRecoveryGenerateState(true, 'Generating...');
+    this.renderRecoveryPatchPlan(null, 'Generating a Micro6 patch plan from your prompt, annotations, and selected evidence...', 'info');
+    try {
+      const body = {
+        prompt: this.recoveryPrompt ? this.recoveryPrompt.value : '',
+        context: this.recoveryContext ? this.recoveryContext.value : '',
+        selectedEvidenceIds,
+        annotations: this.recoveryAnnotations
+      };
+      if (activeStart != null) body.timeRangeStartSeconds = activeStart;
+      if (activeEnd != null) body.timeRangeEndSeconds = activeEnd;
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(this.recoveryIterationId)}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      await this.loadBuilderGoalRuns();
+      const repairIncident = result.repairIncident || this.recoveryDraft?.repairIncident;
+      const generatedMessage = repairIncident
+        ? 'Patch plan generated. Review it, then export a patch file.'
+        : 'Patch plan generated. Approve Patch + Relaunch is now available.';
+      this.renderRecoveryPatchPlan(result, result.patchId ? generatedMessage : 'Patch planning completed, but no patch draft was produced.', result.patchId ? 'success' : 'warning');
+      this.setRecoveryApproveState(!Boolean(result.patchId) || Boolean(repairIncident));
+      this.setRecoveryExportState(!(Boolean(result.patchId) && Boolean(repairIncident)));
+    } catch (error) {
+      console.error('Failed to generate recovery patch plan:', error);
+      this.renderRecoveryPatchPlan(null, `Failed to generate a patch plan: ${error.message}`, 'danger');
+    } finally {
+      this.setRecoveryGenerateState(false, 'Generate Patch Plan');
+    }
+  }
+
+  renderRecoveryPatchPlan(run, message, tone = 'muted') {
+    if (!this.recoveryPatchPlanReview) return;
+    if (message) {
+      this.recoveryPatchPlanReview.innerHTML = `<div class="text-${tone} mb-2">${this.escapeHtml(message)}</div>`;
+    }
+    if (run && (run.diagnosisSummary || run.patchId)) {
+      const parts = [];
+      if (run.diagnosisSummary) parts.push(`<div><strong>Diagnosis:</strong> ${this.escapeHtml(run.diagnosisSummary)}</div>`);
+      if (run.rootCause) parts.push(`<div><strong>Root cause:</strong> ${this.escapeHtml(run.rootCause)}</div>`);
+      if (run.confidence) parts.push(`<div><strong>Confidence:</strong> ${this.escapeHtml(run.confidence)}</div>`);
+      if (run.patchDraftSummary) parts.push(`<div><strong>Patch draft:</strong> ${this.escapeHtml(run.patchDraftSummary)}</div>`);
+      if (run.retestPlanSummary) parts.push(`<div><strong>Retest plan:</strong> ${this.escapeHtml(run.retestPlanSummary)}</div>`);
+      if (run.patchId) parts.push(`<div class="small text-muted">Patch ID: ${this.escapeHtml(run.patchId)}</div>`);
+      this.recoveryPatchPlanReview.innerHTML += parts.join('');
+    }
+  }
+
+  async approveRecoveryRelaunch() {
+    if (!this.recoveryIterationId) return;
+    this.setRecoveryApproveState(true, 'Approving...');
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(this.recoveryIterationId)}/approve-recovery`, {
+        method: 'POST'
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      await this.loadBuilderGoalRuns();
+      this.showRecoveryRelaunchPanel(result);
+      this.setRecoveryApproveState(true, 'Relaunching...');
+    } catch (error) {
+      console.error('Failed to approve recovery relaunch:', error);
+      alert('Failed to approve recovery relaunch: ' + error.message);
+      this.setRecoveryApproveState(false);
+    }
+  }
+
+  async exportRecoveryPatch() {
+    if (!this.recoveryIterationId) return;
+    this.setRecoveryExportState(true, 'Exporting...');
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(this.recoveryIterationId)}/export-repair-patch`, {
+        method: 'POST'
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      const link = result.downloadUrl
+        ? `<div class="mt-2"><a class="btn btn-sm btn-outline-success" href="${this.escapeAttr(result.downloadUrl)}"><i class="bi bi-download me-1"></i>Download ${this.escapeHtml(result.filename || 'repair.patch')}</a></div>`
+        : '';
+      this.renderRecoveryPatchPlan(
+        null,
+        `Patch exported safely (${result.filesChanged || 0} files, ${result.linesChanged || 0} changed lines). The active Micro6 worktree was not modified.`,
+        'success'
+      );
+      if (this.recoveryPatchPlanReview) {
+        this.recoveryPatchPlanReview.innerHTML += link;
+      }
+      await this.loadBuilderGoalRuns();
+      this.setRecoveryExportState(false, 'Export Again');
+    } catch (error) {
+      console.error('Failed to export recovery patch:', error);
+      this.renderRecoveryPatchPlan(null, `Failed to export the repair patch: ${error.message}`, 'danger');
+      this.setRecoveryExportState(false);
+    }
+  }
+
+  renderRepairIncident(incident) {
+    if (!this.recoveryRepairIncident) return;
+    if (!incident) {
+      this.recoveryRepairIncident.hidden = true;
+      this.recoveryRepairIncident.textContent = '';
+      return;
+    }
+    const details = [incident.type, incident.reason];
+    if (Number(incident.stagnant_seconds) > 0) {
+      details.push(`${incident.stagnant_seconds}s without progress`);
+    }
+    this.recoveryRepairIncident.textContent = details.filter(Boolean).join(' • ');
+    this.recoveryRepairIncident.hidden = false;
+  }
+
+  showRecoveryRelaunchPanel(result) {
+    if (this.recoveryRelaunchPanel) {
+      this.recoveryRelaunchPanel.hidden = false;
+    }
+    if (this.recoveryRelaunchStatus) {
+      this.recoveryRelaunchStatus.textContent = result.recoveryPhase || 'Relaunching...';
+    }
+    if (this.recoveryPreferredSession && result.preferredSessionId) {
+      this.recoveryPreferredSession.textContent = `Preferred session: ${result.preferredSessionId}`;
+    }
+    if (this.recoveryChildIteration && result.childIterationId) {
+      this.recoveryChildIteration.textContent = `Child run: ${result.childIterationId}`;
+    }
+  }
+
+  startRecoveryPolling() {
+    this.stopRecoveryPolling();
+    this.recoveryPollHandle = setInterval(() => {
+      this.pollRecoveryState();
+      this.pollRecoveryCodexMcpStatus();
+    }, 5000);
+  }
+
+  stopRecoveryPolling() {
+    if (this.recoveryPollHandle) {
+      clearInterval(this.recoveryPollHandle);
+      this.recoveryPollHandle = null;
+    }
+  }
+
+  /**
+   * Polls Codex MCP provider status and renders the verdict in the recovery toolbar.
+   */
+  async pollRecoveryCodexMcpStatus() {
+    try {
+      const response = await fetch('/api/debug/patch-loop/provider/status');
+      if (!response.ok) return;
+      const status = await response.json();
+      if (typeof renderRecoveryCodexMcpStatus === 'function') {
+        renderRecoveryCodexMcpStatus(status);
+      }
+    } catch (error) {
+      console.debug('Recovery Codex MCP status poll failed:', error);
+    }
+  }
+
+  async pollRecoveryState() {
+    if (!this.recoveryModeActive || !this.recoveryIterationId) return;
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(this.recoveryIterationId)}/recovery-state`);
+      if (!response.ok) return;
+      const state = await response.json();
+      if (this.recoveryRelaunchStatus) {
+        this.recoveryRelaunchStatus.textContent = state.relaunchStatus || state.recoveryPhase || '--';
+      }
+      if (this.recoveryPreferredSession && state.preferredSessionId) {
+        this.recoveryPreferredSession.textContent = `Preferred session: ${state.preferredSessionId}`;
+      }
+      if (this.recoveryChildIteration && state.childIterationId) {
+        this.recoveryChildIteration.textContent = `Child run: ${state.childIterationId}`;
+      }
+      if (state.bindStatus === 'BOUND' || state.recoveryPhase === 'RELAUNCHED') {
+        if (this.recoveryRelaunchPanel) {
+          this.recoveryRelaunchPanel.hidden = false;
+        }
+        if (this.recoveryRelaunchStatus) {
+          this.recoveryRelaunchStatus.textContent = 'Debug session bound. Following child run.';
+        }
+        // Switch the replay surface to the child run's recording once, so the operator stays on
+        // the same debugger surface and follows the relaunched run.
+        if (!this.recoveryChildLoaded && state.childRun && state.childRun.runRecordingId) {
+          const replay = window.ChromaScapeReplay;
+          if (replay && replay.loadRecordingQuietly) {
+            const childRecordingId = state.childRun.runRecordingId;
+            replay.loadRecordingQuietly(childRecordingId).then(loaded => {
+              if (loaded) {
+                this.recoveryChildLoaded = true;
+                if (this.recoveryRunLabel) {
+                  const name = state.childRun.displayName || state.childRun.taskKey || state.childIterationId;
+                  this.recoveryRunLabel.textContent = `Following child run: ${name}`;
+                }
+              }
+            });
+          }
+        }
+      }
+      this.setRecoveryApproveState(!state.approvalAvailable);
+      this.renderRepairIncident(state.repairIncident || state.run?.repairIncident);
+      this.setRecoveryExportState(!Boolean(state.repairPatchExportAvailable));
+    } catch (error) {
+      console.debug('Recovery state poll failed:', error);
+    }
+  }
+
+  setRecoveryGenerateState(disabled, label = 'Generate Patch Plan') {
+    if (!this.recoveryGeneratePatchBtn) return;
+    this.recoveryGeneratePatchBtn.disabled = Boolean(disabled);
+    this.recoveryGeneratePatchBtn.innerHTML = `<i class="bi bi-lightbulb-fill me-1"></i>${this.escapeHtml(label)}`;
+  }
+
+  setRecoveryApproveState(disabled, label = 'Approve Patch + Relaunch') {
+    if (!this.recoveryApproveBtn) return;
+    this.recoveryApproveBtn.disabled = Boolean(disabled);
+    if (label) {
+      this.recoveryApproveBtn.innerHTML = `<i class="bi bi-play-fill me-1"></i>${this.escapeHtml(label)}`;
+    }
+  }
+
+  setRecoveryExportState(disabled, label = 'Export Patch') {
+    if (!this.recoveryExportPatchBtn) return;
+    this.recoveryExportPatchBtn.disabled = Boolean(disabled);
+    this.recoveryExportPatchBtn.innerHTML = `<i class="bi bi-file-earmark-diff me-1"></i>${this.escapeHtml(label)}`;
+  }
+
+  async loadStabilizationKpis() {
+    try {
+      const query = new URLSearchParams();
+      const family = this.stabilizationFamilyFilter?.value || '';
+      const historyLimit = this.stabilizationHistoryLimit?.value || '10';
+      if (family) {
+        query.set('family', family);
+      }
+      query.set('historyLimit', historyLimit);
+      const response = await fetch(`/api/account-tasks/stabilization/kpi?${query.toString()}`);
+      if (!response.ok) return;
+      const payload = await response.json();
+      this.renderStabilizationKpis(payload);
+    } catch (error) {
+      console.debug('Could not load stabilization KPI data:', error);
+    }
+  }
+
+  renderStabilizationKpis(payload) {
+    if (!payload) return;
+
+    const regressions = Array.isArray(payload.regressions) ? payload.regressions : [];
+    const summary = [
+      { label: '24h runs', value: payload.window_24h_count ?? 0 },
+      { label: '7d runs', value: payload.window_7d_count ?? 0 },
+      { label: 'Open triage', value: payload.open_triage_count ?? 0 },
+      { label: 'Regressions', value: regressions.length }
+    ];
+
+    if (this.stabilizationSummary) {
+      this.stabilizationSummary.innerHTML = summary.map(item => `
+        <div class="stabilization-stat">
+          <div class="small text-muted">${this.escapeHtml(item.label)}</div>
+          <div class="fw-bold fs-6">${this.escapeHtml(String(item.value))}</div>
+        </div>
+      `).join('');
+    }
+
+    if (this.stabilizationScripts) {
+      const scripts = Array.isArray(payload.scripts) ? payload.scripts : [];
+      this.stabilizationScripts.innerHTML = scripts.length ? scripts.map(script => `
+        <tr>
+          <td>${this.escapeHtml(script.script_key || '')}</td>
+          <td>${this.escapeHtml(script.family || '')}</td>
+          <td>${this.escapeHtml(String(script.window_24h_count ?? 0))}</td>
+          <td>${this.escapeHtml((Number(script.pass_rate_24h ?? 0) * 100).toFixed(0))}%</td>
+          <td>${script.regression ? '<span class="badge bg-danger">Yes</span>' : '<span class="badge bg-success">No</span>'}</td>
+          <td>${this.escapeHtml(script.top_failure_signature || '')}</td>
+        </tr>
+      `).join('') : '<tr><td colspan="6" class="text-muted small">No KPI data yet.</td></tr>';
+    }
+
+    if (this.stabilizationHistory) {
+      const history = Array.isArray(payload.history) ? payload.history : [];
+      this.stabilizationHistory.innerHTML = history.length ? history.map(row => `
+        <tr>
+          <td>${this.escapeHtml(row.reportId || '')}</td>
+          <td>${this.escapeHtml(row.scriptKey || '')}</td>
+          <td>${this.escapeHtml(row.family || '')}</td>
+          <td>${this.escapeHtml(String(row.passRate24h ?? 0))}</td>
+          <td>${this.escapeHtml(String(row.timeoutRate24h ?? 0))}</td>
+          <td>${row.regression ? 'Yes' : 'No'}</td>
+        </tr>
+      `).join('') : '<tr><td colspan="6" class="text-muted small">No history yet.</td></tr>';
+    }
+
+    if (this.stabilizationRegressions) {
+      this.stabilizationRegressions.innerHTML = regressions.length ? regressions.map(row => `
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span>${this.escapeHtml(row.script_key || '')} <span class="text-muted">(${this.escapeHtml(row.family || '')})</span></span>
+          <span class="badge bg-danger">${this.escapeHtml(String(row.window_24h_count ?? 0))}</span>
+        </li>
+      `).join('') : '<li class="list-group-item text-muted small">No regressions detected.</li>';
+    }
+  }
+
+  getCatalogTaskByKey(taskKey) {
+    if (!taskKey) return null;
+    return this.scriptCatalog.find(task => task && task.task_key === taskKey) || null;
+  }
+
+  normalizeTaskKey(taskKey) {
+    return (taskKey || '')
+      .toString()
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+  }
+
+  findCatalogTaskByKeyFlexible(taskKey) {
+    if (!taskKey) return null;
+    const direct = this.getCatalogTaskByKey(taskKey);
+    if (direct) return direct;
+
+    const normalizedTarget = this.normalizeTaskKey(taskKey);
+    if (!normalizedTarget) return null;
+    return this.scriptCatalog.find(task => {
+      if (!task?.task_key) return false;
+      return this.normalizeTaskKey(task.task_key) === normalizedTarget;
+    }) || null;
+  }
+
+  buildCatalogStateForItem(item, index) {
+    const itemId = item?.itemId || String(index);
+    const selectorId = `catalogSelect_${itemId}`;
+    const searchId = `catalogSearch_${itemId}`;
+    const settingsId = `catalogSettings_${itemId}`;
+    const settingPrefix = `setting_${itemId}_`;
+    const state = this.itemSelectionState.get(itemId) || {};
+    const selectedTaskKey = state.selectedTaskKey || item?.scriptName || '';
+    return { itemId, selectorId, searchId, settingsId, settingPrefix, selectedTaskKey };
+  }
+
+  /**
+   * Renders the plans list.
+   */
+  renderPlansList() {
+    if (!this.plansList) return;
+
+    if (!this.plans || this.plans.length === 0) {
+      this.plansList.innerHTML =
+        '<div class="text-muted small fst-italic">No task plans yet. Generate one above.</div>';
+      if (this.planCountBadge) {
+        this.planCountBadge.textContent = '0 plans';
+      }
+      return;
+    }
+
+    if (this.planCountBadge) {
+      this.planCountBadge.textContent = `${this.plans.length} plan${this.plans.length !== 1 ? 's' : ''}`;
+    }
+
+    this.plansList.innerHTML = this.plans.map(plan => {
+      const status = (plan.status || 'generated').toLowerCase();
+      const isActive = plan.planId === this.selectedPlanId;
+      const itemsCount = plan.itemCount || 0;
+      const createdAt = plan.createdAt ? this.formatTimeAgo(plan.createdAt) : '';
+
+      return `
+        <div class="plan-card${isActive ? ' active' : ''}" data-plan-id="${this.escapeAttr(plan.planId)}">
+          <div class="plan-card-header">
+            <span class="plan-card-title">${this.escapeHtml(plan.intent || 'Untitled Plan')}</span>
+            <span class="plan-card-status ${status}">${this.escapeHtml(plan.status || 'GENERATED')}</span>
+          </div>
+          ${plan.intent ? `<div class="plan-card-intent">${this.escapeHtml(plan.intent)}</div>` : ''}
+          <div class="plan-card-meta">
+            <span>${itemsCount} item${itemsCount !== 1 ? 's' : ''}</span>
+            ${createdAt ? `<span>${createdAt}</span>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    this.plansList.querySelectorAll('.plan-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const planId = card.dataset.planId;
+        this.selectPlan(planId);
+      });
+    });
+  }
+
+  async selectPlan(planId) {
+    this.selectedPlanId = planId;
+    this.renderPlansList();
+    await this.loadPlanDetail(planId);
+  }
+
+  async loadPlanDetail(planId) {
+    try {
+      const response = await fetch(`/api/account-tasks/${planId}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      this.selectedPlan = await response.json();
+      this.renderPlanDetail();
+    } catch (error) {
+      console.error('Failed to load plan detail:', error);
+    }
+  }
+
+  renderPlanDetail() {
+    if (!this.selectedPlan || !this.planDetailSection) return;
+
+    const plan = this.selectedPlan;
+    this.planDetailSection.style.display = 'block';
+
+    if (this.planDetailTitle) {
+      this.planDetailTitle.textContent = plan.intent || 'Untitled Plan';
+    }
+    if (this.planDetailIntent) {
+      this.planDetailIntent.textContent = `Plan ${plan.planId}`;
+    }
+    if (this.planDetailStatus) {
+      const status = (plan.status || 'generated').toLowerCase();
+      this.planDetailStatus.className = `badge plan-card-status ${status}`;
+      this.planDetailStatus.textContent = plan.status || 'GENERATED';
+    }
+
+    const canApprove = ['GENERATED', 'UNDER_REVIEW'].includes(plan.status);
+    const canReject = ['GENERATED', 'UNDER_REVIEW', 'PARTIALLY_APPROVED'].includes(plan.status);
+    if (this.approvePlanBtn) {
+      this.approvePlanBtn.style.display = canApprove ? 'inline-block' : 'none';
+    }
+    if (this.rejectPlanBtn) {
+      this.rejectPlanBtn.style.display = canReject ? 'inline-block' : 'none';
+    }
+
+    this.renderPlanItems(plan.items || []);
+  }
+
+  renderPlanItems(items) {
+    if (!this.planItemsList) return;
+
+    if (!items || items.length === 0) {
+      this.planItemsList.innerHTML =
+        '<div class="text-muted small fst-italic">No items in this plan.</div>';
+      return;
+    }
+
+    this.planItemsList.innerHTML = items.map((item, index) => {
+      const status = (item.status || 'pending').toLowerCase();
+      const canAct = ['PENDING', 'APPROVED'].includes(item.status);
+      const canExecute = item.status === 'APPROVED' && (item.scriptName || this.scriptCatalog.length > 0);
+      const canQuickTest = Boolean(item.scriptName || this.scriptCatalog.length > 0);
+      const catalogState = this.buildCatalogStateForItem(item, index);
+      const selectedTask = this.getCatalogTaskByKey(catalogState.selectedTaskKey);
+
+      return `
+        <div class="plan-item-card" data-item-id="${this.escapeAttr(item.itemId)}">
+          <div class="plan-item-header">
+            <span class="plan-item-title">
+              <span class="text-muted me-1">#${item.sortOrder || index + 1}</span>
+              ${this.escapeHtml(item.title || 'Untitled')}
+            </span>
+            <div class="plan-item-actions">
+              ${canAct && item.status === 'PENDING' ? `
+                <button class="btn btn-outline-success btn-item-approve" data-item-id="${this.escapeAttr(item.itemId)}" title="Approve">
+                  <i class="bi bi-check"></i>
+                </button>
+                <button class="btn btn-outline-danger btn-item-reject" data-item-id="${this.escapeAttr(item.itemId)}" title="Reject">
+                  <i class="bi bi-x"></i>
+                </button>
+              ` : ''}
+              ${canExecute ? `
+                <button class="btn btn-outline-primary btn-item-execute" data-item-id="${this.escapeAttr(item.itemId)}" data-script="${this.escapeAttr(item.scriptName || '')}" data-selector-id="${this.escapeAttr(catalogState.selectorId)}" data-settings-id="${this.escapeAttr(catalogState.settingsId)}" title="Execute Patch Loop">
+                  <i class="bi bi-play-fill"></i>
+                </button>
+              ` : ''}
+              ${canQuickTest ? `
+                <button class="btn btn-outline-info btn-item-quick-test" data-item-id="${this.escapeAttr(item.itemId)}" data-script="${this.escapeAttr(item.scriptName || '')}" data-selector-id="${this.escapeAttr(catalogState.selectorId)}" data-settings-id="${this.escapeAttr(catalogState.settingsId)}" title="Run quick test">
+                  <i class="bi bi-lightning-charge"></i>
+                </button>
+              ` : ''}
+              ${item.status === 'COMPLETED' ? '<i class="bi bi-check-circle-fill text-success"></i>' : ''}
+              ${item.status === 'FAILED' ? '<i class="bi bi-exclamation-circle-fill text-danger"></i>' : ''}
+            </div>
+          </div>
+          ${item.description ? `<div class="plan-item-desc">${this.escapeHtml(item.description)}</div>` : ''}
+          <div class="plan-item-meta">
+            <span class="plan-item-badge ${status}">${this.escapeHtml(item.status || 'PENDING')}</span>
+            ${item.scriptName ? `<span><i class="bi bi-code-square me-1"></i>${this.escapeHtml(item.scriptName)}</span>` : ''}
+            ${item.estimatedMinutes ? `<span><i class="bi bi-clock me-1"></i>~${item.estimatedMinutes}min</span>` : ''}
+            ${item.difficulty ? `<span><i class="bi bi-bar-chart me-1"></i>${this.escapeHtml(item.difficulty)}</span>` : ''}
+          </div>
+          ${this.scriptCatalog.length > 0 ? `
+            <div class="mt-2">
+              <label class="small text-muted mb-1 d-block">Catalog script/task</label>
+              <input
+                type="text"
+                class="form-control form-control-sm mb-1 task-catalog-search"
+                id="${this.escapeAttr(catalogState.searchId)}"
+                data-selector-id="${this.escapeAttr(catalogState.selectorId)}"
+                placeholder="Search task catalog..."
+              >
+              <select class="form-select form-select-sm task-catalog-select" id="${this.escapeAttr(catalogState.selectorId)}" data-item-id="${this.escapeAttr(catalogState.itemId)}" data-settings-id="${this.escapeAttr(catalogState.settingsId)}">
+                ${this.buildCatalogOptionsHtml(catalogState.selectedTaskKey)}
+              </select>
+              <div class="mt-2 task-settings-container" id="${this.escapeAttr(catalogState.settingsId)}">
+                ${this.renderTaskSettings(selectedTask, catalogState)}
+              </div>
+            </div>
+          ` : ''}
+          ${item.citations && item.citations.length > 0 ? this.renderCitations(item.citations) : ''}
+        </div>
+      `;
+    }).join('');
+
+    this.planItemsList.querySelectorAll('.btn-item-approve').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.approveItem(btn.dataset.itemId);
+      });
+    });
+
+    this.planItemsList.querySelectorAll('.btn-item-reject').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.rejectItem(btn.dataset.itemId);
+      });
+    });
+
+    this.planItemsList.querySelectorAll('.btn-item-execute').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const selectorId = btn.dataset.selectorId;
+        const settingsId = btn.dataset.settingsId;
+        let selectedScript = btn.dataset.script;
+        if ((!selectedScript || selectedScript.trim() === '') && selectorId) {
+          const selector = document.getElementById(selectorId);
+          if (selector && selector.value) {
+            selectedScript = selector.value;
+          }
+        }
+        this.executeItemPatchLoop(btn.dataset.itemId, selectedScript, settingsId);
+      });
+    });
+
+    this.planItemsList.querySelectorAll('.btn-item-quick-test').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const selectorId = btn.dataset.selectorId;
+        const settingsId = btn.dataset.settingsId;
+        let selectedScript = btn.dataset.script;
+        if ((!selectedScript || selectedScript.trim() === '') && selectorId) {
+          const selector = document.getElementById(selectorId);
+          if (selector && selector.value) {
+            selectedScript = selector.value;
+          }
+        }
+        this.executeItemQuickTest(btn.dataset.itemId, selectedScript, settingsId);
+      });
+    });
+
+    this.planItemsList.querySelectorAll('.task-catalog-search').forEach(input => {
+      input.addEventListener('input', () => {
+        const selectorId = input.dataset.selectorId;
+        if (!selectorId) return;
+        const selector = document.getElementById(selectorId);
+        if (!selector) return;
+        this.filterCatalogSelector(selector, input.value || '');
+      });
+    });
+
+    this.planItemsList.querySelectorAll('.task-catalog-select').forEach(selector => {
+      selector.addEventListener('change', async () => {
+        const itemId = selector.dataset.itemId;
+        const settingsId = selector.dataset.settingsId;
+        const selectedTask = this.getCatalogTaskByKey(selector.value);
+        await this.refreshTaskSettingsUI(itemId, selectedTask, settingsId);
+      });
+      if (selector.value) {
+        const selectedTask = this.getCatalogTaskByKey(selector.value);
+        this.refreshTaskSettingsUI(selector.dataset.itemId, selectedTask, selector.dataset.settingsId);
+      }
+    });
+  }
+
+  buildCatalogOptionsHtml(selectedTaskKey) {
+    const groups = new Map();
+    this.scriptCatalog.forEach(task => {
+      const category = (task?.category || 'other').toString();
+      if (!groups.has(category)) {
+        groups.set(category, []);
+      }
+      groups.get(category).push(task);
+    });
+
+    const orderedCategories = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b));
+    return orderedCategories.map(category => {
+      const options = groups.get(category)
+        .slice()
+        .sort((a, b) =>
+          (a?.display_name || a?.task_key || '')
+            .toString()
+            .localeCompare((b?.display_name || b?.task_key || '').toString())
+        )
+        .map(task => {
+          const taskKey = task?.task_key || '';
+          const selectedAttr = selectedTaskKey && selectedTaskKey === taskKey ? ' selected' : '';
+          return `<option value="${this.escapeAttr(taskKey)}"${selectedAttr}>${this.escapeHtml(this.buildCatalogTaskLabel(task))}</option>`;
+        })
+        .join('');
+      return `<optgroup label="${this.escapeAttr(category)}">${options}</optgroup>`;
+    }).join('');
+  }
+
+  buildCatalogTaskLabel(task) {
+    let label = task?.display_name || task?.task_key || 'unknown';
+    if (task?.queue_status) {
+      const status = task.queue_status;
+      // PAUSED is an activated-but-suspended state and must never render as QUEUED (or RUNNING).
+      const prefix = status === 'RUNNING' ? '[RUNNING' : status === 'PAUSED' ? '[PAUSED' : '[QUEUED';
+      const countSuffix = task.queue_count > 1 ? ` x${task.queue_count}` : '';
+      label = `${prefix} #${task.queue_rank}]${countSuffix} ${label}`;
+    }
+    if (task?.task_key) {
+      label += ` (${task.task_key})`;
+    }
+    if (task?.runnable === false && task?.disabled_reason) {
+      label += ` [not runnable: ${task.disabled_reason}]`;
+    }
+    return label;
+  }
+
+  renderTaskSettings(task, catalogState) {
+    if (!task) {
+      return '<div class="small text-muted fst-italic">Select a task to configure settings.</div>';
+    }
+    const fields = Array.isArray(task?.args_schema?.fields) ? task.args_schema.fields : [];
+    if (!fields.length) {
+      return '<div class="small text-muted fst-italic">No configurable settings exposed for this task.</div>';
+    }
+    const rendered = fields.map(field => this.renderTaskSettingField(field, catalogState.settingPrefix)).join('');
+    const copyBtnId = `taskConfigCopy_${catalogState.itemId}`;
+    const pasteBtnId = `taskConfigPaste_${catalogState.itemId}`;
+    const applyBtnId = `taskConfigApply_${catalogState.itemId}`;
+    const pasteBoxId = `taskConfigPasteBox_${catalogState.itemId}`;
+    const pasteInputId = `taskConfigPasteInput_${catalogState.itemId}`;
+    const messageId = `taskConfigMsg_${catalogState.itemId}`;
+    return `
+      <div class="d-flex gap-1 mb-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm task-config-copy-btn"
+          id="${this.escapeAttr(copyBtnId)}"
+          data-item-id="${this.escapeAttr(catalogState.itemId)}">Copy Config</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm task-config-paste-btn"
+          id="${this.escapeAttr(pasteBtnId)}"
+          data-item-id="${this.escapeAttr(catalogState.itemId)}"
+          data-paste-box-id="${this.escapeAttr(pasteBoxId)}">Paste Config</button>
+      </div>
+      <div class="mb-2" id="${this.escapeAttr(pasteBoxId)}" style="display:none;">
+        <label class="small text-muted d-block mb-1">Paste task config JSON</label>
+        <textarea class="form-control form-control-sm task-config-paste-input"
+          id="${this.escapeAttr(pasteInputId)}"
+          rows="5"
+          placeholder='{"settings":{"field":"value"},"requirements":{"items":[]}}'></textarea>
+        <div class="d-flex gap-1 mt-1">
+          <button type="button" class="btn btn-primary btn-sm task-config-apply-btn"
+            id="${this.escapeAttr(applyBtnId)}"
+            data-item-id="${this.escapeAttr(catalogState.itemId)}"
+            data-paste-input-id="${this.escapeAttr(pasteInputId)}">Apply Pasted Config</button>
+        </div>
+      </div>
+      <div class="small text-muted mb-2" id="${this.escapeAttr(messageId)}"></div>
+      <div class="task-settings-fields">${rendered}</div>
+    `;
+  }
+
+  renderTaskSettingField(field, settingPrefix) {
+    const key = field?.key || '';
+    if (!key) return '';
+    const fieldId = `${settingPrefix}${key}`;
+    const label = this.escapeHtml(field?.label || key);
+    const type = (field?.type || 'string').toLowerCase();
+    const dependsOn = field?.depends_on ? ` data-depends-on="${this.escapeAttr(field.depends_on)}"` : '';
+    const optionsByDep = field?.options_by_dependency
+      ? ` data-options-by-dependency="${this.escapeAttr(JSON.stringify(field.options_by_dependency))}"`
+      : '';
+    const baseAttrs = `class="form-control form-control-sm task-setting-input" data-setting-key="${this.escapeAttr(key)}" data-setting-type="${this.escapeAttr(type)}"${dependsOn}${optionsByDep}`;
+    const description = field?.description ? `<div class="form-text">${this.escapeHtml(field.description)}</div>` : '';
+
+    if (type === 'boolean') {
+      return `
+        <div class="form-check mb-2">
+          <input type="checkbox" id="${this.escapeAttr(fieldId)}" ${baseAttrs.replace('form-control form-control-sm', 'form-check-input')}>
+          <label class="form-check-label small" for="${this.escapeAttr(fieldId)}">${label}</label>
+          ${description}
+        </div>
+      `;
+    }
+
+    if (type === 'select' || type === 'multi_select') {
+      const options = Array.isArray(field?.options) ? field.options : [];
+      const multipleAttr = type === 'multi_select' ? ' multiple' : '';
+      const optionHtml = options.map(opt => `<option value="${this.escapeAttr(String(opt))}">${this.escapeHtml(String(opt))}</option>`).join('');
+      return `
+        <div class="mb-2">
+          <label class="small text-muted d-block mb-1" for="${this.escapeAttr(fieldId)}">${label}</label>
+          <select id="${this.escapeAttr(fieldId)}" ${baseAttrs}${multipleAttr}>
+            ${optionHtml}
+          </select>
+          ${description}
+        </div>
+      `;
+    }
+
+    const inputType = type === 'integer' || type === 'number' ? 'number' : 'text';
+    const minAttr = field?.min !== undefined ? ` min="${this.escapeAttr(String(field.min))}"` : '';
+    const maxAttr = field?.max !== undefined ? ` max="${this.escapeAttr(String(field.max))}"` : '';
+    const stepAttr = type === 'integer' ? ' step="1"' : (type === 'number' ? ' step="any"' : '');
+    return `
+      <div class="mb-2">
+        <label class="small text-muted d-block mb-1" for="${this.escapeAttr(fieldId)}">${label}</label>
+        <input type="${inputType}" id="${this.escapeAttr(fieldId)}" ${baseAttrs}${minAttr}${maxAttr}${stepAttr}>
+        ${description}
+      </div>
+    `;
+  }
+
+  async refreshTaskSettingsUI(itemId, selectedTask, settingsContainerId) {
+    if (!itemId || !settingsContainerId) return;
+    const state = this.itemSelectionState.get(itemId) || {};
+    state.selectedTaskKey = selectedTask?.task_key || '';
+    state.taskSettings = state.taskSettings || {};
+    this.itemSelectionState.set(itemId, state);
+
+    const container = document.getElementById(settingsContainerId);
+    const catalogState = this.buildCatalogStateForItem({ itemId, scriptName: state.selectedTaskKey }, 0);
+    if (container) {
+      container.innerHTML = this.renderTaskSettings(selectedTask, catalogState);
+    }
+
+    if (!selectedTask) return;
+
+    await this.prefillTaskSettings(itemId, selectedTask, settingsContainerId);
+    this.bindTaskSettingsInputs(itemId, selectedTask, settingsContainerId);
+  }
+
+  bindTaskSettingsInputs(itemId, selectedTask, settingsContainerId) {
+    const container = document.getElementById(settingsContainerId);
+    if (!container) return;
+    container.querySelectorAll('.task-setting-input').forEach(input => {
+      const eventName = input.type === 'checkbox' ? 'change' : 'input';
+      input.addEventListener(eventName, () => {
+        this.captureTaskSettingsFromForm(itemId, selectedTask, settingsContainerId);
+        this.applyDependencyRules(settingsContainerId);
+      });
+    });
+    container.querySelectorAll('.task-config-copy-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await this.copyTaskConfig(itemId, selectedTask, settingsContainerId);
+      });
+    });
+    container.querySelectorAll('.task-config-paste-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pasteBox = document.getElementById(btn.dataset.pasteBoxId);
+        if (!pasteBox) return;
+        const isHidden = pasteBox.style.display === 'none';
+        pasteBox.style.display = isHidden ? 'block' : 'none';
+      });
+    });
+    container.querySelectorAll('.task-config-apply-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.applyPastedTaskConfig(itemId, selectedTask, settingsContainerId, btn.dataset.pasteInputId);
+      });
+    });
+    this.applyDependencyRules(settingsContainerId);
+  }
+
+  buildTaskConfigEnvelope(itemId, selectedTask, settingsContainerId) {
+    const capturedSettings = this.captureTaskSettingsFromForm(itemId, selectedTask, settingsContainerId);
+    const canonicalSettings = this.normalizeLevelAliasSettings(
+      capturedSettings,
+      selectedTask || selectedTask?.task_key
+    );
+    if (canonicalSettings.error) {
+      throw new Error(canonicalSettings.error);
+    }
+    const state = this.itemSelectionState.get(itemId) || {};
+    const requirements = state.taskRequirements || {};
+    return {
+      version: 1,
+      task_key: selectedTask?.task_key || '',
+      display_name: selectedTask?.display_name || '',
+      panel_display_name: selectedTask?.panel_display_name || '',
+      settings: canonicalSettings.settings,
+      requirements
+    };
+  }
+
+  async copyTaskConfig(itemId, selectedTask, settingsContainerId) {
+    if (!selectedTask) return;
+    try {
+      const envelope = this.buildTaskConfigEnvelope(itemId, selectedTask, settingsContainerId);
+      await navigator.clipboard.writeText(JSON.stringify(envelope, null, 2));
+      this.showTaskConfigMessage(itemId, 'Config copied to clipboard.', 'success');
+    } catch (error) {
+      console.error('Failed to copy config:', error);
+      this.showTaskConfigMessage(itemId, 'Failed to copy config.', 'error');
+    }
+  }
+
+  normalizePastedConfig(rawParsed) {
+    if (!rawParsed || typeof rawParsed !== 'object' || Array.isArray(rawParsed)) {
+      return { error: 'Pasted JSON must be an object.' };
+    }
+    const asObject = value => (value && typeof value === 'object' && !Array.isArray(value) ? value : null);
+
+    const builderExecution = asObject(rawParsed.builder_execution);
+    const queuePreview = asObject(rawParsed.queue_payload_preview);
+    const envelopeSettings = asObject(rawParsed.settings);
+    const builderSettings = asObject(builderExecution?.task_metadata);
+    const queueSettings = asObject(queuePreview?.task_metadata);
+
+    const settings =
+      builderSettings ||
+      queueSettings ||
+      envelopeSettings ||
+      rawParsed;
+
+    if (!asObject(settings)) {
+      return { error: 'Could not find a valid settings object in pasted JSON.' };
+    }
+
+    const requirements = asObject(rawParsed.requirements) || {};
+    const taskKey =
+      builderExecution?.task_key ||
+      queuePreview?.task_key ||
+      rawParsed.task_key ||
+      null;
+
+    return { settings, requirements, taskKey };
+  }
+
+  applyPastedTaskConfig(itemId, selectedTask, settingsContainerId, pasteInputId) {
+    const input = document.getElementById(pasteInputId);
+    if (!input) return;
+    const raw = (input.value || '').trim();
+    if (!raw) {
+      this.showTaskConfigMessage(itemId, 'Paste JSON first.', 'warning');
+      return;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      this.showTaskConfigMessage(itemId, `Invalid JSON: ${error.message}`, 'error');
+      return;
+    }
+
+    const normalized = this.normalizePastedConfig(parsed);
+    if (normalized.error) {
+      this.showTaskConfigMessage(itemId, normalized.error, 'error');
+      return;
+    }
+
+    const state = this.itemSelectionState.get(itemId) || {};
+    const resolvedTask = this.findCatalogTaskByKeyFlexible(normalized.taskKey) || selectedTask || null;
+    const resolvedTaskKey = resolvedTask?.task_key || selectedTask?.task_key || state.selectedTaskKey || '';
+    const canonicalSettings = this.normalizeLevelAliasSettings(
+      normalized.settings,
+      resolvedTask || resolvedTaskKey
+    );
+    if (canonicalSettings.error) {
+      this.showTaskConfigMessage(itemId, canonicalSettings.error, 'error');
+      return;
+    }
+    state.selectedTaskKey = resolvedTaskKey;
+    state.taskSettings = canonicalSettings.settings;
+    state.taskRequirements = normalized.requirements || {};
+    this.itemSelectionState.set(itemId, state);
+
+    const selector = document.getElementById(`catalogSelect_${itemId}`);
+    if (selector && resolvedTask?.task_key) {
+      selector.value = resolvedTask.task_key;
+    }
+
+    this.refreshTaskSettingsUI(itemId, resolvedTask, settingsContainerId).then(() => {
+      this.applySettingsToForm(settingsContainerId, state.taskSettings);
+    });
+
+    const allKeys = Object.keys(state.taskSettings);
+    const appliedKeys = [];
+    const ignoredKeys = [];
+    const container = document.getElementById(settingsContainerId);
+    if (container) {
+      const knownKeys = new Set(
+        Array.from(container.querySelectorAll('.task-setting-input'))
+          .map(el => el.dataset.settingKey)
+          .filter(Boolean)
+      );
+      allKeys.forEach(k => {
+        if (knownKeys.has(k)) appliedKeys.push(k);
+        else ignoredKeys.push(k);
+      });
+    }
+    const reqCount = Object.keys(state.taskRequirements).length;
+    const taskMsg = resolvedTask?.task_key ? ` for ${resolvedTask.task_key}` : '';
+    const msg = `Applied ${appliedKeys.length} setting(s)${taskMsg}` +
+      (ignoredKeys.length ? `, ignored ${ignoredKeys.length} unknown key(s)` : '') +
+      (reqCount ? `, stored requirements metadata (${reqCount} key(s))` : '') +
+      '.';
+    this.showTaskConfigMessage(itemId, msg, ignoredKeys.length ? 'warning' : 'success');
+  }
+
+  // Copied planner payloads may carry the schema's canonical level field alongside the legacy
+  // targetLevel/target_level aliases. Fold the aliases into whichever level field the task schema
+  // declares (falling back to the Fishing canonical field when the schema is unknown) so the
+  // executor never rejects an otherwise-valid setting as unknown.
+  normalizeLevelAliasSettings(settings, taskOrKey) {
+    const normalized =
+      settings && typeof settings === 'object' && !Array.isArray(settings) ? { ...settings } : {};
+    const hasCamel = Object.prototype.hasOwnProperty.call(normalized, 'targetLevel');
+    const hasSnake = Object.prototype.hasOwnProperty.call(normalized, 'target_level');
+    if (!hasCamel && !hasSnake) {
+      return { settings: normalized };
+    }
+    const task = taskOrKey && typeof taskOrKey === 'object' ? taskOrKey : null;
+    const key = String(
+      task?.task_key || (typeof taskOrKey === 'string' ? taskOrKey : '') || ''
+    ).toUpperCase();
+    const schemaKeys = new Set(
+      Array.isArray(task?.args_schema?.fields)
+        ? task.args_schema.fields.map(field => field?.key).filter(Boolean)
+        : []
+    );
+    let canonicalKey = null;
+    if (schemaKeys.size) {
+      if (schemaKeys.has('targetLevel')) canonicalKey = 'targetLevel';
+      else if (schemaKeys.has('stopConditionValue')) canonicalKey = 'stopConditionValue';
+    } else if (key === 'FISHING_TRAINING' || key === 'FISH_TRAINING') {
+      canonicalKey = 'stopConditionValue';
+    }
+    if (!canonicalKey) {
+      return { settings: normalized };
+    }
+    const legacyValues = [
+      ...(hasCamel ? [normalized.targetLevel] : []),
+      ...(hasSnake ? [normalized.target_level] : [])
+    ];
+    if (
+      legacyValues.length > 1 &&
+      !legacyValues.every(value => Object.is(value, legacyValues[0]))
+    ) {
+      return { error: 'Conflicting target-level settings: targetLevel and target_level disagree.' };
+    }
+    const legacy = legacyValues[0];
+    if (
+      Object.prototype.hasOwnProperty.call(normalized, canonicalKey) &&
+      !Object.is(normalized[canonicalKey], legacy)
+    ) {
+      return {
+        error: `${canonicalKey} disagrees with a legacy target-level value.`
+      };
+    }
+    if (!Object.prototype.hasOwnProperty.call(normalized, canonicalKey)) {
+      normalized[canonicalKey] = legacy;
+    }
+    if (canonicalKey !== 'targetLevel') {
+      delete normalized.targetLevel;
+    }
+    delete normalized.target_level;
+    return { settings: normalized };
+  }
+
+  // Resolves the catalog task for alias normalization when the catalog is loaded; tests and early
+  // renders may not have one, in which case callers fall back to the task key.
+  resolveCatalogTaskForNormalization(taskKey) {
+    try {
+      if (!taskKey || !Array.isArray(this.scriptCatalog)) return null;
+      return this.findCatalogTaskByKeyFlexible(taskKey);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  showTaskConfigMessage(itemId, message, tone) {
+    const el = document.getElementById(`taskConfigMsg_${itemId}`);
+    if (!el) return;
+    const cls = tone === 'error'
+      ? 'text-danger'
+      : tone === 'warning'
+        ? 'text-warning'
+        : 'text-success';
+    el.className = `small mb-2 ${cls}`;
+    el.textContent = message;
+  }
+
+  applyDependencyRules(settingsContainerId) {
+    const container = document.getElementById(settingsContainerId);
+    if (!container) return;
+
+    container.querySelectorAll('[data-depends-on]').forEach(input => {
+      const dependsOnKey = input.dataset.dependsOn;
+      const dependency = container.querySelector(`[data-setting-key="${dependsOnKey}"]`);
+      if (!dependency) return;
+
+      const depValue = this.readSettingInputValue(dependency);
+      const mapRaw = input.dataset.optionsByDependency;
+      if (mapRaw && input.tagName === 'SELECT') {
+        try {
+          const map = JSON.parse(mapRaw);
+          const branch = Array.isArray(map?.[depValue]) ? map[depValue] : [];
+          if (branch.length) {
+            const prevValue = input.value;
+            input.innerHTML = branch
+              .map(v => `<option value="${this.escapeAttr(String(v))}">${this.escapeHtml(String(v))}</option>`)
+              .join('');
+            if (Array.from(input.options).some(o => o.value === prevValue)) {
+              input.value = prevValue;
+            }
+          }
+        } catch (error) {
+          console.debug('Failed applying dependency options', error);
+        }
+      }
+    });
+  }
+
+  async prefillTaskSettings(itemId, selectedTask, settingsContainerId) {
+    const state = this.itemSelectionState.get(itemId) || {};
+    let settings = state.taskSettings || {};
+    if (!Object.keys(settings).length) {
+      settings = await this.loadSavedTaskSettings(selectedTask);
+      if (!Object.keys(settings).length) {
+        settings = this.buildDefaultSettings(selectedTask);
+      }
+    }
+    state.taskSettings = settings;
+    this.itemSelectionState.set(itemId, state);
+    this.applySettingsToForm(settingsContainerId, settings);
+  }
+
+  async loadSavedTaskSettings(selectedTask) {
+    try {
+      const query = new URLSearchParams();
+      if (selectedTask?.task_key) query.set('taskKey', selectedTask.task_key);
+      if (selectedTask?.panel_display_name) {
+        query.set('displayName', selectedTask.panel_display_name);
+      } else if (selectedTask?.display_name) {
+        query.set('displayName', selectedTask.display_name);
+      }
+      const response = await fetch(`/api/account-tasks/stabilization/config?${query.toString()}`);
+      if (!response.ok) return {};
+      const payload = await response.json();
+      if (payload && payload.success === true && payload.settings && typeof payload.settings === 'object') {
+        return payload.settings;
+      }
+      return {};
+    } catch (error) {
+      console.debug('Could not load saved task settings:', error);
+      return {};
+    }
+  }
+
+  buildDefaultSettings(task) {
+    const defaults = {};
+    const fields = Array.isArray(task?.args_schema?.fields) ? task.args_schema.fields : [];
+    fields.forEach(field => {
+      if (field?.key && field.default !== undefined) {
+        defaults[field.key] = field.default;
+      }
+    });
+    return defaults;
+  }
+
+  applySettingsToForm(settingsContainerId, settings) {
+    const container = document.getElementById(settingsContainerId);
+    if (!container) return;
+    container.querySelectorAll('.task-setting-input').forEach(input => {
+      const key = input.dataset.settingKey;
+      if (!key || settings[key] === undefined) return;
+      const value = settings[key];
+      if (input.type === 'checkbox') {
+        input.checked = Boolean(value);
+      } else if (input.multiple && Array.isArray(value)) {
+        Array.from(input.options).forEach(option => {
+          option.selected = value.includes(option.value);
+        });
+      } else if (value !== null && value !== undefined) {
+        input.value = value;
+      }
+    });
+    this.applyDependencyRules(settingsContainerId);
+  }
+
+  readSettingInputValue(input) {
+    if (input.type === 'checkbox') return input.checked;
+    if (input.multiple) return Array.from(input.selectedOptions).map(option => option.value);
+
+    const raw = input.value;
+    const type = input.dataset.settingType;
+    if (type === 'integer') return raw === '' ? null : parseInt(raw, 10);
+    if (type === 'number') return raw === '' ? null : parseFloat(raw);
+    return raw;
+  }
+
+  captureTaskSettingsFromForm(itemId, selectedTask, settingsContainerId) {
+    const container = document.getElementById(settingsContainerId);
+    if (!container) return {};
+
+    const settings = {};
+    container.querySelectorAll('.task-setting-input').forEach(input => {
+      const key = input.dataset.settingKey;
+      if (!key) return;
+      settings[key] = this.readSettingInputValue(input);
+    });
+
+    const state = this.itemSelectionState.get(itemId) || {};
+    state.selectedTaskKey = selectedTask?.task_key || state.selectedTaskKey || '';
+    state.taskSettings = settings;
+    this.itemSelectionState.set(itemId, state);
+
+    return settings;
+  }
+
+  filterCatalogSelector(selector, query) {
+    const normalizedQuery = (query || '').toLowerCase().trim();
+    const selectedValue = selector.value;
+    let visibleCount = 0;
+
+    selector.querySelectorAll('optgroup').forEach(group => {
+      let groupVisible = 0;
+      group.querySelectorAll('option').forEach(option => {
+        const text = option.textContent ? option.textContent.toLowerCase() : '';
+        const visible = normalizedQuery.length === 0 || text.includes(normalizedQuery);
+        option.hidden = !visible;
+        if (visible) {
+          groupVisible++;
+        }
+      });
+      group.hidden = groupVisible === 0;
+      visibleCount += groupVisible;
+    });
+
+    if (visibleCount === 0) {
+      selector.value = '';
+      return;
+    }
+
+    const selectedOption = Array.from(selector.options).find(option => option.value === selectedValue);
+    if (selectedOption && !selectedOption.hidden) {
+      selector.value = selectedValue;
+    } else {
+      const firstVisible = Array.from(selector.options).find(option => !option.hidden && option.value);
+      if (firstVisible) {
+        selector.value = firstVisible.value;
+      }
+    }
+  }
+
+  renderCitations(citations) {
+    if (!citations || citations.length === 0) return '';
+
+    const citationsHtml = citations.map(c => `
+      <div class="citation-item">
+        <span class="citation-type">${this.escapeHtml(c.evidenceType || 'unknown')}</span>
+        <span class="citation-snippet" title="${this.escapeAttr(c.snippet || '')}">
+          ${this.escapeHtml(c.snippet || c.evidenceId || 'No snippet')}
+        </span>
+        ${c.relevanceScore ? `<span class="citation-score">${(c.relevanceScore * 100).toFixed(0)}%</span>` : ''}
+      </div>
+    `).join('');
+
+    return `
+      <div class="citation-list">
+        <small class="text-muted"><i class="bi bi-link-45deg me-1"></i>${citations.length} citation${citations.length !== 1 ? 's' : ''}</small>
+        ${citationsHtml}
+      </div>
+    `;
+  }
+
+  async generatePlan() {
+    if (!this.intentInput) return;
+
+    const intent = this.intentInput.value.trim();
+    if (!intent) {
+      this.intentInput.classList.add('is-invalid');
+      return;
+    }
+    this.intentInput.classList.remove('is-invalid');
+
+    const sourceSessionId = this.sourceSessionSelect ? this.sourceSessionSelect.value : null;
+
+    if (this.generateBtn) {
+      this.generateBtn.disabled = true;
+      this.generateBtn.innerHTML = '<i class="bi bi-hourglass me-1"></i>Generating...';
+    }
+
+    try {
+      const request = {
+        intent: intent,
+        sourceSessionId: sourceSessionId || null,
+        sourceRecordingId: null
+      };
+
+      const response = await fetch('/api/account-tasks/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `HTTP ${response.status}`);
+      }
+
+      const plan = await response.json();
+      this.intentInput.value = '';
+
+      await this.loadPlans();
+      if (plan.planId) {
+        this.selectPlan(plan.planId);
+      }
+    } catch (error) {
+      console.error('Failed to generate plan:', error);
+      alert('Failed to generate plan: ' + error.message);
+    } finally {
+      if (this.generateBtn) {
+        this.generateBtn.disabled = false;
+        this.generateBtn.innerHTML = '<i class="bi bi-magic me-1"></i>Generate Plan';
+      }
+    }
+  }
+
+  async approvePlan() {
+    if (!this.selectedPlanId) return;
+
+    try {
+      const response = await fetch(`/api/account-tasks/${this.selectedPlanId}/approve`, {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      await this.loadPlanDetail(this.selectedPlanId);
+      await this.loadPlans();
+    } catch (error) {
+      console.error('Failed to approve plan:', error);
+    }
+  }
+
+  async rejectPlan() {
+    if (!this.selectedPlanId) return;
+
+    try {
+      const response = await fetch(`/api/account-tasks/${this.selectedPlanId}/reject`, {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      this.selectedPlanId = null;
+      this.selectedPlan = null;
+      if (this.planDetailSection) {
+        this.planDetailSection.style.display = 'none';
+      }
+      await this.loadPlans();
+    } catch (error) {
+      console.error('Failed to reject plan:', error);
+    }
+  }
+
+  async approveItem(itemId) {
+    try {
+      const response = await fetch(`/api/account-tasks/items/${itemId}/approve`, {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      if (this.selectedPlanId) {
+        await this.loadPlanDetail(this.selectedPlanId);
+      }
+    } catch (error) {
+      console.error('Failed to approve item:', error);
+    }
+  }
+
+  async rejectItem(itemId) {
+    try {
+      const response = await fetch(`/api/account-tasks/items/${itemId}/reject`, {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      if (this.selectedPlanId) {
+        await this.loadPlanDetail(this.selectedPlanId);
+      }
+    } catch (error) {
+      console.error('Failed to reject item:', error);
+    }
+  }
+
+  async executeItemPatchLoop(itemId, scriptName, settingsId) {
+    try {
+      const payload = scriptName ? { scriptName } : {};
+      if (settingsId && scriptName) {
+        const selectedTask = this.getCatalogTaskByKey(scriptName);
+        const settings = this.captureTaskSettingsFromForm(itemId, selectedTask, settingsId);
+        if (selectedTask) {
+          payload.taskMetadata = {
+            task_key: selectedTask.task_key || '',
+            task_name: selectedTask.task_key || scriptName,
+            display_name: selectedTask.display_name || selectedTask.task_key || scriptName,
+            panel_display_name: selectedTask.panel_display_name || selectedTask.display_name || selectedTask.task_key || scriptName,
+            settings,
+            persist_settings: true
+          };
+        }
+      }
+
+      const response = await fetch(`/api/account-tasks/items/${itemId}/execute-patch-loop`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+      const executionId =
+        result?.executionId ||
+        result?.patchLoop?.executionId ||
+        result?.patchLoop?.iterationId ||
+        null;
+      if (window.patchLoopManager && executionId) {
+        window.patchLoopManager.connect(executionId);
+      }
+
+      const patchPanel = document.getElementById('patchLoopPanel');
+      if (patchPanel && patchPanel.style.display === 'none') {
+        patchPanel.style.display = 'block';
+      }
+
+      if (this.selectedPlanId) {
+        await this.loadPlanDetail(this.selectedPlanId);
+      }
+    } catch (error) {
+      console.error('Failed to execute patch loop for item:', error);
+      alert('Failed to execute: ' + error.message);
+    }
+  }
+
+  async executeItemQuickTest(itemId, scriptName, settingsId) {
+    try {
+      const payload = scriptName ? { scriptName } : {};
+      if (settingsId && scriptName) {
+        const selectedTask = this.getCatalogTaskByKey(scriptName);
+        const settings = this.captureTaskSettingsFromForm(itemId, selectedTask, settingsId);
+        if (selectedTask) {
+          payload.taskMetadata = {
+            task_key: selectedTask.task_key || '',
+            task_name: selectedTask.task_key || scriptName,
+            display_name: selectedTask.display_name || selectedTask.task_key || scriptName,
+            panel_display_name: selectedTask.panel_display_name || selectedTask.display_name || selectedTask.task_key || scriptName,
+            settings,
+            persist_settings: true,
+            source: 'planner_quick_test'
+          };
+        }
+      }
+
+      const response = await fetch(`/api/account-tasks/items/${itemId}/quick-test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+      const executionId =
+        result?.executionId ||
+        result?.patchLoop?.executionId ||
+        result?.patchLoop?.iterationId ||
+        null;
+      if (window.patchLoopManager && executionId) {
+        window.patchLoopManager.connect(executionId);
+      }
+
+      const patchPanel = document.getElementById('patchLoopPanel');
+      if (patchPanel && patchPanel.style.display === 'none') {
+        patchPanel.style.display = 'block';
+      }
+
+      if (this.selectedPlanId) {
+        await this.loadPlanDetail(this.selectedPlanId);
+      }
+    } catch (error) {
+      console.error('Failed to run quick test for item:', error);
+      alert('Failed to run quick test: ' + error.message);
+    }
+  }
+
+  escapeHtml(text) {
+    if (text === null || text === undefined || text === '') return '';
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  escapeAttr(text) {
+    if (!text) return '';
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  formatTimeAgo(dateStr) {
+    try {
+      const date = new Date(dateStr);
+      const now = new Date();
+      const diffMs = now - date;
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+
+      if (diffMins < 1) return 'just now';
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      return `${diffDays}d ago`;
+    } catch (e) {
+      return '';
+    }
+  }
+
+  formatAbsoluteTime(dateStr) {
+    try {
+      const date = new Date(dateStr);
+      return Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
+    } catch (e) {
+      return '';
+    }
+  }
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = AccountTaskPlanner;
+}
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', () => {
+    window.accountTaskPlanner = new AccountTaskPlanner();
+    window.accountTaskPlanner.init();
+  });
+}

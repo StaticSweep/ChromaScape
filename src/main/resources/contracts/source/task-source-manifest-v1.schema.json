@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "task-source-manifest/v1",
+  "title": "Authoritative immutable task source manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "task_key",
+    "task_family",
+    "catalog_version",
+    "settings_schema_version",
+    "environment",
+    "repository",
+    "build",
+    "source_snapshot_id",
+    "source_manifest_hash",
+    "parser_version",
+    "indexer_version",
+    "files",
+    "entry_point",
+    "symbols",
+    "generated_mappings",
+    "status",
+    "retention_class",
+    "confidentiality",
+    "signature"
+  ],
+  "properties": {
+    "schema": {"const": "task-source-manifest/v1"},
+    "task_key": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,159}$"},
+    "task_family": {"type": "string", "minLength": 1, "maxLength": 80},
+    "catalog_version": {"type": "string", "minLength": 1, "maxLength": 80},
+    "settings_schema_version": {"type": "string", "minLength": 1, "maxLength": 80},
+    "environment": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"},
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository_id", "commit_id", "tree_id", "clean"],
+      "properties": {
+        "repository_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "commit_id": {"type": "string", "pattern": "^[0-9a-f]{7,64}$"},
+        "tree_id": {"type": "string", "pattern": "^[0-9a-f]{7,64}$"},
+        "clean": {"type": "boolean"}
+      }
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["build_id", "artifact_digest"],
+      "properties": {
+        "build_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "build_timestamp": {"type": "string", "format": "date-time"},
+        "artifact_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "source_snapshot_id": {"type": "string", "pattern": "^srcsnap_[0-9a-f]{24}$"},
+    "source_manifest_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "parser_version": {"type": "string", "minLength": 1, "maxLength": 80},
+    "indexer_version": {"type": "string", "minLength": 1, "maxLength": 80},
+    "status": {"enum": ["AVAILABLE", "INDEX_PARTIAL", "UNAVAILABLE", "REDACTED", "PRUNED", "GENERATED_ONLY"]},
+    "retention_class": {"type": "string", "enum": ["DEBUG", "AUDIT", "REGULATED"]},
+    "confidentiality": {"type": "string", "enum": ["INTERNAL", "RESTRICTED", "SECRET"]},
+    "entry_point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["class_name", "file_id", "source_symbol_id"],
+      "properties": {
+        "class_name": {"type": "string", "minLength": 1, "maxLength": 300},
+        "file_id": {"type": "string", "pattern": "^file_[0-9a-f]{16,64}$"},
+        "source_symbol_id": {"type": "string", "pattern": "^sym_[0-9a-f]{16,64}$"}
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file_id", "relative_path", "content_hash", "size_bytes", "classification", "inclusion_reason"],
+        "properties": {
+          "file_id": {"type": "string", "pattern": "^file_[0-9a-f]{16,64}$"},
+          "relative_path": {"type": "string", "minLength": 1, "maxLength": 500},
+          "module": {"type": "string", "maxLength": 160},
+          "language": {"type": "string", "maxLength": 40},
+          "content_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "size_bytes": {"type": "integer", "minimum": 0, "maximum": 10000000},
+          "classification": {"enum": ["SOURCE", "GENERATED", "TRANSFORMED", "VENDOR", "TEST", "UNRELATED", "SENSITIVE", "EXCLUDED"]},
+          "inclusion_reason": {"type": "string", "minLength": 1, "maxLength": 1000}
+        }
+      }
+    },
+    "closure": {
+      "type": "array",
+      "maxItems": 50000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from_path", "to_path", "edge_kind", "reason"],
+        "properties": {
+          "from_path": {"type": "string", "maxLength": 500},
+          "to_path": {"type": "string", "maxLength": 500},
+          "edge_kind": {"type": "string", "minLength": 1, "maxLength": 40},
+          "reason": {"type": "string", "minLength": 1, "maxLength": 1000}
+        }
+      }
+    },
+    "symbols": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_symbol_id", "file_id", "kind", "qualified_name", "start_byte", "end_byte", "start_line", "end_line", "start_column", "end_column"],
+        "properties": {
+          "source_symbol_id": {"type": "string", "pattern": "^sym_[0-9a-f]{16,64}$"},
+          "file_id": {"type": "string", "pattern": "^file_[0-9a-f]{16,64}$"},
+          "kind": {"type": "string", "minLength": 1, "maxLength": 40},
+          "qualified_name": {"type": "string", "minLength": 1, "maxLength": 500},
+          "signature": {"type": "string", "maxLength": 1000},
+          "enclosing_symbol_id": {"type": "string", "pattern": "^sym_[0-9a-f]{16,64}$"},
+          "start_byte": {"type": "integer", "minimum": 0},
+          "end_byte": {"type": "integer", "minimum": 1},
+          "start_line": {"type": "integer", "minimum": 1},
+          "end_line": {"type": "integer", "minimum": 1},
+          "start_column": {"type": "integer", "minimum": 1},
+          "end_column": {"type": "integer", "minimum": 1},
+          "generated": {"type": "boolean"}
+        }
+      }
+    },
+    "generated_mappings": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["generated_file_id", "authored_file_ids", "mapping_kind", "tool", "tool_version", "description"],
+        "properties": {
+          "generated_file_id": {"type": "string", "pattern": "^file_[0-9a-f]{16,64}$"},
+          "authored_file_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 10000,
+            "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^file_[0-9a-f]{16,64}$"}
+          },
+          "mapping_kind": {"enum": ["GENERATED", "TRANSFORMED"]},
+          "tool": {"type": "string", "minLength": 1, "maxLength": 200},
+          "tool_version": {"type": "string", "minLength": 1, "maxLength": 80},
+          "description": {"type": "string", "minLength": 1, "maxLength": 1000}
+        }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "key_id", "value", "signed_bytes_hash"],
+      "properties": {
+        "algorithm": {"const": "Ed25519"},
+        "key_id": {"type": "string", "minLength": 1, "maxLength": 160},
+        "value": {"type": "string", "minLength": 1},
+        "signed_bytes_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code"],
+        "properties": {
+          "code": {"type": "string", "minLength": 1, "maxLength": 80},
+          "relative_path": {"type": "string", "maxLength": 500},
+          "detail": {"type": "string", "maxLength": 2000}
+        }
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "detail"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1, "maxLength": 80},
+        "detail": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    }
+  }
+}

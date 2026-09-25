@@ -1,0 +1,23 @@
+SC-1663 remediation (r2) — live client mapping acceptance waiver (2026-09-17, UTC)
+
+Status: NOT RUN (waived), never PASS.
+
+The plan's Phase 1 requires launching one Micro6 client via `:client:runBuilderGoal` and one
+alternate launch form (direct `java -jar` RuneLite or bundled-JRE launcher), then recording the
+sanitized structural identity of the forked client JVM and confirming which process renders the
+client. This session executes on a headless Linux host without an interactive game display or
+account credentials; launching the game client is an operator action and no eligible client was
+running during the scan.
+
+The exclusion half of the matching rules IS evidenced live (bash Gradle wrapper carrying all
+markers, Gradle daemon JVM, python3 remote-launcher agent, ten transient ENOENT entries) — see
+process-identity-mapping.md. The client-side half (exact forked JVM command-line shape, including
+whether a direct `java -jar RuneLite.jar` invocation exposes `net.runelite.client.RuneLite` in
+`/proc/<pid>/cmdline`) remains unverified; the current matcher accepts the RuneLite main class or
+the runBuilderGoal entry point with a project-root condition, and rule 1 (java executable) plus
+rule 5 (daemon/worker/agent exclusions) bound it from both sides.
+
+EXPLICIT ACCEPTANCE WAIVER: SC-1664 must not consume this discovery result for attachment until
+the live qualification is completed against real Micro6/RuneLite clients and recorded in
+process-identity-mapping.md. Resolutions during that interim remain read-only discovery and
+selection; no attachment path may trust them.

@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://chromascape.local/contracts/patch/micro6-candidate-manifest-v1.schema.json",
+  "title": "Micro6 validated candidate manifest",
+  "type": "object",
+  "required": [
+    "schema", "candidate_id", "candidate_digest", "candidate_hash", "signature", "key_id",
+    "signature_algorithm", "job_id", "proposal_id", "proposal_hash", "approval_hash",
+    "base_commit", "base_tree", "jar_name", "jar_sha256", "sbom_sha256", "control_allowed",
+    "eligibility"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "micro6-candidate-manifest/v1" },
+    "candidate_id": { "type": "string", "maxLength": 80 },
+    "candidate_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "candidate_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "signature": { "type": "string", "minLength": 1 },
+    "key_id": { "type": "string", "maxLength": 120 },
+    "signature_algorithm": { "const": "Ed25519" },
+    "resulting_tree_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "job_id": { "type": "string", "maxLength": 80 },
+    "proposal_id": { "type": "string", "maxLength": 80 },
+    "proposal_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "patch_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "approval_id": { "type": "string", "maxLength": 80 },
+    "approval_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "base_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "base_tree": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "source_snapshot_id": { "type": ["string", "null"] },
+    "source_manifest_hash": { "type": ["string", "null"] },
+    "validation_plan_hash": { "type": ["string", "null"] },
+    "toolchain_hash": { "type": ["string", "null"] },
+    "jar_name": { "type": "string", "pattern": "^[^/\\\\]+\\.jar$" },
+    "jar_size": { "type": "integer", "minimum": 0 },
+    "jar_sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "sbom_name": { "type": ["string", "null"] },
+    "sbom_sha256": { "type": ["string", "null"] },
+    "certification_document_hash": { "type": ["string", "null"] },
+    "control_allowed": { "const": false },
+    "eligibility": { "const": "BUILD_VALIDATED" }
+  }
+}

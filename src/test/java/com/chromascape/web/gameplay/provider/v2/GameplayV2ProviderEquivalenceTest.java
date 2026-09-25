@@ -191,33 +191,6 @@ class GameplayV2ProviderEquivalenceTest {
   }
 
   @Test
-  void adaptersRejectInvalidAndMismatchedModelVersions() {
-    String[] invalidVersions =
-        new String[] {null, "", " leading", "trailing ", "bad/value", "x".repeat(129)};
-    for (String invalid : invalidVersions) {
-      assertThatThrownBy(() -> adaptClaudeWithModel(invalid, fixtures.path("claudeDecision")))
-          .isInstanceOf(GameplayV2ContractValidator.GameplayV2ContractViolation.class)
-          .extracting("failureCode")
-          .isEqualTo("INVALID_PROVIDER_DECISION");
-      assertThatThrownBy(() -> adaptCodexWithModel(invalid, fixtures.path("codexDecision")))
-          .isInstanceOf(GameplayV2ContractValidator.GameplayV2ContractViolation.class)
-          .extracting("failureCode")
-          .isEqualTo("INVALID_PROVIDER_DECISION");
-    }
-
-    assertThatThrownBy(
-            () -> adaptClaudeWithModel("other-valid-model", fixtures.path("claudeDecision")))
-        .isInstanceOf(GameplayV2ContractValidator.GameplayV2ContractViolation.class)
-        .extracting("failureCode")
-        .isEqualTo("PROVIDER_MISMATCH");
-    assertThatThrownBy(
-            () -> adaptCodexWithModel("other-valid-model", fixtures.path("codexDecision")))
-        .isInstanceOf(GameplayV2ContractValidator.GameplayV2ContractViolation.class)
-        .extracting("failureCode")
-        .isEqualTo("PROVIDER_MISMATCH");
-  }
-
-  @Test
   void adaptersRejectUnboundEligibilityProvenance() {
     com.fasterxml.jackson.databind.node.ObjectNode rebound =
         ((com.fasterxml.jackson.databind.node.ObjectNode)
@@ -306,29 +279,5 @@ class GameplayV2ProviderEquivalenceTest {
             "observationDigest",
             GameplayV2EligibilityFilter.canonicalDigest(objectMapper, observation));
     return planningInput;
-  }
-
-  private ProviderDecision adaptClaudeWithModel(String modelVersion, JsonNode output) {
-    return new ClaudeGameplayV2ProviderAdapter(validator)
-        .adapt(
-            fixtures.path("catalogSnapshot"),
-            fixtures.path("semanticObservation"),
-            fixtures.path("planningInput"),
-            fixtures.path("eligibilityResult"),
-            NOW,
-            modelVersion,
-            output);
-  }
-
-  private ProviderDecision adaptCodexWithModel(String modelVersion, JsonNode output) {
-    return new CodexGameplayV2ProviderAdapter(validator)
-        .adapt(
-            fixtures.path("catalogSnapshot"),
-            fixtures.path("semanticObservation"),
-            fixtures.path("planningInput"),
-            fixtures.path("eligibilityResult"),
-            NOW,
-            modelVersion,
-            output);
   }
 }

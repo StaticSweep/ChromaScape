@@ -6,6 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationRequestFactory;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationValidator;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.ProviderDecisionOrchestrationSource;
 import com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.BudgetLimits;
 import com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.FailureCode;
 import com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.SessionState;
@@ -155,6 +159,89 @@ class ProviderRuntimeHardeningTest {
   }
 
   @Test
+  void verifyReturnsTheDigestOfTheExactStoredBytes() throws Exception {
+    ProviderRuntimeProperties properties = new ProviderRuntimeProperties();
+    properties.setTranscriptRoot(temporary.resolve("verify-transcripts"));
+    RedactedTranscriptStore store =
+        new RedactedTranscriptStore(properties, new CanonicalGameplayJson(new ObjectMapper()));
+
+    RedactedTranscriptStore.Artifact artifact = store.store("untouched-artifact");
+
+    RedactedTranscriptStore.Verification verification = store.verify(artifact.reference());
+    assertEquals(artifact.reference(), verification.digest());
+    assertEquals(artifact.byteLength(), verification.byteLength());
+  }
+
+  @Test
+  void verifyFailsClosedOnModifiedDeletedOversizedAndUnsafeArtifacts() throws Exception {
+    ProviderRuntimeProperties properties = new ProviderRuntimeProperties();
+    properties.setTranscriptRoot(temporary.resolve("verify-transcripts"));
+    properties.setMaxTranscriptBytes(4096);
+    RedactedTranscriptStore store =
+        new RedactedTranscriptStore(properties, new CanonicalGameplayJson(new ObjectMapper()));
+    RedactedTranscriptStore.Artifact artifact = store.store("verify-me");
+    java.nio.file.Path target =
+        temporary.resolve(
+            "verify-transcripts/" + artifact.reference().substring("sha256:".length()) + ".json");
+
+    // One-byte modification after the decision became terminal fails closed.
+    Files.writeString(target, "verify-mf");
+    ProviderRuntimeException modified =
+        assertThrows(ProviderRuntimeException.class, () -> store.verify(artifact.reference()));
+    assertEquals(FailureCode.TRANSCRIPT_DIGEST_MISMATCH.name(), modified.failureCode());
+
+    // A deleted artifact fails closed.
+    Files.writeString(target, "verify-me");
+    Files.delete(target);
+    ProviderRuntimeException deleted =
+        assertThrows(ProviderRuntimeException.class, () -> store.verify(artifact.reference()));
+    assertEquals(FailureCode.TRANSCRIPT_ARTIFACT_MISSING.name(), deleted.failureCode());
+
+    // Empty or malformed references fail closed.
+    ProviderRuntimeException empty =
+        assertThrows(ProviderRuntimeException.class, () -> store.verify(""));
+    assertEquals(FailureCode.INVALID_EVIDENCE_REFERENCE.name(), empty.failureCode());
+    ProviderRuntimeException malformed =
+        assertThrows(ProviderRuntimeException.class, () -> store.verify("sha256:not-a-digest"));
+    assertEquals(FailureCode.INVALID_EVIDENCE_REFERENCE.name(), malformed.failureCode());
+
+    // Path escape fails closed.
+    ProviderRuntimeException escape =
+        assertThrows(ProviderRuntimeException.class, () -> store.verify("sha256:../../etc/passwd"));
+    assertEquals(FailureCode.INVALID_EVIDENCE_REFERENCE.name(), escape.failureCode());
+
+    // An oversized artifact fails closed.
+    Files.writeString(target, "x".repeat(8192));
+    ProviderRuntimeException oversized =
+        assertThrows(ProviderRuntimeException.class, () -> store.verify(artifact.reference()));
+    assertEquals(FailureCode.TRANSCRIPT_ARTIFACT_TOO_LARGE.name(), oversized.failureCode());
+  }
+
+  @Test
+  void verifyRejectsSymlinkEscapeAndNeverExposesTranscriptContent() throws Exception {
+    ProviderRuntimeProperties properties = new ProviderRuntimeProperties();
+    properties.setTranscriptRoot(temporary.resolve("verify-transcripts"));
+    RedactedTranscriptStore store =
+        new RedactedTranscriptStore(properties, new CanonicalGameplayJson(new ObjectMapper()));
+    RedactedTranscriptStore.Artifact artifact = store.store("symlink-target");
+    java.nio.file.Path target =
+        temporary.resolve(
+            "verify-transcripts/" + artifact.reference().substring("sha256:".length()) + ".json");
+    Files.delete(target);
+    java.nio.file.Path outside = temporary.resolve("outside-secret.txt");
+    Files.writeString(outside, "secret-outside-root");
+    try {
+      Files.createSymbolicLink(target, outside);
+    } catch (UnsupportedOperationException | java.io.IOException ignored) {
+      return; // Symlinks unsupported on this platform; the escape case is covered elsewhere.
+    }
+    ProviderRuntimeException failure =
+        assertThrows(ProviderRuntimeException.class, () -> store.verify(artifact.reference()));
+    assertEquals(FailureCode.INVALID_EVIDENCE_REFERENCE.name(), failure.failureCode());
+    assertFalse(failure.getMessage().contains("secret-outside-root"));
+  }
+
+  @Test
   void httpStatusMappingIsStable() {
     ProviderRuntimeController controller = new ProviderRuntimeController(null, null);
     assertEquals(
@@ -222,19 +309,57 @@ class ProviderRuntimeHardeningTest {
   }
 
   @Test
-  void handoffExposesOnlyReadOnlyLookup() throws Exception {
-    for (Method method : ProviderDecisionHandoff.class.getDeclaredMethods()) {
+  void handoffExposesOnlyReadOnlyBind() throws Exception {
+    for (Method method : ProviderDecisionOrchestrationSource.class.getDeclaredMethods()) {
       String name = method.getName().toLowerCase();
       assertFalse(name.contains("reserve"), "handoff must not reserve");
       assertFalse(name.contains("start"), "handoff must not start");
       assertFalse(name.contains("mutat"), "handoff must not mutate");
-      assertFalse(name.contains("dispatch"), "handoff must not dispatch");
-      assertFalse(name.contains("cancel"), "handoff must not cancel");
       assertFalse(name.contains("rawinput"), "handoff must not expose raw input");
       assertFalse(name.contains("client"), "handoff must not expose client");
       assertFalse(name.contains("micro6"), "handoff must not expose micro6");
     }
     ProviderDecisionHandoff empty = (sessionId, turnId) -> Optional.empty();
-    assertTrue(empty.findValidatedDecision("session-1", "turn-1").isEmpty());
+    CanonicalGameplayJson handoffJson = new CanonicalGameplayJson(new ObjectMapper());
+    AccountBuilderOrchestrationValidator handoffValidator =
+        new AccountBuilderOrchestrationValidator(handoffJson, (authority, envelope) -> true);
+    ProviderDecisionOrchestrationSource source =
+        new ProviderDecisionOrchestrationSource(
+            empty,
+            handoffJson,
+            new AccountBuilderOrchestrationRequestFactory(handoffValidator, handoffJson),
+            handoffValidator);
+    AccountBuilderOrchestrationModels.OrchestrationRequest request =
+        new AccountBuilderOrchestrationModels.OrchestrationRequest(
+            "orchestration-1",
+            "request-1",
+            "idempotency-1",
+            "sha256:" + "a".repeat(64),
+            AccountBuilderOrchestrationModels.Mode.SHADOW,
+            "PROVIDER:CLAUDE",
+            null,
+            null,
+            new AccountBuilderOrchestrationModels.SnapshotBindings(
+                "sha256:" + "a".repeat(64),
+                "sha256:" + "b".repeat(64),
+                "sha256:" + "c".repeat(64),
+                "sha256:" + "d".repeat(64),
+                "sha256:" + "e".repeat(64),
+                List.of("sha256:" + "f".repeat(64)),
+                "sha256:" + "a".repeat(64),
+                "sha256:" + "b".repeat(64),
+                "sha256:" + "c".repeat(64),
+                "sha256:" + "d".repeat(64),
+                "build-1",
+                1,
+                1,
+                "sha256:" + "9".repeat(64),
+                "sha256:" + "8".repeat(64),
+                "session-1",
+                "turn-1"),
+            null,
+            null,
+            java.time.Instant.now().plusSeconds(60));
+    assertThrows(RuntimeException.class, () -> source.bind("session-1", "turn-1", request));
   }
 }

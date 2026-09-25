@@ -2,6 +2,7 @@ package com.chromascape.web.gameplay.orchestration.accountbuilder;
 
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import com.chromascape.web.gameplay.contract.GameplayContracts;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderBudgetPolicy.OrchestrationBudget;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.AuthorityConsumption;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayCorrelation;
@@ -58,6 +59,8 @@ public final class InMemoryAccountBuilderOrchestrationStore
   private final Map<String, String> authorityOwners = new HashMap<>();
   private final Map<String, TerminalResult> terminalResults = new HashMap<>();
   private final Map<String, Long> eventCounts = new HashMap<>();
+  private final Map<String, AccountBuilderBudgetPolicy.OrchestrationBudget> budgets =
+      new HashMap<>();
 
   public InMemoryAccountBuilderOrchestrationStore() {
     this(Clock.systemUTC(), (authority, envelope) -> false);
@@ -94,7 +97,10 @@ public final class InMemoryAccountBuilderOrchestrationStore
 
   @Override
   public synchronized Claim claim(
-      OrchestrationRequest request, String fingerprint, String envelopeDigest) {
+      OrchestrationRequest request,
+      String fingerprint,
+      String envelopeDigest,
+      AccountBuilderBudgetPolicy.OrchestrationBudget budget) {
     if (request == null
         || !validId(request.orchestrationId())
         || !validId(request.requestId())
@@ -109,7 +115,8 @@ public final class InMemoryAccountBuilderOrchestrationStore
         || request.observation() == null
         || request.deadline() == null
         || !validDigest(fingerprint)
-        || !validDigest(envelopeDigest)) {
+        || !validDigest(envelopeDigest)
+        || budget == null) {
       throw failure(FailureCode.INVALID_CONTRACT, "Durable orchestration identities are malformed");
     }
     Set<String> owners = new HashSet<>();
@@ -127,7 +134,13 @@ public final class InMemoryAccountBuilderOrchestrationStore
         throw integrity("Identity indexes point at multiple orchestration owners");
       }
       Entry owned = entries.get(owners.iterator().next());
-      if (owned == null
+      OrchestrationBudget existingBudget = budgets.get(owned.view.orchestrationId());
+      if (existingBudget == null) {
+        // A durable claim without a budget is an incomplete aggregate and never replays.
+        throw integrity("Durable orchestration claim has no immutable budget");
+      }
+      if (!sameBudget(existingBudget, budget)
+          || owned == null
           || !owned.view.requestFingerprint().equals(fingerprint)
           || !owned.view.orchestrationId().equals(request.orchestrationId())
           || !owned.view.requestId().equals(request.requestId())
@@ -162,8 +175,49 @@ public final class InMemoryAccountBuilderOrchestrationStore
     correlations.put(request.orchestrationId(), toCorrelation(request, envelopeDigest));
     requestOwners.put(request.requestId(), request.orchestrationId());
     idempotencyOwners.put(request.idempotencyKey(), request.orchestrationId());
+    budgets.put(request.orchestrationId(), budget);
     eventCounts.put(request.orchestrationId(), 1L);
     return new Claim(view, true);
+  }
+
+  /** Replay compares only the immutable limits; started/expires derive from the claim instant. */
+  private boolean sameBudget(OrchestrationBudget persisted, OrchestrationBudget candidate) {
+    return persisted.maxActions() == candidate.maxActions()
+        && persisted.maxAttempts() == candidate.maxAttempts()
+        && persisted.maxElapsedMs() == candidate.maxElapsedMs();
+  }
+
+  @Override
+  public synchronized Optional<AccountBuilderBudgetPolicy.OrchestrationBudget> findBudget(
+      String orchestrationId) {
+    return Optional.ofNullable(budgets.get(orchestrationId));
+  }
+
+  @Override
+  public synchronized AccountBuilderBudgetPolicy.OrchestrationBudget consumeBudget(
+      String orchestrationId, boolean action, boolean attempt) {
+    OrchestrationBudget budget = budgets.get(orchestrationId);
+    if (budget == null) {
+      throw failure(
+          FailureCode.INVALID_CONTRACT, "No durable budget was claimed for this orchestration");
+    }
+    Instant now = now();
+    if (budget.expiredAt(now)) {
+      throw failure(FailureCode.DEADLINE_EXPIRED, "The orchestration budget horizon has expired");
+    }
+    if ((action && budget.actionsExhausted()) || (attempt && budget.attemptsExhausted())) {
+      throw failure(
+          FailureCode.BUDGET_EXHAUSTED, "No orchestration budget capacity remains for delivery");
+    }
+    OrchestrationBudget advanced = budget;
+    if (attempt) {
+      advanced = advanced.withAttemptUsed();
+    }
+    if (action) {
+      advanced = advanced.withActionUsed();
+    }
+    budgets.put(orchestrationId, advanced);
+    return advanced;
   }
 
   @Override
@@ -701,7 +755,8 @@ public final class InMemoryAccountBuilderOrchestrationStore
         lease,
         evidenceRefs,
         receipt.at() == null ? null : truncate(receipt.at()),
-        receipt.receiptId() == null ? null : opaqueDigest(receipt.receiptId()));
+        receipt.receiptId() == null ? null : opaqueDigest(receipt.receiptId()),
+        receipt.killSwitch());
   }
 
   private String opaqueDigest(String value) {
@@ -789,7 +844,11 @@ public final class InMemoryAccountBuilderOrchestrationStore
   }
 
   private boolean requiresLease(State state) {
-    return LEASE_STATES.contains(state) && state != State.NEEDS_RECONCILIATION;
+    // A proven pre-submission terminal failure (connection refused before submission) carries no
+    // lease and never needs one; a lease attached to a terminal state is still validated.
+    return LEASE_STATES.contains(state)
+        && state != State.NEEDS_RECONCILIATION
+        && state != State.FAILED;
   }
 
   private boolean samePersistedReceipt(List<GatewayReceipt> persisted, GatewayReceipt candidate) {

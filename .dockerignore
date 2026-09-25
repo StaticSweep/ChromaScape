@@ -1,0 +1,7 @@
+*.log
+.gradle/
+.idea/
+*.iml
+.DS_Store
+recordings/
+logs/

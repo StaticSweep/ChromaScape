@@ -7,7 +7,6 @@ import com.chromascape.web.accounttask.entity.ScriptStabilizationSnapshot;
 import com.chromascape.web.accounttask.repository.ScriptFailureTriageRepository;
 import com.chromascape.web.accounttask.repository.ScriptStabilizationRunRepository;
 import com.chromascape.web.accounttask.repository.ScriptStabilizationSnapshotRepository;
-import com.chromascape.web.accounttask.service.StabilizationArtifactStore;
 import com.chromascape.web.accounttask.repository.StabilizationArtifactRepository;
 import com.chromascape.web.accounttask.repository.StabilizationRunAggregateRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -39,8 +38,15 @@ class StabilizationMatrixIncomparableTest {
 
   @BeforeEach
   void setUp() {
-    service = new StabilizationIngestionService(runRepository, triageRepository, snapshotRepository,
-            artifactStore, artifactRepository, aggregateRepository, entityManager);
+    service =
+        new StabilizationIngestionService(
+            runRepository,
+            triageRepository,
+            snapshotRepository,
+            artifactStore,
+            artifactRepository,
+            aggregateRepository,
+            entityManager);
   }
 
   @Test

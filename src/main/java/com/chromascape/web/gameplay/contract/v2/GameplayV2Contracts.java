@@ -13,27 +13,23 @@ public final class GameplayV2Contracts {
 
   private GameplayV2Contracts() {}
 
-  /** Closed planning and execution modes. */
   public enum ExecutionMode {
     SIMULATION,
     SHADOW,
     LIVE_TASK
   }
 
-  /** Supported provider identities. */
   public enum Provider {
     CLAUDE,
     CODEX
   }
 
-  /** Closed maturity levels for immutable TaskSkill references. */
   public enum TaskSkillMaturity {
     CANDIDATE,
     VALIDATED,
     TRUSTED
   }
 
-  /** Deterministic task eligibility result and rejection reasons. */
   public enum EligibilityStatus {
     ELIGIBLE,
     NO_ELIGIBLE_TASK,
@@ -46,13 +42,11 @@ public final class GameplayV2Contracts {
     IDENTITY_MISMATCH
   }
 
-  /** Closed provider decision variants. */
   public enum DecisionKind {
     SELECTED,
     ABSTAINED
   }
 
-  /** Stable reasons for provider abstention. */
   public enum AbstentionReason {
     NO_ELIGIBLE_TASK,
     STALE_OBSERVATION,
@@ -64,7 +58,6 @@ public final class GameplayV2Contracts {
     IDENTITY_MISMATCH
   }
 
-  /** Complete semantic tool surface exposed by this contract. */
   public enum ToolOperation {
     CATALOG,
     RESERVE,
@@ -74,7 +67,6 @@ public final class GameplayV2Contracts {
     OBSERVE
   }
 
-  /** Ordered lifecycle phases represented by receipts. */
   public enum ReceiptPhase {
     VALIDATION,
     AUTHORIZATION,
@@ -87,7 +79,6 @@ public final class GameplayV2Contracts {
     FINALIZATION
   }
 
-  /** Closed lifecycle outcomes. */
   public enum Outcome {
     HELD,
     DELIVERED,
@@ -101,7 +92,6 @@ public final class GameplayV2Contracts {
     STOPPED
   }
 
-  /** Eligibility status for one catalog task. */
   public record EligibilityEntry(String taskKey, EligibilityStatus status) {}
 
   /**

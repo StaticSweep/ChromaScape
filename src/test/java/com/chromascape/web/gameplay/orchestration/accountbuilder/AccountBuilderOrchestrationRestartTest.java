@@ -30,64 +30,6 @@ import org.springframework.context.ConfigurableApplicationContext;
 /** Committed two-context restart proof against the real Flyway schema. */
 class AccountBuilderOrchestrationRestartTest {
 
-  /**
-   * External process harness used by the native-Windows restart gate.
-   *
-   * <p>The {@code seed} process deliberately remains alive after committing every checkpoint so the
-   * verifier can terminate that JVM with {@code Stop-Process -Force}. A separate {@code verify}
-   * process then starts a new Spring context against the same PostgreSQL schema and proves that
-   * recovery neither reserves nor dispatches work.
-   */
-  public static void main(String[] args) throws Exception {
-    if (args.length != 6 || !("seed".equals(args[0]) || "verify".equals(args[0]))) {
-      throw new IllegalArgumentException(
-          "usage: <seed|verify> <jdbc-url> <username> <password> <schema> <checkpoint>");
-    }
-    Database database = new Database(args[1], args[2], args[3], args[4]);
-    String checkpoint = args[5];
-    AccountBuilderOrchestrationRestartTest harness = new AccountBuilderOrchestrationRestartTest();
-    if ("seed".equals(args[0])) {
-      harness.migrate(database);
-      try (ConfigurableApplicationContext context = harness.start(database)) {
-        JpaAccountBuilderOrchestrationStore store =
-            context.getBean(JpaAccountBuilderOrchestrationStore.class);
-        harness.populate(store, database);
-        System.out.printf(
-            "SC1431_PROCESS_READY checkpoint=%s pid=%d%n",
-            checkpoint, ProcessHandle.current().pid());
-        System.out.flush();
-        Thread.sleep(Long.MAX_VALUE);
-      }
-      return;
-    }
-
-    try (ConfigurableApplicationContext context = harness.start(database)) {
-      JpaAccountBuilderOrchestrationStore store =
-          context.getBean(JpaAccountBuilderOrchestrationStore.class);
-      assertThat(store.find("orchestration-restart-authorized").orElseThrow().state())
-          .isEqualTo(State.AUTHORIZED);
-      assertThat(store.find("orchestration-restart-reserved").orElseThrow().state())
-          .isEqualTo(State.RESERVED);
-      assertThat(store.find("orchestration-restart-dispatch-submitted").orElseThrow().state())
-          .isEqualTo(State.DISPATCH_SUBMITTED);
-      assertThat(store.find("orchestration-restart-active").orElseThrow().state())
-          .isEqualTo(State.ACTIVE);
-      assertThat(store.find("orchestration-restart-needs-lease").orElseThrow().state())
-          .isEqualTo(State.NEEDS_RECONCILIATION);
-      assertThat(store.find("orchestration-restart-terminal").orElseThrow().state())
-          .isEqualTo(State.DENIED);
-
-      RecoveryGateway gateway = new RecoveryGateway();
-      List<OrchestrationView> recovered = harness.service(store, gateway).recoverAfterRestart();
-      assertThat(recovered).hasSize(6);
-      assertThat(gateway.reservations).hasValue(0);
-      assertThat(gateway.dispatches).hasValue(0);
-      System.out.printf(
-          "SC1431_PROCESS_VERIFIED checkpoint=%s recovered=%d reservations=%d dispatches=%d%n",
-          checkpoint, recovered.size(), gateway.reservations.get(), gateway.dispatches.get());
-    }
-  }
-
   @Test
   void committedEvidenceSurvivesContextRestartAndRecoveryNeverRedispatches() throws Exception {
     Database database = IsolatedPostgresTestDatabase.newDatabase();
@@ -98,11 +40,11 @@ class AccountBuilderOrchestrationRestartTest {
               .dataSource(url, database.username(), database.password())
               .schemas(database.schema())
               .defaultSchema(database.schema())
-              .target(MigrationVersion.fromVersion("32"))
+              .target(MigrationVersion.LATEST)
               .locations("classpath:db/migration")
               .load();
       flyway.migrate();
-      assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("32");
+      assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("57");
 
       Map<String, CommittedAggregate> before;
       try (ConfigurableApplicationContext contextA = start(database)) {
@@ -143,6 +85,94 @@ class AccountBuilderOrchestrationRestartTest {
     }
   }
 
+  @Test
+  void bootstrapClaimWithNullPromptProvisionReplaysExactlyAcrossContextRestart() throws Exception {
+    Database database = IsolatedPostgresTestDatabase.newDatabase();
+    String url = database.jdbcUrl() + "?currentSchema=" + database.schema();
+    try {
+      Flyway flyway =
+          Flyway.configure()
+              .dataSource(url, database.username(), database.password())
+              .schemas(database.schema())
+              .defaultSchema(database.schema())
+              .target(MigrationVersion.LATEST)
+              .locations("classpath:db/migration")
+              .load();
+      flyway.migrate();
+      assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("57");
+
+      CapabilitySnapshot preflight =
+          new CapabilitySnapshot(
+              null,
+              "sha256:" + "0".repeat(64),
+              null,
+              -1,
+              -1,
+              AccountBuilderPostgresTestFixtures.NOW,
+              AccountBuilderPostgresTestFixtures.NOW,
+              false,
+              List.of());
+      OrchestrationRequest bootstrap =
+          AccountBuilderPostgresTestFixtures.bootstrapRequest("restart-bootstrap", preflight);
+      String orchestrationId = bootstrap.orchestrationId();
+      String fingerprint = bootstrap.requestFingerprint();
+
+      try (ConfigurableApplicationContext contextA = start(database)) {
+        JpaAccountBuilderOrchestrationStore storeA =
+            contextA.getBean(JpaAccountBuilderOrchestrationStore.class);
+        assertThat(
+                storeA
+                    .claim(
+                        bootstrap,
+                        fingerprint,
+                        AccountBuilderPostgresTestFixtures.envelopeDigest(bootstrap),
+                        AccountBuilderPostgresTestFixtures.budget(bootstrap))
+                    .created())
+            .isTrue();
+        AccountBuilderOrchestrationStore.NormalizedAggregate aggregateA =
+            storeA.readAggregate(orchestrationId);
+        assertThat(aggregateA.bindings().promptDigest()).isNull();
+        assertThat(aggregateA.bindings().providerSessionId()).isNull();
+        assertThat(aggregateA.bindings().providerTurnId()).isNull();
+      }
+
+      try (ConfigurableApplicationContext contextB = start(database)) {
+        JpaAccountBuilderOrchestrationStore storeB =
+            contextB.getBean(JpaAccountBuilderOrchestrationStore.class);
+        AccountBuilderOrchestrationStore.NormalizedAggregate aggregateB =
+            storeB.readAggregate(orchestrationId);
+        assertThat(aggregateB.view().requestFingerprint()).isEqualTo(fingerprint);
+        assertThat(aggregateB.bindings().promptDigest()).isNull();
+        assertThat(aggregateB.bindings().providerSessionId()).isNull();
+        assertThat(aggregateB.bindings().providerTurnId()).isNull();
+
+        AccountBuilderOrchestrationValidator validator =
+            new AccountBuilderOrchestrationValidator(
+                AccountBuilderPostgresTestFixtures.CANONICAL_JSON,
+                AccountBuilderPostgresTestFixtures.CLOCK,
+                (authority, envelope) -> true);
+        AccountBuilderOrchestrationRequestFactory factory =
+            new AccountBuilderOrchestrationRequestFactory(
+                validator, AccountBuilderPostgresTestFixtures.CANONICAL_JSON);
+        OrchestrationRequest replay =
+            factory.fromBootstrapReplay(
+                bootstrap.observation(),
+                bootstrap.decision(),
+                bootstrap.envelope(),
+                bootstrap.authority(),
+                aggregateB.bindings().capabilityDigest());
+        assertThat(replay.requestFingerprint()).isEqualTo(fingerprint);
+
+        AccountBuilderOrchestrationService service = service(storeB, new RecoveryGateway());
+        var submission = service.orchestrate(replay);
+        assertThat(submission.created()).isFalse();
+        assertThat(submission.view().requestFingerprint()).isEqualTo(fingerprint);
+      }
+    } finally {
+      dropSchema(database);
+    }
+  }
+
   private ConfigurableApplicationContext start(Database database) {
     SpringApplication application =
         new SpringApplication(JpaAccountBuilderOrchestrationStoreTest.JpaTestApplication.class);
@@ -155,7 +185,7 @@ class AccountBuilderOrchestrationRestartTest {
         "--spring.datasource.hikari.schema=" + database.schema(),
         "--spring.flyway.schemas=" + database.schema(),
         "--spring.flyway.default-schema=" + database.schema(),
-        "--spring.flyway.target=32",
+        "--spring.flyway.target=57",
         "--spring.flyway.create-schemas=true",
         "--spring.flyway.locations=classpath:db/migration",
         "--spring.jpa.properties.hibernate.default_schema=" + database.schema(),
@@ -164,20 +194,6 @@ class AccountBuilderOrchestrationRestartTest {
         "--stabilization.auth.token=sc1431-read-token",
         "--stabilization.auth.write-token=sc1431-write-token",
         "--gameplay.bootstrap.authority-hmac-secret=" + AccountBuilderPostgresTestFixtures.SECRET);
-  }
-
-  private void migrate(Database database) {
-    Flyway.configure()
-        .dataSource(
-            database.jdbcUrl() + "?currentSchema=" + database.schema(),
-            database.username(),
-            database.password())
-        .schemas(database.schema())
-        .defaultSchema(database.schema())
-        .target(MigrationVersion.fromVersion("32"))
-        .locations("classpath:db/migration")
-        .load()
-        .migrate();
   }
 
   private Map<String, CommittedAggregate> populate(
@@ -278,13 +294,24 @@ class AccountBuilderOrchestrationRestartTest {
     properties.setEnabled(true);
     properties.setLiveDeliveryEnabled(true);
     properties.setOperatorKey("x".repeat(32));
+    AccountBuilderOrchestrationRequestFactory requestFactory =
+        new AccountBuilderOrchestrationRequestFactory(
+            validator, AccountBuilderPostgresTestFixtures.CANONICAL_JSON);
+    ProviderDecisionOrchestrationSource providerSource =
+        new ProviderDecisionOrchestrationSource(
+            (sessionId, turnId) -> java.util.Optional.empty(),
+            AccountBuilderPostgresTestFixtures.CANONICAL_JSON,
+            requestFactory,
+            validator);
     return new AccountBuilderOrchestrationService(
         validator,
         AccountBuilderPostgresTestFixtures.CANONICAL_JSON,
         store,
         gateway,
         properties,
-        AccountBuilderPostgresTestFixtures.CLOCK);
+        AccountBuilderPostgresTestFixtures.CLOCK,
+        providerSource,
+        new AccountBuilderCapabilityPreflight(gateway));
   }
 
   private void authorize(JpaAccountBuilderOrchestrationStore store, OrchestrationRequest request) {
@@ -319,7 +346,8 @@ class AccountBuilderOrchestrationRestartTest {
                 .claim(
                     request,
                     request.requestFingerprint(),
-                    AccountBuilderPostgresTestFixtures.envelopeDigest(request))
+                    AccountBuilderPostgresTestFixtures.envelopeDigest(request),
+                    AccountBuilderPostgresTestFixtures.budget(request))
                 .created())
         .isTrue();
   }
@@ -380,7 +408,7 @@ class AccountBuilderOrchestrationRestartTest {
     private final AtomicInteger leasedReconciliations = new AtomicInteger();
 
     @Override
-    public CapabilitySnapshot capabilities() {
+    public CapabilitySnapshot capabilities(OrchestrationRequest request) {
       throw new AssertionError("restart recovery must not read gateway capabilities");
     }
 
@@ -403,7 +431,8 @@ class AccountBuilderOrchestrationRestartTest {
     }
 
     @Override
-    public GatewayReceipt stop(GatewayCorrelation correlation, Lease lease, String reason) {
+    public GatewayReceipt stop(
+        GatewayCorrelation correlation, Lease lease, String reason, boolean killSwitch) {
       throw new AssertionError("restart recovery must not stop");
     }
 

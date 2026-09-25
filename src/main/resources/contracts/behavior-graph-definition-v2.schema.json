@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.leeuwbot.dev/sc728/behavior-graph-definition/v2",
+  "$comment": "SC-728 visual routine editor content contract. Extends the SC-967 behavior-graph-definition/v1 lineage; v1 remains authoritative for SC-967 capture graphs and is not modified by this version. Node coordinates live in behavior-graph-layout/v1 so that content and layout hash independently. The graph_hash preimage excludes graph_hash and all presentation/layout data; it includes graph_id. Nodes are sorted by id, edges by priority descending then source_order ascending then id, object keys are recursively sorted, and every other behavior-significant array retains its declared order. Encode the canonical JSON as UTF-8 and prefix the lowercase SHA-256 digest with sha256:. control_allowed and every authority flag are false by construction: the browser cannot enable gameplay through this contract.",
+  "title": "behavior-graph-definition/v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_version",
+    "graph_id",
+    "graph_hash",
+    "task",
+    "profile",
+    "nodes",
+    "edges",
+    "authority",
+    "control_allowed"
+  ],
+  "properties": {
+    "schema": { "const": "behavior-graph-definition/v2" },
+    "schema_version": { "const": "behavior-graph-definition/v2" },
+    "graph_id": { "$ref": "#/$defs/identifier" },
+    "graph_hash": { "$ref": "#/$defs/hash" },
+    "task": { "$ref": "#/$defs/task" },
+    "profile": { "$ref": "#/$defs/profile" },
+    "nodes": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 256,
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "edges": {
+      "type": "array",
+      "maxItems": 512,
+      "items": { "$ref": "#/$defs/edge" }
+    },
+    "authority": { "$ref": "#/$defs/authority" },
+    "control_allowed": { "const": false }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "identifier": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+    "reason_code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,63}$" },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_key"],
+      "properties": {
+        "task_key": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,63}$" }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_id", "profile_version"],
+      "properties": {
+        "profile_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+        "profile_version": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "can_write_source",
+        "can_approve_patch",
+        "can_publish_graph",
+        "can_activate_model",
+        "can_dispatch_input"
+      ],
+      "properties": {
+        "can_write_source": { "const": false },
+        "can_approve_patch": { "const": false },
+        "can_publish_graph": { "const": false },
+        "can_activate_model": { "const": false },
+        "can_dispatch_input": { "const": false }
+      }
+    },
+    "guard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,63}$" },
+        "parameters": { "type": "object" }
+      }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "label", "configuration"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "type": {
+          "enum": [
+            "START",
+            "STATE",
+            "GATE",
+            "SEMANTIC_ACTION",
+            "WAIT",
+            "ABSTAIN",
+            "RECOVERY",
+            "STOP",
+            "SUCCESS",
+            "FAILURE"
+          ]
+        },
+        "label": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "semantic_key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        },
+        "reason_code": { "$ref": "#/$defs/reason_code" },
+        "configuration": { "type": "object" },
+        "timeout_ticks": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "maximum_attempts": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "evidence_ids": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+        }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "from", "to", "priority", "source_order"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "from": { "$ref": "#/$defs/identifier" },
+        "to": { "$ref": "#/$defs/identifier" },
+        "priority": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "source_order": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "guard": { "$ref": "#/$defs/guard" },
+        "reason_code": { "$ref": "#/$defs/reason_code" }
+      }
+    }
+  }
+}

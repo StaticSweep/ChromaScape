@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chromascape.dev/replay/semantic-action-v1.schema.json",
+  "title": "Semantic Action",
+  "description": "Tagged union of supported semantic actions for the replay kernel.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "WAIT_UNTIL_TICK",
+        "WALK_TO",
+        "INTERACT_NPC",
+        "INTERACT_OBJECT",
+        "INTERACT_GROUND_ITEM",
+        "INTERACT_INVENTORY_ITEM",
+        "INTERACT_WIDGET",
+        "SELECT_DIALOGUE_OPTION",
+        "CAST_SPELL",
+        "EQUIP_ITEM",
+        "INVENTORY_ACTION",
+        "USE_ITEM_ON_NPC"
+      ]
+    }
+  },
+  "required": ["type"],
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "WAIT_UNTIL_TICK" } } },
+      "then": {
+        "properties": {
+          "tick": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["tick"]
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "INTERACT_NPC" } } },
+      "then": {
+        "properties": {
+          "targetStableId": { "type": "string" },
+          "option": { "type": "string" }
+        },
+        "required": ["targetStableId", "option"]
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "INTERACT_OBJECT" } } },
+      "then": {
+        "properties": {
+          "targetStableId": { "type": "string" },
+          "option": { "type": "string" }
+        },
+        "required": ["targetStableId", "option"]
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "INTERACT_GROUND_ITEM" } } },
+      "then": {
+        "properties": {
+          "targetStableId": { "type": "string", "minLength": 1 },
+          "option": { "type": "string", "minLength": 1 },
+          "itemId": { "type": "integer", "minimum": 1 }
+        },
+        "required": ["targetStableId", "option"]
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "INTERACT_INVENTORY_ITEM" } } },
+      "then": {
+        "properties": {
+          "targetStableId": { "type": "string", "minLength": 1 },
+          "slot": { "type": "integer", "minimum": 0, "maximum": 27 },
+          "itemId": { "type": "integer", "minimum": 1 },
+          "option": { "type": "string", "minLength": 1 }
+        },
+        "required": ["targetStableId", "slot", "itemId", "option"]
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "INTERACT_WIDGET" } } },
+      "then": {
+        "properties": {
+          "targetStableId": { "type": "string", "minLength": 1 },
+          "option": { "type": "string", "minLength": 1 },
+          "widgetId": { "type": "integer", "minimum": 0 },
+          "widgetIndex": { "type": "integer", "minimum": -1, "maximum": 65535 }
+        },
+        "required": ["targetStableId", "option"]
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "SELECT_DIALOGUE_OPTION" } } },
+      "then": {
+        "properties": {
+          "targetStableId": { "type": "string", "minLength": 1 },
+          "option": { "type": "string", "minLength": 1 },
+          "optionIndex": { "type": "integer", "minimum": 0, "maximum": 255 },
+          "widgetId": { "type": "integer", "minimum": 0 },
+          "widgetIndex": { "type": "integer", "minimum": -1, "maximum": 65535 }
+        },
+        "required": ["targetStableId"]
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "CAST_SPELL" } } },
+      "then": {
+        "properties": {
+          "targetStableId": { "type": "string", "minLength": 1 },
+          "spellId": { "type": "integer", "minimum": 1 },
+          "option": { "type": "string", "minLength": 1 },
+          "widgetId": { "type": "integer", "minimum": 0 },
+          "widgetIndex": { "type": "integer", "minimum": -1, "maximum": 65535 }
+        },
+        "required": ["targetStableId"]
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "EQUIP_ITEM" } } },
+      "then": {
+        "properties": {
+          "targetStableId": { "type": "string", "minLength": 1 },
+          "slot": { "type": "integer", "minimum": 0, "maximum": 27 },
+          "itemId": { "type": "integer", "minimum": 1 },
+          "option": { "type": "string", "minLength": 1 },
+          "equipmentSlot": { "type": "integer", "minimum": 0, "maximum": 13 }
+        },
+        "required": ["targetStableId", "slot", "itemId"]
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "WALK_TO" } } },
+      "then": {
+        "properties": {
+          "destination": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "x": { "type": "integer" },
+              "y": { "type": "integer" },
+              "plane": { "type": "integer" }
+            },
+            "required": ["x", "y", "plane"]
+          }
+        },
+        "required": ["destination"]
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "INVENTORY_ACTION" } } },
+      "then": {
+        "properties": {
+          "slot": { "type": "integer", "minimum": 0 },
+          "itemId": { "type": "integer", "minimum": 0 },
+          "option": { "type": "string" }
+        },
+        "required": ["slot", "itemId", "option"]
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "USE_ITEM_ON_NPC" } } },
+      "then": {
+        "properties": {
+          "slot": { "type": "integer", "minimum": 0 },
+          "itemId": { "type": "integer", "minimum": 0 },
+          "targetStableId": { "type": "string" }
+        },
+        "required": ["slot", "itemId", "targetStableId"]
+      }
+    }
+  ]
+}

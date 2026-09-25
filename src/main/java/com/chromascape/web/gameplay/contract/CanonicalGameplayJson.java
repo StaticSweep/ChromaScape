@@ -20,12 +20,10 @@ import org.springframework.stereotype.Component;
 public final class CanonicalGameplayJson {
   private final ObjectMapper objectMapper;
 
-  /** Creates the canonicalizer with the application JSON mapper. */
   public CanonicalGameplayJson(ObjectMapper objectMapper) {
     this.objectMapper = objectMapper;
   }
 
-  /** Returns the lowercase SHA-256 digest of the canonical JSON representation. */
   public String digest(Object value) {
     try {
       byte[] bytes = objectMapper.writeValueAsBytes(canonicalize(objectMapper.valueToTree(value)));
@@ -36,7 +34,6 @@ public final class CanonicalGameplayJson {
     }
   }
 
-  /** Returns the UTF-8 bytes of the canonical JSON representation. */
   public byte[] canonicalBytes(Object value) {
     try {
       return objectMapper

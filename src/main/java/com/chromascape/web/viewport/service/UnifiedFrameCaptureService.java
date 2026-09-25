@@ -1,0 +1,403 @@
+package com.chromascape.web.viewport.service;
+
+import com.chromascape.utils.core.screen.FrameEvent;
+import com.chromascape.utils.core.screen.FrameListener;
+import com.chromascape.utils.core.screen.FrameSourceBinding;
+import com.chromascape.web.recording.capture.ScreenManagerWindowFrameCapture;
+import com.chromascape.web.recording.capture.WindowFrameCapture;
+import com.chromascape.web.viewport.config.UnifiedCaptureConfig;
+import jakarta.annotation.PreDestroy;
+import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+/**
+ * Unified frame capture service that provides screen frames to multiple consumers.
+ *
+ * <p>This service implements a single-capture, multi-consumer pattern to reduce CPU usage: -
+ * Captures screen at configured FPS - Distributes frames to all registered listeners - Reference
+ * counted lifecycle (starts when first subscriber registers, stops when last unregisters) - Async
+ * delivery per subscriber (slow listeners don't block others)
+ *
+ * <p>Benefits: - Eliminates duplicate screen captures (viewport + recording = 2x captures) - Lower
+ * thread priority reduces interference with game rendering - Single configuration point for capture
+ * FPS
+ */
+@Service
+public class UnifiedFrameCaptureService {
+
+  private static final Logger logger = LogManager.getLogger(UnifiedFrameCaptureService.class);
+
+  private final UnifiedCaptureConfig config;
+  private final WindowFrameCapture frameCapture;
+  private final Set<FrameListener> subscribers = ConcurrentHashMap.newKeySet();
+  private final AtomicInteger refCount = new AtomicInteger(0);
+  private final AtomicReference<FrameEvent> latestFrame = new AtomicReference<>();
+  private final AtomicLong captureAttempts = new AtomicLong(0);
+  private final AtomicLong captureSuccesses = new AtomicLong(0);
+  private final AtomicLong captureErrors = new AtomicLong(0);
+  private final AtomicLong subscriberDispatchAttempts = new AtomicLong(0);
+  private final AtomicLong subscriberDispatchErrors = new AtomicLong(0);
+  private final AtomicLong sourceTransitions = new AtomicLong(0);
+  private final AtomicLong staleSourceDispatches = new AtomicLong(0);
+  private final AtomicReference<FrameSourceBinding> activeSourceBinding = new AtomicReference<>();
+  private final AtomicLong totalCaptureDurationMs = new AtomicLong(0);
+  private final AtomicLong maxCaptureDurationMs = new AtomicLong(0);
+
+  private ScheduledExecutorService captureScheduler;
+  private ExecutorService dispatchExecutor;
+  private volatile boolean capturing = false;
+  private volatile long lastErrorLogTimeMs = 0;
+  private static final long ERROR_LOG_INTERVAL_MS = 5000;
+
+  // Jitter tracking for capture timing
+  private volatile long lastCaptureTimeMs = 0;
+  private volatile long totalCaptureJitterMs = 0;
+  private volatile long captureCount = 0;
+
+  /** Creates the shared capture pipeline over the platform-aware frame provider. */
+  @Autowired
+  public UnifiedFrameCaptureService(UnifiedCaptureConfig config, WindowFrameCapture frameCapture) {
+    this.config = config;
+    this.frameCapture = frameCapture;
+  }
+
+  /** Compatibility constructor for focused tests and non-Spring callers. */
+  public UnifiedFrameCaptureService(UnifiedCaptureConfig config) {
+    this(config, new ScreenManagerWindowFrameCapture());
+  }
+
+  /**
+   * Registers a frame listener to receive captured frames.
+   *
+   * <p>If this is the first subscriber, starts the capture thread. Subsequent registrations reuse
+   * the existing capture thread.
+   *
+   * @param listener The listener to register
+   */
+  public synchronized void registerSubscriber(FrameListener listener) {
+    if (!config.isEnabled()) {
+      logger.warn(
+          "Unified capture is disabled, subscriber will not receive frames: {}",
+          listener.getClass().getSimpleName());
+      return;
+    }
+
+    if (subscribers.add(listener)) {
+      int count = refCount.incrementAndGet();
+      logger.info(
+          "Registered frame listener: {} (total subscribers: {})",
+          listener.getClass().getSimpleName(),
+          count);
+
+      // Start capture if this is the first subscriber
+      if (count == 1) {
+        startCapture();
+      }
+
+      // Send latest frame to new subscriber immediately if available
+      FrameEvent latest = latestFrame.get();
+      if (latest != null && listener.isActive()) {
+        dispatchExecutor.execute(() -> deliverFrame(listener, latest));
+      }
+    }
+  }
+
+  /**
+   * Unregisters a frame listener.
+   *
+   * <p>If this is the last subscriber, stops the capture thread to reduce CPU usage.
+   *
+   * @param listener The listener to unregister
+   */
+  public synchronized void unregisterSubscriber(FrameListener listener) {
+    if (subscribers.remove(listener)) {
+      int count = refCount.decrementAndGet();
+      logger.info(
+          "Unregistered frame listener: {} (remaining subscribers: {})",
+          listener.getClass().getSimpleName(),
+          count);
+
+      // Stop capture if no more subscribers
+      if (count == 0) {
+        stopCapture();
+      }
+    }
+  }
+
+  /**
+   * Returns the most recently captured frame.
+   *
+   * <p>Useful for on-demand consumers (e.g., ZoneManager, OCR) that don't need continuous updates.
+   *
+   * @return The latest frame, or null if no frame has been captured yet
+   */
+  public FrameEvent getLatestFrame() {
+    return latestFrame.get();
+  }
+
+  /** Starts the capture thread. */
+  private void startCapture() {
+    if (capturing) {
+      return;
+    }
+
+    logger.info("Starting unified frame capture at {} FPS", config.getFps());
+
+    // Create capture scheduler with normal priority to prevent game threads from starving capture
+    captureScheduler =
+        Executors.newSingleThreadScheduledExecutor(
+            r -> {
+              Thread t = new Thread(r, "UnifiedFrameCapture");
+              t.setDaemon(true);
+              t.setPriority(Thread.NORM_PRIORITY);
+              return t;
+            });
+
+    // Create dispatcher for async frame delivery
+    dispatchExecutor =
+        Executors.newCachedThreadPool(
+            r -> {
+              Thread t = new Thread(r, "FrameDispatch");
+              t.setDaemon(true);
+              return t;
+            });
+
+    capturing = true;
+
+    // Schedule periodic captures
+    long intervalMs = config.getIntervalMs();
+    captureScheduler.scheduleAtFixedRate(this::captureTick, 0, intervalMs, TimeUnit.MILLISECONDS);
+  }
+
+  /** Stops the capture thread. */
+  private void stopCapture() {
+    if (!capturing) {
+      return;
+    }
+
+    logger.info("Stopping unified frame capture (no subscribers)");
+    capturing = false;
+
+    if (captureScheduler != null) {
+      captureScheduler.shutdown();
+      try {
+        if (!captureScheduler.awaitTermination(2, TimeUnit.SECONDS)) {
+          captureScheduler.shutdownNow();
+        }
+      } catch (InterruptedException e) {
+        captureScheduler.shutdownNow();
+        Thread.currentThread().interrupt();
+      }
+      captureScheduler = null;
+    }
+
+    if (dispatchExecutor != null) {
+      dispatchExecutor.shutdown();
+      try {
+        if (!dispatchExecutor.awaitTermination(2, TimeUnit.SECONDS)) {
+          dispatchExecutor.shutdownNow();
+        }
+      } catch (InterruptedException e) {
+        dispatchExecutor.shutdownNow();
+        Thread.currentThread().interrupt();
+      }
+      dispatchExecutor = null;
+    }
+    // A later subscription must never receive the previous target's cached frame.
+    latestFrame.set(null);
+    activeSourceBinding.set(null);
+  }
+
+  /** Captures a frame and dispatches it to all active subscribers. */
+  private void captureTick() {
+    if (refCount.get() == 0) {
+      return; // No subscribers, skip capture
+    }
+    captureAttempts.incrementAndGet();
+
+    long captureStart = System.currentTimeMillis();
+
+    // Track capture jitter
+    if (lastCaptureTimeMs > 0) {
+      long actualInterval = captureStart - lastCaptureTimeMs;
+      long expectedInterval = config.getIntervalMs();
+      long jitter = Math.abs(actualInterval - expectedInterval);
+      totalCaptureJitterMs += jitter;
+      captureCount++;
+
+      // Log jitter every ~1 second (30 frames at 30 FPS)
+      if (captureCount % 30 == 0) {
+        double avgJitter = (double) totalCaptureJitterMs / captureCount;
+        logger.info(
+            "Capture FPS check: expected {}ms interval, avg jitter: {}ms, count: {}",
+            expectedInterval,
+            String.format(Locale.US, "%.1f", avgJitter),
+            captureCount);
+      }
+    }
+    lastCaptureTimeMs = captureStart;
+
+    try {
+      final FrameEvent event = frameCapture.captureEvent();
+      long captureEnd = System.currentTimeMillis();
+      long captureMs = captureEnd - captureStart;
+      totalCaptureDurationMs.addAndGet(captureMs);
+      maxCaptureDurationMs.accumulateAndGet(captureMs, Math::max);
+
+      // Log slow captures
+      if (captureMs > 50) {
+        logger.warn("Slow frame capture: {}ms (expected <{}ms)", captureMs, config.getIntervalMs());
+      }
+
+      if (event != null && event.getFrame() != null) {
+        captureSuccesses.incrementAndGet();
+        observeSourceBinding(event.getSourceBinding());
+
+        // Store as latest frame
+        latestFrame.set(event);
+
+        // Dispatch to all active subscribers asynchronously
+        for (FrameListener subscriber : subscribers) {
+          if (subscriber.isActive()) {
+            subscriberDispatchAttempts.incrementAndGet();
+            dispatchExecutor.execute(() -> deliverFrame(subscriber, event));
+          }
+        }
+      }
+    } catch (Exception e) {
+      captureErrors.incrementAndGet();
+      // Rate limit error logging to avoid spam
+      long nowMs = System.currentTimeMillis();
+      if (nowMs - lastErrorLogTimeMs >= ERROR_LOG_INTERVAL_MS) {
+        lastErrorLogTimeMs = nowMs;
+        logger.info("Frame capture failed (window may be unavailable): {}", e.getMessage());
+      }
+    }
+  }
+
+  /** Delivers a frame to a subscriber, catching any exceptions. */
+  private void deliverFrame(FrameListener subscriber, FrameEvent event) {
+    FrameSourceBinding eventBinding = event.getSourceBinding();
+    FrameSourceBinding activeBinding = activeSourceBinding.get();
+    if (activeBinding != null && !activeBinding.equals(eventBinding)) {
+      staleSourceDispatches.incrementAndGet();
+      return;
+    }
+    try {
+      subscriber.onFrameCaptured(event);
+    } catch (Exception e) {
+      subscriberDispatchErrors.incrementAndGet();
+      logger.error(
+          "Error delivering frame to subscriber {}: {}",
+          subscriber.getClass().getSimpleName(),
+          e.getMessage());
+    }
+  }
+
+  private void observeSourceBinding(FrameSourceBinding observed) {
+    if (observed == null) {
+      return;
+    }
+    FrameSourceBinding previous = activeSourceBinding.getAndSet(observed);
+    if (previous != null && !previous.equals(observed)) {
+      sourceTransitions.incrementAndGet();
+      latestFrame.set(null);
+      logger.info(
+          "Frame source changed; invalidated cached frame ({} -> {})",
+          previous.toDisplayString(),
+          observed.toDisplayString());
+    }
+  }
+
+  /** Cleanup on application shutdown. */
+  @PreDestroy
+  public void cleanup() {
+    logger.info("UnifiedFrameCaptureService cleanup");
+    stopCapture();
+    subscribers.clear();
+    refCount.set(0);
+  }
+
+  /** Returns whether the capture service is currently running. */
+  public boolean isCapturing() {
+    return capturing;
+  }
+
+  /** Returns the number of registered subscribers. */
+  public int getSubscriberCount() {
+    return refCount.get();
+  }
+
+  public long getCaptureAttempts() {
+    return captureAttempts.get();
+  }
+
+  public long getCaptureSuccesses() {
+    return captureSuccesses.get();
+  }
+
+  public long getCaptureErrors() {
+    return captureErrors.get();
+  }
+
+  public long getSubscriberDispatchAttempts() {
+    return subscriberDispatchAttempts.get();
+  }
+
+  public long getSubscriberDispatchErrors() {
+    return subscriberDispatchErrors.get();
+  }
+
+  /** Number of exact host/process/generation transitions observed by this service. */
+  public long getSourceTransitions() {
+    return sourceTransitions.get();
+  }
+
+  /** Number of queued callbacks refused because their source was displaced. */
+  public long getStaleSourceDispatches() {
+    return staleSourceDispatches.get();
+  }
+
+  /** Returns the exact active source binding, or {@code null} before the first bound frame. */
+  public FrameSourceBinding getActiveSourceBinding() {
+    return activeSourceBinding.get();
+  }
+
+  /** Returns mean capture duration over successful captures. */
+  public double getAverageCaptureDurationMs() {
+    long successes = captureSuccesses.get();
+    return successes == 0 ? 0.0 : (double) totalCaptureDurationMs.get() / successes;
+  }
+
+  public long getMaxCaptureDurationMs() {
+    return maxCaptureDurationMs.get();
+  }
+
+  /**
+   * Restarts the capture scheduler with updated FPS.
+   *
+   * <p>Call this after changing UnifiedCaptureConfig.fps at runtime to apply the new frame rate.
+   * Only restarts if capture is currently running.
+   */
+  public synchronized void restartCapture() {
+    if (!capturing) {
+      return; // Not running, nothing to restart
+    }
+
+    logger.info("Restarting frame capture with new FPS: {}", config.getFps());
+    stopCapture();
+    startCapture();
+  }
+}

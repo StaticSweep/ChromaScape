@@ -127,7 +127,6 @@ public final class SafeProviderProcessRunner {
       environment.put("NO_COLOR", "1");
       environment.put("TERM", "dumb");
     } catch (IOException exception) {
-      logger.warn("Provider process {} could not be configured", turnRef, exception);
       return ProcessResult.failure(false, FailureCode.PROCESS_START_FAILED, 0);
     }
 
@@ -152,20 +151,12 @@ public final class SafeProviderProcessRunner {
       Thread.currentThread().interrupt();
       return ProcessResult.failure(false, FailureCode.PROCESS_START_FAILED, elapsed(startedAt));
     } catch (ExecutionException exception) {
-      logger.warn("Provider process {} failed to start", turnRef, exception);
       return ProcessResult.failure(false, FailureCode.PROCESS_START_FAILED, elapsed(startedAt));
     }
 
-    // The child is running, so the provider call is submitted. From here on a broken input pipe or
-    // a deadline breach is an uncertain outcome, never a clean pre-submission failure.
-    boolean submitted = true;
+    boolean submitted = false;
     try {
       CompletableFuture<Void> firstEvent = new CompletableFuture<>();
-      try (var processInput = process.getOutputStream()) {
-        processInput.write(stdin.getBytes(StandardCharsets.UTF_8));
-      } catch (IOException inputFailure) {
-        logger.debug("Provider process {} closed stdin during submission", turnRef, inputFailure);
-      }
       CompletableFuture<BoundedOutput> stdout =
           CompletableFuture.supplyAsync(
               () ->
@@ -176,6 +167,15 @@ public final class SafeProviderProcessRunner {
               () ->
                   readBounded(
                       process.getErrorStream(), properties.getMaxStderrBytes(), firstEvent));
+      // Once the child is running, submission has begun. A child may legitimately close stdin
+      // after producing a terminal response, so a broken input pipe must not discard the bounded
+      // output or be misclassified as a process-start failure.
+      submitted = true;
+      try (var processInput = process.getOutputStream()) {
+        processInput.write(stdin.getBytes(StandardCharsets.UTF_8));
+      } catch (IOException inputFailure) {
+        logger.debug("Provider process {} closed stdin during submission", turnRef, inputFailure);
+      }
       try {
         firstEvent.get(
             boundedWait(deadline, properties.getFirstEventTimeoutMillis()), TimeUnit.MILLISECONDS);
@@ -186,6 +186,9 @@ public final class SafeProviderProcessRunner {
       long remaining = Math.max(1, Duration.between(clock.instant(), deadline).toMillis());
       if (!process.waitFor(remaining, TimeUnit.MILLISECONDS)) {
         terminateProcessTree(process);
+        // The readers own the process pipes. Await their completion after termination so Windows
+        // releases the child's working directory before callers attempt to remove it.
+        CompletableFuture.allOf(stdout, stderr).get(5, TimeUnit.SECONDS);
         return ProcessResult.failure(
             true, FailureCode.UNKNOWN_PROVIDER_OUTCOME, elapsed(startedAt));
       }
@@ -224,6 +227,30 @@ public final class SafeProviderProcessRunner {
     }
     terminateProcessTree(process);
     return true;
+  }
+
+  private void terminateProcessTree(Process process) {
+    List<ProcessHandle> descendants = process.descendants().toList();
+    descendants.forEach(ProcessHandle::destroy);
+    process.destroy();
+    try {
+      if (!process.waitFor(250, TimeUnit.MILLISECONDS)) {
+        descendants.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
+        process.destroyForcibly();
+        process.waitFor(5, TimeUnit.SECONDS);
+      }
+      for (ProcessHandle descendant : descendants) {
+        if (descendant.isAlive()) {
+          descendant.destroyForcibly();
+          descendant.onExit().get(5, TimeUnit.SECONDS);
+        }
+      }
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      logger.warn("Interrupted while terminating provider process tree", exception);
+    } catch (Exception exception) {
+      logger.warn("Provider process tree did not terminate within the cleanup bound", exception);
+    }
   }
 
   public ProbeResult probe(List<String> command, List<String> credentialEnvironmentNames) {
@@ -268,30 +295,6 @@ public final class SafeProviderProcessRunner {
   private long boundedWait(Instant deadline, long configuredMillis) {
     long remaining = Math.max(1, Duration.between(clock.instant(), deadline).toMillis());
     return Math.max(1, Math.min(configuredMillis, remaining));
-  }
-
-  private void terminateProcessTree(Process process) {
-    List<ProcessHandle> descendants = process.descendants().toList();
-    descendants.forEach(ProcessHandle::destroy);
-    process.destroy();
-    try {
-      if (!process.waitFor(250, TimeUnit.MILLISECONDS)) {
-        descendants.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
-        process.destroyForcibly();
-        process.waitFor(5, TimeUnit.SECONDS);
-      }
-      for (ProcessHandle descendant : descendants) {
-        if (descendant.isAlive()) {
-          descendant.destroyForcibly();
-          descendant.onExit().get(5, TimeUnit.SECONDS);
-        }
-      }
-    } catch (InterruptedException exception) {
-      Thread.currentThread().interrupt();
-      logger.warn("Interrupted while terminating provider process tree", exception);
-    } catch (Exception exception) {
-      logger.warn("Provider process tree did not terminate within the cleanup bound", exception);
-    }
   }
 
   private long elapsed(Instant startedAt) {

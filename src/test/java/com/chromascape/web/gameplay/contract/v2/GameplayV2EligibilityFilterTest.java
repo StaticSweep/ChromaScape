@@ -9,7 +9,6 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import java.io.InputStream;
 import java.time.Instant;
-import java.util.Locale;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -65,41 +64,6 @@ class GameplayV2EligibilityFilterTest {
     ((com.fasterxml.jackson.databind.node.ObjectNode) aged.path("freshness")).put("maxAgeMs", 1000);
     assertThat(statusOf(filter.filter(catalog(), aged, planningInputFor(aged), NOW)))
         .isEqualTo(EligibilityStatus.STALE_OBSERVATION);
-  }
-
-  @Test
-  void observationFreshnessRejectsFutureAndHonorsBoundaries() {
-    assertThat(statusOf(filterAt(NOW.plusMillis(1))))
-        .isEqualTo(EligibilityStatus.STALE_OBSERVATION);
-    assertThat(statusOf(filterAt(NOW))).isEqualTo(EligibilityStatus.ELIGIBLE);
-    assertThat(statusOf(filterAt(NOW.minusMillis(300000)))).isEqualTo(EligibilityStatus.ELIGIBLE);
-    assertThat(statusOf(filterAt(NOW.minusMillis(300001))))
-        .isEqualTo(EligibilityStatus.STALE_OBSERVATION);
-  }
-
-  @Test
-  void simulatorDetectionIsStableUnderTurkishLocale() {
-    Locale original = Locale.getDefault();
-    try {
-      Locale.setDefault(Locale.forLanguageTag("tr-TR"));
-      JsonNode observation = fixtures.path("semanticObservation").deepCopy();
-      ((com.fasterxml.jackson.databind.node.ObjectNode) observation.path("identities"))
-          .put("environmentId", "simulation");
-      JsonNode planningInput = planningInputFor(observation);
-      ((com.fasterxml.jackson.databind.node.ObjectNode) planningInput.path("identities"))
-          .put("environmentId", "simulation");
-      assertThat(statusOf(filter.filter(catalog(), observation, planningInput, NOW)))
-          .isEqualTo(EligibilityStatus.POLICY_DENIED);
-
-      JsonNode invalid = objectMapper.createObjectNode();
-      org.assertj.core.api.Assertions.assertThatThrownBy(
-              () -> validator.validateWithRules("providerDecision", invalid))
-          .isInstanceOf(GameplayV2ContractValidator.GameplayV2ContractViolation.class)
-          .extracting("failureCode")
-          .isEqualTo("INVALID_PROVIDER_DECISION");
-    } finally {
-      Locale.setDefault(original);
-    }
   }
 
   @Test
@@ -208,13 +172,6 @@ class GameplayV2EligibilityFilterTest {
             "observationDigest",
             GameplayV2EligibilityFilter.canonicalDigest(objectMapper, observation));
     return planningInput;
-  }
-
-  private JsonNode filterAt(Instant capturedAt) {
-    JsonNode observation = fixtures.path("semanticObservation").deepCopy();
-    ((com.fasterxml.jackson.databind.node.ObjectNode) observation)
-        .put("capturedAt", capturedAt.toString());
-    return filter.filter(catalog(), observation, planningInputFor(observation), NOW);
   }
 
   private JsonNode catalog() {

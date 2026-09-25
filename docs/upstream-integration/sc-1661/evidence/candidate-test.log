@@ -1,0 +1,387 @@
+> Task :compileJava UP-TO-DATE
+> Task :copyNativeLibraries SKIPPED
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileTestJava UP-TO-DATE
+> Task :processTestResources UP-TO-DATE
+> Task :testClasses UP-TO-DATE
+
+> Task :test
+SC-967 vectors: /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/contracts/sc967/ed25519-vectors.json
+
+ChromaScapeApplicationTests > contextLoadsAndUsesCurrentRepositoryMigrations() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:180
+        Caused by: java.lang.IllegalStateException at ChromaScapeApplicationTests.java:27
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :test
+
+RoutineAssistantGenerationContextIT > aDocumentLargerThanAnyVarcharBoundRoundTrips() FAILED
+    java.lang.ExceptionInInitializerError at Constructor.java:500
+        Caused by: java.lang.IllegalStateException at RoutineAssistantGenerationContextIT.java:56
+
+RoutineAssistantGenerationContextIT > resolvesTheRunsPublishedGraphFromOffRequestThread() FAILED
+    java.lang.NoClassDefFoundError at Constructor.java:500
+        Caused by: java.lang.ExceptionInInitializerError at RoutineAssistantGenerationContextIT.java:56
+
+RoutineAssistantGenerationContextIT > theColumnHoldsTheJsonSoSqlOverItWorks() FAILED
+    java.lang.NoClassDefFoundError at Constructor.java:500
+        Caused by: java.lang.ExceptionInInitializerError at RoutineAssistantGenerationContextIT.java:56
+
+RoutineAssistantGenerationContextIT > jsonColumnsAreReadableOutsideATransaction() FAILED
+    java.lang.NoClassDefFoundError at Constructor.java:500
+        Caused by: java.lang.ExceptionInInitializerError at RoutineAssistantGenerationContextIT.java:56
+
+Sc967FlywaySchemaTest > v5UpgradeBackfillsUnfinishedCaptureOperationsWithUniqueCorrelations() FAILED
+    org.postgresql.util.PSQLException at Sc967FlywaySchemaTest.java:217
+        Caused by: java.net.ConnectException at Sc967FlywaySchemaTest.java:217
+
+Sc967FlywaySchemaTest > flywayAloneCreatesValidSc967Schema() FAILED
+    org.postgresql.util.PSQLException at Sc967FlywaySchemaTest.java:49
+        Caused by: java.net.ConnectException at Sc967FlywaySchemaTest.java:49
+
+Sc967FlywaySchemaTest > executionError FAILED
+    org.postgresql.util.PSQLException at Sc967FlywaySchemaTest.java:40
+        Caused by: java.net.ConnectException at Sc967FlywaySchemaTest.java:40
+
+CaptureSourceIntegrationTest > bindingConflictRollsBackManifestBindingAndCaptureWrite() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:180
+        Caused by: java.lang.IllegalStateException at CaptureSourceIntegrationTest.java:121
+
+CaptureSourceIntegrationTest > captureUpdateFailureRollsBackManifestBindingRunAndCapture() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+CaptureSourceIntegrationTest > exactSuccessfulCompletionRetryReturnsTheExistingImmutableIdentity() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+CaptureSourceIntegrationTest > differentCompletionIdentityCannotReuseAnExistingCompletion() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+CaptureSourceIntegrationTest > runIdentityConflictRollsBackEveryPhaseTwoWrite() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+CaptureSourceIntegrationTest > sourceFetchIsOutsideTheCompletionWriteTransaction() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+CaptureSourceIntegrationTest > identityChangingBetweenFetchAndWriteFailsClosed() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+ChromaScapeFullContextExcludesSc810TestBootstrapTest > wiresTheRealStabilizationIngestionServiceNotTheSc810TestMock() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:180
+        Caused by: java.lang.IllegalStateException at ChromaScapeFullContextExcludesSc810TestBootstrapTest.java:42
+
+ChromaScapeFullContextExcludesSc810TestBootstrapTest > stillConstructsTheRealAccountTaskServiceGraph() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+ChromaScapeFullContextExcludesSc810TestBootstrapTest > doesNotDiscoverTheSc810TestBootstrap() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+Sc810FlywayOnlyMigrationCompletenessTest > initializationError FAILED
+    org.postgresql.util.PSQLException at Sc810FlywayOnlyMigrationCompletenessTest.java:62
+        Caused by: java.net.ConnectException at Sc810FlywayOnlyMigrationCompletenessTest.java:62
+
+Sc810NarrowContextIsolationTest > containsExactlyItsDeclaredSourceRunCaptureServicesAndRepositories() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:180
+        Caused by: java.lang.IllegalStateException at Sc810NarrowContextIsolationTest.java:47
+
+Sc810NarrowContextIsolationTest > neverConstructsTheUnrelatedAccountTaskServiceGraph() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+SourceContractSchemaEqualityTest > canonicalSchemaIsByteIdenticalAcrossRepositories() FAILED
+    org.opentest4j.AssertionFailedError at SourceContractSchemaEqualityTest.java:92
+
+SourceFetchTransactionSuspensionTest > fetchForRunRunsUpstreamOutsideAnyDatabaseTransaction() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:180
+        Caused by: java.lang.IllegalStateException at SourceFetchTransactionSuspensionTest.java:84
+
+SourceManifestConcurrentPersistenceIntegrationTest > twoThreadsRacingTheSameIdentityConvergeOnOneImmutableRow() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:180
+        Caused by: java.lang.IllegalStateException at SourceManifestConcurrentPersistenceIntegrationTest.java:93
+
+SourceManifestConcurrentPersistenceIntegrationTest > sameManifestHashWithDifferentBytesIsRejectedAtTheDatabase() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+SourceManifestConcurrentPersistenceIntegrationTest > immutableTriggerRejectsAnyMutationOfAPersistedReference() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+SourceManifestTextPersistenceTest > productionSizedJsonRoundTripsAsInlineText() FAILED
+    java.lang.IllegalStateException at SourceManifestTextPersistenceTest.java:15
+
+SourceRunOrchestrationIntegrationTest > fetchFailurePersistsNothing() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:180
+        Caused by: java.lang.IllegalStateException at SourceRunOrchestrationIntegrationTest.java:92
+
+SourceRunOrchestrationIntegrationTest > manifestRunBindingAndStageCommitTogether() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+SourceRunOrchestrationIntegrationTest > bindingConflictRollsBackRunAndManifest() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+SourceRunOrchestrationIntegrationTest > retriesAreIdempotent() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+SourceRunOrchestrationIntegrationTest > runInsertFailureLeavesNoManifest() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+Micro6TargetRelaunchServiceTest > integrated_interruptedHealthRequestTerminatesOwnedTreeAndPreservesInterruptStatus() FAILED
+    org.opentest4j.AssertionFailedError at Micro6TargetRelaunchServiceTest.java:428
+
+CdiStartupRegressionTest > repairIncidentServiceReceivesIntendedDependencies() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:180
+        Caused by: java.lang.IllegalStateException at CdiStartupRegressionTest.java:42
+
+CdiStartupRegressionTest > contextCreatesExactlyOneSourceDebuggerReadServiceWithAllCollaborators() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+PacketObservationMigrationIntegrationTest > initializationError FAILED
+    java.lang.IllegalStateException at DockerClientProviderStrategy.java:229
+
+ReplayTickBatchReceiptIntegrationTest > initializationError FAILED
+    java.lang.IllegalStateException at DockerClientProviderStrategy.java:229
+
+TickBatchDurabilityIntegrationTest > initializationError FAILED
+    java.lang.IllegalStateException at DockerClientProviderStrategy.java:229
+
+HumanGameplayAuthorityServiceTest > bindsOneUseAuthorityToTheExactEnvelopeAndScope() FAILED
+    org.opentest4j.AssertionFailedError at HumanGameplayAuthorityServiceTest.java:56
+
+GameplayContractConformanceTest > claudeAndCodexUseTheSameClosedDownstreamShape() FAILED
+    com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation at GameplayContractConformanceTest.java:71
+
+GameplayContractConformanceTest > securitySensitiveObjectsRejectUnknownOrUnsupportedFields() FAILED
+    java.lang.ClassCastException at GameplayContractConformanceTest.java:85
+
+GameplayContractConformanceTest > canonicalResourcesHaveFrozenByteDigests() FAILED
+    org.opentest4j.AssertionFailedError at GameplayContractConformanceTest.java:100
+
+GameplayContractConformanceTest > canonicalFixturesValidateAndPinDigests() FAILED
+    com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation at GameplayContractConformanceTest.java:47
+
+BootstrapGameplayOperatorServiceTest > approvalRequiresHumanConfirmationOfTheCurrentDigest() FAILED
+    com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation at BootstrapGameplayOperatorServiceTest.java:111
+
+BootstrapGameplayOperatorServiceTest > previewApproveAndDispatchConsumeOneExactHumanApproval() FAILED
+    com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation at BootstrapGameplayOperatorServiceTest.java:82
+
+BootstrapGameplayOrchestratorTest > fakeAccountBuilderCoversTerminalAndUncertainPathsWithAtomicEvidence() FAILED
+    com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation at BootstrapGameplayOrchestratorTest.java:68
+
+BootstrapGameplayOrchestratorTest > identicalRequestReconcilesAndConflictingIdempotencyFailsBeforeDispatch() FAILED
+    com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation at BootstrapGameplayOrchestratorTest.java:95
+
+BootstrapGameplayOrchestratorTest > staleObservationFailsBeforeAccountBuilderReservation() FAILED
+    com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation at BootstrapGameplayOrchestratorTest.java:125
+
+AccountBuilderOrchestrationPostgresConcurrencyTest > idempotencyKeyConflictLeavesOnlyTheCommittedOwner() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:180
+        Caused by: java.lang.IllegalStateException at AccountBuilderOrchestrationPostgresConcurrencyTest.java:60
+
+AccountBuilderOrchestrationPostgresConcurrencyTest > identicalTransitionRaceHasMonotonicEventAndReceiptSequences() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+AccountBuilderOrchestrationPostgresConcurrencyTest > requestIdConflictLeavesOnlyTheCommittedOwner() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+AccountBuilderOrchestrationPostgresConcurrencyTest > twoDifferentAuthoritiesRacingOneOrchestrationFailClosed() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+AccountBuilderOrchestrationPostgresConcurrencyTest > eightIdenticalClaimsProduceOneCommittedOwnerAndCreationEvent() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+AccountBuilderOrchestrationPostgresConcurrencyTest > sameAuthorityRaceHasOneCommittedOwnerAndOneClosedFailure() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+AccountBuilderOrchestrationRestartTest > committedEvidenceSurvivesContextRestartAndRecoveryNeverRedispatches() FAILED
+    java.lang.IllegalStateException at AccountBuilderOrchestrationRestartTest.java:35
+
+AccountBuilderOrchestrationRollbackTest > receiptInsertFailureRollsBackRootLeaseReceiptAndEvent() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:180
+        Caused by: java.lang.IllegalStateException at AccountBuilderOrchestrationRollbackTest.java:48
+
+AccountBuilderOrchestrationRollbackTest > terminalInsertFailureRollsBackTheTerminalTransition() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+AccountBuilderOrchestrationRollbackTest > authorityInsertFailureAfterRootLockRollsBackOwnershipAndRootMarker() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+AccountBuilderOrchestrationRollbackTest > eventInsertFailureRollsBackTheLifecycleTransition() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+AccountBuilderOrchestrationRollbackTest > leaseInsertFailureRollsBackTheReservationBoundary() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+JpaAccountBuilderOrchestrationStoreTest > expiredAuthorityIsRejectedBeforeAuthorityOwnership() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:180
+        Caused by: java.lang.IllegalStateException at JpaAccountBuilderOrchestrationStoreTest.java:80
+
+JpaAccountBuilderOrchestrationStoreTest > correctlyShapedButWrongHmacIsRejectedBeforeAuthorityOwnership() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+JpaAccountBuilderOrchestrationStoreTest > cryptographicallyValidDuplicateAuthorityIdIsRejectedAcrossOrchestrations() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+JpaAccountBuilderOrchestrationStoreTest > changedApprovedScopeIsRejectedBeforeAuthorityOwnership() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+JpaAccountBuilderOrchestrationStoreTest > allZeroHmacIsRejectedBeforeAuthorityOwnership() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+JpaAccountBuilderOrchestrationStoreTest > normalizedRowsReconstructAfterPersistenceContextClear() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+JpaAccountBuilderOrchestrationStoreTest > authorityBoundToDifferentEnvelopeIsRejected() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+JpaAccountBuilderOrchestrationStoreTest > changedFingerprintCannotReuseDurableIdentity() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+JpaAccountBuilderOrchestrationStoreTest > sc1431FixturesAreTestConfigurationsNotSpringBootApplications() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+Sc1431FlywaySchemaTest > flywayCreatesAllNormalizedTablesAndGuards() FAILED
+    org.postgresql.util.PSQLException at Sc1431FlywaySchemaTest.java:57
+        Caused by: java.net.ConnectException at Sc1431FlywaySchemaTest.java:57
+
+Sc1431FlywaySchemaTest > executionError FAILED
+    org.postgresql.util.PSQLException at Sc1431FlywaySchemaTest.java:46
+        Caused by: java.net.ConnectException at Sc1431FlywaySchemaTest.java:46
+
+GameplayV2GateMigrationIntegrationTest > originalV40DatabaseMigratesForwardAndBackfillsFromCanonicalBytes() FAILED
+    org.postgresql.util.PSQLException at GameplayV2GateMigrationIntegrationTest.java:336
+        Caused by: java.net.ConnectException at GameplayV2GateMigrationIntegrationTest.java:336
+
+GameplayV2GateMigrationIntegrationTest > v40V41V42BuildTheCompleteGateTable() FAILED
+    org.postgresql.util.PSQLException at GameplayV2GateMigrationIntegrationTest.java:336
+        Caused by: java.net.ConnectException at GameplayV2GateMigrationIntegrationTest.java:336
+
+GameplayV2GateMigrationIntegrationTest > migrationsApplyCleanlyInAnIndependentSchema() FAILED
+    org.postgresql.util.PSQLException at GameplayV2GateMigrationIntegrationTest.java:336
+        Caused by: java.net.ConnectException at GameplayV2GateMigrationIntegrationTest.java:336
+
+GameplayV2GateMigrationIntegrationTest > executionError FAILED
+    org.postgresql.util.PSQLException at GameplayV2GateMigrationIntegrationTest.java:336
+        Caused by: java.net.ConnectException at GameplayV2GateMigrationIntegrationTest.java:336
+
+JpaGameplayV2GateStoreTest > aRequestIdIsUsableOnce() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:180
+        Caused by: java.lang.IllegalStateException at JpaGameplayV2GateStoreTest.java:62
+
+JpaGameplayV2GateStoreTest > canonicalBytesRoundTripExactlyThroughANewPersistenceContext() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+JpaGameplayV2GateStoreTest > exactlyOneOfManyConcurrentStartClaimsWins() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+JpaGameplayV2GateStoreTest > onlyOneNonTerminalRowMayHoldAnAccountClientSlot() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+JpaGameplayV2GateStoreTest > anIdempotencyKeyIsUsableOnce() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+JpaGameplayV2GateStoreTest > anAuthorityIsConsumableOnce() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+JpaGameplayV2GateStoreTest > compareAndSetOnlyAppliesFromAnExpectedState() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+JpaGameplayV2GateStoreTest > findRecoverableReturnsOnlyInFlightRows() FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+GameplayProviderRuntimeTest > identicalRetryInvokesProviderOnceAndPublishesOnlyPersistedDecision() FAILED
+    org.opentest4j.AssertionFailedError at GameplayProviderRuntimeTest.java:51
+
+ProviderOutputNormalizerTest > normalizesClaudeAndCodexGoldenProposalsToEquivalentDecisions() FAILED
+    com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeException at ProviderOutputNormalizerTest.java:46
+
+ProviderOutputNormalizerTest > rejectsProseMultipleDecisionsAndUnsupportedActions() FAILED
+    java.lang.ClassCastException at ProviderOutputNormalizerTest.java:117
+
+ProviderOutputNormalizerTest > rejectsEvidenceOutsidePinnedInput() FAILED
+    java.lang.ClassCastException at ProviderOutputNormalizerTest.java:132
+
+ProviderOutputNormalizerTest > extractsOneClaudeTerminalResultFromBoundedTransportEvents() FAILED
+    com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeException at ProviderOutputNormalizerTest.java:75
+
+ProviderOutputNormalizerTest > acceptsOnlyThePinnedAbstainAction() FAILED
+    com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeException at ProviderOutputNormalizerTest.java:88
+
+ReplayMigrationIntegrationTest > v19RejectsConflictingOldAndNewChecksums() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:88
+
+ReplayMigrationIntegrationTest > freshHibernateManagedTablesConvergeAfterFlywayAndRemainStableOnRepeatStartup() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:88
+
+ReplayMigrationIntegrationTest > v31CreatesPlaybackIndexesWhenDebuggerTablesExist() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:88
+
+ReplayMigrationIntegrationTest > v19BackfillsAndDropsWhenBothColumnsHoldEqualValues() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:88
+
+ReplayMigrationIntegrationTest > v19AcceptsNewColumnOnlyState() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:88
+
+ReplayMigrationIntegrationTest > v19ConvergesFromOldColumnOnlyState() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:88
+
+ReplayMigrationIntegrationTest > v30AppliesOnAV20UpgradedDatabase() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:88
+
+ReplayMigrationIntegrationTest > replayChainThroughV31AppliesOnEmptyDatabase() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:88
+
+ReplayMigrationIntegrationTest > v30AllowsNullAttemptIdButKeepsTheForeignKey() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:88
+
+ReplayPostgresIntegrationTest > initializationError FAILED
+    java.lang.IllegalStateException at DockerClientProviderStrategy.java:229
+
+ReplayPlaybackCatalogRepositoryIntegrationTest > initializationError FAILED
+    java.lang.IllegalStateException at DockerClientProviderStrategy.java:229
+
+ReplayPlaybackParityIntegrationTest > initializationError FAILED
+    java.lang.IllegalStateException at DockerClientProviderStrategy.java:229
+
+SimulatorVerifyServiceIntegrationTest > Report Retrieval Behavioral Tests > Should return synthetic failure report when verifier cannot start FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:180
+        Caused by: java.lang.IllegalStateException at DockerClientProviderStrategy.java:229
+
+SimulatorVerifyServiceIntegrationTest > Report Retrieval Behavioral Tests > Should include reportAvailable field in status response FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+SimulatorVerifyServiceIntegrationTest > Job Cancellation Behavioral Tests > Should cancel running job via REST API FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+SimulatorVerifyServiceIntegrationTest > Job Lifecycle Behavioral Tests > Should return 404 for non-existent job FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+SimulatorVerifyServiceIntegrationTest > Job Lifecycle Behavioral Tests > Should transition job from QUEUED to RUNNING to terminal status FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+SimulatorVerifyServiceIntegrationTest > Job Lifecycle Behavioral Tests > Should create job with QUEUED status via REST API FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+SimulatorVerifyServiceIntegrationTest > Job Lifecycle Behavioral Tests > Should reach terminal FAILED status with reportAvailable when exitCode=2 FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+SimulatorVerifyServiceIntegrationTest > Bridge Reachability Behavioral Tests > Should accept various bridge URL formats FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+SimulatorVerifyServiceIntegrationTest > Bridge Reachability Behavioral Tests > Should return false for unreachable bridge endpoint FAILED
+    java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:145
+
+2250 tests completed, 110 failed, 13 skipped
+
+> Task :test FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':test'.
+> There were failing tests. See the report at: file:///run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights.
+
+BUILD FAILED in 2m 50s
+5 actionable tasks: 1 executed, 4 up-to-date

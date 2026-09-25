@@ -1,0 +1,33 @@
+SC-1663 remediation (r2) — failure identity comparison
+Base: 20beeb1 (committed SC-1663 head) vs Head: codex/sc-1663-review-remediation
+Host: Fedora (Linux), JDK 17 toolchain, Gradle 8.14.2, --offline. Identities = classname.test.
+
+Ordinary suite (task `test`):
+  base: 2059 tests, 14 skipped, 67 failures, 0 errors
+  head: 2079 tests, 14 skipped, 68 failures, 0 errors  (+20 tests = new SC-1663 regressions)
+  New failure identities at head: 1
+    com.chromascape.web.debug.buildergoal.service.Micro6TargetRelaunchServiceTest.
+      integrated_interruptedHealthRequestTerminatesOwnedTreeAndPreservesInterruptStatus
+  Investigation: no code linkage to the SC-1663 surface (no window/discovery symbol referenced
+  by the service or its test). The test spawns real `sleep 600` shell children and asserts
+  prompt process-tree death — a timing race. Two stray `sleep 600` orphans (including the exact
+  pid named in the failure) were found on the host after the failed run. A/B rerun after
+  clearing them: base 2/2 PASS, head 2/2 PASS. Classified: pre-existing environmental flake,
+  NOT introduced by the remediation. Zero introduced failure identities.
+
+Replay suite (task `replayTest`):
+  base: 270 tests, 0 skipped, 15 failures, 0 errors
+  head: 270 tests, 0 skipped, 15 failures, 0 errors
+  Failure identity sets are IDENTICAL (comm diff empty both directions): 12 Docker-environment
+  blocks ("Could not find a valid Docker environment") — Docker is unavailable on this host —
+  plus 3 pre-existing assertion failures (XrspsStartupValidatorTest x2, replay migration chain).
+  Zero introduced failure identities.
+
+Focused suite (--tests "com.chromascape.utils.core.screen.window.*"):
+  r2 final: 93 tests, 1 skipped (Windows-only factory test), 0 failures, 0 errors.
+
+Launcher suites (r2, all PASS): BuilderGoalLauncherControlServiceTest 26,
+BuilderGoalRunnerServiceTest 96, Micro6OnlineClientRegistryServiceTest 27,
+Micro6TargetPreparationServiceTest 8, Micro6ExecutorReadinessEvaluatorTest 13.
+Micro6RemoteLauncherServiceTest from the plan's list does not exist in this tree (recorded as
+NOT PRESENT, not NOT RUN).

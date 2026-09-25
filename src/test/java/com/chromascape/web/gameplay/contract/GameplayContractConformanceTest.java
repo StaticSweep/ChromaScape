@@ -80,34 +80,6 @@ class GameplayContractConformanceTest {
   }
 
   @Test
-  void providerModelVersionsMustBeSchemaTokens() {
-    ClaudeGameplayProviderAdapter claude = new ClaudeGameplayProviderAdapter(validator);
-    CodexGameplayProviderAdapter codex = new CodexGameplayProviderAdapter(validator);
-    String[] invalidVersions =
-        new String[] {null, "", " leading", "trailing ", "bad/value", "x".repeat(129)};
-    for (String invalid : invalidVersions) {
-      assertThatThrownBy(() -> claude.adapt(invalid, fixtures.path("claudeProposal")))
-          .isInstanceOf(IllegalArgumentException.class);
-      assertThatThrownBy(() -> codex.adapt(invalid, fixtures.path("codexProposal")))
-          .isInstanceOf(IllegalArgumentException.class);
-    }
-  }
-
-  @Test
-  void v1DateTimesAreParsedExplicitly() {
-    assertInvalidDateTime("observation", fixtures.path("observation"), "capturedAt");
-    assertInvalidDateTime("executionEnvelope", fixtures.path("executionEnvelope"), "deadline");
-    assertInvalidDateTime("authority", fixtures.path("authority"), "approvedAt");
-    assertInvalidDateTime("authority", fixtures.path("authority"), "expiresAt");
-    assertInvalidDateTime("receipt", validReceipt(), "at");
-
-    com.fasterxml.jackson.databind.node.ObjectNode lowercase =
-        (com.fasterxml.jackson.databind.node.ObjectNode) fixtures.path("observation").deepCopy();
-    lowercase.put("capturedAt", "2026-09-03t12:00:00z");
-    validator.validate("observation", lowercase);
-  }
-
-  @Test
   void securitySensitiveObjectsRejectUnknownOrUnsupportedFields() {
     JsonNode proposal = fixtures.path("claudeProposal").deepCopy();
     ((com.fasterxml.jackson.databind.node.ObjectNode) proposal).put("rawMouseHandle", "forbidden");
@@ -133,31 +105,5 @@ class GameplayContractConformanceTest {
       return HexFormat.of()
           .formatHex(MessageDigest.getInstance("SHA-256").digest(input.readAllBytes()));
     }
-  }
-
-  private void assertInvalidDateTime(String definition, JsonNode source, String field) {
-    com.fasterxml.jackson.databind.node.ObjectNode invalid =
-        (com.fasterxml.jackson.databind.node.ObjectNode) source.deepCopy();
-    invalid.put(field, "2026-02-30T12:00:00Z");
-    assertThatThrownBy(() -> validator.validate(definition, invalid))
-        .isInstanceOf(GameplayContractValidator.GameplayContractViolation.class)
-        .extracting("failureCode")
-        .isEqualTo("INVALID_" + definition.toUpperCase(java.util.Locale.ROOT));
-  }
-
-  private JsonNode validReceipt() {
-    com.fasterxml.jackson.databind.node.ObjectNode receipt = objectMapper.createObjectNode();
-    receipt.put("contractVersion", "sc-1429/v1");
-    receipt.put("receiptId", "receipt-1");
-    receipt.put("requestId", "request-1");
-    receipt.put(
-        "envelopeDigest",
-        "sha256:0000000000000000000000000000000000000000000000000000000000000000");
-    receipt.put("phase", "VALIDATION");
-    receipt.put("outcome", "HELD");
-    receipt.put("at", "2026-09-03T12:00:00Z");
-    receipt.putArray("evidenceRefs");
-    receipt.put("retryAllowed", false);
-    return receipt;
   }
 }

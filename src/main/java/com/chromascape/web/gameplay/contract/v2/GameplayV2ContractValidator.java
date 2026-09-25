@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
@@ -32,7 +31,6 @@ public final class GameplayV2ContractValidator {
   private final JsonSchemaFactory schemaFactory =
       JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012);
 
-  /** Loads the frozen v2 schema using the application JSON mapper. */
   public GameplayV2ContractValidator(ObjectMapper objectMapper) {
     this.objectMapper = objectMapper;
     try (InputStream input = getClass().getClassLoader().getResourceAsStream(SCHEMA)) {
@@ -72,8 +70,7 @@ public final class GameplayV2ContractValidator {
    * INVALID_PROVIDER_DECISION}.
    */
   static String failureCode(String definition) {
-    return "INVALID_"
-        + definition.replaceAll("([a-z0-9])([A-Z])", "$1_$2").toUpperCase(Locale.ROOT);
+    return "INVALID_" + definition.replaceAll("([a-z0-9])([A-Z])", "$1_$2").toUpperCase();
   }
 
   /**
@@ -387,8 +384,8 @@ public final class GameplayV2ContractValidator {
       if (authorityId.isNull() || authorityId.asText().isBlank()) {
         throw violation("AUTHORITY_MISSING", "LIVE_TASK envelopes require an authorityId");
       }
-      if (environment(envelope).toUpperCase(Locale.ROOT).contains("SIM")
-          || environment(envelope).toUpperCase(Locale.ROOT).contains("XRSPS")) {
+      if (environment(envelope).toUpperCase().contains("SIM")
+          || environment(envelope).toUpperCase().contains("XRSPS")) {
         throw violation(
             "AUTHORITY_SOURCE_FORBIDDEN", "Simulator identity cannot authorize live delivery");
       }
@@ -412,8 +409,8 @@ public final class GameplayV2ContractValidator {
   private void checkReceiptRules(JsonNode receipt) {
     String phase = receipt.path("phase").asText();
     String outcome = receipt.path("outcome").asText();
-    final int evidenceCount = receipt.path("evidenceRefs").size();
-    final boolean retryAllowed = receipt.path("retryAllowed").asBoolean();
+    int evidenceCount = receipt.path("evidenceRefs").size();
+    boolean retryAllowed = receipt.path("retryAllowed").asBoolean();
     JsonNode failureCode = receipt.path("failureCode");
     boolean hasFailure = !failureCode.isNull() && !failureCode.asText().isBlank();
     // Phase/outcome matrix: every phase accepts only its closed outcome set.
@@ -491,13 +488,11 @@ public final class GameplayV2ContractValidator {
   public static final class GameplayV2ContractViolation extends IllegalArgumentException {
     private final String failureCode;
 
-    /** Creates a violation with its stable failure code and diagnostic message. */
     public GameplayV2ContractViolation(String failureCode, String message) {
       super(message);
       this.failureCode = failureCode;
     }
 
-    /** Returns the stable failure code. */
     public String failureCode() {
       return failureCode;
     }

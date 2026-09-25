@@ -1,0 +1,14 @@
+# Deliberately isolated compatibility profile for tests of the retired OpenRune adapter.
+# Production/default profiles do not bind any simulator settings.
+simulator:
+  verifier:
+    enabled: true
+    openrune-root: ${SIMULATOR_OPENRUNE_ROOT:/mnt/f/Dev/IdeaProjects/OpenRune-Server}
+    invocation-mode: jar
+    verifier-jar-path: simulator-verifier/build/libs/simulator-verifier-all.jar
+    reports-dir: ${SIMULATOR_REPORTS_DIR:/tmp/simulator-test-reports}
+    max-concurrent-jobs: 1
+    job-timeout-seconds: 60
+    auto-create-reports-dir: true
+  replay-control:
+    enabled: false
