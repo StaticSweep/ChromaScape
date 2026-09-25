@@ -357,7 +357,13 @@ class TickStreamIngestionServiceTest {
     batch.setPackets(
         List.of(
             v2PacketEntry(
-                "source-a", 7L, 4812L, 100L, "NPC_INFO_LARGE", "DECODED", false,
+                "source-a",
+                7L,
+                4812L,
+                100L,
+                "NPC_INFO_LARGE",
+                "DECODED",
+                false,
                 Map.of("hostileText", "<script>alert(1)</script>"))));
 
     JsonNode goPayload = objectMapper.readTree(service.goForwardPayload(batch));
