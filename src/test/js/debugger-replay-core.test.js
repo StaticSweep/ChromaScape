@@ -42,6 +42,33 @@ test('single-tick packet recovery retains its continuation cursor at the page ca
   });
 });
 
+test('packet-only replay follows persisted cursors and keeps both packet directions', async () => {
+  const cursors = [];
+  const result = await core.collectPacketPages(async cursor => {
+    cursors.push(cursor);
+    return cursor
+      ? { packets: [{ direction: 'CLIENT_TO_SERVER', sequence: 2 }], hasMore: false }
+      : { packets: [{ direction: 'SERVER_TO_CLIENT', sequence: 1 }], hasMore: true,
+          cursor: 'next-page' };
+  });
+  assert.deepEqual(cursors, ['', 'next-page']);
+  assert.deepEqual(result, {
+    packets: [
+      { direction: 'SERVER_TO_CLIENT', sequence: 1 },
+      { direction: 'CLIENT_TO_SERVER', sequence: 2 }
+    ],
+    truncated: false
+  });
+});
+
+test('packet-only replay reports the page cap and rejects malformed responses', async () => {
+  const capped = await core.collectPacketPages(
+    async () => ({ packets: [{ sequence: 1 }], hasMore: true, cursor: 'next-page' }), 1);
+  assert.equal(capped.truncated, true);
+  await assert.rejects(core.collectPacketPages(async () => ({ hasMore: false })),
+    /Invalid packet replay response/);
+});
+
 test('duplicate in-flight recovery requests share one promise and release after settlement', async () => {
   const registry = core.createInFlightRegistry();
   let calls = 0;

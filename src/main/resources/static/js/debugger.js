@@ -7,6 +7,7 @@ const replayRecoveryCore = globalThis.ChromaScapeReplayCore;
 
 let currentMode = 'live';
 let currentRecording = null;
+let directSessionJumpGeneration = 0;
 let sessionHealthMap = {};
 let sessionMetadataMap = {};
 let sessionPlayabilityMap = {};
@@ -3022,6 +3023,21 @@ function buildPacketsSection(tick, snapshot) {
 
   const content = document.createElement('div');
   content.className = 'tick-section-content packet-list';
+
+  if (snapshot?.packetLoadError) {
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'packet-badge packet-badge-error packet-retry-btn';
+    retry.textContent = 'packet load failed — retry';
+    retry.title = snapshot.packetLoadError;
+    retry.addEventListener('click', event => {
+      event.stopPropagation();
+      jumpToTick(tick);
+    });
+    content.appendChild(retry);
+    section.appendChild(content);
+    return section;
+  }
 
   if (packets.length === 0) {
     const empty = document.createElement('span');
@@ -8179,6 +8195,8 @@ function updatePanelsForTick(data) {
       groundObjects: data.groundObjects || data.snapshot?.groundObjects,
       groundItems: data.groundItems || data.snapshot?.groundItems,
       packets: cappedPackets(data.packets || data.snapshot?.packets),
+      packetTruncated: !!data.packetTruncated,
+      packetLoadError: data.packetLoadError || null,
       transport: data.transport || data.snapshot?.transport || null
     };
     // Same partition as the new format: primary keeps only its own packets.
@@ -8543,11 +8561,36 @@ function initTickReplayControls() {
 async function jumpToTick(tick) {
   if (!currentDebugSession || tick < tickRange.min || tick > tickRange.max) return;
 
+  const sessionId = currentDebugSession;
+  const directSession = currentMode === 'replay' && !currentRecording;
+  const generation = ++directSessionJumpGeneration;
   try {
-    const response = await fetch(`/api/debug/replay/tick/${currentDebugSession}/${tick}`);
+    const response = await fetch(`/api/debug/replay/tick/${encodeURIComponent(sessionId)}/${tick}`);
     if (!response.ok) return;
 
     const data = await response.json();
+    if (directSession) {
+      try {
+        const pageResult = await replayRecoveryCore.collectPacketPages(async cursor => {
+          const params = new URLSearchParams({
+            startTick: String(tick), endTick: String(tick), limit: '500'
+          });
+          if (cursor) params.set('cursor', cursor);
+          const packetResponse = await fetch(
+            `/api/debug/replay/packets/${encodeURIComponent(sessionId)}?${params}`);
+          if (!packetResponse.ok) throw new Error(`Packet request failed (${packetResponse.status})`);
+          return packetResponse.json();
+        });
+        data.packets = pageResult.packets;
+        data.packetTruncated = pageResult.truncated
+          || pageResult.packets.length > MAX_PACKETS_PER_TICK_SNAPSHOT;
+      } catch (error) {
+        data.packets = [];
+        data.packetLoadError = error?.message || 'Packet request failed';
+      }
+      if (generation !== directSessionJumpGeneration || currentDebugSession !== sessionId
+          || currentMode !== 'replay' || currentRecording) return;
+    }
     updatePanelsForTick(data);
 
     // Update scrubber
@@ -8611,16 +8654,40 @@ function stopTickPlayback() {
  */
 async function loadDebugSession(sessionId) {
   try {
+    if (currentMode !== 'replay') switchMode('replay');
+    directSessionJumpGeneration++;
+    const loadGeneration = ++replayLoadGeneration;
+    stopTickPlayback();
+    if (replayLoadAbortController) {
+      replayLoadAbortController.abort();
+      replayLoadAbortController = null;
+    }
+    currentDebugSession = null;
+    currentRecording = null;
+    if (elements.sessionSelect) elements.sessionSelect.value = '';
+    if (elements.replayVideo) {
+      elements.replayVideo.pause();
+      elements.replayVideo.removeAttribute('src');
+      elements.replayVideo.load();
+    }
+    setReplayVideoWarning('This debug session has no video recording; showing tick and packet replay.');
     // Clear previous session state
     replayTickSnapshots.clear();
     perTickSectionToggles.clear();
     replayLogHistory.length = 0;
+    clearLogs();
 
     // Get session info
-    const sessionResponse = await fetch(`/api/debug/replay/session-info/${sessionId}`);
-    if (!sessionResponse.ok) return false;
+    const sessionResponse = await fetch(
+      `/api/debug/replay/session-info/${encodeURIComponent(sessionId)}`);
+    if (loadGeneration !== replayLoadGeneration) return false;
+    if (!sessionResponse.ok) {
+      setReplayVideoWarning('Debug session could not be loaded.');
+      return false;
+    }
 
     const sessionInfo = await sessionResponse.json();
+    if (loadGeneration !== replayLoadGeneration) return false;
     currentDebugSession = sessionId;
     currentReplayDebugSessionId = sessionId;
     history.replaceState({}, '', `/debugger?sessionId=${encodeURIComponent(sessionId)}&mode=replay`);
@@ -8645,7 +8712,7 @@ async function loadDebugSession(sessionId) {
     loadTimelineMarkers(sessionId);
 
     // Jump to start tick
-    jumpToTick(tickRange.min);
+    await jumpToTick(tickRange.min);
     return true;
 
   } catch (error) {
@@ -11602,6 +11669,8 @@ document.addEventListener('DOMContentLoaded', () => {
       renderReplayMetadataPreview(targetRecordingId);
       if (elements.editReplayMetadataBtn) elements.editReplayMetadataBtn.style.display = '';
       await loadRecording(targetRecordingId);
+    } else if (sessionIdParam) {
+      await loadDebugSession(sessionIdParam);
     } else if (modeParam === 'replay') {
       // mode=replay only: stay in replay mode with selector usable, no auto-load
       console.info('[deep-link] mode=replay, no recording resolved; leaving selector open');
