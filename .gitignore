@@ -8,6 +8,12 @@
 # Runtime log artifact accidentally named with a Windows-style variable
 /%log%
 
+# Local review and diagnostic scratch files
+/.tmp_*
+/checkenv-tmp.ps1
+/jstack_*.txt
+/jstack_out.txt
+
 # BlueJ files
 *.ctxt
 
