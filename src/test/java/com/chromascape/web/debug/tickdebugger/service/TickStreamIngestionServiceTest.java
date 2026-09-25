@@ -595,7 +595,7 @@ class TickStreamIngestionServiceTest {
             sessionId, batchId, 100, packetEntry("proxy-session", 4814L, 100L, "NPC_INFO_LARGE"));
 
     assertDoesNotThrow(() -> service.processTickBatch(batch));
-    verify(packetObservationRepository, never()).saveAndFlush(any());
+    verify(packetObservationRepository, never()).save(any());
   }
 
   @Test
@@ -666,7 +666,8 @@ class TickStreamIngestionServiceTest {
                 "source-a", 9L, 4815L, 100L, "NPC_INFO_LARGE", "DECODED", false, Map.of()));
 
     assertDoesNotThrow(() -> service.processTickBatch(batch));
-    verify(packetObservationRepository, times(3)).saveAndFlush(any(PacketObservation.class));
+    verify(packetObservationRepository, times(3)).save(any(PacketObservation.class));
+    verify(packetObservationRepository).flush();
   }
 
   @Test
@@ -714,7 +715,7 @@ class TickStreamIngestionServiceTest {
             v2PacketEntry("source-a", 0L, 101L, 100L, "STREAM_GAP", "GAP", true, Map.of()));
 
     assertThrows(IllegalArgumentException.class, () -> service.processTickBatch(batch));
-    verify(packetObservationRepository, never()).saveAndFlush(any(PacketObservation.class));
+    verify(packetObservationRepository, never()).save(any(PacketObservation.class));
   }
 
   @Test

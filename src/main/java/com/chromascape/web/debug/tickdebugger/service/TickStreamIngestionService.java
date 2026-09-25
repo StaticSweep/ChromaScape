@@ -962,7 +962,9 @@ public class TickStreamIngestionService {
       row.setDecodeError(packet.getDecodeError());
       row.setSynthetic(Boolean.TRUE.equals(packet.getSynthetic()));
       try {
-        packetRepository.saveAndFlush(row);
+        // IDENTITY inserts execute on save. Flushing the entire persistence context after every
+        // packet makes a recovery backlog quadratic as snapshots and other rows accumulate.
+        packetRepository.save(row);
       } catch (org.springframework.dao.DataIntegrityViolationException e) {
         // Lost-ACK retry racing a concurrent insert: re-read and compare idempotently.
         var winner =
@@ -983,6 +985,7 @@ public class TickStreamIngestionService {
         ensurePacketMatches(winner, sessionId, batch.getTick(), packet);
       }
     }
+    packetRepository.flush();
   }
 
   private void ensurePacketMatches(

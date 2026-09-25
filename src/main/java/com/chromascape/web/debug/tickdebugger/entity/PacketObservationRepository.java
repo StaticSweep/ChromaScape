@@ -2,8 +2,10 @@ package com.chromascape.web.debug.tickdebugger.entity;
 
 import java.util.List;
 import java.util.Optional;
+import jakarta.persistence.QueryHint;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
@@ -11,9 +13,11 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface PacketObservationRepository extends JpaRepository<PacketObservation, Long> {
 
+  @QueryHints(@QueryHint(name = "org.hibernate.flushMode", value = "COMMIT"))
   Optional<PacketObservation> findBySessionIdAndSourceSessionIdAndPacketSchemaAndPacketSequence(
       String sessionId, String sourceSessionId, String packetSchema, Long packetSequence);
 
+  @QueryHints(@QueryHint(name = "org.hibernate.flushMode", value = "COMMIT"))
   Optional<PacketObservation>
       findBySessionIdAndSourceSessionIdAndPacketSchemaAndObservationSequence(
           String sessionId, String sourceSessionId, String packetSchema, Long observationSequence);
