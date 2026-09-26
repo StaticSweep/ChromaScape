@@ -44,7 +44,7 @@ older launcher can start an executor that refuses to bind its port, so it is rej
 | `-ContractVersion` | Print the machine-readable contract JSON and exit 0. |
 | `-ValidateOnly` | Run `gradlew.bat --no-daemon --no-watch-fs help --task :client:runBuilderGoal`. Never launches the client and never stops processes. |
 | `-CompileOnly` | Run `gradlew.bat --no-daemon --no-watch-fs :client:prepareBuilderGoal`. Compiles Micro6 production classes; never launches the client. |
-| `-Authoritative` | Resolve `MICRO6_SOURCE_MODE=authoritative` and run `:client:runBuilderGoalAuthoritative`. |
+| `MICRO6_SOURCE_MODE=authoritative` (environment) | Select `:client:runBuilderGoalAuthoritative`; no separate command-line switch is required. |
 | `-PayloadFile <path>` | Path to the temporary JSON payload (`clientArgs`) written by ChromaScape. Required for normal launches. |
 
 ## Source mode: `disabled` versus `authoritative`
@@ -130,3 +130,13 @@ For a replacement launch (Run Task / Launch Account on a non-ready or mismatched
 A validation failure (`LAUNCH_CONFIGURATION_INVALID`), a compile failure (`GRADLE_TASK_FAILED`), a
 preflight timeout (`GRADLE_TIMEOUT`), or an executor startup rejection (`EXECUTOR_STARTUP_REJECTED`)
 all leave no orphaned client running.
+
+## Linux adapter
+
+On Linux ChromaScape uses the contract-v3 shell adapter in the Micro6 repository root
+(`launch-buildergoal-client.sh`, delegating to `scripts/remote-launcher/launcher.py`) instead of
+a direct `./gradlew :client:runBuilderGoal --args=...` invocation, because
+`:client:runBuilderGoal` requires `MICRO6_CLIENT_ARGS_FILE` and only the adapter supplies it.
+The JSON contract, the preflight order above, and the `clientArgs` payload schema are identical;
+only the switch spelling differs (`--contract-version`, `--validate-only`, `--compile-only`,
+`--payload-file <path>`), invoked via `bash` so the adapter needs no execute bit.

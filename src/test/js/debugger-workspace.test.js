@@ -42,7 +42,7 @@ test('Runs owns a canonical URL that removes replay deep-link state', () => {
 });
 
 test('debugger loads the current cache-busted script bundle', () => {
-  assert.match(template, /<script src="\/js\/debugger\.js\?v=26"><\/script>/);
+  assert.match(template, /<script src="\/js\/debugger\.js\?v=27"><\/script>/);
   assert.match(template, /<script src="\/js\/debugger-replay-core\.js\?v=2"><\/script>/);
 });
 

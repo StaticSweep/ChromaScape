@@ -123,6 +123,12 @@
           <i class="bi bi-broadcast me-1"></i>
           <span>Debug Feed: Off</span>
         </button>
+        <button type="button" id="watchBtn" class="btn btn-outline-secondary ms-2"
+            title="Watch the local desktop in the viewport without taking input (view-only)">
+          <i class="bi bi-eye me-1"></i>
+          <span>Watch: Off</span>
+        </button>
+          <span id="clientFrameStatus" role="status" aria-live="polite">Viewport: waiting</span>
         <div id="recordingStatus" class="recording-status d-none">
           <i class="bi bi-record-fill blink"></i>
           <span id="recordingStatusDuration">00:00</span>
@@ -1368,7 +1374,7 @@
     <button type="button" data-ai-candidate-reconcile>Reconcile candidate registration</button>
     <pre data-ai-routine-output aria-live="polite"></pre>
   </section>
-  <script src="/js/debugger.js?v=26"></script>
+  <script src="/js/debugger.js?v=27"></script>
   <script src="/js/ai-training.js?v=1"></script>
   <script src="/js/replay-debugger.js?v=3"></script>
   <script src="/js/ai-routine-state.js?v=1"></script>

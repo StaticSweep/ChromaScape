@@ -112,7 +112,7 @@ public class WebsocketViewport implements Viewport {
       frameQueue.poll(); // Drop oldest
       framesDroppedEncodeBackpressure.incrementAndGet();
     }
-    frameQueue.offer(new PendingFrame(image, sourceWidth, sourceHeight));
+    frameQueue.offer(new PendingFrame(image, sourceWidth, sourceHeight, null, null));
 
     // Start worker if not running
     if (workerRunning.compareAndSet(false, true)) {
@@ -126,12 +126,45 @@ public class WebsocketViewport implements Viewport {
    * <p>Processes all frames in the queue, assigning sequence numbers to each frame for client-side
    * ordering.
    */
+  public boolean publishEncodedFrame(
+      byte[] jpeg, int width, int height, java.util.function.Consumer<Runnable> guard) {
+    if (handler.getActiveSessionCount() == 0) {
+      framesSkippedNoSessions.incrementAndGet();
+      return false;
+    }
+    // The same one-slot queue arbitrates all pixel sources. Client JPEGs need no re-encode.
+    if (frameQueue.remainingCapacity() == 0) {
+      frameQueue.poll();
+      framesDroppedEncodeBackpressure.incrementAndGet();
+    }
+    frameQueue.offer(new PendingFrame(null, width, height, jpeg, guard));
+    if (workerRunning.compareAndSet(false, true)) executor.submit(this::processPendingUpdate);
+    return true;
+  }
+
   private void processPendingUpdate() {
     try {
       PendingFrame frame;
       while ((frame = frameQueue.poll()) != null) {
         if (handler.getActiveSessionCount() == 0) {
           framesSkippedNoSessions.incrementAndGet();
+          continue;
+        }
+        if (frame.jpeg() != null) {
+          PendingFrame encoded = frame;
+          encoded
+              .guard()
+              .accept(
+                  () -> {
+                    byte[] payload =
+                        buildBinaryFramePayload(
+                            frameCounter.incrementAndGet(),
+                            encoded.sourceWidth(),
+                            encoded.sourceHeight(),
+                            encoded.jpeg());
+                    totalPayloadBytes.addAndGet(payload.length);
+                    handler.broadcast(payload);
+                  });
           continue;
         }
         long seq = frameCounter.incrementAndGet();
@@ -235,5 +268,10 @@ public class WebsocketViewport implements Viewport {
     return count == 0 ? 0.0 : (double) totalPayloadBytes.get() / count;
   }
 
-  private record PendingFrame(BufferedImage image, int sourceWidth, int sourceHeight) {}
+  private record PendingFrame(
+      BufferedImage image,
+      int sourceWidth,
+      int sourceHeight,
+      byte[] jpeg,
+      java.util.function.Consumer<Runnable> guard) {}
 }
