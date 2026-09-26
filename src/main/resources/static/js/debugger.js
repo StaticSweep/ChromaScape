@@ -201,7 +201,11 @@ function initializeDebuggerWorkspaces() {
   debuggerWorkspaceInitialized = true;
   // Do not canonicalize during bootstrap: a recording deep link still needs its query parameters
   // later in initialization. URL ownership begins when the operator selects a workspace.
-  activateDebuggerWorkspace('runs', { syncMode: false, syncUrl: false });
+  const params = new URLSearchParams(window.location.search);
+  const replayDeepLink = params.has('recordingId') || params.has('recording')
+    || params.has('sessionId') || params.get('mode') === 'replay';
+  activateDebuggerWorkspace(replayDeepLink ? 'replays' : 'runs',
+    { syncMode: false, syncUrl: false });
 }
 
 window.DebuggerWorkspace = {

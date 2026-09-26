@@ -32,11 +32,13 @@ test('workspace navigation synchronizes live and replay modes', () => {
 test('Runs owns a canonical URL that removes replay deep-link state', () => {
   assert.match(script, /const runsPath = '\/debugger\/runs'/);
   assert.match(script, /history\.replaceState\(\{ workspace: 'runs' \}, '', runsPath\)/);
-  assert.match(script, /activateDebuggerWorkspace\('runs', \{ syncMode: false, syncUrl: false \}\)/);
+  assert.match(script, /activateDebuggerWorkspace\(replayDeepLink \? 'replays' : 'runs'/);
+  assert.match(script, /params\.has\('sessionId'\) \|\| params\.get\('mode'\) === 'replay'/);
 });
 
 test('debugger loads the current cache-busted script bundle', () => {
-  assert.match(template, /<script src="\/js\/debugger\.js\?v=24"><\/script>/);
+  assert.match(template, /<script src="\/js\/debugger\.js\?v=25"><\/script>/);
+  assert.match(template, /<script src="\/js\/debugger-replay-core\.js\?v=2"><\/script>/);
 });
 
 test('advanced systems are isolated in the developer workspace', () => {
