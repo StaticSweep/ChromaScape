@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.patchloop.PatchLoopSessionResolverServiceTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:28:34.936Z" hostname="fedora" time="0.014">
+  <properties/>
+  <testcase name="Retest path does not reuse runSessionId and falls back to latest-by-script" classname="com.chromascape.web.debug.patchloop.PatchLoopSessionResolverServiceTest" time="0.002"/>
+  <testcase name="No matching session returns empty when no explicit context and no fallback session" classname="com.chromascape.web.debug.patchloop.PatchLoopSessionResolverServiceTest" time="0.001"/>
+  <testcase name="Persisted runSessionId is reused before latest-by-script fallback" classname="com.chromascape.web.debug.patchloop.PatchLoopSessionResolverServiceTest" time="0.001"/>
+  <testcase name="applyResolvedSession persists debug session, recording, and resolution source" classname="com.chromascape.web.debug.patchloop.PatchLoopSessionResolverServiceTest" time="0.003"/>
+  <testcase name="Explicit debugSessionId resolves strictly and suppresses fallback" classname="com.chromascape.web.debug.patchloop.PatchLoopSessionResolverServiceTest" time="0.002"/>
+  <testcase name="Invalid explicit debugSessionId fails without fallback" classname="com.chromascape.web.debug.patchloop.PatchLoopSessionResolverServiceTest" time="0.004"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

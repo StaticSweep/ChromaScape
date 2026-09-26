@@ -1,0 +1,695 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.gameplay.orchestration.accountbuilder.Sc1431FlywaySchemaTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:29:25.822Z" hostname="fedora" time="1.658">
+  <properties/>
+  <testcase name="flywayCreatesAllNormalizedTablesAndGuards()" classname="com.chromascape.web.gameplay.orchestration.accountbuilder.Sc1431FlywaySchemaTest" time="1.658"/>
+  <system-out><![CDATA[19:29:25.908 [Test worker] DEBUG org.flywaydb.core.internal.database.DatabaseTypeRegister - Multiple databases found that handle url 'jdbc:postgresql://localhost:5433/chromascape_test?sslmode=disable': CockroachDB,PostgreSQL
+19:29:25.909 [Test worker] DEBUG org.flywaydb.core.internal.scanner.classpath.ClassPathScanner - Scanning for classpath resources at 'classpath:db/callback' ...
+19:29:25.909 [Test worker] DEBUG org.flywaydb.core.internal.scanner.classpath.ClassPathScanner - Determining location urls for classpath:db/callback using ClassLoader jdk.internal.loader.ClassLoaders$AppClassLoader@30946e09 ...
+19:29:25.910 [Test worker] DEBUG org.flywaydb.core.internal.scanner.classpath.ClassPathScanner - Unable to resolve location classpath:db/callback.
+19:29:25.913 [Test worker] DEBUG org.flywaydb.core.internal.scanner.filesystem.FileSystemScanner - Scanning for filesystem resources at '/tmp/sc1431-flyway-migrations18397217333722565528'
+19:29:25.915 [Test worker] DEBUG org.flywaydb.core.internal.scanner.filesystem.FileSystemScanner - Scanning for resources in path: /tmp/sc1431-flyway-migrations18397217333722565528 (/tmp/sc1431-flyway-migrations18397217333722565528)
+19:29:25.917 [Test worker] DEBUG org.flywaydb.core.internal.scanner.filesystem.FileSystemScanner - Found filesystem resource: /tmp/sc1431-flyway-migrations18397217333722565528/V23__sc1431_accountbuilder_orchestration.sql
+19:29:25.917 [Test worker] DEBUG org.flywaydb.core.internal.scanner.filesystem.FileSystemScanner - Found filesystem resource: /tmp/sc1431-flyway-migrations18397217333722565528/V32__sc1431_recovery_correlation.sql
+19:29:25.951 [Test worker] DEBUG org.flywaydb.core.internal.resource.ResourceNameValidator - Validating V23__sc1431_accountbuilder_orchestration.sql
+19:29:25.951 [Test worker] DEBUG org.flywaydb.core.internal.resource.ResourceNameValidator - Validating V32__sc1431_recovery_correlation.sql
+19:29:25.952 [Test worker] DEBUG org.flywaydb.core.internal.database.DatabaseTypeRegister - Multiple databases found that handle url 'jdbc:postgresql://localhost:5433/chromascape_test?sslmode=disable': CockroachDB,PostgreSQL
+19:29:25.952 [Test worker] INFO  org.flywaydb.core.FlywayExecutor - Database: jdbc:postgresql://localhost:5433/chromascape_test?sslmode=disable (PostgreSQL 16.15)
+19:29:25.952 [Test worker] DEBUG org.flywaydb.core.FlywayExecutor - Database Type: PostgreSQL
+19:29:25.952 [Test worker] DEBUG org.flywaydb.core.FlywayExecutor - Driver: PostgreSQL JDBC Driver 42.7.7
+19:29:25.952 [Test worker] DEBUG org.flywaydb.core.FlywayExecutor - DDL Transactions Supported: true
+19:29:25.952 [Test worker] DEBUG org.flywaydb.core.internal.schemahistory.SchemaHistoryFactory - Schemas: sc1431_flyway_test
+19:29:25.953 [Test worker] DEBUG org.flywaydb.core.internal.schemahistory.SchemaHistoryFactory - Default schema: sc1431_flyway_test
+19:29:25.964 [Test worker] DEBUG org.flywaydb.core.FlywayExecutor - Scanning for script callbacks ...
+19:29:25.964 [Test worker] DEBUG org.flywaydb.core.internal.callback.SqlScriptCallbackFactory - Scanning for SQL callbacks ...
+19:29:25.973 [Test worker] DEBUG org.flywaydb.core.internal.command.DbValidate - Validating migrations ...
+19:29:25.973 [Test worker] DEBUG org.flywaydb.core.api.configuration.ClassicConfiguration - CherryPickConfigurationExtension not found
+19:29:25.977 [Test worker] DEBUG org.flywaydb.core.internal.scanner.Scanner - Filtering out resource: /tmp/sc1431-flyway-migrations18397217333722565528/V23__sc1431_accountbuilder_orchestration.sql (filename: V23__sc1431_accountbuilder_orchestration.sql)
+19:29:25.977 [Test worker] DEBUG org.flywaydb.core.internal.scanner.Scanner - Filtering out resource: /tmp/sc1431-flyway-migrations18397217333722565528/V32__sc1431_recovery_correlation.sql (filename: V32__sc1431_recovery_correlation.sql)
+19:29:25.977 [Test worker] DEBUG org.flywaydb.core.internal.scanner.Scanner - Filtering out resource: /tmp/sc1431-flyway-migrations18397217333722565528/V23__sc1431_accountbuilder_orchestration.sql (filename: V23__sc1431_accountbuilder_orchestration.sql)
+19:29:25.977 [Test worker] DEBUG org.flywaydb.core.internal.scanner.Scanner - Filtering out resource: /tmp/sc1431-flyway-migrations18397217333722565528/V32__sc1431_recovery_correlation.sql (filename: V32__sc1431_recovery_correlation.sql)
+19:29:25.977 [Test worker] DEBUG org.flywaydb.core.internal.scanner.Scanner - Filtering out resource: /tmp/sc1431-flyway-migrations18397217333722565528/V23__sc1431_accountbuilder_orchestration.sql (filename: V23__sc1431_accountbuilder_orchestration.sql)
+19:29:25.978 [Test worker] DEBUG org.flywaydb.core.internal.scanner.Scanner - Filtering out resource: /tmp/sc1431-flyway-migrations18397217333722565528/V32__sc1431_recovery_correlation.sql (filename: V32__sc1431_recovery_correlation.sql)
+19:29:25.978 [Test worker] DEBUG org.flywaydb.core.internal.scanner.Scanner - Filtering out resource: /tmp/sc1431-flyway-migrations18397217333722565528/V23__sc1431_accountbuilder_orchestration.sql (filename: V23__sc1431_accountbuilder_orchestration.sql)
+19:29:25.978 [Test worker] DEBUG org.flywaydb.core.internal.scanner.Scanner - Filtering out resource: /tmp/sc1431-flyway-migrations18397217333722565528/V32__sc1431_recovery_correlation.sql (filename: V32__sc1431_recovery_correlation.sql)
+19:29:25.982 [Test worker] INFO  org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory - Schema history table "sc1431_flyway_test"."flyway_schema_history" does not exist yet
+19:29:25.984 [Test worker] INFO  org.flywaydb.core.internal.command.DbValidate - Successfully validated 2 migrations (execution time 00:00.010s)
+19:29:25.985 [Test worker] DEBUG org.flywaydb.core.internal.command.DbSchemas - Skipping creation of existing schema: "sc1431_flyway_test"
+19:29:26.008 [Test worker] INFO  org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory - Creating Schema History table "sc1431_flyway_test"."flyway_schema_history" with baseline ...
+19:29:26.011 [Test worker] DEBUG org.flywaydb.core.internal.parser.Parser - Parsing  ...
+19:29:26.013 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 1: CREATE TABLE "sc1431_flyway_test"."flyway_schema_history" (
+    "installed_rank" INT NOT NULL,
+    "version" VARCHAR(50),
+    "description" VARCHAR(200) NOT NULL,
+    "type" VARCHAR(20) NOT NULL,
+    "script" VARCHAR(1000) NOT NULL,
+    "checksum" INTEGER,
+    "installed_by" VARCHAR(100) NOT NULL,
+    "installed_on" TIMESTAMP NOT NULL DEFAULT now(),
+    "execution_time" INTEGER NOT NULL,
+    "success" BOOLEAN NOT NULL
+)
+19:29:26.013 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 13: INSERT INTO "sc1431_flyway_test"."flyway_schema_history" ("installed_rank", "version", "description", "type", "script", "checksum", "installed_by", "execution_time", "success") VALUES (1, '22', '<< Flyway Baseline >>', 'BASELINE', '<< Flyway Baseline >>', NULL, 'chromascape', 0, TRUE)
+19:29:26.014 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 14: ALTER TABLE "sc1431_flyway_test"."flyway_schema_history" ADD CONSTRAINT "flyway_schema_history_pk" PRIMARY KEY ("installed_rank")
+19:29:26.014 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 15: CREATE INDEX "flyway_schema_history_s_idx" ON "sc1431_flyway_test"."flyway_schema_history" ("success")
+19:29:26.014 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE TABLE "sc1431_flyway_test"."flyway_schema_history" (
+    "installed_rank" INT NOT NULL,
+    "version" VARCHAR(50),
+    "description" VARCHAR(200) NOT NULL,
+    "type" VARCHAR(20) NOT NULL,
+    "script" VARCHAR(1000) NOT NULL,
+    "checksum" INTEGER,
+    "installed_by" VARCHAR(100) NOT NULL,
+    "installed_on" TIMESTAMP NOT NULL DEFAULT now(),
+    "execution_time" INTEGER NOT NULL,
+    "success" BOOLEAN NOT NULL
+)
+19:29:26.028 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.028 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: INSERT INTO "sc1431_flyway_test"."flyway_schema_history" ("installed_rank", "version", "description", "type", "script", "checksum", "installed_by", "execution_time", "success") VALUES (1, '22', '<< Flyway Baseline >>', 'BASELINE', '<< Flyway Baseline >>', NULL, 'chromascape', 0, TRUE)
+19:29:26.030 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 1 row affected
+19:29:26.031 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: ALTER TABLE "sc1431_flyway_test"."flyway_schema_history" ADD CONSTRAINT "flyway_schema_history_pk" PRIMARY KEY ("installed_rank")
+19:29:26.050 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.050 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE INDEX "flyway_schema_history_s_idx" ON "sc1431_flyway_test"."flyway_schema_history" ("success")
+19:29:26.058 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.058 [Test worker] DEBUG org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory - Created Schema History table "sc1431_flyway_test"."flyway_schema_history" with baseline
+19:29:26.070 [Test worker] INFO  org.flywaydb.core.internal.command.DbBaseline - Successfully baselined schema with version: 22
+19:29:26.109 [Test worker] DEBUG org.flywaydb.core.api.configuration.ClassicConfiguration - CherryPickConfigurationExtension not found
+19:29:26.117 [Test worker] INFO  org.flywaydb.core.internal.command.DbMigrate - Current version of schema "sc1431_flyway_test": 22
+19:29:26.118 [Test worker] WARN  org.flywaydb.core.internal.command.DbMigrate - outOfOrder mode is active. Migration of schema "sc1431_flyway_test" may not be reproducible.
+19:29:26.118 [Test worker] DEBUG org.flywaydb.core.internal.parser.Parser - Parsing V23__sc1431_accountbuilder_orchestration.sql ...
+19:29:26.120 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 5: -- SC-1431.1: durable normalized AccountBuilder orchestration evidence.
+-- This migration is intentionally amended before V23 is shipped. No authority signature, key,
+-- token secret, raw fence token or unredacted request payload is stored in these tables.
+
+CREATE TABLE ab_orchestration (
+    orchestration_id VARCHAR(128) PRIMARY KEY,
+    request_id VARCHAR(128) NOT NULL UNIQUE,
+    idempotency_key VARCHAR(128) NOT NULL UNIQUE,
+    request_fingerprint VARCHAR(80) NOT NULL,
+    envelope_digest VARCHAR(80) NOT NULL,
+    source_type VARCHAR(128) NOT NULL,
+    mode VARCHAR(32) NOT NULL,
+    state VARCHAR(32) NOT NULL,
+    failure_code VARCHAR(64) NOT NULL,
+    request_json TEXT NOT NULL,
+    view_json TEXT NOT NULL,
+    retry_allowed BOOLEAN NOT NULL DEFAULT FALSE,
+    view_version BIGINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    entity_version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT ab_orchestration_mode_check
+        CHECK (mode IN ('HELD', 'SHADOW', 'BOOTSTRAP_RECORDING', 'LIVE_TASK', 'SIMULATION')),
+    CONSTRAINT ab_orchestration_state_check
+        CHECK (state IN (
+            'CREATED', 'VALIDATED', 'HELD', 'AUTHORIZED', 'RESERVED',
+            'DISPATCH_SUBMITTED', 'ACTIVE', 'VERIFYING', 'CONFIRMED', 'REFUTED',
+            'UNVERIFIABLE', 'DENIED', 'STOPPED', 'FAILED', 'NEEDS_RECONCILIATION')),
+    CONSTRAINT ab_orchestration_fingerprint_check
+        CHECK (request_fingerprint ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT ab_orchestration_envelope_digest_check
+        CHECK (envelope_digest ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT ab_orchestration_version_check
+        CHECK (view_version >= 0)
+)
+19:29:26.121 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 37: CREATE TABLE ab_snapshot_binding (
+    orchestration_id VARCHAR(128) PRIMARY KEY
+        REFERENCES ab_orchestration(orchestration_id) ON DELETE RESTRICT,
+    decision_digest VARCHAR(80) NOT NULL,
+    semantic_action_digest VARCHAR(80) NOT NULL,
+    catalog_digest VARCHAR(80) NOT NULL,
+    capability_digest VARCHAR(80) NOT NULL,
+    goal_plan_digest VARCHAR(80) NOT NULL,
+    task_skill_digests TEXT NOT NULL,
+    tool_schema_digest VARCHAR(80) NOT NULL,
+    knowledge_digest VARCHAR(80) NOT NULL,
+    policy_digest VARCHAR(80) NOT NULL,
+    verifier_digest VARCHAR(80) NOT NULL,
+    build_id VARCHAR(128) NOT NULL,
+    expected_observation_revision BIGINT NOT NULL,
+    expected_task_revision BIGINT NOT NULL,
+    CONSTRAINT ab_binding_digest_check CHECK (
+        decision_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND semantic_action_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND catalog_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND capability_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND goal_plan_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND tool_schema_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND knowledge_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND policy_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND verifier_digest ~ '^sha256:[0-9a-f]{64}$'
+    )
+)
+19:29:26.121 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 66: CREATE TABLE ab_authority_consumption (
+    authority_id VARCHAR(128) PRIMARY KEY,
+    orchestration_id VARCHAR(128) NOT NULL UNIQUE
+        REFERENCES ab_orchestration(orchestration_id) ON DELETE RESTRICT,
+    envelope_digest VARCHAR(80) NOT NULL,
+    approved_scope_digest VARCHAR(80) NOT NULL,
+    operator_id VARCHAR(128) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    consumed_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT ab_authority_envelope_digest_check
+        CHECK (envelope_digest ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT ab_authority_scope_digest_check
+        CHECK (approved_scope_digest ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT ab_authority_operator_check
+        CHECK (operator_id ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'),
+    CONSTRAINT ab_authority_expiry_check
+        CHECK (expires_at > consumed_at)
+)
+19:29:26.122 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 85: CREATE TABLE ab_orchestration_lease (
+    orchestration_id VARCHAR(128) PRIMARY KEY
+        REFERENCES ab_orchestration(orchestration_id) ON DELETE RESTRICT,
+    reservation_id VARCHAR(128) NOT NULL UNIQUE,
+    generation BIGINT NOT NULL,
+    fence BIGINT NOT NULL,
+    fence_token_digest VARCHAR(80) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    state VARCHAR(32) NOT NULL,
+    entity_version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT ab_lease_generation_check CHECK (generation >= 1),
+    CONSTRAINT ab_lease_fence_check CHECK (fence >= 1),
+    CONSTRAINT ab_lease_digest_check CHECK (fence_token_digest ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT ab_lease_state_check CHECK (state IN (
+        'RESERVED', 'DISPATCH_SUBMITTED', 'ACTIVE', 'VERIFYING', 'CONFIRMED',
+        'REFUTED', 'UNVERIFIABLE', 'STOPPED', 'FAILED', 'NEEDS_RECONCILIATION'))
+)
+19:29:26.122 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 103: CREATE TABLE ab_orchestration_event (
+    event_id VARCHAR(64) PRIMARY KEY,
+    orchestration_id VARCHAR(128) NOT NULL
+        REFERENCES ab_orchestration(orchestration_id) ON DELETE RESTRICT,
+    sequence_number BIGINT NOT NULL,
+    event_type VARCHAR(64) NOT NULL,
+    payload_digest VARCHAR(80) NOT NULL,
+    occurred_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT ab_event_sequence_unique UNIQUE (orchestration_id, sequence_number),
+    CONSTRAINT ab_event_sequence_check CHECK (sequence_number >= 1),
+    CONSTRAINT ab_event_digest_check CHECK (payload_digest ~ '^sha256:[0-9a-f]{64}$')
+)
+19:29:26.123 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 116: CREATE TABLE ab_orchestration_receipt (
+    receipt_id VARCHAR(128) PRIMARY KEY,
+    orchestration_id VARCHAR(128) NOT NULL
+        REFERENCES ab_orchestration(orchestration_id) ON DELETE RESTRICT,
+    receipt_identity VARCHAR(256) NOT NULL,
+    receipt_digest VARCHAR(80) NOT NULL,
+    sequence_number BIGINT NOT NULL,
+    phase VARCHAR(64) NOT NULL,
+    outcome VARCHAR(32) NOT NULL,
+    stable_code VARCHAR(64) NOT NULL,
+    receipt_json TEXT NOT NULL,
+    evidence_digest VARCHAR(80),
+    occurred_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT ab_receipt_identity_unique UNIQUE (orchestration_id, receipt_identity),
+    CONSTRAINT ab_receipt_digest_unique UNIQUE (orchestration_id, phase, receipt_digest),
+    CONSTRAINT ab_receipt_sequence_unique UNIQUE (orchestration_id, sequence_number),
+    CONSTRAINT ab_receipt_sequence_check CHECK (sequence_number >= 1),
+    CONSTRAINT ab_receipt_digest_check CHECK (receipt_digest ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT ab_receipt_evidence_digest_check CHECK (
+        evidence_digest IS NULL OR evidence_digest ~ '^sha256:[0-9a-f]{64}$'
+    )
+)
+19:29:26.123 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 139: CREATE TABLE ab_orchestration_terminal_result (
+    orchestration_id VARCHAR(128) PRIMARY KEY
+        REFERENCES ab_orchestration(orchestration_id) ON DELETE RESTRICT,
+    outcome VARCHAR(32) NOT NULL,
+    stable_code VARCHAR(64) NOT NULL,
+    retry_allowed BOOLEAN NOT NULL,
+    reconciled BOOLEAN NOT NULL,
+    evidence_digest VARCHAR(80),
+    terminal_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT ab_terminal_evidence_digest_check CHECK (
+        evidence_digest IS NULL OR evidence_digest ~ '^sha256:[0-9a-f]{64}$'
+    )
+)
+19:29:26.123 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 153: CREATE INDEX ab_orchestration_state_idx ON ab_orchestration(state)
+19:29:26.123 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 154: CREATE INDEX ab_orchestration_updated_idx ON ab_orchestration(updated_at)
+19:29:26.123 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 155: CREATE INDEX ab_event_orchestration_idx
+    ON ab_orchestration_event(orchestration_id, sequence_number)
+19:29:26.123 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 157: CREATE INDEX ab_receipt_orchestration_idx
+    ON ab_orchestration_receipt(orchestration_id, sequence_number)
+19:29:26.124 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 162: -- The application performs all writes through locked transactions, but the evidence tables must
+-- remain append-only even if a maintenance connection bypasses the JPA store.
+CREATE OR REPLACE FUNCTION ab_reject_evidence_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RAISE EXCEPTION 'SC-1431 evidence table % is append-only', TG_TABLE_NAME
+        USING ERRCODE = '55006';
+    RETURN NULL;
+END;
+$$
+19:29:26.124 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 173: CREATE TRIGGER ab_snapshot_binding_append_only
+    BEFORE UPDATE OR DELETE ON ab_snapshot_binding
+    FOR EACH ROW EXECUTE FUNCTION ab_reject_evidence_mutation()
+19:29:26.124 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 177: CREATE TRIGGER ab_authority_consumption_append_only
+    BEFORE UPDATE OR DELETE ON ab_authority_consumption
+    FOR EACH ROW EXECUTE FUNCTION ab_reject_evidence_mutation()
+19:29:26.124 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 181: CREATE TRIGGER ab_orchestration_event_append_only
+    BEFORE UPDATE OR DELETE ON ab_orchestration_event
+    FOR EACH ROW EXECUTE FUNCTION ab_reject_evidence_mutation()
+19:29:26.125 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 185: CREATE TRIGGER ab_orchestration_receipt_append_only
+    BEFORE UPDATE OR DELETE ON ab_orchestration_receipt
+    FOR EACH ROW EXECUTE FUNCTION ab_reject_evidence_mutation()
+19:29:26.125 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 189: CREATE TRIGGER ab_terminal_result_write_once
+    BEFORE UPDATE OR DELETE ON ab_orchestration_terminal_result
+    FOR EACH ROW EXECUTE FUNCTION ab_reject_evidence_mutation()
+19:29:26.125 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 193: CREATE OR REPLACE FUNCTION ab_lease_identity_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_OP = 'DELETE'
+       OR NEW.reservation_id IS DISTINCT FROM OLD.reservation_id
+       OR NEW.generation IS DISTINCT FROM OLD.generation
+       OR NEW.fence IS DISTINCT FROM OLD.fence
+       OR NEW.fence_token_digest IS DISTINCT FROM OLD.fence_token_digest
+       OR NEW.expires_at IS DISTINCT FROM OLD.expires_at THEN
+        RAISE EXCEPTION 'SC-1431 lease identity is immutable'
+            USING ERRCODE = '55006';
+    END IF;
+    RETURN NEW;
+END;
+$$
+19:29:26.126 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 211: CREATE TRIGGER ab_lease_identity_immutable
+    BEFORE UPDATE OR DELETE ON ab_orchestration_lease
+    FOR EACH ROW EXECUTE FUNCTION ab_lease_identity_guard()
+19:29:26.126 [Test worker] DEBUG org.flywaydb.core.internal.command.DbMigrate - Starting migration of schema "sc1431_flyway_test" to version "23 - sc1431 accountbuilder orchestration" ...
+19:29:26.130 [Test worker] INFO  org.flywaydb.core.internal.command.DbMigrate - Migrating schema "sc1431_flyway_test" to version "23 - sc1431 accountbuilder orchestration"
+19:29:26.133 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: -- SC-1431.1: durable normalized AccountBuilder orchestration evidence.
+-- This migration is intentionally amended before V23 is shipped. No authority signature, key,
+-- token secret, raw fence token or unredacted request payload is stored in these tables.
+
+CREATE TABLE ab_orchestration (
+    orchestration_id VARCHAR(128) PRIMARY KEY,
+    request_id VARCHAR(128) NOT NULL UNIQUE,
+    idempotency_key VARCHAR(128) NOT NULL UNIQUE,
+    request_fingerprint VARCHAR(80) NOT NULL,
+    envelope_digest VARCHAR(80) NOT NULL,
+    source_type VARCHAR(128) NOT NULL,
+    mode VARCHAR(32) NOT NULL,
+    state VARCHAR(32) NOT NULL,
+    failure_code VARCHAR(64) NOT NULL,
+    request_json TEXT NOT NULL,
+    view_json TEXT NOT NULL,
+    retry_allowed BOOLEAN NOT NULL DEFAULT FALSE,
+    view_version BIGINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    entity_version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT ab_orchestration_mode_check
+        CHECK (mode IN ('HELD', 'SHADOW', 'BOOTSTRAP_RECORDING', 'LIVE_TASK', 'SIMULATION')),
+    CONSTRAINT ab_orchestration_state_check
+        CHECK (state IN (
+            'CREATED', 'VALIDATED', 'HELD', 'AUTHORIZED', 'RESERVED',
+            'DISPATCH_SUBMITTED', 'ACTIVE', 'VERIFYING', 'CONFIRMED', 'REFUTED',
+            'UNVERIFIABLE', 'DENIED', 'STOPPED', 'FAILED', 'NEEDS_RECONCILIATION')),
+    CONSTRAINT ab_orchestration_fingerprint_check
+        CHECK (request_fingerprint ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT ab_orchestration_envelope_digest_check
+        CHECK (envelope_digest ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT ab_orchestration_version_check
+        CHECK (view_version >= 0)
+)
+19:29:26.191 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.191 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE TABLE ab_snapshot_binding (
+    orchestration_id VARCHAR(128) PRIMARY KEY
+        REFERENCES ab_orchestration(orchestration_id) ON DELETE RESTRICT,
+    decision_digest VARCHAR(80) NOT NULL,
+    semantic_action_digest VARCHAR(80) NOT NULL,
+    catalog_digest VARCHAR(80) NOT NULL,
+    capability_digest VARCHAR(80) NOT NULL,
+    goal_plan_digest VARCHAR(80) NOT NULL,
+    task_skill_digests TEXT NOT NULL,
+    tool_schema_digest VARCHAR(80) NOT NULL,
+    knowledge_digest VARCHAR(80) NOT NULL,
+    policy_digest VARCHAR(80) NOT NULL,
+    verifier_digest VARCHAR(80) NOT NULL,
+    build_id VARCHAR(128) NOT NULL,
+    expected_observation_revision BIGINT NOT NULL,
+    expected_task_revision BIGINT NOT NULL,
+    CONSTRAINT ab_binding_digest_check CHECK (
+        decision_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND semantic_action_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND catalog_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND capability_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND goal_plan_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND tool_schema_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND knowledge_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND policy_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND verifier_digest ~ '^sha256:[0-9a-f]{64}$'
+    )
+)
+19:29:26.213 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.213 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE TABLE ab_authority_consumption (
+    authority_id VARCHAR(128) PRIMARY KEY,
+    orchestration_id VARCHAR(128) NOT NULL UNIQUE
+        REFERENCES ab_orchestration(orchestration_id) ON DELETE RESTRICT,
+    envelope_digest VARCHAR(80) NOT NULL,
+    approved_scope_digest VARCHAR(80) NOT NULL,
+    operator_id VARCHAR(128) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    consumed_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT ab_authority_envelope_digest_check
+        CHECK (envelope_digest ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT ab_authority_scope_digest_check
+        CHECK (approved_scope_digest ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT ab_authority_operator_check
+        CHECK (operator_id ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'),
+    CONSTRAINT ab_authority_expiry_check
+        CHECK (expires_at > consumed_at)
+)
+19:29:26.241 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.241 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE TABLE ab_orchestration_lease (
+    orchestration_id VARCHAR(128) PRIMARY KEY
+        REFERENCES ab_orchestration(orchestration_id) ON DELETE RESTRICT,
+    reservation_id VARCHAR(128) NOT NULL UNIQUE,
+    generation BIGINT NOT NULL,
+    fence BIGINT NOT NULL,
+    fence_token_digest VARCHAR(80) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    state VARCHAR(32) NOT NULL,
+    entity_version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT ab_lease_generation_check CHECK (generation >= 1),
+    CONSTRAINT ab_lease_fence_check CHECK (fence >= 1),
+    CONSTRAINT ab_lease_digest_check CHECK (fence_token_digest ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT ab_lease_state_check CHECK (state IN (
+        'RESERVED', 'DISPATCH_SUBMITTED', 'ACTIVE', 'VERIFYING', 'CONFIRMED',
+        'REFUTED', 'UNVERIFIABLE', 'STOPPED', 'FAILED', 'NEEDS_RECONCILIATION'))
+)
+19:29:26.259 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.259 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE TABLE ab_orchestration_event (
+    event_id VARCHAR(64) PRIMARY KEY,
+    orchestration_id VARCHAR(128) NOT NULL
+        REFERENCES ab_orchestration(orchestration_id) ON DELETE RESTRICT,
+    sequence_number BIGINT NOT NULL,
+    event_type VARCHAR(64) NOT NULL,
+    payload_digest VARCHAR(80) NOT NULL,
+    occurred_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT ab_event_sequence_unique UNIQUE (orchestration_id, sequence_number),
+    CONSTRAINT ab_event_sequence_check CHECK (sequence_number >= 1),
+    CONSTRAINT ab_event_digest_check CHECK (payload_digest ~ '^sha256:[0-9a-f]{64}$')
+)
+19:29:26.276 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.276 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE TABLE ab_orchestration_receipt (
+    receipt_id VARCHAR(128) PRIMARY KEY,
+    orchestration_id VARCHAR(128) NOT NULL
+        REFERENCES ab_orchestration(orchestration_id) ON DELETE RESTRICT,
+    receipt_identity VARCHAR(256) NOT NULL,
+    receipt_digest VARCHAR(80) NOT NULL,
+    sequence_number BIGINT NOT NULL,
+    phase VARCHAR(64) NOT NULL,
+    outcome VARCHAR(32) NOT NULL,
+    stable_code VARCHAR(64) NOT NULL,
+    receipt_json TEXT NOT NULL,
+    evidence_digest VARCHAR(80),
+    occurred_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT ab_receipt_identity_unique UNIQUE (orchestration_id, receipt_identity),
+    CONSTRAINT ab_receipt_digest_unique UNIQUE (orchestration_id, phase, receipt_digest),
+    CONSTRAINT ab_receipt_sequence_unique UNIQUE (orchestration_id, sequence_number),
+    CONSTRAINT ab_receipt_sequence_check CHECK (sequence_number >= 1),
+    CONSTRAINT ab_receipt_digest_check CHECK (receipt_digest ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT ab_receipt_evidence_digest_check CHECK (
+        evidence_digest IS NULL OR evidence_digest ~ '^sha256:[0-9a-f]{64}$'
+    )
+)
+19:29:26.313 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.313 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE TABLE ab_orchestration_terminal_result (
+    orchestration_id VARCHAR(128) PRIMARY KEY
+        REFERENCES ab_orchestration(orchestration_id) ON DELETE RESTRICT,
+    outcome VARCHAR(32) NOT NULL,
+    stable_code VARCHAR(64) NOT NULL,
+    retry_allowed BOOLEAN NOT NULL,
+    reconciled BOOLEAN NOT NULL,
+    evidence_digest VARCHAR(80),
+    terminal_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT ab_terminal_evidence_digest_check CHECK (
+        evidence_digest IS NULL OR evidence_digest ~ '^sha256:[0-9a-f]{64}$'
+    )
+)
+19:29:26.324 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.324 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE INDEX ab_orchestration_state_idx ON ab_orchestration(state)
+19:29:26.329 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.330 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE INDEX ab_orchestration_updated_idx ON ab_orchestration(updated_at)
+19:29:26.338 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.338 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE INDEX ab_event_orchestration_idx
+    ON ab_orchestration_event(orchestration_id, sequence_number)
+19:29:26.343 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.344 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE INDEX ab_receipt_orchestration_idx
+    ON ab_orchestration_receipt(orchestration_id, sequence_number)
+19:29:26.349 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.349 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: -- The application performs all writes through locked transactions, but the evidence tables must
+-- remain append-only even if a maintenance connection bypasses the JPA store.
+CREATE OR REPLACE FUNCTION ab_reject_evidence_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RAISE EXCEPTION 'SC-1431 evidence table % is append-only', TG_TABLE_NAME
+        USING ERRCODE = '55006';
+    RETURN NULL;
+END;
+$$
+19:29:26.353 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.353 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE TRIGGER ab_snapshot_binding_append_only
+    BEFORE UPDATE OR DELETE ON ab_snapshot_binding
+    FOR EACH ROW EXECUTE FUNCTION ab_reject_evidence_mutation()
+19:29:26.354 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.354 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE TRIGGER ab_authority_consumption_append_only
+    BEFORE UPDATE OR DELETE ON ab_authority_consumption
+    FOR EACH ROW EXECUTE FUNCTION ab_reject_evidence_mutation()
+19:29:26.355 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.355 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE TRIGGER ab_orchestration_event_append_only
+    BEFORE UPDATE OR DELETE ON ab_orchestration_event
+    FOR EACH ROW EXECUTE FUNCTION ab_reject_evidence_mutation()
+19:29:26.357 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.357 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE TRIGGER ab_orchestration_receipt_append_only
+    BEFORE UPDATE OR DELETE ON ab_orchestration_receipt
+    FOR EACH ROW EXECUTE FUNCTION ab_reject_evidence_mutation()
+19:29:26.357 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.357 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE TRIGGER ab_terminal_result_write_once
+    BEFORE UPDATE OR DELETE ON ab_orchestration_terminal_result
+    FOR EACH ROW EXECUTE FUNCTION ab_reject_evidence_mutation()
+19:29:26.358 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.358 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE OR REPLACE FUNCTION ab_lease_identity_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_OP = 'DELETE'
+       OR NEW.reservation_id IS DISTINCT FROM OLD.reservation_id
+       OR NEW.generation IS DISTINCT FROM OLD.generation
+       OR NEW.fence IS DISTINCT FROM OLD.fence
+       OR NEW.fence_token_digest IS DISTINCT FROM OLD.fence_token_digest
+       OR NEW.expires_at IS DISTINCT FROM OLD.expires_at THEN
+        RAISE EXCEPTION 'SC-1431 lease identity is immutable'
+            USING ERRCODE = '55006';
+    END IF;
+    RETURN NEW;
+END;
+$$
+19:29:26.359 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.360 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE TRIGGER ab_lease_identity_immutable
+    BEFORE UPDATE OR DELETE ON ab_orchestration_lease
+    FOR EACH ROW EXECUTE FUNCTION ab_lease_identity_guard()
+19:29:26.361 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.361 [Test worker] DEBUG org.flywaydb.core.internal.command.DbMigrate - Successfully completed migration of schema "sc1431_flyway_test" to version "23 - sc1431 accountbuilder orchestration"
+19:29:26.370 [Test worker] DEBUG org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory - Schema History table "sc1431_flyway_test"."flyway_schema_history" successfully updated to reflect changes
+19:29:26.384 [Test worker] DEBUG org.flywaydb.core.api.configuration.ClassicConfiguration - CherryPickConfigurationExtension not found
+19:29:26.391 [Test worker] INFO  org.flywaydb.core.internal.command.DbMigrate - Successfully applied 1 migration to schema "sc1431_flyway_test", now at version v23 (execution time 00:00.234s)
+19:29:26.398 [Test worker] DEBUG org.flywaydb.core.FlywayExecutor - Memory usage: 195 of 301M
+19:29:26.420 [Test worker] DEBUG org.flywaydb.core.internal.database.DatabaseTypeRegister - Multiple databases found that handle url 'jdbc:postgresql://localhost:5433/chromascape_test?sslmode=disable': CockroachDB,PostgreSQL
+19:29:26.421 [Test worker] DEBUG org.flywaydb.core.internal.scanner.classpath.ClassPathScanner - Scanning for classpath resources at 'classpath:db/callback' ...
+19:29:26.421 [Test worker] DEBUG org.flywaydb.core.internal.scanner.classpath.ClassPathScanner - Determining location urls for classpath:db/callback using ClassLoader jdk.internal.loader.ClassLoaders$AppClassLoader@30946e09 ...
+19:29:26.422 [Test worker] DEBUG org.flywaydb.core.internal.scanner.classpath.ClassPathScanner - Unable to resolve location classpath:db/callback.
+19:29:26.425 [Test worker] DEBUG org.flywaydb.core.internal.scanner.filesystem.FileSystemScanner - Scanning for filesystem resources at '/tmp/sc1431-flyway-migrations18397217333722565528'
+19:29:26.425 [Test worker] DEBUG org.flywaydb.core.internal.scanner.filesystem.FileSystemScanner - Scanning for resources in path: /tmp/sc1431-flyway-migrations18397217333722565528 (/tmp/sc1431-flyway-migrations18397217333722565528)
+19:29:26.425 [Test worker] DEBUG org.flywaydb.core.internal.scanner.filesystem.FileSystemScanner - Found filesystem resource: /tmp/sc1431-flyway-migrations18397217333722565528/V23__sc1431_accountbuilder_orchestration.sql
+19:29:26.425 [Test worker] DEBUG org.flywaydb.core.internal.scanner.filesystem.FileSystemScanner - Found filesystem resource: /tmp/sc1431-flyway-migrations18397217333722565528/V32__sc1431_recovery_correlation.sql
+19:29:26.456 [Test worker] DEBUG org.flywaydb.core.internal.resource.ResourceNameValidator - Validating V23__sc1431_accountbuilder_orchestration.sql
+19:29:26.457 [Test worker] DEBUG org.flywaydb.core.internal.resource.ResourceNameValidator - Validating V32__sc1431_recovery_correlation.sql
+19:29:26.459 [Test worker] DEBUG org.flywaydb.core.internal.database.DatabaseTypeRegister - Multiple databases found that handle url 'jdbc:postgresql://localhost:5433/chromascape_test?sslmode=disable': CockroachDB,PostgreSQL
+19:29:26.459 [Test worker] INFO  org.flywaydb.core.FlywayExecutor - Database: jdbc:postgresql://localhost:5433/chromascape_test?sslmode=disable (PostgreSQL 16.15)
+19:29:26.459 [Test worker] DEBUG org.flywaydb.core.FlywayExecutor - Database Type: PostgreSQL
+19:29:26.460 [Test worker] DEBUG org.flywaydb.core.FlywayExecutor - Driver: PostgreSQL JDBC Driver 42.7.7
+19:29:26.460 [Test worker] DEBUG org.flywaydb.core.FlywayExecutor - DDL Transactions Supported: true
+19:29:26.460 [Test worker] DEBUG org.flywaydb.core.internal.schemahistory.SchemaHistoryFactory - Schemas: sc1431_flyway_test
+19:29:26.460 [Test worker] DEBUG org.flywaydb.core.internal.schemahistory.SchemaHistoryFactory - Default schema: sc1431_flyway_test
+19:29:26.471 [Test worker] DEBUG org.flywaydb.core.FlywayExecutor - Scanning for script callbacks ...
+19:29:26.471 [Test worker] DEBUG org.flywaydb.core.internal.callback.SqlScriptCallbackFactory - Scanning for SQL callbacks ...
+19:29:26.476 [Test worker] DEBUG org.flywaydb.core.internal.command.DbValidate - Validating migrations ...
+19:29:26.476 [Test worker] DEBUG org.flywaydb.core.api.configuration.ClassicConfiguration - CherryPickConfigurationExtension not found
+19:29:26.478 [Test worker] DEBUG org.flywaydb.core.internal.scanner.Scanner - Filtering out resource: /tmp/sc1431-flyway-migrations18397217333722565528/V23__sc1431_accountbuilder_orchestration.sql (filename: V23__sc1431_accountbuilder_orchestration.sql)
+19:29:26.478 [Test worker] DEBUG org.flywaydb.core.internal.scanner.Scanner - Filtering out resource: /tmp/sc1431-flyway-migrations18397217333722565528/V32__sc1431_recovery_correlation.sql (filename: V32__sc1431_recovery_correlation.sql)
+19:29:26.478 [Test worker] DEBUG org.flywaydb.core.internal.scanner.Scanner - Filtering out resource: /tmp/sc1431-flyway-migrations18397217333722565528/V23__sc1431_accountbuilder_orchestration.sql (filename: V23__sc1431_accountbuilder_orchestration.sql)
+19:29:26.478 [Test worker] DEBUG org.flywaydb.core.internal.scanner.Scanner - Filtering out resource: /tmp/sc1431-flyway-migrations18397217333722565528/V32__sc1431_recovery_correlation.sql (filename: V32__sc1431_recovery_correlation.sql)
+19:29:26.478 [Test worker] DEBUG org.flywaydb.core.internal.scanner.Scanner - Filtering out resource: /tmp/sc1431-flyway-migrations18397217333722565528/V23__sc1431_accountbuilder_orchestration.sql (filename: V23__sc1431_accountbuilder_orchestration.sql)
+19:29:26.478 [Test worker] DEBUG org.flywaydb.core.internal.scanner.Scanner - Filtering out resource: /tmp/sc1431-flyway-migrations18397217333722565528/V32__sc1431_recovery_correlation.sql (filename: V32__sc1431_recovery_correlation.sql)
+19:29:26.478 [Test worker] DEBUG org.flywaydb.core.internal.scanner.Scanner - Filtering out resource: /tmp/sc1431-flyway-migrations18397217333722565528/V23__sc1431_accountbuilder_orchestration.sql (filename: V23__sc1431_accountbuilder_orchestration.sql)
+19:29:26.478 [Test worker] DEBUG org.flywaydb.core.internal.scanner.Scanner - Filtering out resource: /tmp/sc1431-flyway-migrations18397217333722565528/V32__sc1431_recovery_correlation.sql (filename: V32__sc1431_recovery_correlation.sql)
+19:29:26.494 [Test worker] INFO  org.flywaydb.core.internal.command.DbValidate - Successfully validated 3 migrations (execution time 00:00.017s)
+19:29:26.495 [Test worker] DEBUG org.flywaydb.core.internal.command.DbSchemas - Skipping creation of existing schema: "sc1431_flyway_test"
+19:29:26.529 [Test worker] DEBUG org.flywaydb.core.api.configuration.ClassicConfiguration - CherryPickConfigurationExtension not found
+19:29:26.532 [Test worker] INFO  org.flywaydb.core.internal.command.DbMigrate - Current version of schema "sc1431_flyway_test": 23
+19:29:26.533 [Test worker] WARN  org.flywaydb.core.internal.command.DbMigrate - outOfOrder mode is active. Migration of schema "sc1431_flyway_test" may not be reproducible.
+19:29:26.533 [Test worker] DEBUG org.flywaydb.core.internal.parser.Parser - Parsing V32__sc1431_recovery_correlation.sql ...
+19:29:26.535 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 6: -- SC-1431.1: immutable, non-secret recovery correlation for post-reservation calls.
+-- V23 is already installed in persistent environments and V24-V31 are occupied by later
+-- migrations, so this is a forward-only additive migration. No raw request or authority secret is
+-- copied into this table.
+
+CREATE TABLE ab_gateway_correlation (
+    orchestration_id VARCHAR(128) PRIMARY KEY
+        REFERENCES ab_orchestration(orchestration_id) ON DELETE RESTRICT,
+    contract_version VARCHAR(32) NOT NULL,
+    request_id VARCHAR(128) NOT NULL,
+    idempotency_key VARCHAR(128) NOT NULL,
+    envelope_digest VARCHAR(80) NOT NULL,
+    mode VARCHAR(32) NOT NULL,
+    source_type VARCHAR(128) NOT NULL,
+    task_key VARCHAR(128) NOT NULL,
+    authority_id VARCHAR(128) NOT NULL,
+    identities_digest VARCHAR(80) NOT NULL,
+    settings_digest VARCHAR(80) NOT NULL,
+    budgets_digest VARCHAR(80) NOT NULL,
+    expected_observation_revision BIGINT NOT NULL,
+    expected_task_revision BIGINT NOT NULL,
+    deadline_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT ab_correlation_contract_version_check
+        CHECK (contract_version = 'sc-1431/v1'),
+    CONSTRAINT ab_correlation_request_id_check
+        CHECK (request_id ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'),
+    CONSTRAINT ab_correlation_idempotency_key_check
+        CHECK (idempotency_key ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'),
+    CONSTRAINT ab_correlation_envelope_digest_check
+        CHECK (envelope_digest ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT ab_correlation_mode_check
+        CHECK (mode IN ('HELD', 'SHADOW', 'BOOTSTRAP_RECORDING', 'LIVE_TASK', 'SIMULATION')),
+    CONSTRAINT ab_correlation_source_type_check
+        CHECK (source_type <> '' AND length(source_type) <= 128),
+    CONSTRAINT ab_correlation_task_key_check
+        CHECK (task_key ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'),
+    CONSTRAINT ab_correlation_authority_id_check
+        CHECK (authority_id ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'),
+    CONSTRAINT ab_correlation_identities_digest_check
+        CHECK (identities_digest ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT ab_correlation_settings_digest_check
+        CHECK (settings_digest ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT ab_correlation_budgets_digest_check
+        CHECK (budgets_digest ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT ab_correlation_revision_check
+        CHECK (expected_observation_revision >= 0 AND expected_task_revision >= 0)
+)
+19:29:26.536 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 49: CREATE INDEX ab_gateway_correlation_request_idx
+    ON ab_gateway_correlation(request_id)
+19:29:26.536 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 52: CREATE INDEX ab_gateway_correlation_idempotency_idx
+    ON ab_gateway_correlation(idempotency_key)
+19:29:26.536 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 55: CREATE TRIGGER ab_gateway_correlation_append_only
+    BEFORE UPDATE OR DELETE ON ab_gateway_correlation
+    FOR EACH ROW EXECUTE FUNCTION ab_reject_evidence_mutation()
+19:29:26.536 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 63: -- V23 shipped an overly broad digest check: verifier_digest is the bounded, non-secret
+-- verifier identifier (for example, "verifier-v1"), not a cryptographic digest. Keep V23
+-- immutable and correct that contract in the forward migration while retaining digest checks
+-- for every actual digest column.
+ALTER TABLE ab_snapshot_binding
+    DROP CONSTRAINT IF EXISTS ab_binding_digest_check
+19:29:26.536 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.ParserSqlScript - Found statement at line 66: ALTER TABLE ab_snapshot_binding
+    ADD CONSTRAINT ab_binding_digest_check CHECK (
+        decision_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND semantic_action_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND catalog_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND capability_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND goal_plan_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND tool_schema_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND knowledge_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND policy_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND verifier_digest ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+    )
+19:29:26.537 [Test worker] DEBUG org.flywaydb.core.internal.command.DbMigrate - Starting migration of schema "sc1431_flyway_test" to version "32 - sc1431 recovery correlation" ...
+19:29:26.540 [Test worker] INFO  org.flywaydb.core.internal.command.DbMigrate - Migrating schema "sc1431_flyway_test" to version "32 - sc1431 recovery correlation"
+19:29:26.541 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: -- SC-1431.1: immutable, non-secret recovery correlation for post-reservation calls.
+-- V23 is already installed in persistent environments and V24-V31 are occupied by later
+-- migrations, so this is a forward-only additive migration. No raw request or authority secret is
+-- copied into this table.
+
+CREATE TABLE ab_gateway_correlation (
+    orchestration_id VARCHAR(128) PRIMARY KEY
+        REFERENCES ab_orchestration(orchestration_id) ON DELETE RESTRICT,
+    contract_version VARCHAR(32) NOT NULL,
+    request_id VARCHAR(128) NOT NULL,
+    idempotency_key VARCHAR(128) NOT NULL,
+    envelope_digest VARCHAR(80) NOT NULL,
+    mode VARCHAR(32) NOT NULL,
+    source_type VARCHAR(128) NOT NULL,
+    task_key VARCHAR(128) NOT NULL,
+    authority_id VARCHAR(128) NOT NULL,
+    identities_digest VARCHAR(80) NOT NULL,
+    settings_digest VARCHAR(80) NOT NULL,
+    budgets_digest VARCHAR(80) NOT NULL,
+    expected_observation_revision BIGINT NOT NULL,
+    expected_task_revision BIGINT NOT NULL,
+    deadline_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT ab_correlation_contract_version_check
+        CHECK (contract_version = 'sc-1431/v1'),
+    CONSTRAINT ab_correlation_request_id_check
+        CHECK (request_id ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'),
+    CONSTRAINT ab_correlation_idempotency_key_check
+        CHECK (idempotency_key ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'),
+    CONSTRAINT ab_correlation_envelope_digest_check
+        CHECK (envelope_digest ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT ab_correlation_mode_check
+        CHECK (mode IN ('HELD', 'SHADOW', 'BOOTSTRAP_RECORDING', 'LIVE_TASK', 'SIMULATION')),
+    CONSTRAINT ab_correlation_source_type_check
+        CHECK (source_type <> '' AND length(source_type) <= 128),
+    CONSTRAINT ab_correlation_task_key_check
+        CHECK (task_key ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'),
+    CONSTRAINT ab_correlation_authority_id_check
+        CHECK (authority_id ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'),
+    CONSTRAINT ab_correlation_identities_digest_check
+        CHECK (identities_digest ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT ab_correlation_settings_digest_check
+        CHECK (settings_digest ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT ab_correlation_budgets_digest_check
+        CHECK (budgets_digest ~ '^sha256:[0-9a-f]{64}$'),
+    CONSTRAINT ab_correlation_revision_check
+        CHECK (expected_observation_revision >= 0 AND expected_task_revision >= 0)
+)
+19:29:26.574 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.574 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE INDEX ab_gateway_correlation_request_idx
+    ON ab_gateway_correlation(request_id)
+19:29:26.580 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.581 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE INDEX ab_gateway_correlation_idempotency_idx
+    ON ab_gateway_correlation(idempotency_key)
+19:29:26.588 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.588 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: CREATE TRIGGER ab_gateway_correlation_append_only
+    BEFORE UPDATE OR DELETE ON ab_gateway_correlation
+    FOR EACH ROW EXECUTE FUNCTION ab_reject_evidence_mutation()
+19:29:26.590 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.590 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: -- V23 shipped an overly broad digest check: verifier_digest is the bounded, non-secret
+-- verifier identifier (for example, "verifier-v1"), not a cryptographic digest. Keep V23
+-- immutable and correct that contract in the forward migration while retaining digest checks
+-- for every actual digest column.
+ALTER TABLE ab_snapshot_binding
+    DROP CONSTRAINT IF EXISTS ab_binding_digest_check
+19:29:26.593 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.593 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - Executing SQL: ALTER TABLE ab_snapshot_binding
+    ADD CONSTRAINT ab_binding_digest_check CHECK (
+        decision_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND semantic_action_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND catalog_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND capability_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND goal_plan_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND tool_schema_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND knowledge_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND policy_digest ~ '^sha256:[0-9a-f]{64}$'
+        AND verifier_digest ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+    )
+19:29:26.596 [Test worker] DEBUG org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor - 0 rows affected
+19:29:26.596 [Test worker] DEBUG org.flywaydb.core.internal.command.DbMigrate - Successfully completed migration of schema "sc1431_flyway_test" to version "32 - sc1431 recovery correlation"
+19:29:26.605 [Test worker] DEBUG org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory - Schema History table "sc1431_flyway_test"."flyway_schema_history" successfully updated to reflect changes
+19:29:26.620 [Test worker] DEBUG org.flywaydb.core.api.configuration.ClassicConfiguration - CherryPickConfigurationExtension not found
+19:29:26.627 [Test worker] INFO  org.flywaydb.core.internal.command.DbMigrate - Successfully applied 1 migration to schema "sc1431_flyway_test", now at version v32 (execution time 00:00.059s)
+19:29:26.631 [Test worker] DEBUG org.flywaydb.core.FlywayExecutor - Memory usage: 198 of 301M
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

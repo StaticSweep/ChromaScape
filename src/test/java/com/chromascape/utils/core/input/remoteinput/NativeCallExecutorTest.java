@@ -39,4 +39,18 @@ class NativeCallExecutorTest {
     assertEquals(InputSessionDiagnostic.NATIVE_CALL_TIMEOUT, timeout.diagnostic());
     assertEquals(InputSessionDiagnostic.SESSION_POISONED, poisoned.diagnostic());
   }
+
+  @Test
+  void deliberateCloseIsNotReportedAsPoisoned() {
+    ProcessIdentity identity =
+        new ProcessIdentity(ProcessOrigin.LOCAL, "host", 42, Instant.EPOCH, "boot");
+    NativeCallExecutor executor = new NativeCallExecutor(identity, 7L);
+
+    executor.close();
+
+    assertEquals(
+        false,
+        executor.isPoisoned(),
+        "a lane closed after all native work completed is not a poisoned lane");
+  }
 }

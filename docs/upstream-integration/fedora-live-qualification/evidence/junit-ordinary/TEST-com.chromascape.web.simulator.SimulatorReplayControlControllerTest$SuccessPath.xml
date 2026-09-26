@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Success path" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:48.196Z" hostname="fedora" time="0.558">
+  <properties/>
+  <testcase name="start returns 200 with success result" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$SuccessPath" time="0.542"/>
+  <testcase name="start passes recordingId and sourceMode to service" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$SuccessPath" time="0.005"/>
+  <testcase name="players returns 200 with selected and player list" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$SuccessPath" time="0.001"/>
+  <testcase name="getStatus returns 200 with status data" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$SuccessPath" time="0.001"/>
+  <testcase name="pause returns 200 on success" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$SuccessPath" time="0.001"/>
+  <testcase name="speed returns 200 on success" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$SuccessPath" time="0.001"/>
+  <testcase name="seek returns 200 on success" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$SuccessPath" time="0.001"/>
+  <testcase name="stop returns 200 on success" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$SuccessPath" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

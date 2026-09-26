@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.patchloop.dto.ArtifactsResponseTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:28:34.981Z" hostname="fedora" time="0.014">
+  <properties/>
+  <testcase name="ValidationArtifact setters and getters work for rollback fields" classname="com.chromascape.web.debug.patchloop.dto.ArtifactsResponseTest" time="0.0"/>
+  <testcase name="ValidationArtifact round-trip serialization preserves rollback fields" classname="com.chromascape.web.debug.patchloop.dto.ArtifactsResponseTest" time="0.003"/>
+  <testcase name="ValidationArtifact serialization includes null rollback fields" classname="com.chromascape.web.debug.patchloop.dto.ArtifactsResponseTest" time="0.001"/>
+  <testcase name="ValidationArtifact serialization includes rollback fields" classname="com.chromascape.web.debug.patchloop.dto.ArtifactsResponseTest" time="0.001"/>
+  <testcase name="ValidationArtifact deserialization handles missing rollback fields" classname="com.chromascape.web.debug.patchloop.dto.ArtifactsResponseTest" time="0.003"/>
+  <testcase name="ValidationArtifact deserialization populates rollback fields" classname="com.chromascape.web.debug.patchloop.dto.ArtifactsResponseTest" time="0.001"/>
+  <testcase name="ValidationArtifact empty rollbackReason serializes correctly" classname="com.chromascape.web.debug.patchloop.dto.ArtifactsResponseTest" time="0.0"/>
+  <testcase name="ValidationArtifact has rolledBack and rollbackReason fields" classname="com.chromascape.web.debug.patchloop.dto.ArtifactsResponseTest" time="0.0"/>
+  <testcase name="ValidationArtifact serialization with rolledBack=false includes field" classname="com.chromascape.web.debug.patchloop.dto.ArtifactsResponseTest" time="0.001"/>
+  <testcase name="ValidationArtifact handles false rolledBack with reason" classname="com.chromascape.web.debug.patchloop.dto.ArtifactsResponseTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

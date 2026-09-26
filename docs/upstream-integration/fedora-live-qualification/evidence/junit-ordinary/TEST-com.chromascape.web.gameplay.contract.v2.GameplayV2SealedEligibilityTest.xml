@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.gameplay.contract.v2.GameplayV2SealedEligibilityTest" tests="15" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:29:24.390Z" hostname="fedora" time="0.295">
+  <properties/>
+  <testcase name="unknownClosedSchemaPropertiesAreRejectedAtSealTime()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2SealedEligibilityTest" time="0.012"/>
+  <testcase name="malformedNonObjectCatalogFailsClosedWithStableCode()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2SealedEligibilityTest" time="0.018"/>
+  <testcase name="mutatedSnapshotCatalogCannotPassTheSealedAdapterBoundary()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2SealedEligibilityTest" time="0.016"/>
+  <testcase name="sealBindsTheCanonicalCatalogDigest()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2SealedEligibilityTest" time="0.013"/>
+  <testcase name="mutationAfterSealEntryCannotAffectTheBoundSeal()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2SealedEligibilityTest" time="0.017"/>
+  <testcase name="providerOutputSnapshotIsUsedForAllChecks()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2SealedEligibilityTest" time="0.035"/>
+  <testcase name="nullProviderOutputFailsClosed()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2SealedEligibilityTest" time="0.018"/>
+  <testcase name="sealedAdapterRejectsMissingCatalogAndNullSeal()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2SealedEligibilityTest" time="0.018"/>
+  <testcase name="staleCatalogDigestIsRejectedAtTheSealedAdapterBoundary()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2SealedEligibilityTest" time="0.015"/>
+  <testcase name="returnedDecisionDoesNotRetainProviderOutput()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2SealedEligibilityTest" time="0.027"/>
+  <testcase name="mutatingTheReturnedResultHandleCannotFabricateLaterReads()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2SealedEligibilityTest" time="0.016"/>
+  <testcase name="substitutedCatalogIsRejectedAtTheSealedAdapterBoundary()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2SealedEligibilityTest" time="0.015"/>
+  <testcase name="nonObjectProviderOutputFailsClosed()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2SealedEligibilityTest" time="0.019"/>
+  <testcase name="mutatingTheCallerOriginalAfterSealCannotFabricateTheSealedResult()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2SealedEligibilityTest" time="0.017"/>
+  <testcase name="validSealStillAdaptsThroughTheSealedBoundary()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2SealedEligibilityTest" time="0.027"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -21,6 +21,15 @@ set_default_environment() {
 set_fedora_runtime_defaults() {
     set_default_environment SERVER_ADDRESS 127.0.0.1
     set_default_environment SERVER_PORT 8090
+    # The development profile is the only profile under which the bounded qualification harness
+    # bean may exist. Default it here so a Fedora run is reproducible, but never overwrite an
+    # operator-supplied profile (set_default_environment only fills an unset/empty value), so a
+    # production or explicit profile is preserved exactly.
+    set_default_environment SPRING_PROFILES_ACTIVE local-development
+    # The harness stays disabled unless an operator explicitly opts in; both defaults are
+    # documentation-equivalent to application.yml and are preserved when the operator sets them.
+    set_default_environment CHROMASCAPE_QUALIFICATION_ENABLED false
+    set_default_environment CHROMASCAPE_QUALIFICATION_CAPTURE_DIR .chromascape/qualification/captures
     set_default_environment LEEUWBOT_STREAM_URL ws://127.0.0.1:8084/ws/screens/agent
     set_default_environment LEEUWBOT_STREAM_HOST_ID fedora-host-native
     set_default_environment BUILDER_GOAL_LAUNCHER_BASE_URL http://127.0.0.1:8084
@@ -29,6 +38,10 @@ set_fedora_runtime_defaults() {
     set_default_environment MICRO6_EXECUTOR_BASE_URL http://127.0.0.1:8098
     set_default_environment GAMEPLAY_BOOTSTRAP_MICRO6_URL http://127.0.0.1:8098
     set_default_environment LEEUWBOT_CANDIDATE_REGISTRY_URL http://127.0.0.1:8081
+    # The MCP bridge is an analysis sidecar whose scripts/mcp-bridge payload is not
+    # part of a Linux checkout; leaving auto-start on aborts Fedora startup with a
+    # BridgeConfigException. Keep it off by default and let an operator opt back in.
+    set_default_environment MCP_AUTO_START false
 }
 
 usage() {
