@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.curation.ReplayCurationActionReplacementTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:18.144Z" hostname="fedora" time="0.076">
+  <properties/>
+  <testcase name="updateWithActionLabelsReplacesRowsAndRebuildsChecksum()" classname="com.chromascape.web.replay.curation.ReplayCurationActionReplacementTest" time="0.058"/>
+  <testcase name="publishedCurationsAreImmutable()" classname="com.chromascape.web.replay.curation.ReplayCurationActionReplacementTest" time="0.005"/>
+  <testcase name="outOfRangeTickIsRejectedBeforeAnyWrite()" classname="com.chromascape.web.replay.curation.ReplayCurationActionReplacementTest" time="0.002"/>
+  <testcase name="foreignOwnerGetsUniform404()" classname="com.chromascape.web.replay.curation.ReplayCurationActionReplacementTest" time="0.003"/>
+  <testcase name="updateNeverIgnoresSuppliedActionLabels()" classname="com.chromascape.web.replay.curation.ReplayCurationActionReplacementTest" time="0.002"/>
+  <testcase name="duplicateTickSequenceIsRejected()" classname="com.chromascape.web.replay.curation.ReplayCurationActionReplacementTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

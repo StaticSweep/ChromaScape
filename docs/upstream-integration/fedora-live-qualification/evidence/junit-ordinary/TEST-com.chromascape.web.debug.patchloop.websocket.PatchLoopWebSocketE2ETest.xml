@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketE2ETest" tests="6" skipped="6" failures="0" errors="0" timestamp="2026-09-19T17:29:18.797Z" hostname="fedora" time="0.0">
+  <properties/>
+  <testcase name="testExecutionScopedConnection()" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketE2ETest" time="0.0">
+    <skipped/>
+  </testcase>
+  <testcase name="testBroadcastToAllSessions()" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketE2ETest" time="0.0">
+    <skipped/>
+  </testcase>
+  <testcase name="testBaseConnection()" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketE2ETest" time="0.0">
+    <skipped/>
+  </testcase>
+  <testcase name="testMultipleClientsBaseConnection()" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketE2ETest" time="0.0">
+    <skipped/>
+  </testcase>
+  <testcase name="testExecutionScopedBroadcast()" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketE2ETest" time="0.0">
+    <skipped/>
+  </testcase>
+  <testcase name="testMixedBaseAndScopedConnections()" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketE2ETest" time="0.0">
+    <skipped/>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

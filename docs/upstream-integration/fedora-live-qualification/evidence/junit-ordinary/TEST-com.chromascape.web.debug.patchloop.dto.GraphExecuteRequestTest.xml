@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.patchloop.dto.GraphExecuteRequestTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:28:34.996Z" hostname="fedora" time="0.012">
+  <properties/>
+  <testcase name="getNormalizedExecutionMode preserves autofix_loop value" classname="com.chromascape.web.debug.patchloop.dto.GraphExecuteRequestTest" time="0.0"/>
+  <testcase name="getExecutionMode returns original value without normalization" classname="com.chromascape.web.debug.patchloop.dto.GraphExecuteRequestTest" time="0.01"/>
+  <testcase name="getNormalizedExecutionMode returns autofix_loop for full_loop legacy value" classname="com.chromascape.web.debug.patchloop.dto.GraphExecuteRequestTest" time="0.0"/>
+  <testcase name="getNormalizedExecutionMode preserves analysis_only value" classname="com.chromascape.web.debug.patchloop.dto.GraphExecuteRequestTest" time="0.0"/>
+  <testcase name="getNormalizedExecutionMode returns original value for unknown modes" classname="com.chromascape.web.debug.patchloop.dto.GraphExecuteRequestTest" time="0.0"/>
+  <testcase name="getNormalizedExecutionMode returns analysis_only for null value" classname="com.chromascape.web.debug.patchloop.dto.GraphExecuteRequestTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

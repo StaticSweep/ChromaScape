@@ -136,6 +136,29 @@ gateway:
 
 # ChromaScape runtime configuration
 chromascape:
+  # Development-only bounded target-session harness (open/capture/move/click/key) used by the
+  # live Fedora qualification. Disabled by default and enforced twice by Spring: the bean exists
+  # only when the local-development profile is the active profile AND
+  # CHROMASCAPE_QUALIFICATION_ENABLED=true is set explicitly. The controller additionally refuses
+  # non-loopback callers so it can never expose input on a shared interface, and it closes any
+  # open session on application shutdown.
+  qualification:
+    enabled: ${CHROMASCAPE_QUALIFICATION_ENABLED:false}
+    capture-directory: ${CHROMASCAPE_QUALIFICATION_CAPTURE_DIR:.chromascape/qualification/captures}
+  # Linux RemoteInput attachment (RemoteInputProperties). Attachment is disabled by default; every
+  # deadline is bounded and validated at startup. inject-timeout is the TOTAL attachment budget
+  # shared by the native injection call and every client poll (allowed 1s-60s; the injected library
+  # needs ~5s for the JVM plus up to ~20s for AWT/window reflection, so 30s covers that with margin).
+  # The artifact settings application-root / library are consumed by the binding provider and are
+  # unchanged. Durations use Spring syntax such as 30s or 250ms.
+  remoteinput:
+    attachment-enabled: ${CHROMASCAPE_REMOTEINPUT_ATTACHMENT_ENABLED:false}
+    inject-timeout: ${CHROMASCAPE_REMOTEINPUT_INJECT_TIMEOUT:30s}
+    pair-timeout: ${CHROMASCAPE_REMOTEINPUT_PAIR_TIMEOUT:10s}
+    native-call-timeout: ${CHROMASCAPE_REMOTEINPUT_NATIVE_CALL_TIMEOUT:2s}
+    release-timeout: ${CHROMASCAPE_REMOTEINPUT_RELEASE_TIMEOUT:3s}
+    validation-interval: ${CHROMASCAPE_REMOTEINPUT_VALIDATION_INTERVAL:250ms}
+    max-clients: ${CHROMASCAPE_REMOTEINPUT_MAX_CLIENTS:4096}
   # SC-810 authoritative source manifest trust. All values are mandatory at startup; empty
   # placeholders deliberately fail SourceConfigurationValidator rather than enabling a fallback.
   source:

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.patchloop.PatchLoopEvidenceServiceTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:28:33.062Z" hostname="fedora" time="0.211">
+  <properties/>
+  <testcase name="Evidence respects includeTypes config - only TICK_LOGS" classname="com.chromascape.web.debug.patchloop.PatchLoopEvidenceServiceTest" time="0.193"/>
+  <testcase name="Evidence respects maxTickLogs config" classname="com.chromascape.web.debug.patchloop.PatchLoopEvidenceServiceTest" time="0.003"/>
+  <testcase name="Sufficiency validation fails without evidence" classname="com.chromascape.web.debug.patchloop.PatchLoopEvidenceServiceTest" time="0.001"/>
+  <testcase name="Sufficiency validation passes with evidence" classname="com.chromascape.web.debug.patchloop.PatchLoopEvidenceServiceTest" time="0.001"/>
+  <testcase name="Evidence respects includeTypes config - only GENERAL_LOGS" classname="com.chromascape.web.debug.patchloop.PatchLoopEvidenceServiceTest" time="0.002"/>
+  <testcase name="Evidence respects maxLogEntries config" classname="com.chromascape.web.debug.patchloop.PatchLoopEvidenceServiceTest" time="0.002"/>
+  <testcase name="Evidence collected from all three sources with default config" classname="com.chromascape.web.debug.patchloop.PatchLoopEvidenceServiceTest" time="0.002"/>
+  <testcase name="Evidence respects timeWindowSeconds config" classname="com.chromascape.web.debug.patchloop.PatchLoopEvidenceServiceTest" time="0.001"/>
+  <testcase name="Sufficiency validation fails with null bundle" classname="com.chromascape.web.debug.patchloop.PatchLoopEvidenceServiceTest" time="0.001"/>
+  <testcase name="Evidence uses default values when config is null" classname="com.chromascape.web.debug.patchloop.PatchLoopEvidenceServiceTest" time="0.001"/>
+  <testcase name="Evidence respects includeTypes config - only DECISIONS" classname="com.chromascape.web.debug.patchloop.PatchLoopEvidenceServiceTest" time="0.001"/>
+  <system-out><![CDATA[19:28:33.254 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService - Collecting evidence for iteration test-iteration-123
+19:28:33.256 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService - Collected evidence: 0 logs, 1 tick logs, 0 decisions
+19:28:33.258 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService - Collecting evidence for iteration test-iteration-123
+19:28:33.259 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService - Collected evidence: 0 logs, 5 tick logs, 0 decisions
+19:28:33.261 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService - No evidence found in bundle
+19:28:33.263 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService - Collecting evidence for iteration test-iteration-123
+19:28:33.263 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService - Collected evidence: 2 logs, 0 tick logs, 0 decisions
+19:28:33.265 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService - Collecting evidence for iteration test-iteration-123
+19:28:33.265 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService - Collected evidence: 10 logs, 0 tick logs, 0 decisions
+19:28:33.267 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService - Collecting evidence for iteration test-iteration-123
+19:28:33.267 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService - Collected evidence: 2 logs, 1 tick logs, 1 decisions
+19:28:33.269 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService - Collecting evidence for iteration test-iter
+19:28:33.269 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService - Collected evidence: 2 logs, 0 tick logs, 0 decisions
+19:28:33.272 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService - Collecting evidence for iteration test-iteration-123
+19:28:33.272 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService - Collected evidence: 2 logs, 1 tick logs, 1 decisions
+19:28:33.273 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService - Collecting evidence for iteration test-iteration-123
+19:28:33.273 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService - Collected evidence: 0 logs, 0 tick logs, 1 decisions
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

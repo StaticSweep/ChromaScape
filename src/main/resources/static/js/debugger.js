@@ -156,6 +156,12 @@ function activateDebuggerWorkspace(workspace, options = {}) {
     }
   }
 
+  // Opening Live is an explicit request to resume the client feed. A fresh page must not
+  // leave both tick logs and client-rendered frames silently paused.
+  if (workspace === 'live' && !debugFeedEnabled) {
+    setDebugFeedEnabled(true, true);
+  }
+
   document.dispatchEvent(new CustomEvent('debugger:workspace-changed', {
     detail: { workspace }
   }));
@@ -167,7 +173,7 @@ function syncWorkspaceConnectionStatus() {
   const text = document.getElementById('workspaceConnectionText');
   if (!source || !dot || !text) return;
 
-  const connected = /connected/i.test(source.textContent || '')
+  const connected = /connected|Feed: Active/i.test(source.textContent || '')
     && !/disconnected/i.test(source.textContent || '');
   dot.classList.toggle('connected', connected);
   dot.classList.toggle('warning', !connected && /connecting/i.test(source.textContent || ''));
@@ -744,7 +750,18 @@ function switchMode(mode) {
       && !document.body.classList.contains('recovery-mode-active')) {
     activateDebuggerWorkspace(mode === 'replay' ? 'replays' : 'live', { syncMode: false });
   }
-  if (currentMode === mode) return; // Don't clear logs if already in this mode
+  if (currentMode === mode) {
+    // The initial template shows the replay video even though currentMode starts as live.
+    // Reconcile the surface on every selection without resetting the current session or logs.
+    const isReplay = mode === 'replay';
+    elements.liveBtn.classList.toggle('active', !isReplay);
+    elements.replayBtn.classList.toggle('active', isReplay);
+    elements.viewportCanvas.style.display = isReplay ? 'none' : 'block';
+    elements.replayVideo.style.display = isReplay ? 'block' : 'none';
+    elements.scrubberMode.textContent = isReplay ? 'Replay' : 'Live';
+    setScrubberEnabled(isReplay);
+    return;
+  }
 
   // Invalidate any in-flight recording load / timeline sync before switching.
   replayLoadGeneration++;

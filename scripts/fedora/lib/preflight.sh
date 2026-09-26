@@ -30,15 +30,21 @@ sc1667_trim_quotes() {
 
 sc1667_allowed_env_key() {
     case "$1" in
-        JAVA_HOME|GRADLE_USER_HOME|SERVER_ADDRESS|SERVER_PORT|STATIC_API_TOKEN|ANTHROPIC_API_KEY|OPENAI_API_KEY|BUILDER_GOAL_*|CHROMASCAPE_*|SPRING_*|LEEUWBOT_*|GAMEPLAY_*|AI_*|MICRO6_*|SC967_*|CANDIDATE_*|RECORDING_*) return 0 ;;
+        JAVA_HOME|GRADLE_USER_HOME|SERVER_ADDRESS|SERVER_PORT|MCP_AUTO_START|STATIC_API_TOKEN|ANTHROPIC_API_KEY|OPENAI_API_KEY|BUILDER_GOAL_*|CHROMASCAPE_*|SPRING_*|LEEUWBOT_*|GAMEPLAY_*|AI_*|MICRO6_*|SC967_*|CANDIDATE_*|RECORDING_*) return 0 ;;
         *) return 1 ;;
     esac
 }
 
 # Loads simple KEY=VALUE assignments without eval/source. Existing non-empty
 # environment variables win; values and file contents are never printed.
+#
+# Every key may appear at most once per file. A repeated key is rejected with
+# CONFIG_DUPLICATE_KEY regardless of whether the values agree: the later value is
+# never applied, the diagnostic names only the key and both line numbers, and the
+# error count makes the wrapper fail closed instead of silently keeping one value.
 sc1667_load_env_file() {
     local file="$1" line key value line_number=0
+    local -A seen_keys=()
     [[ -f "$file" ]] || return 0
     while IFS= read -r line || [[ -n "$line" ]]; do
         line_number=$((line_number + 1))
@@ -56,6 +62,12 @@ sc1667_load_env_file() {
             sc1667_emit ERROR CONFIG_INVALID "environment file line $line_number has an invalid key"
             continue
         fi
+        if [[ -n "${seen_keys[$key]:-}" ]]; then
+            sc1667_emit ERROR CONFIG_DUPLICATE_KEY \
+                "environment file line $line_number repeats key $key first defined on line ${seen_keys[$key]}"
+            continue
+        fi
+        seen_keys[$key]="$line_number"
         if ! sc1667_allowed_env_key "$key"; then
             sc1667_emit ERROR CONFIG_KEY_UNSUPPORTED "environment file line $line_number uses a key outside the application allowlist"
             continue

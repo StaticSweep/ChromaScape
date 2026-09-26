@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ExitCode=2 Job Outcome Tests" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:53.124Z" hostname="fedora" time="0.004">
+  <properties/>
+  <testcase name="Should set reportAvailable=true when exitCode=2 with report file" classname="com.chromascape.web.simulator.SimulatorVerifyServiceTest$ExitCodeTwoJobOutcomeTests" time="0.004"/>
+  <system-out><![CDATA[19:30:53.127 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'reportsDir' of type [null] on target object [SimulatorVerifierProperties{enabled=true, openruneRoot='/mnt/f/Dev/IdeaProjects/OpenRune-Server', invocationMode='jar', verifierJarPath='simulator-verifier/build/libs/simulator-verifier-all.jar', defaultBridgeUrl='http://localhost:8092', reportsDir='output/simulator-reports', maxConcurrentJobs=2, jobTimeoutSeconds=300}] or target class [class com.chromascape.web.simulator.SimulatorVerifierProperties] to value [reports]
+19:30:53.127 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'openruneRoot' of type [null] on target object [SimulatorVerifierProperties{enabled=true, openruneRoot='/mnt/f/Dev/IdeaProjects/OpenRune-Server', invocationMode='jar', verifierJarPath='simulator-verifier/build/libs/simulator-verifier-all.jar', defaultBridgeUrl='http://localhost:8092', reportsDir='reports', maxConcurrentJobs=2, jobTimeoutSeconds=300}] or target class [class com.chromascape.web.simulator.SimulatorVerifierProperties] to value [/tmp/simulator-outcome-test10680806713383670756]
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

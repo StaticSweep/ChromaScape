@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.service.PatchCandidateWorkflowServiceTest" tests="10" skipped="1" failures="0" errors="0" timestamp="2026-09-19T17:27:36.170Z" hostname="fedora" time="0.475">
+  <properties/>
+  <testcase name="candidateSourceBindingReplacesOnlyTheAuthoritativeSourceGroup()" classname="com.chromascape.web.aiplayer.routine.service.PatchCandidateWorkflowServiceTest" time="0.011"/>
+  <testcase name="enabledWithoutExpectedJarNameFailsStartup()" classname="com.chromascape.web.aiplayer.routine.service.PatchCandidateWorkflowServiceTest" time="0.436"/>
+  <testcase name="enabledWithoutOperatorTokenFailsStartup()" classname="com.chromascape.web.aiplayer.routine.service.PatchCandidateWorkflowServiceTest" time="0.003"/>
+  <testcase name="canonicalCandidatePatchAppliesToConfiguredMicro6Checkout()" classname="com.chromascape.web.aiplayer.routine.service.PatchCandidateWorkflowServiceTest" time="0.003">
+    <skipped message="Assumption failed: SC968_MICRO6_VERIFY_ROOT enables the native patch applicability check" type="org.opentest4j.TestAbortedException">org.opentest4j.TestAbortedException: Assumption failed: SC968_MICRO6_VERIFY_ROOT enables the native patch applicability check
+	at org.junit.jupiter.api.Assumptions.throwAssumptionFailed(Assumptions.java:321)
+	at org.junit.jupiter.api.Assumptions.assumeTrue(Assumptions.java:120)
+	at com.chromascape.web.aiplayer.routine.service.PatchCandidateWorkflowServiceTest.canonicalCandidatePatchAppliesToConfiguredMicro6Checkout(PatchCandidateWorkflowServiceTest.java:154)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+</skipped>
+  </testcase>
+  <testcase name="canonicalCandidatePatchRetainsExactUnifiedDiffContext()" classname="com.chromascape.web.aiplayer.routine.service.PatchCandidateWorkflowServiceTest" time="0.001"/>
+  <testcase name="disabledBuildsRejectEnqueue()" classname="com.chromascape.web.aiplayer.routine.service.PatchCandidateWorkflowServiceTest" time="0.003"/>
+  <testcase name="enabledWithCompleteConfigurationPassesStartup(Path)" classname="com.chromascape.web.aiplayer.routine.service.PatchCandidateWorkflowServiceTest" time="0.005"/>
+  <testcase name="enabledWithoutStagingRootFailsStartup()" classname="com.chromascape.web.aiplayer.routine.service.PatchCandidateWorkflowServiceTest" time="0.005"/>
+  <testcase name="enabledWithUnreadableSigningKeyFailsStartup(Path)" classname="com.chromascape.web.aiplayer.routine.service.PatchCandidateWorkflowServiceTest" time="0.004"/>
+  <testcase name="enabledWithoutSigningKeyFailsStartup()" classname="com.chromascape.web.aiplayer.routine.service.PatchCandidateWorkflowServiceTest" time="0.003"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

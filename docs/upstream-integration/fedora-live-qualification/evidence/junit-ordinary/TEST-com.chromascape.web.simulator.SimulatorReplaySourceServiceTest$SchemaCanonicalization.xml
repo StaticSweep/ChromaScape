@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Schema canonicalization" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:48.902Z" hostname="fedora" time="0.022">
+  <properties/>
+  <testcase name="frames returns session metadata in response" classname="com.chromascape.web.simulator.SimulatorReplaySourceServiceTest$SchemaCanonicalization" time="0.001"/>
+  <testcase name="canonicalizeItems handles empty array" classname="com.chromascape.web.simulator.SimulatorReplaySourceServiceTest$SchemaCanonicalization" time="0.001"/>
+  <testcase name="canonicalizePlayerState renames currentHp to hp, currentPrayer to prayer" classname="com.chromascape.web.simulator.SimulatorReplaySourceServiceTest$SchemaCanonicalization" time="0.002"/>
+  <testcase name="Nested position.x/y canonicalizes to replay x/z" classname="com.chromascape.web.simulator.SimulatorReplaySourceServiceTest$SchemaCanonicalization" time="0.002"/>
+  <testcase name="canonicalizeItems preserves existing slot field" classname="com.chromascape.web.simulator.SimulatorReplaySourceServiceTest$SchemaCanonicalization" time="0.001"/>
+  <testcase name="canonicalizePlayerState handles null playerState" classname="com.chromascape.web.simulator.SimulatorReplaySourceServiceTest$SchemaCanonicalization" time="0.001"/>
+  <testcase name="canonicalizePlayerState renames worldX to x, worldY to z" classname="com.chromascape.web.simulator.SimulatorReplaySourceServiceTest$SchemaCanonicalization" time="0.001"/>
+  <testcase name="canonicalizeItems passes through items without slot unchanged (no synthesis)" classname="com.chromascape.web.simulator.SimulatorReplaySourceServiceTest$SchemaCanonicalization" time="0.001"/>
+  <testcase name="Nested prayer.current canonicalizes to numeric replay prayer" classname="com.chromascape.web.simulator.SimulatorReplaySourceServiceTest$SchemaCanonicalization" time="0.001"/>
+  <testcase name="Nested hp.current canonicalizes to numeric replay hp" classname="com.chromascape.web.simulator.SimulatorReplaySourceServiceTest$SchemaCanonicalization" time="0.001"/>
+  <testcase name="canonicalizePlayerState preserves unknown fields unchanged" classname="com.chromascape.web.simulator.SimulatorReplaySourceServiceTest$SchemaCanonicalization" time="0.002"/>
+  <testcase name="Nested position.x/z with no position.y canonicalizes to replay x/z" classname="com.chromascape.web.simulator.SimulatorReplaySourceServiceTest$SchemaCanonicalization" time="0.002"/>
+  <testcase name="Legacy flat fields still canonicalize as before with nested absent" classname="com.chromascape.web.simulator.SimulatorReplaySourceServiceTest$SchemaCanonicalization" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

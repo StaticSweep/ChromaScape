@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.kernel.XrspsProcessLaunchDiagnosticsTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:31:29.236Z" hostname="fedora" time="2.603">
+  <properties/>
+  <testcase name="resolvedNodeProcessBuilderAndKernelLaunchesShareTheSameWindowsPaths()" classname="com.chromascape.web.replay.kernel.XrspsProcessLaunchDiagnosticsTest" time="2.603"/>
+  <system-out><![CDATA[19:31:31.497 [Test worker] INFO  com.chromascape.web.replay.kernel.XrspsKernelProcess - Started xRSPS kernel process: /usr/bin/node <workspace>/ChromaScape-fedora-qualification/build/replay-certification/process-diagnostics/XrspsProcessLaunchDiagnosticsTest-b139ac37-b353-4910-ada1-07b2dbeadee1/fixtures/launch-probe.js --stdio
+19:31:31.810 [xrsps-stderr-reader] DEBUG com.chromascape.web.replay.kernel.XrspsKernelProcess - xRSPS kernel stderr preview diagnosticRef=xrsps-4254c41e-54ef-49ec-899b-b65dc596afc1 preview=kernel-stderr
+19:31:31.827 [Test worker] INFO  com.chromascape.web.replay.kernel.XrspsKernelProcess - xRSPS kernel process disposed
+19:31:31.828 [Test worker] DEBUG com.chromascape.web.replay.kernel.XrspsKernelProcess - xRSPS kernel stderr preview diagnosticRef=xrsps-4254c41e-54ef-49ec-899b-b65dc596afc1 preview=kernel-stderr
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

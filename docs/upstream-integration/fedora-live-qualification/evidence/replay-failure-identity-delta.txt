@@ -1,0 +1,26 @@
+# suite: replay
+# base identities: 15
+# candidate identities: 12
+
+== introduced identities ==
+replay | ReplayMigrationIntegrationTest | v30AllowsNullAttemptIdButKeepsTheForeignKey() | failure | java.lang.IllegalStateException | java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+replay | ReplayMigrationIntegrationTest | v30AppliesOnAV20UpgradedDatabase() | failure | java.lang.IllegalStateException | java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+
+== resolved identities ==
+replay | ReplayMigrationIntegrationTest | v21AllowsNullAttemptIdButKeepsTheForeignKey() | failure | java.lang.IllegalStateException | java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+replay | ReplayMigrationIntegrationTest | v21AppliesOnAV20UpgradedDatabase() | failure | java.lang.IllegalStateException | java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+replay | XrspsProcessLaunchDiagnosticsTest | resolvedNodeProcessBuilderAndKernelLaunchesShareTheSameWindowsPaths() | failure | java.io.IOException | java.io.IOException: Cannot run program "./gradlew" (in directory "<workspace>/ChromaScape-sc1668-baseline-rerun/."): error=13, Permission denied
+replay | XrspsStartupValidatorTest | parseManifestPreservesSecurityAndCapabilityFields() | failure | org.opentest4j.AssertionFailedError | org.opentest4j.AssertionFailedError: expected: java.lang.String@<hex><XRSPS_AUTHORITATIVE> but was: com.chromascape.web.replay.capability.CapabilityManifest$Fidelity@44485db<XRSPS_AUTHORITATIVE>
+replay | XrspsStartupValidatorTest | verifyVersionsRejectsForbiddenCapabilitiesInsteadOfMaskingThem() | failure | org.opentest4j.AssertionFailedError | org.opentest4j.AssertionFailedError: expected: <true> but was: <false>
+
+== unchanged identities ==
+replay | ReplayMigrationIntegrationTest | freshHibernateManagedTablesConvergeAfterFlywayAndRemainStableOnRepeatStartup() | failure | java.lang.IllegalStateException | java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+replay | ReplayMigrationIntegrationTest | replayChainThroughV31AppliesOnEmptyDatabase() | failure | java.lang.IllegalStateException | java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+replay | ReplayMigrationIntegrationTest | v19AcceptsNewColumnOnlyState() | failure | java.lang.IllegalStateException | java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+replay | ReplayMigrationIntegrationTest | v19BackfillsAndDropsWhenBothColumnsHoldEqualValues() | failure | java.lang.IllegalStateException | java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+replay | ReplayMigrationIntegrationTest | v19ConvergesFromOldColumnOnlyState() | failure | java.lang.IllegalStateException | java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+replay | ReplayMigrationIntegrationTest | v19RejectsConflictingOldAndNewChecksums() | failure | java.lang.IllegalStateException | java.lang.IllegalStateException: Could not find a valid Docker environment. Please see logs and check configuration
+replay | ReplayMigrationIntegrationTest | v31CreatesPlaybackIndexesWhenDebuggerTablesExist() | failure | java.lang.IllegalStateException | java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+replay | ReplayPlaybackCatalogRepositoryIntegrationTest | initializationError | failure | java.lang.IllegalStateException | java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+replay | ReplayPlaybackParityIntegrationTest | initializationError | failure | java.lang.IllegalStateException | java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+replay | ReplayPostgresIntegrationTest | initializationError | failure | java.lang.IllegalStateException | java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
