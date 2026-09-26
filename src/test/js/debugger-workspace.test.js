@@ -107,6 +107,9 @@ test('clicking Live from Runs shows the live canvas without clearing session log
   const preferences = new Map();
   const context = vm.createContext({
     console,
+    URLSearchParams,
+    location: { pathname: "/debugger", search: "", hash: "" },
+    history: { replaceState() {} },
     localStorage: { getItem: key => preferences.get(key), setItem: (key, value) => preferences.set(key, value) },
     fetch: async (url, options) => { signals.push({ url, enabled: JSON.parse(options.body).enabled }); return { ok: true }; },
     document: {
