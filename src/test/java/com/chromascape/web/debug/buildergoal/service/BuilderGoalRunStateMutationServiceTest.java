@@ -359,7 +359,8 @@ class BuilderGoalRunStateMutationServiceTest {
     Map<String, Object> metadata =
         objectMapper.convertValue(iteration.getTaskMetadataJson(), Map.class);
     publishMetadata(metadata).put("published_at", LocalDateTime.now().minusMinutes(1).toString());
-    publishMetadata(metadata).put("stop_requested_at", LocalDateTime.now().minusSeconds(5).toString());
+    publishMetadata(metadata)
+        .put("stop_requested_at", LocalDateTime.now().minusSeconds(5).toString());
     iteration.setTaskMetadataJson(objectMapper.valueToTree(metadata));
     when(iterationRepository.findByIterationIdForUpdate("bg_stopped_missing0001"))
         .thenReturn(Optional.of(iteration));

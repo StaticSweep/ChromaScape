@@ -1121,10 +1121,7 @@ class BuilderGoalRunnerServiceTest {
     iteration.setTaskMetadataJson(
         objectMapper.valueToTree(
             Map.of(
-                "display_name",
-                "Glassblowing",
-                "micro6_publish",
-                Map.of("status", "CANCELLED"))));
+                "display_name", "Glassblowing", "micro6_publish", Map.of("status", "CANCELLED"))));
     when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
             BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
         .thenReturn(java.util.List.of(iteration));
@@ -1194,8 +1191,10 @@ class BuilderGoalRunnerServiceTest {
     iteration.setTaskMetadataJson(
         objectMapper.valueToTree(
             Map.of(
-                "display_name", "Glassblowing",
-                "micro6_publish", Map.of("status", "PUBLISH_FAILED"))));
+                "display_name",
+                "Glassblowing",
+                "micro6_publish",
+                Map.of("status", "PUBLISH_FAILED"))));
     when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
             BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
         .thenReturn(java.util.List.of(iteration));
@@ -2017,10 +2016,14 @@ class BuilderGoalRunnerServiceTest {
     assertThat(response.get("settings"))
         .isEqualTo(
             Map.of(
-                "stopCondition", "Level Target",
-                "stopConditionValue", 5,
-                "budgetLevel", 50,
-                "preferredActivity", "Glass"));
+                "stopCondition",
+                "Level Target",
+                "stopConditionValue",
+                5,
+                "budgetLevel",
+                50,
+                "preferredActivity",
+                "Glass"));
   }
 
   @Test
@@ -2070,13 +2073,7 @@ class BuilderGoalRunnerServiceTest {
 
     Map<String, Object> response =
         service.publishOnly(
-            "1111111111111111",
-            "machine-1",
-            "PROGRESSIVE_CRAFTING",
-            settings,
-            360,
-            false,
-            null);
+            "1111111111111111", "machine-1", "PROGRESSIVE_CRAFTING", settings, 360, false, null);
 
     assertThat(response.get("accepted")).isEqualTo(true);
     assertThat(response.get("published")).isEqualTo(true);
@@ -2085,19 +2082,29 @@ class BuilderGoalRunnerServiceTest {
     assertThat(metadataCaptor.getValue().get("settings"))
         .isEqualTo(
             Map.of(
-                "stopCondition", "Level Target",
-                "stopConditionValue", 5,
-                "budgetLevel", 50,
-                "preferredActivity", "Glass"));
+                "stopCondition",
+                "Level Target",
+                "stopConditionValue",
+                5,
+                "budgetLevel",
+                50,
+                "preferredActivity",
+                "Glass"));
   }
 
-  private JsonNode craftingCatalog(String taskKey, String displayName, boolean declaresTargetLevel) {
+  private JsonNode craftingCatalog(
+      String taskKey, String displayName, boolean declaresTargetLevel) {
     JsonNode catalog = runnableCatalog(taskKey, displayName, null);
     com.fasterxml.jackson.databind.node.ArrayNode fields =
         (com.fasterxml.jackson.databind.node.ArrayNode)
             catalog.path("tasks").get(0).path("args_schema").path("fields");
     if (declaresTargetLevel) {
-      fields.addObject().put("key", "targetLevel").put("type", "integer").put("min", 1).put("max", 99);
+      fields
+          .addObject()
+          .put("key", "targetLevel")
+          .put("type", "integer")
+          .put("min", 1)
+          .put("max", 99);
       return catalog;
     }
     fields
@@ -2106,8 +2113,18 @@ class BuilderGoalRunnerServiceTest {
         .put("type", "select")
         .putArray("options")
         .add("Level Target");
-    fields.addObject().put("key", "stopConditionValue").put("type", "integer").put("min", 1).put("max", 99);
-    fields.addObject().put("key", "budgetLevel").put("type", "integer").put("min", 0).put("max", 100);
+    fields
+        .addObject()
+        .put("key", "stopConditionValue")
+        .put("type", "integer")
+        .put("min", 1)
+        .put("max", 99);
+    fields
+        .addObject()
+        .put("key", "budgetLevel")
+        .put("type", "integer")
+        .put("min", 0)
+        .put("max", 100);
     fields
         .addObject()
         .put("key", "preferredActivity")

@@ -69,14 +69,40 @@ class PacketObservationRepositoryIntegrationTest {
 
     List<PacketObservation> unfiltered =
         repository.searchPacketsPageOrdered(
-            "session-1", null, 0L, 100L, null, null, null, null, null,
-            null, null, null, null, null, PageRequest.of(0, 20));
+            "session-1",
+            null,
+            0L,
+            100L,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            PageRequest.of(0, 20));
     assertEquals(1, unfiltered.size());
 
     List<PacketObservation> filtered =
         repository.searchPacketsPageOrdered(
-            "session-1", null, 0L, 100L, null, "npc_update", null, null, "movement",
-            null, null, null, null, null, PageRequest.of(0, 20));
+            "session-1",
+            null,
+            0L,
+            100L,
+            null,
+            "npc_update",
+            null,
+            null,
+            "movement",
+            null,
+            null,
+            null,
+            null,
+            null,
+            PageRequest.of(0, 20));
     assertEquals(1, filtered.size());
   }
 }

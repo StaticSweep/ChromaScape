@@ -52,6 +52,7 @@ public class Micro6TargetRelaunchService {
    * rather than stalling a launch indefinitely.
    */
   private static final long GRACEFUL_TERMINATION_WAIT_MS = 3_000L;
+
   private static final long FORCE_TERMINATION_WAIT_MS = 2_000L;
   private static final long OWNED_TREE_SETTLE_MS = 1_500L;
 
@@ -64,6 +65,7 @@ public class Micro6TargetRelaunchService {
 
   /** Delay before retrying the native netstat fallback after an indeterminate listener probe. */
   private static final long PORT_PROBE_FALLBACK_RETRY_DELAY_MS = 750L;
+
   private static final String FAILURE_KIND_BUILD_OUTPUT_LOCK = "BUILD_OUTPUT_LOCK";
   private static final String FAILURE_KIND_PROCESS_EXITED = "PROCESS_EXITED";
   private static final String FAILURE_KIND_GRADLE_TASK_FAILED = "GRADLE_TASK_FAILED";

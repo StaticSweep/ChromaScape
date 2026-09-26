@@ -325,7 +325,8 @@ public class RecordingService implements FrameListener {
           boolean largeEnough = width >= minWidth && height >= minHeight;
           long stableNanos = System.nanoTime() - candidateFirstSeenNanos;
           if (largeEnough && stableNanos >= TimeUnit.MILLISECONDS.toNanos(stabilityWindowMs)) {
-            recordingSourceBinding = capturedEvent != null ? capturedEvent.getSourceBinding() : null;
+            recordingSourceBinding =
+                capturedEvent != null ? capturedEvent.getSourceBinding() : null;
             long waitMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
             logger.info(
                 "Stable canvas dimensions {}x{} selected after {} attempts in {} ms "
@@ -1105,7 +1106,8 @@ public class RecordingService implements FrameListener {
    * @return a new image of exactly {@code targetWidth} x {@code targetHeight}
    */
   static BufferedImage fitToRecorderSize(BufferedImage source, int targetWidth, int targetHeight) {
-    BufferedImage target = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_3BYTE_BGR);
+    BufferedImage target =
+        new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_3BYTE_BGR);
     Graphics2D graphics = target.createGraphics();
     try {
       graphics.setRenderingHint(
@@ -1116,8 +1118,7 @@ public class RecordingService implements FrameListener {
 
       double scale =
           Math.min(
-              targetWidth / (double) source.getWidth(),
-              targetHeight / (double) source.getHeight());
+              targetWidth / (double) source.getWidth(), targetHeight / (double) source.getHeight());
       int drawWidth = Math.max(1, (int) Math.round(source.getWidth() * scale));
       int drawHeight = Math.max(1, (int) Math.round(source.getHeight() * scale));
       int drawX = (targetWidth - drawWidth) / 2;

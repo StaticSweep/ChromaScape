@@ -1655,8 +1655,7 @@ public class ScriptExecutionService {
       }
       Object preparation = taskMetadata.get("target_preparation");
       if (preparation instanceof Map<?, ?> preparationMap) {
-        Object value =
-            ((Map<String, Object>) preparationMap).get("local_executor_base_url");
+        Object value = ((Map<String, Object>) preparationMap).get("local_executor_base_url");
         if (value != null && !value.toString().isBlank()) {
           return normalizeBaseUrl(value.toString());
         }
