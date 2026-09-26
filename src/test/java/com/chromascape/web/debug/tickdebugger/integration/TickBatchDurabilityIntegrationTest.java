@@ -464,7 +464,8 @@ class TickBatchDurabilityIntegrationTest {
     first.setActions(List.of());
     first.setPackets(List.of(packetEntry("conflict-source", 1L, 300L, 452L, "DECODED", false)));
     applyChecksum(first);
-    assertEquals("PERSISTED", ingestionService.processTickBatch(first, wireDocument(first)).status());
+    assertEquals(
+        "PERSISTED", ingestionService.processTickBatch(first, wireDocument(first)).status());
 
     TickBatchMessage conflict = strictBatch(sessionId, UUID.randomUUID().toString(), 453L);
     conflict.setSchemaVersion(3);

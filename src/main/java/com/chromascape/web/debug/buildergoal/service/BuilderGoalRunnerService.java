@@ -3865,8 +3865,7 @@ public class BuilderGoalRunnerService {
     return new LinkedHashMap<>(settings);
   }
 
-  private Map<String, Object> normalizeTaskSettings(
-      String taskKey, Map<String, Object> settings) {
+  private Map<String, Object> normalizeTaskSettings(String taskKey, Map<String, Object> settings) {
     Map<String, Object> normalized = normalizeSettings(settings);
     String normalizedTaskKey = normalizeTaskKey(taskKey);
     if (!"fishing_training".equals(normalizedTaskKey)
@@ -3900,8 +3899,8 @@ public class BuilderGoalRunnerService {
   }
 
   /**
-   * Folds legacy level aliases ({@code targetLevel} / {@code target_level}) into the target
-   * task's declared settings schema.
+   * Folds legacy level aliases ({@code targetLevel} / {@code target_level}) into the target task's
+   * declared settings schema.
    *
    * <p>Legacy planner payloads emit both the canonical level field (for example {@code
    * stopConditionValue} on progressive crafting) and one or both aliases. The executor schema
@@ -6045,8 +6044,7 @@ public class BuilderGoalRunnerService {
         taskMetadata != null && taskMetadata.containsKey("advertised_base_url")
             ? taskMetadata
             : readTargetMetadata(taskMetadata);
-    Map<String, Object> targetPreparationMetadata =
-        readTargetPreparationMetadata(taskMetadata);
+    Map<String, Object> targetPreparationMetadata = readTargetPreparationMetadata(taskMetadata);
     String value =
         firstNonBlank(
             stringValue(targetMetadata.get("local_executor_base_url")),

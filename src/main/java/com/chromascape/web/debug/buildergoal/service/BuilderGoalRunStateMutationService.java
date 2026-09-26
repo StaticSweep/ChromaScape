@@ -763,7 +763,8 @@ public class BuilderGoalRunStateMutationService {
     // otherwise never record a start, which leaves the evidence window anchored before the run and
     // clips away the very logs the recovery workspace needs. Preserve any existing value.
     if (iteration.getRunStartTime() == null && isTaskStarted(statusResult)) {
-      LocalDateTime startedAt = parseLocalDateTime(stringValue(taskMetadata.get("task_started_at")));
+      LocalDateTime startedAt =
+          parseLocalDateTime(stringValue(taskMetadata.get("task_started_at")));
       iteration.setRunStartTime(startedAt != null ? startedAt : observed);
       metadataChanged = true;
     }
