@@ -1,7 +1,9 @@
 ---
 schema_version: 1
+felix_note_id: note_1790390816183_d850dc17
+synced_at: 2026-09-26T02:47:28.294707+00:00
 offline_record_id: offline-sc1813-impl-evidence-20260925T192632Z
-sync_status: conflict
+sync_status: synced
 project: C:\Dev\IdeaProjects\ChromaScape
 posix_checkout: /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-fedora-03
 micro6_checkout: /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/micro6-sc1618-fedora
@@ -121,3 +123,8 @@ Pending.
 ## Recovery audit 2026-09-26
 
 Felix is available. This historical payload conflicts with the newer authoritative SC-1813 Architecture/API notes and Implementation Evidence (note_1790374737868_5ad93394). The original plan uses 900 KiB and a narrower wire envelope; current Felix requires capability/session-stream validation and 768000-byte bounds. The old implementation evidence is superseded and must not mark present acceptance items complete. Preserved both versions; no overwrite or workflow transition performed. Reconcile this conflict before completing outbox replay.
+
+
+## Completed recovery 2026-09-26
+
+Reused task task_1790373482776_czm675c9j. Historical note note_1790390816183_d850dc17 preserves this payload with explicit supersession by the current specification; no authoritative content overwritten and no historical test claim used to check current acceptance. Scope Definition completed; Felix reached spec_ready and in_progress through real transitions. Shortcut state is In Progress, planned marker comment 1814 and started marker comment 1815 succeeded. All recorded note operations replayed; remaining implementation/live evidence stays on the active task.

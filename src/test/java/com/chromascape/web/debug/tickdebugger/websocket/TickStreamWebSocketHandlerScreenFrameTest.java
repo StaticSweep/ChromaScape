@@ -70,11 +70,11 @@ class TickStreamWebSocketHandlerScreenFrameTest {
         wsSession, new TextMessage(frameJson("debug_1", streamId("debug_1"), 7, framePixels())));
 
     verify(viewport)
-        .publishFrame(
-            org.mockito.ArgumentMatchers.argThat(
-                image -> image != null && image.getWidth() == 16 && image.getHeight() == 12),
+        .publishEncodedFrame(
+            any(byte[].class),
             org.mockito.ArgumentMatchers.eq(16),
-            org.mockito.ArgumentMatchers.eq(12));
+            org.mockito.ArgumentMatchers.eq(12),
+            any());
     assertEquals(1, metrics().getForwarded());
     assertEquals(0, metrics().getDroppedInvalid());
     assertEquals("debug_1", metrics().getLastSessionId());
@@ -90,7 +90,7 @@ class TickStreamWebSocketHandlerScreenFrameTest {
         wsSession, new TextMessage(frameJson("debug_1", "stream-x", 1, framePixels())));
 
     assertError("SESSION_NOT_BOUND");
-    verify(viewport, never()).publishFrame(any(), any(int.class), any(int.class));
+    verify(viewport, never()).publishEncodedFrame(any(), any(int.class), any(int.class), any());
     assertEquals(1, metrics().getDroppedInvalid());
   }
 
@@ -103,7 +103,7 @@ class TickStreamWebSocketHandlerScreenFrameTest {
         wsSession, new TextMessage(frameJson("debug_2", streamId("debug_1"), 1, framePixels())));
 
     assertError("SESSION_ID_MISMATCH");
-    verify(viewport, never()).publishFrame(any(), any(int.class), any(int.class));
+    verify(viewport, never()).publishEncodedFrame(any(), any(int.class), any(int.class), any());
   }
 
   @Test
@@ -121,7 +121,7 @@ class TickStreamWebSocketHandlerScreenFrameTest {
     handler.handleTextMessage(wsSession, new TextMessage(raw));
 
     assertError("SESSION_ID_MISMATCH");
-    verify(viewport, never()).publishFrame(any(), any(int.class), any(int.class));
+    verify(viewport, never()).publishEncodedFrame(any(), any(int.class), any(int.class), any());
   }
 
   @Test
@@ -133,7 +133,7 @@ class TickStreamWebSocketHandlerScreenFrameTest {
         wsSession, new TextMessage(frameJson("debug_1", "dead-stream", 1, framePixels())));
 
     assertError("STREAM_ID_MISMATCH");
-    verify(viewport, never()).publishFrame(any(), any(int.class), any(int.class));
+    verify(viewport, never()).publishEncodedFrame(any(), any(int.class), any(int.class), any());
   }
 
   @Test
@@ -150,7 +150,7 @@ class TickStreamWebSocketHandlerScreenFrameTest {
     handler.handleTextMessage(wsSession, new TextMessage(raw));
 
     assertError("STREAM_ID_MISMATCH");
-    verify(viewport, never()).publishFrame(any(), any(int.class), any(int.class));
+    verify(viewport, never()).publishEncodedFrame(any(), any(int.class), any(int.class), any());
   }
 
   @Test
@@ -158,11 +158,13 @@ class TickStreamWebSocketHandlerScreenFrameTest {
     setup("ws-frame-7");
     bind("debug_1");
 
-    String raw = frameJson("debug_1", streamId("debug_1"), 1, framePixels()).replace("\"schemaVersion\":1", "\"schemaVersion\":2");
+    String raw =
+        frameJson("debug_1", streamId("debug_1"), 1, framePixels())
+            .replace("\"schemaVersion\":1", "\"schemaVersion\":2");
     handler.handleTextMessage(wsSession, new TextMessage(raw));
 
     assertError("FRAME_PAYLOAD_INVALID");
-    verify(viewport, never()).publishFrame(any(), any(int.class), any(int.class));
+    verify(viewport, never()).publishEncodedFrame(any(), any(int.class), any(int.class), any());
   }
 
   @Test
@@ -170,11 +172,13 @@ class TickStreamWebSocketHandlerScreenFrameTest {
     setup("ws-frame-8");
     bind("debug_1");
 
-    String raw = frameJson("debug_1", streamId("debug_1"), 1, framePixels()).replace("image/jpeg", "image/png");
+    String raw =
+        frameJson("debug_1", streamId("debug_1"), 1, framePixels())
+            .replace("image/jpeg", "image/png");
     handler.handleTextMessage(wsSession, new TextMessage(raw));
 
     assertError("FRAME_PAYLOAD_INVALID");
-    verify(viewport, never()).publishFrame(any(), any(int.class), any(int.class));
+    verify(viewport, never()).publishEncodedFrame(any(), any(int.class), any(int.class), any());
   }
 
   @Test
@@ -183,10 +187,12 @@ class TickStreamWebSocketHandlerScreenFrameTest {
     bind("debug_1");
     String stream = streamId("debug_1");
 
-    handler.handleTextMessage(wsSession, new TextMessage(frameJson("debug_1", stream, 7, framePixels())));
-    handler.handleTextMessage(wsSession, new TextMessage(frameJson("debug_1", stream, 7, framePixels())));
+    handler.handleTextMessage(
+        wsSession, new TextMessage(frameJson("debug_1", stream, 7, framePixels())));
+    handler.handleTextMessage(
+        wsSession, new TextMessage(frameJson("debug_1", stream, 7, framePixels())));
 
-    verify(viewport, times(1)).publishFrame(any(), any(int.class), any(int.class));
+    verify(viewport, times(1)).publishEncodedFrame(any(), any(int.class), any(int.class), any());
     assertEquals(1, metrics().getForwarded());
     assertEquals(1, metrics().getDroppedInvalid());
     assertEquals("FRAME_STALE", metrics().getLastRejection());
@@ -198,10 +204,12 @@ class TickStreamWebSocketHandlerScreenFrameTest {
     bind("debug_1");
     String stream = streamId("debug_1");
 
-    handler.handleTextMessage(wsSession, new TextMessage(frameJson("debug_1", stream, 9, framePixels())));
-    handler.handleTextMessage(wsSession, new TextMessage(frameJson("debug_1", stream, 8, framePixels())));
+    handler.handleTextMessage(
+        wsSession, new TextMessage(frameJson("debug_1", stream, 9, framePixels())));
+    handler.handleTextMessage(
+        wsSession, new TextMessage(frameJson("debug_1", stream, 8, framePixels())));
 
-    verify(viewport, times(1)).publishFrame(any(), any(int.class), any(int.class));
+    verify(viewport, times(1)).publishEncodedFrame(any(), any(int.class), any(int.class), any());
     assertEquals("FRAME_STALE", metrics().getLastRejection());
   }
 
@@ -211,11 +219,10 @@ class TickStreamWebSocketHandlerScreenFrameTest {
     bind("debug_1");
 
     handler.handleTextMessage(
-        wsSession,
-        new TextMessage(frameJson("debug_1", streamId("debug_1"), 1, "!!!nope!!!")));
+        wsSession, new TextMessage(frameJson("debug_1", streamId("debug_1"), 1, "!!!nope!!!")));
 
     assertError("FRAME_DECODE_FAILED");
-    verify(viewport, never()).publishFrame(any(), any(int.class), any(int.class));
+    verify(viewport, never()).publishEncodedFrame(any(), any(int.class), any(int.class), any());
   }
 
   @Test
@@ -228,7 +235,7 @@ class TickStreamWebSocketHandlerScreenFrameTest {
         new TextMessage(frameJson("debug_1", streamId("debug_1"), 1, "A".repeat(1_200_001))));
 
     assertError("FRAME_TOO_LARGE");
-    verify(viewport, never()).publishFrame(any(), any(int.class), any(int.class));
+    verify(viewport, never()).publishEncodedFrame(any(), any(int.class), any(int.class), any());
   }
 
   @Test
@@ -242,7 +249,7 @@ class TickStreamWebSocketHandlerScreenFrameTest {
     handler.handleTextMessage(wsSession, new TextMessage(raw));
 
     assertError("FRAME_DIMENSION_MISMATCH");
-    verify(viewport, never()).publishFrame(any(), any(int.class), any(int.class));
+    verify(viewport, never()).publishEncodedFrame(any(), any(int.class), any(int.class), any());
   }
 
   @Test
@@ -255,7 +262,7 @@ class TickStreamWebSocketHandlerScreenFrameTest {
       handler.handleTextMessage(
           wsSession, new TextMessage(frameJson("debug_1", streamId("debug_1"), 1, framePixels())));
 
-      verify(viewport, never()).publishFrame(any(), any(int.class), any(int.class));
+      verify(viewport, never()).publishEncodedFrame(any(), any(int.class), any(int.class), any());
       assertEquals(1, metrics().getDroppedAttached());
       assertEquals("ATTACHED_SOURCE_WINS", metrics().getLastRejection());
     } finally {
@@ -273,7 +280,7 @@ class TickStreamWebSocketHandlerScreenFrameTest {
       handler.handleTextMessage(
           wsSession, new TextMessage(frameJson("debug_1", streamId("debug_1"), 1, framePixels())));
 
-      verify(viewport, never()).publishFrame(any(), any(int.class), any(int.class));
+      verify(viewport, never()).publishEncodedFrame(any(), any(int.class), any(int.class), any());
       assertEquals(1, metrics().getDroppedDesktopWatch());
       assertEquals("DESKTOP_WATCH_WINS", metrics().getLastRejection());
     } finally {
@@ -288,12 +295,13 @@ class TickStreamWebSocketHandlerScreenFrameTest {
     String stream = streamId("debug_1");
 
     handler.handleTextMessage(
-        wsSession, new TextMessage("{\"type\":\"SESSION_STOP\",\"sessionId\":\"debug_1\",\"endTick\":10}"));
+        wsSession,
+        new TextMessage("{\"type\":\"SESSION_STOP\",\"sessionId\":\"debug_1\",\"endTick\":10}"));
     handler.handleTextMessage(
         wsSession, new TextMessage(frameJson("debug_1", stream, 2, framePixels())));
 
     assertError("SESSION_NOT_BOUND");
-    verify(viewport, never()).publishFrame(any(), any(int.class), any(int.class));
+    verify(viewport, never()).publishEncodedFrame(any(), any(int.class), any(int.class), any());
   }
 
   @Test
@@ -303,7 +311,8 @@ class TickStreamWebSocketHandlerScreenFrameTest {
     String oldStream = streamId("debug_1");
 
     handler.handleTextMessage(
-        wsSession, new TextMessage("{\"type\":\"SESSION_STOP\",\"sessionId\":\"debug_1\",\"endTick\":10}"));
+        wsSession,
+        new TextMessage("{\"type\":\"SESSION_STOP\",\"sessionId\":\"debug_1\",\"endTick\":10}"));
     bind("debug_1");
     String newStream = streamId("debug_1");
     assertNotEquals(oldStream, newStream);
@@ -312,7 +321,146 @@ class TickStreamWebSocketHandlerScreenFrameTest {
         wsSession, new TextMessage(frameJson("debug_1", oldStream, 1, framePixels())));
 
     assertError("STREAM_ID_MISMATCH");
-    verify(viewport, never()).publishFrame(any(), any(int.class), any(int.class));
+    verify(viewport, never()).publishEncodedFrame(any(), any(int.class), any(int.class), any());
+  }
+
+  @Test
+  void stoppedSessionCannotPublishAlreadyDecodedPixels() throws Exception {
+    setup("stop-race");
+    bind("debug_1");
+    java.util.List<java.util.function.Consumer<Runnable>> guards = new java.util.ArrayList<>();
+    org.mockito.Mockito.doAnswer(
+            call -> {
+              guards.add(call.getArgument(3));
+              return true;
+            })
+        .when(viewport)
+        .publishEncodedFrame(any(), any(int.class), any(int.class), any());
+    handler.handleTextMessage(
+        wsSession, new TextMessage(frameJson("debug_1", streamId("debug_1"), 1, framePixels())));
+    handler.handleTextMessage(
+        wsSession,
+        new TextMessage("{\"type\":\"SESSION_STOP\",\"sessionId\":\"debug_1\",\"endTick\":10}"));
+    guards
+        .get(0)
+        .accept(
+            () -> {
+              throw new AssertionError("Stale frame published");
+            });
+    assertEquals(0, metrics().getForwarded());
+    assertEquals("WAITING_FOR_SESSION", metrics().getFeedState());
+  }
+
+  @Test
+  void rateAndDisableBoundFrameWork() throws Exception {
+    setup("rate");
+    bind("debug_1");
+    String stream = streamId("debug_1");
+    handler.handleTextMessage(
+        wsSession, new TextMessage(frameJson("debug_1", stream, 1, framePixels())));
+    handler.handleTextMessage(
+        wsSession, new TextMessage(frameJson("debug_1", stream, 2, framePixels())));
+    assertEquals("FRAME_RATE_LIMITED", metrics().getLastRejection());
+    handler.broadcastFeedControl(false);
+    handler.handleTextMessage(
+        wsSession, new TextMessage(frameJson("debug_1", stream, 3, framePixels())));
+    assertEquals("DISABLED", metrics().getFeedState());
+    assertEquals(1, metrics().getForwarded());
+  }
+
+  @Test
+  void sourceSelectedAfterDecodePreventsClientBroadcast() throws Exception {
+    setup("source-race");
+    bind("debug_1");
+    java.util.List<java.util.function.Consumer<Runnable>> guards = new java.util.ArrayList<>();
+    org.mockito.Mockito.doAnswer(
+            call -> {
+              guards.add(call.getArgument(3));
+              return true;
+            })
+        .when(viewport)
+        .publishEncodedFrame(any(), any(int.class), any(int.class), any());
+    handler.handleTextMessage(
+        wsSession, new TextMessage(frameJson("debug_1", streamId("debug_1"), 1, framePixels())));
+    StubWatch watch = new StubWatch();
+    TargetFrameRuntime.installViewOnly(watch);
+    try {
+      guards
+          .get(0)
+          .accept(
+              () -> {
+                throw new AssertionError("Wrong source published");
+              });
+    } finally {
+      TargetFrameRuntime.uninstall(watch);
+    }
+    assertEquals(1, metrics().getDroppedDesktopWatch());
+  }
+
+  @Test
+  void reconnectRotatesScreenCapabilityAndRejectsOldSocket() throws Exception {
+    setup("original");
+    bind("debug_1");
+    String old = streamId("debug_1");
+    handler.afterConnectionClosed(wsSession, org.springframework.web.socket.CloseStatus.NORMAL);
+    assertEquals("WAITING_FOR_SESSION", metrics().getFeedState());
+    WebSocketSession prior = wsSession;
+    wsSession = mock(WebSocketSession.class);
+    when(wsSession.getId()).thenReturn("replacement");
+    bind("debug_1");
+    assertNotEquals(old, streamId("debug_1"));
+    handler.handleTextMessage(prior, new TextMessage(frameJson("debug_1", old, 1, framePixels())));
+    assertEquals(0, metrics().getForwarded());
+    handler.shutdownReconnectScheduler();
+  }
+
+  @Test
+  void hugeJpegMetadataIsRejectedBeforeRasterAllocation() throws Exception {
+    setup("jpeg-bomb");
+    bind("debug_1");
+    byte[] jpeg = Base64.getDecoder().decode(framePixels());
+    for (int i = 0; i < jpeg.length - 9; i++) {
+      if ((jpeg[i] & 255) == 255 && ((jpeg[i + 1] & 255) == 192 || (jpeg[i + 1] & 255) == 194)) {
+        // Valid JPEG dimensions, but a raster far above the negotiated bound.
+        jpeg[i + 5] = jpeg[i + 7] = 0x7d;
+        jpeg[i + 6] = jpeg[i + 8] = 0;
+        break;
+      }
+    }
+    handler.handleTextMessage(
+        wsSession,
+        new TextMessage(
+            frameJson(
+                "debug_1", streamId("debug_1"), 1, Base64.getEncoder().encodeToString(jpeg))));
+    assertError("FRAME_DIMENSION_MISMATCH");
+    assertEquals(0, metrics().getForwarded());
+  }
+
+  @Test
+  void validFramesWithoutViewerAreIdleRatherThanBroken() throws Exception {
+    setup("no-viewer");
+    bind("debug_1");
+    org.mockito.Mockito.doReturn(false)
+        .when(viewport)
+        .publishEncodedFrame(any(), any(int.class), any(int.class), any());
+    handler.handleTextMessage(
+        wsSession, new TextMessage(frameJson("debug_1", streamId("debug_1"), 1, framePixels())));
+    assertEquals("IDLE_NO_SUBSCRIBERS", metrics().getFeedState());
+    assertEquals(0, metrics().getForwarded());
+  }
+
+  @Test
+  void negotiatedCapabilityMatchesSharedFixture() throws Exception {
+    setup("contract");
+    bind("debug_1");
+    var fixture =
+        objectMapper.readTree(getClass().getResourceAsStream("/contracts/screen-frame-v1.json"));
+    ArgumentCaptor<TextMessage> messages = ArgumentCaptor.forClass(TextMessage.class);
+    verify(wsSession, atLeastOnce()).sendMessage(messages.capture());
+    var capability =
+        objectMapper.readTree(messages.getAllValues().get(0).getPayload()).get("screenFrame");
+    for (String field : List.of("version", "maxJpegBytes", "maxLongEdge", "maxFps", "enabled"))
+      assertEquals(fixture.get(field), capability.get(field));
   }
 
   private void setup(String wsId) {
@@ -328,6 +476,16 @@ class TickStreamWebSocketHandlerScreenFrameTest {
         new TickStreamWebSocketHandler(
             objectMapper, sessionService, ingestionService, debuggerHandler, shadowDecisionService);
     ReflectionTestUtils.setField(handler, "clientFrameViewport", viewport);
+    ReflectionTestUtils.setField(
+        handler, "frameExecutor", (java.util.concurrent.Executor) Runnable::run);
+    org.mockito.Mockito.doAnswer(
+            call -> {
+              java.util.function.Consumer<Runnable> guard = call.getArgument(3);
+              guard.accept(() -> {});
+              return true;
+            })
+        .when(viewport)
+        .publishEncodedFrame(any(), any(int.class), any(int.class), any());
   }
 
   private void bind(String sessionId) throws Exception {

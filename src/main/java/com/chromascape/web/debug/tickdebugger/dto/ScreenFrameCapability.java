@@ -28,10 +28,19 @@ public class ScreenFrameCapability {
   @JsonProperty("maxFps")
   private int maxFps;
 
+  private boolean enabled = true;
+
+  public boolean isEnabled() {
+    return enabled;
+  }
+
+  public void setEnabled(boolean enabled) {
+    this.enabled = enabled;
+  }
+
   public ScreenFrameCapability() {}
 
-  public ScreenFrameCapability(
-      String streamId, int maxJpegBytes, int maxLongEdge, int maxFps) {
+  public ScreenFrameCapability(String streamId, int maxJpegBytes, int maxLongEdge, int maxFps) {
     this.version = 1;
     this.streamId = streamId;
     this.maxJpegBytes = maxJpegBytes;

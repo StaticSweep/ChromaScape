@@ -20,6 +20,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class ObserveService {
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private com.chromascape.web.debug.tickdebugger.service.ClientFrameMetrics clientFrames;
 
   private static final Logger logger = LogManager.getLogger(ObserveService.class);
 
@@ -106,6 +108,25 @@ public class ObserveService {
   /** Returns the current watch state for the debugger UI. */
   public synchronized Map<String, Object> status() {
     Map<String, Object> body = new LinkedHashMap<>();
+    if (clientFrames != null)
+      body.put(
+          "clientFrames",
+          Map.of(
+              "state",
+              clientFrames.getFeedState(),
+              "source",
+              clientFrames.getLastSource(),
+              "ageMillis",
+              clientFrames.getLastForwardAgeMillis(),
+              "received",
+              clientFrames.getReceived(),
+              "forwarded",
+              clientFrames.getForwarded(),
+              "dropped",
+              clientFrames.getDroppedInvalid(),
+              "lastRejection",
+              java.util.Objects.toString(clientFrames.getLastRejection(), "")));
+
     if (active == null) {
       body.put("state", "IDLE");
       return body;

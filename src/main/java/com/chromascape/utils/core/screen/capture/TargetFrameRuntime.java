@@ -13,7 +13,7 @@ public final class TargetFrameRuntime {
   private TargetFrameRuntime() {}
 
   /** Installs a source, refusing to replace an active attachment silently. */
-  public static void install(TargetFrameSource source) {
+  public static synchronized void install(TargetFrameSource source) {
     if (source == null) {
       throw new IllegalArgumentException("Frame source must not be null");
     }
@@ -47,7 +47,7 @@ public final class TargetFrameRuntime {
    * <p>Refuses when any source is already active, so observation can never steal an attachment. A
    * later real input session preempts the view-only source via {@link #install(TargetFrameSource)}.
    */
-  public static void installViewOnly(ViewOnlyFrameSource source) {
+  public static synchronized void installViewOnly(ViewOnlyFrameSource source) {
     if (source == null) {
       throw new IllegalArgumentException("Frame source must not be null");
     }
@@ -62,7 +62,7 @@ public final class TargetFrameRuntime {
   }
 
   /** Removes exactly the supplied source; a later replacement can never be cleared accidentally. */
-  public static void uninstall(TargetFrameSource source) {
+  public static synchronized void uninstall(TargetFrameSource source) {
     if (source != null) {
       ACTIVE.compareAndSet(source, null);
     }

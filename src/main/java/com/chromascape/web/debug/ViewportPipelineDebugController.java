@@ -112,8 +112,7 @@ public class ViewportPipelineDebugController {
                     clientFrameMetrics.getLastRejection() == null
                         ? "none"
                         : clientFrameMetrics.getLastRejection()),
-                Map.entry(
-                    "lastForwardedAtMillis", clientFrameMetrics.getLastForwardedAtMillis())));
+                Map.entry("lastForwardedAtMillis", clientFrameMetrics.getLastForwardedAtMillis())));
 
     return ResponseEntity.ok(payload);
   }

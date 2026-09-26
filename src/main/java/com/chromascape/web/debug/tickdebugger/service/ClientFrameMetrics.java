@@ -14,6 +14,24 @@ import org.springframework.stereotype.Component;
 @Component
 public class ClientFrameMetrics {
 
+  private volatile boolean activeSession;
+
+  public void sessionStarted(String id) {
+    activeSession = true;
+    lastSessionId.set(id);
+    lastDecision.set("WAITING");
+  }
+
+  public void sessionEnded(String id) {
+    if (id.equals(lastSessionId.get())) activeSession = false;
+  }
+
+  private volatile boolean enabled = true;
+
+  public void setEnabled(boolean enabled) {
+    this.enabled = enabled;
+  }
+
   private final AtomicLong received = new AtomicLong(0);
   private final AtomicLong forwarded = new AtomicLong(0);
   private final AtomicLong droppedAttached = new AtomicLong(0);
@@ -28,6 +46,12 @@ public class ClientFrameMetrics {
 
   public void countReceived() {
     received.incrementAndGet();
+  }
+
+  public void countNoSubscribers() {
+    lastDecisionAtMillis.set(System.currentTimeMillis());
+    lastDecision.set("NO_SUBSCRIBERS");
+    lastSource.set("client");
   }
 
   public void countForwarded(int width, int height) {
@@ -68,21 +92,19 @@ public class ClientFrameMetrics {
     lastDecision.set("REJECTED");
   }
 
-  /**
-   * Feed state for Observe: {@code WAITING_FOR_SESSION} before any frame arrives, {@code ACTIVE}
-   * while forwards are recent, {@code STALE} when the feed went quiet, {@code REJECTED} when the
-   * latest decision was a rejection. A client-side {@code DISABLED} feed manifests here as {@code
-   * STALE} after the quiet timeout: the server never sees a disabled feed, it only sees frames
-   * stop arriving.
-   */
+  /** Current feed state; receiving without viewers is distinct from a silent sender. */
   public String getFeedState() {
-    if (received.get() == 0) {
+    if (!enabled) return "DISABLED";
+    if (!activeSession || "WAITING".equals(lastDecision.get()) || received.get() == 0) {
       return "WAITING_FOR_SESSION";
     }
-    if ("FORWARDED".equals(lastDecision.get())) {
-      return System.currentTimeMillis() - lastForwardedAtMillis.get() <= 5_000
-          ? "ACTIVE"
+    if ("NO_SUBSCRIBERS".equals(lastDecision.get())) {
+      return System.currentTimeMillis() - lastDecisionAtMillis.get() <= 5_000
+          ? "IDLE_NO_SUBSCRIBERS"
           : "STALE";
+    }
+    if ("FORWARDED".equals(lastDecision.get())) {
+      return System.currentTimeMillis() - lastForwardedAtMillis.get() <= 5_000 ? "ACTIVE" : "STALE";
     }
     return "REJECTED";
   }

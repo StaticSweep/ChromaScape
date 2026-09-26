@@ -9298,17 +9298,24 @@ async function initDesktopWatchControls() {
     await setDesktopWatching(!desktopWatching);
   });
 
-  // Sync the toggle with the server state on load.
-  try {
-    const response = await fetch('/api/observe/status');
-    if (response.ok) {
-      const status = await response.json();
-      desktopWatching = status && status.state === 'ACTIVE';
-      updateDesktopWatchUi();
-    }
-  } catch (error) {
-    console.warn('Failed to sync desktop watch state:', error);
+  async function refreshFrameStatus() {
+    try {
+      const response = await fetch('/api/observe/status');
+      if (response.ok) {
+        const status = await response.json();
+        desktopWatching = status && status.state === 'ACTIVE';
+        updateDesktopWatchUi();
+        const label = document.getElementById('clientFrameStatus');
+        const frames = status.clientFrames;
+        if (label && frames) {
+          label.textContent = desktopWatching ? 'Viewport: desktop' : `Viewport: ${frames.state.toLowerCase().replaceAll('_', ' ')}`;
+          label.title = `${frames.forwarded} forwarded / ${frames.received} received; age ${frames.ageMillis} ms`;
+        }
+      }
+    } catch (error) { console.warn('Failed to sync viewport state:', error); }
   }
+  await refreshFrameStatus();
+  setInterval(refreshFrameStatus, 2000);
 }
 
 function updateDesktopWatchUi() {

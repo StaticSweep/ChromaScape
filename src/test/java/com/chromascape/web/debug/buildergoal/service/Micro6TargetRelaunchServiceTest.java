@@ -367,7 +367,7 @@ class Micro6TargetRelaunchServiceTest {
 
   /**
    * Creates a project whose fake {@code launch-buildergoal-client.sh} adapter answers the
-   * contract-v2 preflights ({@code --contract-version}, {@code --validate-only}, {@code
+   * contract-v3 preflights ({@code --contract-version}, {@code --validate-only}, {@code
    * --compile-only}) and otherwise spawns a long-lived foreground child and a backgrounded
    * descendant (writing both PIDs to {@code pids.txt}), then writes {@code started.marker}. The
    * launcher tree stays alive so cancellation boundaries can be exercised.
@@ -379,7 +379,7 @@ class Micro6TargetRelaunchServiceTest {
         launcher,
         "#!/bin/bash\n"
             + "if [ \"$1\" = \"--contract-version\" ]; then\n"
-            + "  echo '{\"contract_version\":2,\"validate_only\":true,\"compile_only\":true,\"run_task\":\":client:runBuilderGoal\",\"prepare_task\":\":client:prepareBuilderGoal\"}'\n"
+            + "  echo '{\"contract_version\":3,\"validate_only\":true,\"compile_only\":true,\"run_task\":\":client:runBuilderGoal\",\"prepare_task\":\":client:prepareBuilderGoal\",\"authoritative_run_task\":\":client:runBuilderGoalAuthoritative\",\"source_mode_env\":\"MICRO6_SOURCE_MODE\",\"source_modes\":[\"disabled\",\"authoritative\"]}'\n"
             + "  exit 0\n"
             + "fi\n"
             + "if [ \"$1\" = \"--validate-only\" ] || [ \"$1\" = \"--compile-only\" ]; then\n"
@@ -401,20 +401,18 @@ class Micro6TargetRelaunchServiceTest {
    * backgrounded descendant PID are recorded in {@code pids.txt}.
    */
   private Path createFatalMarkerLauncherProject(String name) throws Exception {
-    Path project = createProjectDir(name);
-    Path wrapper = project.resolve("gradlew");
-    Files.writeString(
-        wrapper,
-        "#!/bin/bash\n"
-            + "sleep 600 &\n"
-            + "echo \"$$ $!\" > pids.txt\n"
-            + "echo \"[Micro6Executor] refusing startup: running packaged artifact identity is unavailable\"\n"
-            + "echo \"[AccountBuilderPlugin] Local builder executor did not start: \"\n"
-            + "echo \"source_startup_failed:running packaged artifact identity is unavailable\"\n"
-            + "touch started.marker\n"
-            + "sleep 600\n",
-        StandardCharsets.UTF_8);
-    wrapper.toFile().setExecutable(true, false);
+    Path project = createFakeLauncherProject(name);
+    Path wrapper = project.resolve("launch-buildergoal-client.sh");
+    String script =
+        Files.readString(wrapper)
+            .replace(
+                "touch started.marker",
+                "echo '[Micro6Executor] refusing startup: running packaged artifact identity is unavailable'\n"
+                    + "echo '[AccountBuilderPlugin] Local builder executor did not start:'\n"
+                    + "echo 'source_startup_failed:running packaged artifact identity is unavailable'\n"
+                    + "touch started.marker");
+    Files.writeString(wrapper, script);
+
     return project;
   }
 
