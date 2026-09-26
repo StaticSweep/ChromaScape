@@ -805,8 +805,8 @@ public class WindowHandler {
 
   /**
    * Collapses runs of whitespace (and trims) so client titles with irregular spacing — for example
-   * {@code "-  RuneLite"} or {@code "RuneLite  -  Account"} — are classified like their
-   * single-spaced equivalents.
+   * {@code "- RuneLite"} or {@code "RuneLite - Account"} — are classified like their single-spaced
+   * equivalents.
    */
   private static String normalizeWhitespace(String value) {
     return value == null ? null : value.trim().replaceAll("\\s+", " ");

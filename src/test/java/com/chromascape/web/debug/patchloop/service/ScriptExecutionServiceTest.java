@@ -252,7 +252,8 @@ class ScriptExecutionServiceTest {
     when(executeResponse.body()).thenReturn(acceptedBody(1001, "FISHING_TRAINING"));
     when(statusResponse.statusCode()).thenReturn(200);
     when(statusResponse.body())
-        .thenReturn("{\"status\":\"COMPLETED\",\"entry_id\":1001,\"task_key\":\"FISHING_TRAINING\"}");
+        .thenReturn(
+            "{\"status\":\"COMPLETED\",\"entry_id\":1001,\"task_key\":\"FISHING_TRAINING\"}");
     when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
         .thenReturn(executeResponse, statusResponse);
 

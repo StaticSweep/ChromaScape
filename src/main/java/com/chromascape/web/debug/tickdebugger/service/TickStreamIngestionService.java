@@ -1014,7 +1014,8 @@ public class TickStreamIngestionService {
                 statement.setInt(12, row.getEncodedSize());
                 statement.setString(13, row.getDecodedType());
                 statement.setString(
-                    14, row.getDecodedPayload() == null ? null : row.getDecodedPayload().toString());
+                    14,
+                    row.getDecodedPayload() == null ? null : row.getDecodedPayload().toString());
                 statement.setBytes(15, row.getSanitizedPayload());
                 statement.setString(16, row.getDecodeStatus());
                 statement.setString(17, row.getDecodeError());
