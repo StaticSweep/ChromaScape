@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.worker.ReplayWorkerLifecycleTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:31:37.937Z" hostname="fedora" time="0.36">
+  <properties/>
+  <testcase name="closeWaitsForAnInFlightPollBeforeShuttingDown()" classname="com.chromascape.web.replay.worker.ReplayWorkerLifecycleTest" time="0.115"/>
+  <testcase name="closeWaitsForAnInFlightLeaseRecoveryBeforeShuttingDown()" classname="com.chromascape.web.replay.worker.ReplayWorkerLifecycleTest" time="0.235"/>
+  <testcase name="closeAndPreDestroyAreIdempotentAndLeaveNoExecutorThreads()" classname="com.chromascape.web.replay.worker.ReplayWorkerLifecycleTest" time="0.006"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

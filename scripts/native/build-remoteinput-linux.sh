@@ -366,7 +366,11 @@ validate_artifact() { # $1 = .so path
   local exported
   exported="$(nm -D --defined-only "$so" | awk '{print $3}')"
   for sym in "${REQUIRED_SYMBOLS[@]}"; do
-    if ! printf '%s\n' "$exported" | grep -qx "$sym"; then
+    # Membership check uses a herestring, not `printf ... | grep -qx`: under `set -o pipefail`
+    # that pipeline races — `grep -q` exits after the first match while the writing printf is
+    # still filling the pipe, the writer dies with SIGPIPE (rc 141), and pipefail reports the
+    # present symbol as missing. A herestring has no pipe, so grep's early exit is harmless.
+    if ! grep -qx -- "$sym" <<<"$exported"; then
       printf '[sc-1662] ERROR: required symbol missing: %s\n' "$sym" >&2
       missing=$((missing + 1))
     fi

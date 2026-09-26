@@ -31,6 +31,7 @@ public final class NativeCallExecutor implements AutoCloseable {
             return thread;
           });
   private final AtomicBoolean poisoned = new AtomicBoolean();
+  private final AtomicBoolean closed = new AtomicBoolean();
   private final ProcessIdentity identity;
   private final long generation;
 
@@ -66,7 +67,10 @@ public final class NativeCallExecutor implements AutoCloseable {
     }
     Future<T> future = executor.submit(operation);
     try {
-      return future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+      // Nanosecond precision: a caller that has already computed a small remaining budget (for
+      // example a fraction of a millisecond before a total attachment deadline) must not have that
+      // budget truncated to 0ms and be reported as a timeout before the call has a chance to run.
+      return future.get(timeout.toNanos(), TimeUnit.NANOSECONDS);
     } catch (TimeoutException e) {
       poisoned.set(true);
       future.cancel(true);
@@ -98,13 +102,20 @@ public final class NativeCallExecutor implements AutoCloseable {
     }
   }
 
-  /** Returns whether the lane timed out and can no longer be used. */
+  /**
+   * Returns whether the lane timed out and can no longer be used.
+   *
+   * <p>A lane that was closed deliberately after all native work completed is <b>not</b> poisoned:
+   * {@code close()} shuts the lane down without a timeout, so callers that ask after a normal
+   * session close must not be told a native release is still outstanding.
+   */
   public boolean isPoisoned() {
-    return poisoned.get();
+    return poisoned.get() && !closed.get();
   }
 
   @Override
   public void close() {
+    closed.set(true);
     poisoned.set(true);
     executor.shutdownNow();
   }

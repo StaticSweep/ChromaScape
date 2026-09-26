@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.prototype.FishingPreflightServiceTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:21.605Z" hostname="fedora" time="0.101">
+  <properties/>
+  <testcase name="unchanged fishing XP is reported" classname="com.chromascape.web.aiplayer.prototype.FishingPreflightServiceTest" time="0.086"/>
+  <testcase name="unsupported gameplay actions are reported" classname="com.chromascape.web.aiplayer.prototype.FishingPreflightServiceTest" time="0.001"/>
+  <testcase name="recording not found returns a structured 404" classname="com.chromascape.web.aiplayer.prototype.FishingPreflightServiceTest" time="0.001"/>
+  <testcase name="action without a snapshot is reported" classname="com.chromascape.web.aiplayer.prototype.FishingPreflightServiceTest" time="0.001"/>
+  <testcase name="an active or non-finalized session is not ready" classname="com.chromascape.web.aiplayer.prototype.FishingPreflightServiceTest" time="0.001"/>
+  <testcase name="fewer or more than five catches are reported" classname="com.chromascape.web.aiplayer.prototype.FishingPreflightServiceTest" time="0.001"/>
+  <testcase name="action queue overflow is reported" classname="com.chromascape.web.aiplayer.prototype.FishingPreflightServiceTest" time="0.001"/>
+  <testcase name="missing NPC telemetry is reported" classname="com.chromascape.web.aiplayer.prototype.FishingPreflightServiceTest" time="0.001"/>
+  <testcase name="no fishing actions are reported" classname="com.chromascape.web.aiplayer.prototype.FishingPreflightServiceTest" time="0.002"/>
+  <testcase name="a clean five-catch recording is ready" classname="com.chromascape.web.aiplayer.prototype.FishingPreflightServiceTest" time="0.001"/>
+  <testcase name="missing snapshots are reported" classname="com.chromascape.web.aiplayer.prototype.FishingPreflightServiceTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

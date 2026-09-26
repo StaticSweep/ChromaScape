@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.catalog.ReplayPreflightFidelityTest" tests="20" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:15.941Z" hostname="fedora" time="1.267">
+  <properties/>
+  <testcase name="missingWorldIdentityBlocksSimulation()" classname="com.chromascape.web.replay.catalog.ReplayPreflightFidelityTest" time="0.893"/>
+  <testcase name="causalPostWithoutCurationVersionIsBlocked()" classname="com.chromascape.web.replay.catalog.ReplayPreflightFidelityTest" time="0.021"/>
+  <testcase name="duplicateTargetAtTheActionTickBlocksPostPreflight()" classname="com.chromascape.web.replay.catalog.ReplayPreflightFidelityTest" time="0.198"/>
+  <testcase name="inventoryItemsWithoutExplicitSlotsBlockSimulation()" classname="com.chromascape.web.replay.catalog.ReplayPreflightFidelityTest" time="0.007"/>
+  <testcase name="duplicatedTickRowsBlockPostPreflightEvenWhenCountsMatch()" classname="com.chromascape.web.replay.catalog.ReplayPreflightFidelityTest" time="0.005"/>
+  <testcase name="tickGapsBlockSimulation()" classname="com.chromascape.web.replay.catalog.ReplayPreflightFidelityTest" time="0.001"/>
+  <testcase name="explicitlyIgnoredActionsAreDroppedAndDoNotBlock()" classname="com.chromascape.web.replay.catalog.ReplayPreflightFidelityTest" time="0.002"/>
+  <testcase name="initialNpcWithUnsupportedSpotTypeBlocksPostPreflight()" classname="com.chromascape.web.replay.catalog.ReplayPreflightFidelityTest" time="0.003"/>
+  <testcase name="wrongCurationVersionIsABlockNotASilentSubstitute()" classname="com.chromascape.web.replay.catalog.ReplayPreflightFidelityTest" time="0.003"/>
+  <testcase name="missingEquipmentCaptureBlocksSimulation()" classname="com.chromascape.web.replay.catalog.ReplayPreflightFidelityTest" time="0.002"/>
+  <testcase name="foreignCurationIsBlockedEvenWhenPublishedForAnotherSession()" classname="com.chromascape.web.replay.catalog.ReplayPreflightFidelityTest" time="0.003"/>
+  <testcase name="malformedEquipmentBlocksPostPreflight()" classname="com.chromascape.web.replay.catalog.ReplayPreflightFidelityTest" time="0.003"/>
+  <testcase name="completeEvidenceRemainsEligible()" classname="com.chromascape.web.replay.catalog.ReplayPreflightFidelityTest" time="0.002"/>
+  <testcase name="npcsWithoutNumericIdOrPositionBlockSimulation()" classname="com.chromascape.web.replay.catalog.ReplayPreflightFidelityTest" time="0.002"/>
+  <testcase name="nullSchemaVersionBlocksSimulation()" classname="com.chromascape.web.replay.catalog.ReplayPreflightFidelityTest" time="0.002"/>
+  <testcase name="unsupportedAndUnknownActionStatusesBlockWhileIgnoredIsDropped()" classname="com.chromascape.web.replay.catalog.ReplayPreflightFidelityTest" time="0.006"/>
+  <testcase name="unsupportedSchemaVersionBlocksSimulation()" classname="com.chromascape.web.replay.catalog.ReplayPreflightFidelityTest" time="0.002"/>
+  <testcase name="actionWithoutSnapshotAtItsOwnTickBlocksPostPreflight()" classname="com.chromascape.web.replay.catalog.ReplayPreflightFidelityTest" time="0.003"/>
+  <testcase name="unpublishedCurationIsBlocked()" classname="com.chromascape.web.replay.catalog.ReplayPreflightFidelityTest" time="0.034"/>
+  <testcase name="curatedOptionMismatchingRecordedSpotTypeBlocksPostPreflight()" classname="com.chromascape.web.replay.catalog.ReplayPreflightFidelityTest" time="0.017"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.viewport.service.ScreenCaptureServiceTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:53.939Z" hostname="fedora" time="0.25">
+  <properties/>
+  <testcase name="viewportSessionLifecycleRegistersUnifiedCaptureOnlyForFirstAndLastViewer()" classname="com.chromascape.web.viewport.service.ScreenCaptureServiceTest" time="0.049"/>
+  <testcase name="onFrameCapturedThrottlesViewportForwarding()" classname="com.chromascape.web.viewport.service.ScreenCaptureServiceTest" time="0.199"/>
+  <system-out><![CDATA[19:30:53.983 [Test worker] INFO  com.chromascape.web.viewport.service.ScreenCaptureService - Registering ScreenCaptureService with unified capture at 30 FPS (viewport target: 15 FPS)
+19:30:53.987 [Test worker] INFO  com.chromascape.web.viewport.service.ScreenCaptureService - Unregistering ScreenCaptureService from unified capture
+19:30:54.178 [Test worker] INFO  com.chromascape.web.viewport.service.ScreenCaptureService - Registering ScreenCaptureService with unified capture at 30 FPS (viewport target: 15 FPS)
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

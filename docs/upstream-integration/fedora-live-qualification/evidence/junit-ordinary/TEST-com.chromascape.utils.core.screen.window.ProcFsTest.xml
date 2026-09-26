@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.screen.window.ProcFsTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:13.882Z" hostname="fedora" time="2.408">
+  <properties/>
+  <testcase name="readCmdlineRejectsMaxFileBytesPlusOne()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.002"/>
+  <testcase name="readCmdlineReturnsNullDelimitedBytesAndEmptyForMissingPid()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.002"/>
+  <testcase name="listPidDirectoriesRetainsTheSmallestPidsDeterministically()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="2.374"/>
+  <testcase name="statParsingHandlesCommasAndSpacesInsideTheCommField()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.002"/>
+  <testcase name="readCmdlineFailsForDirectoryEntry()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.002"/>
+  <testcase name="listPidDirsOnMissingRootIsEmpty()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.001"/>
+  <testcase name="bootIdIsTrimmedWhenPresentAndEmptyWhenAbsent()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.002"/>
+  <testcase name="listPidDirsReturnsSortedNumericDirsOnly()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.002"/>
+  <testcase name="readStartTimeTicksAndUptimeIsEmptyForDisappearingPid()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.002"/>
+  <testcase name="readStartTimeTicksAndUptimeIsEmptyForMalformedStatOrMissingUptime()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.002"/>
+  <testcase name="readExeTargetResolvesSymlinkAndIsEmptyWhenAbsent()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.001"/>
+  <testcase name="realProcfsZeroSizeFilesAreStillReadBounded()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.002"/>
+  <testcase name="readStartTimeTicksAndUptimeParsesStatField22AndUptime()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.002"/>
+  <testcase name="listPidDirectoriesReportsNoTruncationUnderTheCap()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.001"/>
+  <testcase name="invalidUtf8StaysBoundedAndNeverEscapesAsDiagnostics()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.003"/>
+  <testcase name="readCmdlineAcceptsExactlyMaxFileBytes()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.001"/>
+  <testcase name="readCmdlineIsEmptyForADisappearingEntry()" classname="com.chromascape.utils.core.screen.window.ProcFsTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

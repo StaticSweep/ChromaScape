@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.patchloop.graph.PatchLoopGraphExecutorTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:28:35.062Z" hostname="fedora" time="0.605">
+  <properties/>
+  <testcase name="Cancel execution when not paused still sets CANCELLED status" classname="com.chromascape.web.debug.patchloop.graph.PatchLoopGraphExecutorTest" time="0.599"/>
+  <testcase name="Cancel execution sets CANCELLED status and clears pause state" classname="com.chromascape.web.debug.patchloop.graph.PatchLoopGraphExecutorTest" time="0.001"/>
+  <testcase name="Execution status transitions through lifecycle states" classname="com.chromascape.web.debug.patchloop.graph.PatchLoopGraphExecutorTest" time="0.001"/>
+  <testcase name="Snapshot restore with typed rehydration for PatchProposal" classname="com.chromascape.web.debug.patchloop.graph.PatchLoopGraphExecutorTest" time="0.003"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

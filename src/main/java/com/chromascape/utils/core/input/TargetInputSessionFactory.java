@@ -8,6 +8,7 @@ import com.chromascape.utils.core.input.remoteinput.RemoteInputAttachmentCoordin
 import com.chromascape.utils.core.input.remoteinput.RemoteInputBindingProvider;
 import com.chromascape.utils.core.input.remoteinput.RemoteInputDiagnostic;
 import com.chromascape.utils.core.input.remoteinput.RemoteInputInterface;
+import com.chromascape.utils.core.input.remoteinput.RemoteInputProperties;
 import com.chromascape.utils.core.input.remoteinput.RemoteInputSession;
 import com.chromascape.utils.core.input.remoteinput.RemoteInputSessionOptions;
 import com.chromascape.utils.core.input.remoteinput.SelectionFencing;
@@ -19,7 +20,6 @@ import com.chromascape.utils.core.screen.window.WindowInfo;
 import com.chromascape.utils.core.screen.window.WindowSelectionService;
 import java.awt.Rectangle;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /** Explicit, side-effect-free input-session factory for the selected target. */
@@ -44,15 +44,25 @@ public final class TargetInputSessionFactory {
   private final RemoteInputSessionOptions options;
   private final KinputBackendFactory kinputBackends;
 
-  /** Creates the production factory. */
+  /**
+   * Creates the production factory from the typed {@code chromascape.remoteinput} configuration.
+   * The properties bean has already been range-validated at startup, so exactly one validated
+   * {@link RemoteInputSessionOptions} is built here and reused for every session.
+   */
   @Autowired
   public TargetInputSessionFactory(
       TargetDiscoveryService discovery,
       WindowSelectionService selection,
       ProcessManagerFactory processManagers,
       RemoteInputBindingProvider bindingProvider,
-      @Value("${chromascape.remoteinput.attachment-enabled:false}") boolean enabled) {
-    this(discovery, selection, processManagers, bindingProvider, optionsFor(enabled), Kinput::new);
+      RemoteInputProperties properties) {
+    this(
+        discovery,
+        selection,
+        processManagers,
+        bindingProvider,
+        properties.toSessionOptions(),
+        Kinput::new);
   }
 
   /** Creates a factory with injected options and Windows backend for tests. */
@@ -70,18 +80,6 @@ public final class TargetInputSessionFactory {
     this.coordinator = PROCESS_ATTACHMENTS;
     this.options = options;
     this.kinputBackends = kinputBackends;
-  }
-
-  private static RemoteInputSessionOptions optionsFor(boolean enabled) {
-    RemoteInputSessionOptions defaults = RemoteInputSessionOptions.DEFAULT;
-    return new RemoteInputSessionOptions(
-        enabled,
-        defaults.injectTimeout(),
-        defaults.pairTimeout(),
-        defaults.nativeCallTimeout(),
-        defaults.releaseTimeout(),
-        defaults.validationInterval(),
-        defaults.maxClients());
   }
 
   /** Opens one fenced session for the explicit current selection. */

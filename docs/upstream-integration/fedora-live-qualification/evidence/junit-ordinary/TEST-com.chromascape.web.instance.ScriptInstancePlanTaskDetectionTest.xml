@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.instance.ScriptInstancePlanTaskDetectionTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:29:48.535Z" hostname="fedora" time="0.011">
+  <properties/>
+  <testcase name="dispatch_withBlankPlanId_routesToHeuristicDetection()" classname="com.chromascape.web.instance.ScriptInstancePlanTaskDetectionTest" time="0.008"/>
+  <testcase name="dispatch_withoutPlanId_routesToHeuristicDetection()" classname="com.chromascape.web.instance.ScriptInstancePlanTaskDetectionTest" time="0.002"/>
+  <testcase name="dispatch_withPlanId_routesToPlanTaskDetection()" classname="com.chromascape.web.instance.ScriptInstancePlanTaskDetectionTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

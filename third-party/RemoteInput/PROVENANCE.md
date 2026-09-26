@@ -63,9 +63,33 @@ Identity was verified at import time against the pinned commit:
 
 ## Local modifications
 
-**None.** Every imported file is byte-identical to the pinned commit. No local patch has been
-applied to the vendored sources. If a patch becomes necessary, it must be added here with its
-reason and identity before it is used in a build.
+One documented Linux-only local patch is applied. Every other imported file is byte-identical to the
+pinned commit.
+
+| Item | Value |
+|---|---|
+| Changed path | `third-party/RemoteInput/RemoteInput/Platform/Platform_Linux.cxx` |
+| Patch identity | `sha256:a640b72cc3c84f6e55984f4f3ca5d78485561b93f429456983513114da2f2a69` |
+| Declaration | `docs/upstream-integration/fedora-live-qualification/evidence/native-patch-declaration.json` |
+
+Reason: on Fedora/XWayland a RuneLite client owns several windows that share the recognised
+`net-runelite-client-RuneLite` WM_CLASS (a splash window and the real client frame). The pinned
+`EnumWindowsProc` stopped at the first match and returned that window, so `awt_GetComponent` /
+`Reflection::Create` could be driven against a window with no AWT Canvas, the reflection returned
+null, and no `ControlCenter` rendezvous was created. The patch:
+
+- collects every recognised target-owned window and never stops the enumeration at the first match;
+- orders candidates deterministically (non-`_NET_WM_STATE_SKIP_TASKBAR` windows first);
+- tries every candidate until `Reflection::Create` succeeds, so the real frame is selected;
+- releases the JNI local reference of every rejected candidate (a window that is not a
+  `java.awt.Frame`, or one for which `Reflection::Create` returned null) before the next
+  candidate/retry, so the bounded reflection probe cannot leak local references across its
+  100 ms retries; `Reflection::Create()` creates its own global reference, so the caller's local
+  reference is safe to release as soon as `Create` returns;
+- adds opt-in, bounded stage diagnostics on the detached constructor thread only, gated by
+  `REMOTEINPUT_ATTACH_DIAGNOSTICS=1`.
+
+Windows behaviour is untouched: `Platform_Windows.cxx` keeps its own `EnumWindowsProc`.
 
 Files added by this story (not part of the import): `PROVENANCE.md` and
 `import-manifest.sha256`.

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Malformed payload" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:48.822Z" hostname="fedora" time="0.004">
+  <properties/>
+  <testcase name="throws on non-JSON response body on 2xx" classname="com.chromascape.web.simulator.SimulatorReplayControlServiceTest$MalformedPayload" time="0.004"/>
+  <system-out><![CDATA[19:30:48.824 [Test worker] INFO  com.chromascape.web.simulator.SimulatorReplayControlService - SimulatorReplayControlService initialized - enabled: false, url: http://127.0.0.1:8095
+19:30:48.824 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'httpClient' of type [null] on target object [com.chromascape.web.simulator.SimulatorReplayControlService@25671809] or target class [class com.chromascape.web.simulator.SimulatorReplayControlService] to value [httpClient]
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

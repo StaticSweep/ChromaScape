@@ -91,6 +91,135 @@ assert_contains "$env_output" 'code=CONFIG_LOADED' 'environment parser is non-ex
 assert_contains "$env_output" 'code=CONFIG_KEY_UNSUPPORTED' 'environment parser rejects shell control variables'
 SC1667_ERRORS=0
 
+# Duplicate keys are rejected regardless of value agreement. Each case runs the parser in
+# a subshell so the assertions can inspect the resulting variable, the error count, and the
+# diagnostics without leaking state between cases. Values are deliberately recognisable
+# secrets-shaped strings so the output can be proven not to contain them.
+run_duplicate_case() {
+    local fixture="$1" key="$2"
+    # The parser must run in the same shell as the counter it increments, so its output
+    # is captured through a file rather than a command substitution.
+    bash -c '
+        source "$1"
+        unset "$3"
+        sc1667_load_env_file "$2" > "$2.out"
+        printf "%s\n---\nerrors=%s\nvalue=%s\n" "$(< "$2.out")" "$SC1667_ERRORS" "${!3:-<unset>}"
+    ' bash "$FEDORA_DIR/lib/preflight.sh" "$fixture" "$key"
+}
+
+assert_secret_free() {
+    local text="$1" name="$2"
+    shift 2
+    local secret
+    for secret in "$@"; do
+        [[ "$text" != *"$secret"* ]] || fail "$name (printed a configuration value)"
+    done
+    pass "$name"
+}
+
+DUP_EQUAL="$ROOT/env.dup-equal"
+printf 'CHROMASCAPE_DUP_A=secret-equal-1\nSERVER_PORT=8090\nCHROMASCAPE_DUP_A=secret-equal-1\n' > "$DUP_EQUAL"
+dup_equal_output="$(run_duplicate_case "$DUP_EQUAL" CHROMASCAPE_DUP_A)"
+assert_contains "$dup_equal_output" 'code=CONFIG_DUPLICATE_KEY' 'duplicate key with equal values is rejected'
+assert_contains "$dup_equal_output" 'line 3 repeats key CHROMASCAPE_DUP_A first defined on line 1' 'duplicate diagnostic names both lines'
+assert_contains "$dup_equal_output" 'errors=1' 'duplicate equal values count as a configuration error'
+assert_secret_free "${dup_equal_output%%---*}" 'duplicate equal-value diagnostics print no values' 'secret-equal-1'
+
+DUP_CONFLICT="$ROOT/env.dup-conflict"
+printf 'CHROMASCAPE_DUP_B=secret-first-2\nCHROMASCAPE_DUP_B=secret-second-2\n' > "$DUP_CONFLICT"
+dup_conflict_output="$(run_duplicate_case "$DUP_CONFLICT" CHROMASCAPE_DUP_B)"
+assert_contains "$dup_conflict_output" 'code=CONFIG_DUPLICATE_KEY' 'duplicate key with conflicting values is rejected'
+assert_contains "$dup_conflict_output" 'value=secret-first-2' 'later conflicting value is never applied'
+assert_secret_free "${dup_conflict_output%%---*}" 'duplicate conflicting diagnostics print no values' 'secret-first-2' 'secret-second-2'
+
+DUP_EMPTY="$ROOT/env.dup-empty"
+printf 'CHROMASCAPE_DUP_C=\nCHROMASCAPE_DUP_C=secret-later-3\n' > "$DUP_EMPTY"
+dup_empty_output="$(run_duplicate_case "$DUP_EMPTY" CHROMASCAPE_DUP_C)"
+assert_contains "$dup_empty_output" 'code=CONFIG_DUPLICATE_KEY' 'duplicate key with empty then non-empty value is rejected'
+[[ "$dup_empty_output" != *'value=secret-later-3'* ]] || fail "empty-then-non-empty duplicate applied the later value"
+pass 'empty-then-non-empty duplicate never applies the later value'
+assert_secret_free "${dup_empty_output%%---*}" 'duplicate empty-first diagnostics print no values' 'secret-later-3'
+
+DUP_QUOTED="$ROOT/env.dup-quoted"
+printf 'CHROMASCAPE_DUP_D="secret-quoted-4"\nCHROMASCAPE_DUP_D=secret-quoted-4\n' > "$DUP_QUOTED"
+dup_quoted_output="$(run_duplicate_case "$DUP_QUOTED" CHROMASCAPE_DUP_D)"
+assert_contains "$dup_quoted_output" 'code=CONFIG_DUPLICATE_KEY' 'quoted and unquoted duplicate is rejected'
+assert_contains "$dup_quoted_output" 'errors=1' 'quoted/unquoted duplicate counts exactly once'
+assert_secret_free "${dup_quoted_output%%---*}" 'duplicate quoted diagnostics print no values' 'secret-quoted-4'
+
+# External environment precedence is unchanged by duplicate detection: an exported
+# non-empty variable still wins over the file even when the file also repeats the key.
+DUP_PRECEDENCE="$ROOT/env.dup-precedence"
+printf 'CHROMASCAPE_DUP_E=file-1\nCHROMASCAPE_DUP_E=file-2\n' > "$DUP_PRECEDENCE"
+dup_precedence_value="$(
+    bash -c '
+        source "$1"
+        export CHROMASCAPE_DUP_E=environment-wins
+        sc1667_load_env_file "$2" >/dev/null
+        printf "%s" "$CHROMASCAPE_DUP_E"
+    ' bash "$FEDORA_DIR/lib/preflight.sh" "$DUP_PRECEDENCE"
+)"
+[[ "$dup_precedence_value" == environment-wins ]] || fail "duplicate detection changed environment precedence"
+pass 'exported environment still overrides a file with duplicate keys'
+
+# A duplicate in .env.fedora.local must stop the wrapper before any command runs.
+DUP_PROJECT="$ROOT/dup-project"
+mkdir -p "$DUP_PROJECT/scripts"
+cp -a "$FEDORA_DIR" "$DUP_PROJECT/scripts/fedora"
+printf 'CHROMASCAPE_REMOTEINPUT_ATTACHMENT_ENABLED=false\nCHROMASCAPE_REMOTEINPUT_ATTACHMENT_ENABLED=true\n' \
+    > "$DUP_PROJECT/.env.fedora.local"
+set +e
+dup_startup_output="$("$DUP_PROJECT/scripts/fedora/chromascape-fedora.sh" status 2>&1)"
+dup_startup_exit=$?
+set -e
+[[ "$dup_startup_exit" -eq 2 ]] || fail "wrapper started with a duplicate key in .env.fedora.local (exit $dup_startup_exit)"
+assert_contains "$dup_startup_output" 'code=CONFIG_DUPLICATE_KEY' 'duplicate machine-local key fails startup closed'
+[[ "$dup_startup_output" != *'SC1667_LIFECYCLE'* ]] || fail "wrapper reached a lifecycle command despite a parser failure"
+pass 'parser failure prevents any lifecycle command'
+
+# MCP_AUTO_START defaults to false only when the operator left it unset; explicit
+# values are preserved verbatim and the wrapper never overwrites them.
+mcp_default_output="$(
+    bash -c '
+        source "$1"
+        unset MCP_AUTO_START
+        set_fedora_runtime_defaults
+        printf "%s" "${MCP_AUTO_START:-<unset>}"
+    ' bash "$FEDORA_DIR/chromascape-fedora.sh"
+)"
+[[ "$mcp_default_output" == false ]] || fail "unset MCP_AUTO_START did not default to false (got $mcp_default_output)"
+pass 'unset MCP_AUTO_START defaults to false'
+
+for mcp_explicit in true false; do
+    mcp_explicit_output="$(
+        bash -c '
+            source "$1"
+            export MCP_AUTO_START="$2"
+            set_fedora_runtime_defaults
+            set_fedora_runtime_defaults
+            printf "%s" "$MCP_AUTO_START"
+        ' bash "$FEDORA_DIR/chromascape-fedora.sh" "$mcp_explicit"
+    )"
+    [[ "$mcp_explicit_output" == "$mcp_explicit" ]] || \
+        fail "explicit MCP_AUTO_START=$mcp_explicit was overwritten (got $mcp_explicit_output)"
+    pass "explicit MCP_AUTO_START=$mcp_explicit is preserved and never overwritten"
+done
+
+# An operator value supplied through .env.fedora.local also survives the defaults pass.
+MCP_ENV="$ROOT/env.mcp"
+printf 'MCP_AUTO_START=true\n' > "$MCP_ENV"
+mcp_file_output="$(
+    bash -c '
+        source "$1"
+        unset MCP_AUTO_START
+        sc1667_load_env_file "$2" >/dev/null
+        set_fedora_runtime_defaults
+        printf "%s|%s" "${MCP_AUTO_START:-<unset>}" "$SC1667_ERRORS"
+    ' bash "$FEDORA_DIR/chromascape-fedora.sh" "$MCP_ENV"
+)"
+[[ "$mcp_file_output" == 'true|0' ]] || fail "MCP_AUTO_START from the local file was not honoured (got $mcp_file_output)"
+pass 'MCP_AUTO_START from .env.fedora.local overrides the wrapper default'
+
 defaults_output="$(
     bash -c '
         source "$1"
@@ -232,5 +361,69 @@ flock -u 8
 grep -Fq '9>&- >> "$LOG_FILE"' "$FEDORA_DIR/chromascape-fedora.sh" || \
     fail "bootRun child would inherit the lifecycle lock descriptor"
 pass 'bootRun child cannot retain the lifecycle lock descriptor'
+
+# --- Development profile and qualification-harness defaults (SC-1668 phase 4) --------------
+# The wrapper defaults the development profile and a disabled qualification harness, and must
+# never overwrite an operator-supplied value. Each case runs in its own bash -c subshell because
+# the wrapper enables `set -euo pipefail` when sourced.
+wrapper_env() {
+    bash -c '
+        source "$1"
+        set_fedora_runtime_defaults
+        printf "profile=%s\nqualification=%s\ncapture=%s\n" \
+            "${SPRING_PROFILES_ACTIVE:-<unset>}" \
+            "${CHROMASCAPE_QUALIFICATION_ENABLED:-<unset>}" \
+            "${CHROMASCAPE_QUALIFICATION_CAPTURE_DIR:-<unset>}"
+    ' bash "$FEDORA_DIR/chromascape-fedora.sh"
+}
+
+default_wrapper_env="$(env -u SPRING_PROFILES_ACTIVE -u CHROMASCAPE_QUALIFICATION_ENABLED \
+    -u CHROMASCAPE_QUALIFICATION_CAPTURE_DIR bash -c '
+        source "$1"
+        set_fedora_runtime_defaults
+        printf "profile=%s\nqualification=%s\ncapture=%s\n" \
+            "${SPRING_PROFILES_ACTIVE:-<unset>}" \
+            "${CHROMASCAPE_QUALIFICATION_ENABLED:-<unset>}" \
+            "${CHROMASCAPE_QUALIFICATION_CAPTURE_DIR:-<unset>}"
+    ' bash "$FEDORA_DIR/chromascape-fedora.sh")"
+assert_contains "$default_wrapper_env" 'profile=local-development' \
+    'wrapper defaults the development profile'
+assert_contains "$default_wrapper_env" 'qualification=false' \
+    'qualification harness stays disabled by default'
+assert_contains "$default_wrapper_env" 'capture=.chromascape/qualification/captures' \
+    'wrapper defaults the capture directory'
+
+preserved_wrapper_env="$(SPRING_PROFILES_ACTIVE=production CHROMASCAPE_QUALIFICATION_ENABLED=true \
+    wrapper_env)"
+assert_contains "$preserved_wrapper_env" 'profile=production' \
+    'operator-supplied profile is never overwritten'
+assert_contains "$preserved_wrapper_env" 'qualification=true' \
+    'operator-supplied qualification opt-in is never overwritten'
+
+# Duplicate profile/qualification keys fail closed like every other machine-local key.
+DUP_PROFILE="$ROOT/env.dup-profile"
+printf 'SPRING_PROFILES_ACTIVE=local-development\nSPRING_PROFILES_ACTIVE=production\n' \
+    > "$DUP_PROFILE"
+dup_profile_output="$(run_duplicate_case "$DUP_PROFILE" SPRING_PROFILES_ACTIVE)"
+assert_contains "$dup_profile_output" 'code=CONFIG_DUPLICATE_KEY' 'duplicate profile key is rejected'
+
+DUP_QUALIFICATION="$ROOT/env.dup-qualification"
+printf 'CHROMASCAPE_QUALIFICATION_ENABLED=true\nCHROMASCAPE_QUALIFICATION_ENABLED=false\n' \
+    > "$DUP_QUALIFICATION"
+dup_qualification_output="$(run_duplicate_case "$DUP_QUALIFICATION" CHROMASCAPE_QUALIFICATION_ENABLED)"
+assert_contains "$dup_qualification_output" 'code=CONFIG_DUPLICATE_KEY' \
+    'duplicate qualification key is rejected'
+
+# An empty value is treated as unset by the parser contract, so the wrapper default applies.
+EMPTY_PROFILE="$ROOT/env.empty-profile"
+printf 'SPRING_PROFILES_ACTIVE=\n' > "$EMPTY_PROFILE"
+empty_profile_env="$(bash -c '
+    source "$1"
+    sc1667_load_env_file "$2" >/dev/null 2>&1 || true
+    set_fedora_runtime_defaults
+    printf "profile=%s\n" "${SPRING_PROFILES_ACTIVE:-<unset>}"
+' bash "$FEDORA_DIR/chromascape-fedora.sh" "$EMPTY_PROFILE")"
+assert_contains "$empty_profile_env" 'profile=local-development' \
+    'empty profile value falls back to the development default'
 
 printf 'SC1667_REGRESSIONS status=PASS cases=%d\n' "$PASS_COUNT"
