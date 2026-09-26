@@ -9272,9 +9272,9 @@ function initDebugSessionControls() {
 function initDebugFeedControls() {
   if (!elements.debugFeedToggleBtn) return;
 
-  const saved = localStorage.getItem(DEBUG_FEED_KEY);
-  debugFeedEnabled = saved === 'true';
-  setDebugFeedEnabled(debugFeedEnabled, true);
+  // Opening an observer must not pause every Micro6 client because this browser has an old
+  // (or absent) preference. Subscribe locally; only an explicit toggle controls the shared feed.
+  setDebugFeedEnabled(true, false);
 
   elements.debugFeedToggleBtn.addEventListener('click', async () => {
     const next = !debugFeedEnabled;
