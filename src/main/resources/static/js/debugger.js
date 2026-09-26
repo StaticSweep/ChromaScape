@@ -58,6 +58,10 @@ let isDebugSessionActive = false;
 let debugFeedEnabled = false;
 const DEBUG_FEED_KEY = 'debugger_debug_feed_enabled';
 
+// Desktop watch state (view-only observation: streams the desktop into the viewport without
+// opening an input session, so a self-driven client can be watched, never steered).
+let desktopWatching = false;
+
 // Session/recording synchronization guards. These prevent duplicate SESSION_CREATED broadcasts
 // and overlapping status generations from resetting the live panel during transport recovery.
 let lastProcessedSessionCreatedKey = null;
@@ -739,6 +743,7 @@ function cacheElements() {
   elements.debugSessionStatus = document.getElementById('debugSessionStatus');
   elements.resetFiltersBtn = document.getElementById('resetFiltersBtn');
   elements.debugFeedToggleBtn = document.getElementById('debugFeedToggleBtn');
+  elements.watchBtn = document.getElementById('watchBtn');
   // Recovery workspace containers
   elements.recoveryRawLogsContainer = document.getElementById('recoveryRawLogsContainer');
   elements.recoveryRawLogsMeta = document.getElementById('recoveryRawLogsMeta');
@@ -9284,6 +9289,61 @@ function initDebugSessionControls() {
 }
 
 /**
+ * Initialize desktop watch toggle (view-only observation of the local desktop).
+ */
+async function initDesktopWatchControls() {
+  if (!elements.watchBtn) return;
+
+  elements.watchBtn.addEventListener('click', async () => {
+    await setDesktopWatching(!desktopWatching);
+  });
+
+  // Sync the toggle with the server state on load.
+  try {
+    const response = await fetch('/api/observe/status');
+    if (response.ok) {
+      const status = await response.json();
+      desktopWatching = status && status.state === 'ACTIVE';
+      updateDesktopWatchUi();
+    }
+  } catch (error) {
+    console.warn('Failed to sync desktop watch state:', error);
+  }
+}
+
+function updateDesktopWatchUi() {
+  if (!elements.watchBtn) return;
+  if (desktopWatching) {
+    elements.watchBtn.classList.remove('btn-outline-secondary');
+    elements.watchBtn.classList.add('btn-outline-info');
+    elements.watchBtn.querySelector('span').textContent = 'Watch: On';
+  } else {
+    elements.watchBtn.classList.remove('btn-outline-info');
+    elements.watchBtn.classList.add('btn-outline-secondary');
+    elements.watchBtn.querySelector('span').textContent = 'Watch: Off';
+  }
+}
+
+async function setDesktopWatching(enabled) {
+  try {
+    const response = await fetch(enabled ? '/api/observe/start' : '/api/observe/stop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    if (!response.ok) {
+      const detail = await response.json().catch(() => ({}));
+      throw new Error(detail.message || `HTTP ${response.status}`);
+    }
+    desktopWatching = enabled;
+    updateDesktopWatchUi();
+  } catch (error) {
+    console.error('Failed to control desktop watch:', error);
+    showNotification('Failed to control desktop watch: ' + error.message, 'error');
+  }
+}
+
+/**
  * Initialize debug feed toggle (pause/resume Micro6 tick feed).
  */
 function initDebugFeedControls() {
@@ -11613,6 +11673,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initRecordingControls(); // Recording controls
   initDebugSessionControls(); // Debug session controls (live mode only)
   initDebugFeedControls(); // Debug feed toggle (pause/resume micro6)
+  initDesktopWatchControls(); // Desktop watch toggle (view-only observation)
   initFishingRecordingLab(); // Recording quality, range, training, and replay workflow
   initFishingShadowAgent(); // Fishing Shadow Agent panel
   initTaskRecordingControls(); // Task recording controls

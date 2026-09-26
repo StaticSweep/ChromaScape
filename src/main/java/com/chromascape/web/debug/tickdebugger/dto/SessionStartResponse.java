@@ -44,6 +44,15 @@ public class SessionStartResponse {
   @JsonInclude(JsonInclude.Include.NON_NULL)
   private String clientRequestId;
 
+  /**
+   * Optional screen-frame capability. Present when the server accepts client-pushed {@code
+   * SCREEN_FRAME} messages for this session; absent for older clients, which must treat screen
+   * frames as disabled.
+   */
+  @JsonProperty("screenFrame")
+  @JsonInclude(JsonInclude.Include.NON_NULL)
+  private ScreenFrameCapability screenFrame;
+
   public SessionStartResponse() {}
 
   public SessionStartResponse(
@@ -140,5 +149,13 @@ public class SessionStartResponse {
 
   public void setShadowRunId(String shadowRunId) {
     this.shadowRunId = shadowRunId;
+  }
+
+  public ScreenFrameCapability getScreenFrame() {
+    return screenFrame;
+  }
+
+  public void setScreenFrame(ScreenFrameCapability screenFrame) {
+    this.screenFrame = screenFrame;
   }
 }

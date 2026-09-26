@@ -1,6 +1,7 @@
 package com.chromascape.web.debug;
 
 import com.chromascape.utils.core.screen.FrameSourceBinding;
+import com.chromascape.web.debug.tickdebugger.service.ClientFrameMetrics;
 import com.chromascape.web.viewport.ViewportWebSocketHandler;
 import com.chromascape.web.viewport.WebsocketViewport;
 import com.chromascape.web.viewport.config.ViewportStreamConfig;
@@ -33,6 +34,7 @@ public class ViewportPipelineDebugController {
   private final ViewportWebSocketHandler viewportWebSocketHandler;
   private final WebsocketViewport websocketViewport;
   private final ViewportStreamConfig viewportStreamConfig;
+  private final ClientFrameMetrics clientFrameMetrics;
 
   /** Creates the diagnostics endpoint over every stage of the viewport pipeline. */
   public ViewportPipelineDebugController(
@@ -40,12 +42,14 @@ public class ViewportPipelineDebugController {
       ScreenCaptureService screenCaptureService,
       ViewportWebSocketHandler viewportWebSocketHandler,
       WebsocketViewport websocketViewport,
-      ViewportStreamConfig viewportStreamConfig) {
+      ViewportStreamConfig viewportStreamConfig,
+      ClientFrameMetrics clientFrameMetrics) {
     this.unifiedFrameCaptureService = unifiedFrameCaptureService;
     this.screenCaptureService = screenCaptureService;
     this.viewportWebSocketHandler = viewportWebSocketHandler;
     this.websocketViewport = websocketViewport;
     this.viewportStreamConfig = viewportStreamConfig;
+    this.clientFrameMetrics = clientFrameMetrics;
   }
 
   /** Returns capture, forwarding, and WebSocket counters plus sanitized source identity. */
@@ -87,7 +91,29 @@ public class ViewportPipelineDebugController {
                 Map.entry("avgPayloadBytes", websocketViewport.getAveragePayloadBytes()),
                 Map.entry("targetFps", viewportStreamConfig.getTargetFps()),
                 Map.entry("jpegQuality", viewportStreamConfig.getJpegQuality()),
-                Map.entry("maxLongEdge", viewportStreamConfig.getMaxLongEdge())));
+                Map.entry("maxLongEdge", viewportStreamConfig.getMaxLongEdge())),
+            "clientFrames",
+            Map.ofEntries(
+                Map.entry("received", clientFrameMetrics.getReceived()),
+                Map.entry("forwarded", clientFrameMetrics.getForwarded()),
+                Map.entry("droppedAttached", clientFrameMetrics.getDroppedAttached()),
+                Map.entry("droppedDesktopWatch", clientFrameMetrics.getDroppedDesktopWatch()),
+                Map.entry("droppedInvalid", clientFrameMetrics.getDroppedInvalid()),
+                Map.entry("source", clientFrameMetrics.getLastSource()),
+                Map.entry(
+                    "sessionId",
+                    clientFrameMetrics.getLastSessionId() == null
+                        ? "none"
+                        : clientFrameMetrics.getLastSessionId()),
+                Map.entry("state", clientFrameMetrics.getFeedState()),
+                Map.entry("ageMillis", clientFrameMetrics.getLastForwardAgeMillis()),
+                Map.entry(
+                    "lastRejection",
+                    clientFrameMetrics.getLastRejection() == null
+                        ? "none"
+                        : clientFrameMetrics.getLastRejection()),
+                Map.entry(
+                    "lastForwardedAtMillis", clientFrameMetrics.getLastForwardedAtMillis())));
 
     return ResponseEntity.ok(payload);
   }

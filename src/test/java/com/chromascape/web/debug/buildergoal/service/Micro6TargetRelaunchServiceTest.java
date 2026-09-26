@@ -357,33 +357,40 @@ class Micro6TargetRelaunchServiceTest {
     return project;
   }
 
-  private Path createUnixGradleProject(String name, boolean executable) throws Exception {
+  private Path createUnixLauncherProject(String name, boolean executable) throws Exception {
     Path project = createProjectDir(name);
-    Path wrapper = project.resolve("gradlew");
-    Files.writeString(wrapper, "#!/bin/sh\necho unix wrapper\n", StandardCharsets.UTF_8);
-    if (executable) {
-      wrapper.toFile().setExecutable(true, false);
-    }
+    Path launcher = project.resolve("launch-buildergoal-client.sh");
+    Files.writeString(launcher, "#!/bin/bash\necho unix launcher\n", StandardCharsets.UTF_8);
+    launcher.toFile().setExecutable(executable, false);
     return project;
   }
 
   /**
-   * Creates a project whose fake {@code gradlew} launcher spawns a long-lived foreground child and
-   * a backgrounded descendant (writing both PIDs to {@code pids.txt}), then writes {@code
-   * started.marker}. The launcher tree stays alive so cancellation boundaries can be exercised.
+   * Creates a project whose fake {@code launch-buildergoal-client.sh} adapter answers the
+   * contract-v2 preflights ({@code --contract-version}, {@code --validate-only}, {@code
+   * --compile-only}) and otherwise spawns a long-lived foreground child and a backgrounded
+   * descendant (writing both PIDs to {@code pids.txt}), then writes {@code started.marker}. The
+   * launcher tree stays alive so cancellation boundaries can be exercised.
    */
   private Path createFakeLauncherProject(String name) throws Exception {
     Path project = createProjectDir(name);
-    Path wrapper = project.resolve("gradlew");
+    Path launcher = project.resolve("launch-buildergoal-client.sh");
     Files.writeString(
-        wrapper,
+        launcher,
         "#!/bin/bash\n"
+            + "if [ \"$1\" = \"--contract-version\" ]; then\n"
+            + "  echo '{\"contract_version\":2,\"validate_only\":true,\"compile_only\":true,\"run_task\":\":client:runBuilderGoal\",\"prepare_task\":\":client:prepareBuilderGoal\"}'\n"
+            + "  exit 0\n"
+            + "fi\n"
+            + "if [ \"$1\" = \"--validate-only\" ] || [ \"$1\" = \"--compile-only\" ]; then\n"
+            + "  exit 0\n"
+            + "fi\n"
             + "sleep 600 &\n"
             + "echo \"$$ $!\" > pids.txt\n"
             + "touch started.marker\n"
             + "sleep 600\n",
         StandardCharsets.UTF_8);
-    wrapper.toFile().setExecutable(true, false);
+    launcher.toFile().setExecutable(true, false);
     return project;
   }
 
@@ -756,6 +763,151 @@ class Micro6TargetRelaunchServiceTest {
         .hasMessageContaining("launch-buildergoal-client.ps1");
   }
 
+  @Test
+  void structuredLinux_payloadIsCreatedOnlyWhenBuildingAnAttemptCommand() throws Exception {
+    Path project = createProjectDir("structured-linux-payload");
+    Files.writeString(
+        project.resolve("launch-buildergoal-client.sh"), "#!/bin/bash\necho linux launcher\n");
+    ControlledPlatformService service = newUnixService(project.toString(), "", "");
+    Method method =
+        Micro6TargetRelaunchService.class.getDeclaredMethod(
+            "buildLaunchCommand",
+            List.class,
+            Path.class,
+            String.class,
+            String.class,
+            String.class,
+            int.class,
+            Integer.class,
+            String.class);
+    method.setAccessible(true);
+    @SuppressWarnings("unchecked")
+    List<String> command =
+        (List<String>)
+            method.invoke(
+                service,
+                List.of(
+                    "--profile=account", "--profile-email=user@example.com:secret", "--world=360"),
+                project,
+                "account",
+                "user@example.com",
+                "secret",
+                360,
+                8098,
+                "http://127.0.0.1:8098");
+    // Credentials travel in the payload file, never on the command line.
+    assertThat(command).hasSize(4);
+    assertThat(command.get(0)).isEqualTo("bash");
+    assertThat(command.get(1))
+        .isEqualTo(project.resolve("launch-buildergoal-client.sh").toString());
+    assertThat(command.get(2)).isEqualTo("--payload-file");
+    Path payload = Path.of(command.get(3));
+    assertThat(payload).isRegularFile();
+    com.fasterxml.jackson.databind.JsonNode payloadJson =
+        new ObjectMapper().readTree(payload.toFile());
+    assertThat(payloadJson.path("clientArgs").toString())
+        .contains("--profile=account")
+        .contains("--world=360");
+    assertThat(String.join(" ", command)).doesNotContain("secret");
+
+    Method cleanup =
+        Micro6TargetRelaunchService.class.getDeclaredMethod("deleteOwnedLaunchFiles", List.class);
+    cleanup.setAccessible(true);
+    cleanup.invoke(service, command);
+    assertThat(payload).doesNotExist();
+  }
+
+  @Test
+  void structuredLinux_buildCompileOnlyCommandHasNoPayload() throws Exception {
+    ControlledPlatformService service = newUnixService(tempDir.toString(), "", "");
+    Path launcher = tempDir.resolve("launch-buildergoal-client.sh");
+    Files.writeString(launcher, "#!/bin/bash\necho linux launcher\n", StandardCharsets.UTF_8);
+
+    Method method =
+        Micro6TargetRelaunchService.class.getDeclaredMethod("buildCompileOnlyCommand", Path.class);
+    method.setAccessible(true);
+    @SuppressWarnings("unchecked")
+    List<String> command = (List<String>) method.invoke(service, launcher);
+
+    assertThat(command).containsExactly("bash", launcher.toString(), "--compile-only");
+    assertThat(command).doesNotContain("--payload-file");
+    assertThat(command.stream().noneMatch(c -> c.contains("buildergoal-launch-"))).isTrue();
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void structuredLinux_preflightCommandsUseBashAdapter() throws Exception {
+    ControlledPlatformService service = newUnixService(tempDir.toString(), "", "");
+    Path launcher = tempDir.resolve("launch-buildergoal-client.sh");
+
+    Method validate =
+        Micro6TargetRelaunchService.class.getDeclaredMethod("buildValidateOnlyCommand", Path.class);
+    validate.setAccessible(true);
+    assertThat((List<String>) validate.invoke(service, launcher))
+        .containsExactly("bash", launcher.toString(), "--validate-only");
+
+    Method contract =
+        Micro6TargetRelaunchService.class.getDeclaredMethod(
+            "buildContractVersionCommand", Path.class);
+    contract.setAccessible(true);
+    assertThat((List<String>) contract.invoke(service, launcher))
+        .containsExactly("bash", launcher.toString(), "--contract-version");
+  }
+
+  @Test
+  @EnabledOnOs({OS.LINUX, OS.MAC})
+  void structuredLinux_realLauncherCompileOnlySucceeds() throws Exception {
+    Path project = createProjectDir("compile-linux-success");
+    Files.writeString(
+        project.resolve("launch-buildergoal-client.sh"),
+        "#!/bin/bash\necho \"got: $*\"\nexit 0\n",
+        StandardCharsets.UTF_8);
+    Path logFile = project.resolve("micro6-recovery-launch.log");
+    ControlledPlatformService service = newUnixService(project.toString(), "", "");
+
+    Method method =
+        Micro6TargetRelaunchService.class.getDeclaredMethod(
+            "compileMicro6ProductionClasses",
+            Path.class,
+            Path.class,
+            BuilderGoalLaunchCancellation.class);
+    method.setAccessible(true);
+    method.invoke(service, project, logFile, null);
+
+    String output = Files.readString(logFile, StandardCharsets.UTF_8);
+    assertThat(output).contains("--compile-only");
+    assertThat(output).doesNotContain("--payload-file");
+  }
+
+  @Test
+  @EnabledOnOs({OS.LINUX, OS.MAC})
+  void structuredLinux_realLauncherCompileOnlyFailureThrows() throws Exception {
+    Path project = createProjectDir("compile-linux-failure");
+    Files.writeString(
+        project.resolve("launch-buildergoal-client.sh"),
+        "#!/bin/bash\nexit 1\n",
+        StandardCharsets.UTF_8);
+    Path logFile = project.resolve("micro6-recovery-launch.log");
+    ControlledPlatformService service = newUnixService(project.toString(), "", "");
+
+    Method method =
+        Micro6TargetRelaunchService.class.getDeclaredMethod(
+            "compileMicro6ProductionClasses",
+            Path.class,
+            Path.class,
+            BuilderGoalLaunchCancellation.class);
+    method.setAccessible(true);
+    try {
+      method.invoke(service, project, logFile, null);
+      throw new AssertionError("expected RelaunchException");
+    } catch (java.lang.reflect.InvocationTargetException e) {
+      Throwable cause = e.getCause();
+      assertThat(cause).isInstanceOf(Micro6TargetRelaunchService.RelaunchException.class);
+      assertThat(((Micro6TargetRelaunchService.RelaunchException) cause).getFailureKind())
+          .isEqualTo("GRADLE_TASK_FAILED");
+    }
+  }
+
   /** Reads the private effective Gradle task selected at construction time. */
   private String readEffectiveGradleTask(Micro6TargetRelaunchService service) throws Exception {
     java.lang.reflect.Field field =
@@ -830,8 +982,8 @@ class Micro6TargetRelaunchServiceTest {
   }
 
   @Test
-  void directGradleLaunchWithoutTemplateReportsCanonicalTask() throws Exception {
-    Path project = createProjectDir("direct-gradle-task");
+  void structuredLinuxLaunchWithoutTemplateReportsCanonicalTask() throws Exception {
+    Path project = createProjectDir("structured-linux-task");
     ControlledPlatformService service = newUnixService(project.toString(), "", "");
 
     assertThat(readEffectiveGradleTask(service)).isEqualTo(":client:runBuilderGoal");
@@ -875,54 +1027,44 @@ class Micro6TargetRelaunchServiceTest {
   }
 
   @Test
-  void unixGradle_missingGradlewFailsWithPathAndMode() throws Exception {
-    Path project = createProjectDir("unix-gradle-missing");
+  void structuredLinux_missingLauncherScriptFailsWithPathAndMode() throws Exception {
+    Path project = createProjectDir("linux-launcher-missing");
     ControlledPlatformService service = newUnixService(project.toString(), "", "");
 
     assertThatThrownBy(() -> invokeValidate(service, project))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining(project.toString())
-        .hasMessageContaining("gradlew");
+        .hasMessageContaining("STRUCTURED_LINUX")
+        .hasMessageContaining("launch-buildergoal-client.sh");
   }
 
   @Test
-  void unixGradle_nonExecutableGradlewFailsWithPathAndMode() throws Exception {
-    Path project = createUnixGradleProject("unix-gradle-not-exec", false);
-    Path wrapper = project.resolve("gradlew");
-    wrapper.toFile().setExecutable(false, false);
-    ControlledPlatformService service = newUnixService(project.toString(), "", "");
-
-    // The executability check only applies on non-Windows hosts (Windows does not honor
-    // Unix execute bits), and the test platform is pinned to non-Windows via the subclass.
-    boolean checkApplies = !System.getProperty("os.name", "").toLowerCase().contains("win");
-    if (checkApplies) {
-      assertThatThrownBy(() -> invokeValidate(service, project))
-          .isInstanceOf(IllegalStateException.class)
-          .hasMessageContaining(project.toString())
-          .hasMessageContaining("gradlew")
-          .hasMessageContaining("not executable");
-    } else {
-      invokeValidate(service, project);
-    }
-  }
-
-  @Test
-  void unixGradle_executableGradlewPasses() throws Exception {
-    Path project = createUnixGradleProject("unix-gradle-exec", true);
+  void structuredLinux_nonExecutableLauncherScriptPasses() throws Exception {
+    // The adapter is invoked via `bash <script>`, so the execute bit is not required.
+    Path project = createUnixLauncherProject("linux-launcher-not-exec", false);
+    project.resolve("launch-buildergoal-client.sh").toFile().setExecutable(false, false);
     ControlledPlatformService service = newUnixService(project.toString(), "", "");
 
     invokeValidate(service, project);
   }
 
   @Test
-  void unixGradle_directoryNamedGradlewFails() throws Exception {
-    Path project = createProjectDir("unix-gradle-directory");
-    Files.createDirectory(project.resolve("gradlew"));
+  void structuredLinux_launcherScriptPresentPasses() throws Exception {
+    Path project = createUnixLauncherProject("linux-launcher-present", true);
+    ControlledPlatformService service = newUnixService(project.toString(), "", "");
+
+    invokeValidate(service, project);
+  }
+
+  @Test
+  void structuredLinux_directoryNamedLauncherScriptFails() throws Exception {
+    Path project = createProjectDir("linux-launcher-directory");
+    Files.createDirectory(project.resolve("launch-buildergoal-client.sh"));
 
     assertThatThrownBy(() -> invokeValidate(newUnixService(project.toString(), "", ""), project))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("regular required entry point")
-        .hasMessageContaining("gradlew");
+        .hasMessageContaining("launch-buildergoal-client.sh");
   }
 
   @Test
@@ -1099,7 +1241,7 @@ class Micro6TargetRelaunchServiceTest {
     assertThatThrownBy(() -> invokeValidate(service, missing))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining(missing.toString())
-        .hasMessageContaining("NON_WINDOWS_GRADLE")
+        .hasMessageContaining("STRUCTURED_LINUX")
         .hasMessageContaining("does not exist");
   }
 
@@ -1112,7 +1254,7 @@ class Micro6TargetRelaunchServiceTest {
     assertThatThrownBy(() -> invokeValidate(service, file))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining(file.toString())
-        .hasMessageContaining("NON_WINDOWS_GRADLE")
+        .hasMessageContaining("STRUCTURED_LINUX")
         .hasMessageContaining("is not a directory");
   }
 

@@ -12,6 +12,8 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -22,6 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -143,9 +146,9 @@ public class Micro6TargetRelaunchService {
 
   private enum LaunchMode {
     STRUCTURED_WINDOWS,
+    STRUCTURED_LINUX,
     CUSTOM_COMMAND_TEMPLATE,
-    WINDOWS_GRADLE,
-    NON_WINDOWS_GRADLE
+    WINDOWS_GRADLE
   }
 
   // Preparation lifecycle phases persisted in target_preparation metadata.
@@ -1849,25 +1852,26 @@ public class Micro6TargetRelaunchService {
 
   /**
    * Non-destructively validates the Micro6 launch configuration by invoking the production
-   * launcher's {@code -ValidateOnly} mode, which runs {@code gradlew.bat --no-daemon --no-watch-fs
-   * help --task :client:runBuilderGoal}. It never launches the Micro6 Java client or stops existing
-   * processes; Gradle may configure or build supporting included-build tasks needed to discover the
-   * canonical task. A bounded, configurable timeout prevents a wedged invocation from hanging the
-   * preparation. Any failure throws {@code LAUNCH_CONFIGURATION_INVALID} (or {@code
-   * GRADLE_TIMEOUT}) before existing Micro6 processes are stopped.
+   * launcher's validate-only mode ({@code -ValidateOnly} on Windows, {@code --validate-only} via
+   * {@code launch-buildergoal-client.sh} on Linux), which resolves the canonical {@code
+   * :client:runBuilderGoal} task without launching the client. It never launches the Micro6 Java
+   * client or stops existing processes. A bounded, configurable timeout prevents a wedged
+   * invocation from hanging the preparation. Any failure throws {@code
+   * LAUNCH_CONFIGURATION_INVALID} (or {@code GRADLE_TIMEOUT}) before existing Micro6 processes are
+   * stopped.
    */
   protected void validateLaunchConfiguration(
       Path projectDir, Path logFile, BuilderGoalLaunchCancellation cancellation) throws Exception {
-    // Validate-only is a Windows production-launcher capability. Non-Windows Gradle launches have
-    // no PowerShell adapter; a broken configuration fails fast as a Gradle task failure instead.
-    if (!useStructuredWindowsLaunch()) {
+    // Validate-only is a structured-launcher capability (Windows PowerShell adapter or Linux
+    // contract-v2 shell adapter). Custom-template launches have no adapter; a broken
+    // configuration fails fast as a launch failure instead.
+    if (!isStructuredLaunch()) {
       return;
     }
     if (cancellation != null) {
       cancellation.throwIfCancelled();
     }
-    Path launcherScript =
-        projectDir.resolve("launch-buildergoal-client.ps1").toAbsolutePath().normalize();
+    Path launcherScript = resolveStructuredLauncherScript(projectDir);
     if (!Files.isRegularFile(launcherScript)) {
       throw new RelaunchException(
           PHASE_BUILD_FAILED,
@@ -1881,15 +1885,7 @@ public class Micro6TargetRelaunchService {
           PHASE_PREPARING_BUILD,
           null);
     }
-    List<String> command =
-        List.of(
-            "powershell.exe",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            launcherScript.toString(),
-            "-ValidateOnly");
+    List<String> command = buildValidateOnlyCommand(launcherScript);
     Process process = null;
     try {
       process =
@@ -1955,36 +1951,28 @@ public class Micro6TargetRelaunchService {
   }
 
   /**
-   * Verifies the production launcher contract by invoking the launcher's {@code -ContractVersion}
-   * mode. ChromaScape requires contract version 2 (which guarantees {@code -ValidateOnly}, {@code
-   * -CompileOnly}, and the canonical run/prepare Gradle tasks). An incompatible launcher fails
-   * before any preflight or process cleanup.
+   * Verifies the production launcher contract by invoking the launcher's contract-version mode
+   * ({@code -ContractVersion} on Windows, {@code --contract-version} via {@code
+   * launch-buildergoal-client.sh} on Linux). ChromaScape requires contract version 2 (which
+   * guarantees validate-only, compile-only, and the canonical run/prepare Gradle tasks). An
+   * incompatible launcher fails before any preflight or process cleanup.
    */
   protected void verifyLauncherContract(
       Path projectDir, Path logFile, BuilderGoalLaunchCancellation cancellation) throws Exception {
-    if (!useStructuredWindowsLaunch()) {
+    if (!isStructuredLaunch()) {
       return;
     }
     if (cancellation != null) {
       cancellation.throwIfCancelled();
     }
-    Path launcherScript =
-        projectDir.resolve("launch-buildergoal-client.ps1").toAbsolutePath().normalize();
+    Path launcherScript = resolveStructuredLauncherScript(projectDir);
     if (!Files.isRegularFile(launcherScript)) {
       throw launcherContractException(
           logFile,
           "Builder Goal launcher script does not exist: " + launcherScript,
           "Builder Goal launcher script does not exist: " + launcherScript);
     }
-    List<String> command =
-        List.of(
-            "powershell.exe",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            launcherScript.toString(),
-            "-ContractVersion");
+    List<String> command = buildContractVersionCommand(launcherScript);
     Process process = null;
     try {
       ProcessBuilder builder =
@@ -2104,7 +2092,7 @@ public class Micro6TargetRelaunchService {
   }
 
   /**
-   * Compiles Micro6 production classes via the launcher's {@code -CompileOnly} mode ({@code
+   * Compiles Micro6 production classes via the launcher's compile-only mode (which runs {@code
    * :client:prepareBuilderGoal}). This runs only after the launcher contract and configuration
    * validate successfully and always before any existing Micro6 process is stopped, so a compile
    * failure never kills a running client. A bounded, configurable timeout prevents a wedged
@@ -2112,14 +2100,13 @@ public class Micro6TargetRelaunchService {
    */
   protected void compileMicro6ProductionClasses(
       Path projectDir, Path logFile, BuilderGoalLaunchCancellation cancellation) throws Exception {
-    if (!useStructuredWindowsLaunch()) {
+    if (!isStructuredLaunch()) {
       return;
     }
     if (cancellation != null) {
       cancellation.throwIfCancelled();
     }
-    Path launcherScript =
-        projectDir.resolve("launch-buildergoal-client.ps1").toAbsolutePath().normalize();
+    Path launcherScript = resolveStructuredLauncherScript(projectDir);
     if (!Files.isRegularFile(launcherScript)) {
       throw new RelaunchException(
           PHASE_BUILD_FAILED,
@@ -2203,11 +2190,16 @@ public class Micro6TargetRelaunchService {
   }
 
   /**
-   * Builds the PowerShell invocation for the launcher's compile-only preflight mode. Compile-only
-   * never passes a payload or client arguments: the launcher runs {@code
-   * :client:prepareBuilderGoal} directly.
+   * Builds the launcher invocation for the compile-only preflight mode. Compile-only never passes a
+   * payload or client arguments: the launcher runs {@code :client:prepareBuilderGoal} directly.
+   * Windows uses the PowerShell adapter ({@code -CompileOnly}); Linux uses the contract-v2 shell
+   * adapter ({@code --compile-only}), invoked via {@code bash} so the script needs no execute bit.
    */
   protected List<String> buildCompileOnlyCommand(Path launcherScript) {
+    if (!isWindows()) {
+      return List.of(
+          "bash", launcherScript.toAbsolutePath().normalize().toString(), "--compile-only");
+    }
     return List.of(
         "powershell.exe",
         "-NoProfile",
@@ -2247,6 +2239,8 @@ public class Micro6TargetRelaunchService {
     switch (launchMode) {
       case STRUCTURED_WINDOWS:
         return buildStructuredWindowsLaunchCommand(clientArgs, projectDir);
+      case STRUCTURED_LINUX:
+        return buildStructuredLinuxLaunchCommand(clientArgs, projectDir);
       case CUSTOM_COMMAND_TEMPLATE:
         String expanded =
             expandLaunchCommandTemplate(
@@ -2268,13 +2262,36 @@ public class Micro6TargetRelaunchService {
         String commandLine =
             "call gradlew.bat \"" + gradleRunTask + "\" \"--args=" + escapedRunArgs + "\"";
         return List.of("cmd.exe", "/c", commandLine);
-      case NON_WINDOWS_GRADLE:
-        return List.of(
-            "bash",
-            "-lc",
-            "./gradlew " + gradleRunTask + " '--args=" + escapeSingleQuotes(runArgs) + "'");
       default:
         throw new IllegalStateException("Unsupported Micro6 launch mode: " + launchMode);
+    }
+  }
+
+  /**
+   * Builds the Linux structured launch command via the contract-v2 shell adapter ({@code
+   * launch-buildergoal-client.sh --payload-file}). Client arguments travel in a credential-bearing
+   * JSON payload file (never on the command line); the adapter writes the args file, exports {@code
+   * MICRO6_CLIENT_ARGS_FILE}, and runs {@code :client:runBuilderGoal}. Invoked via {@code bash} so
+   * the adapter needs no execute bit.
+   */
+  private List<String> buildStructuredLinuxLaunchCommand(List<String> clientArgs, Path projectDir)
+      throws IOException {
+    Path launcherScript =
+        projectDir.resolve("launch-buildergoal-client.sh").toAbsolutePath().normalize();
+    if (!Files.isRegularFile(launcherScript)) {
+      throw new IllegalStateException(
+          "Builder Goal launcher script does not exist: " + launcherScript);
+    }
+    Path payloadFile = Files.createTempFile("buildergoal-launch-", ".json");
+    try {
+      Map<String, Object> payload = new LinkedHashMap<>();
+      payload.put("clientArgs", clientArgs);
+      objectMapper.writeValue(payloadFile.toFile(), payload);
+      restrictPayloadFile(payloadFile);
+      return List.of("bash", launcherScript.toString(), "--payload-file", payloadFile.toString());
+    } catch (IOException | RuntimeException e) {
+      Files.deleteIfExists(payloadFile);
+      throw e;
     }
   }
 
@@ -2308,17 +2325,24 @@ public class Micro6TargetRelaunchService {
   }
 
   /**
-   * Restricts a credential-bearing payload to its owning user where the filesystem supports ACLs.
+   * Restricts a credential-bearing payload to its owning user.
    *
-   * <p>The payload is created by ChromaScape and later read by the launcher PowerShell process that
-   * runs under the same account. Restricting the file is required because the payload carries
-   * client credentials; but the DACL must actually let the current user read it. Java NIO's {@code
-   * AclFileAttributeView.setAcl} writes an ACL that Windows denies even to the owning user when the
-   * JVM is elevated (owner resolves to the Administrators group and the launcher token is UAC
-   * filtered), so the restriction is applied via {@code icacls} granting the explicit current-user
-   * principal, which has been verified readable by a separate PowerShell process.
+   * <p>On Windows the payload is created by ChromaScape and later read by the launcher PowerShell
+   * process that runs under the same account. Restricting the file is required because the payload
+   * carries client credentials; but the DACL must actually let the current user read it. Java NIO's
+   * {@code AclFileAttributeView.setAcl} writes an ACL that Windows denies even to the owning user
+   * when the JVM is elevated (owner resolves to the Administrators group and the launcher token is
+   * UAC filtered), so the restriction is applied via {@code icacls} granting the explicit
+   * current-user principal, which has been verified readable by a separate PowerShell process.
+   *
+   * <p>On Linux the payload is read by {@code launch-buildergoal-client.sh}; the file is restricted
+   * to owner read/write via POSIX permissions.
    */
   private void restrictPayloadFile(Path payloadFile) throws IOException {
+    if (!isWindows()) {
+      restrictPayloadFilePosix(payloadFile);
+      return;
+    }
     String user = currentUserPrincipal();
     if (user == null || user.isBlank()) {
       logger.warn("Could not resolve current user; leaving Builder Goal payload unrestricted");
@@ -2355,6 +2379,24 @@ public class Micro6TargetRelaunchService {
   }
 
   /**
+   * Restricts the credential-bearing payload to owner read/write on POSIX filesystems. Failures
+   * only warn: the launcher still deletes the payload after parsing, and a hard failure here must
+   * never block a launch.
+   */
+  private void restrictPayloadFilePosix(Path payloadFile) {
+    try {
+      Set<PosixFilePermission> permissions = PosixFilePermissions.fromString("rw-------");
+      Files.setPosixFilePermissions(payloadFile, permissions);
+    } catch (UnsupportedOperationException e) {
+      logger.warn(
+          "POSIX permissions unsupported for Builder Goal payload {}; leaving default permissions",
+          payloadFile);
+    } catch (IOException e) {
+      logger.warn("Failed to restrict Builder Goal payload {}: {}", payloadFile, e.getMessage());
+    }
+  }
+
+  /**
    * Resolves the current process user principal in a form {@code icacls} accepts (for example
    * {@code CZC8518C27\Beheerder}), or null when unavailable.
    */
@@ -2377,7 +2419,9 @@ public class Micro6TargetRelaunchService {
       return;
     }
     for (int index = 0; index + 1 < command.size(); index++) {
-      if (!"-PayloadFile".equalsIgnoreCase(command.get(index))) {
+      String token = command.get(index);
+      // Windows structured launch uses -PayloadFile; Linux uses --payload-file.
+      if (!"-PayloadFile".equalsIgnoreCase(token) && !"--payload-file".equals(token)) {
         continue;
       }
       Path payload = Paths.get(command.get(index + 1));
@@ -3030,6 +3074,12 @@ public class Micro6TargetRelaunchService {
    * Resolves the launch mode used for both validation and command construction so the two cannot
    * disagree.
    *
+   * <p>Windows prefers the structured PowerShell adapter; Linux uses the structured contract-v2
+   * shell adapter ({@code launch-buildergoal-client.sh}), which supplies {@code
+   * MICRO6_CLIENT_ARGS_FILE} required by {@code :client:runBuilderGoal}. A configured custom
+   * command template wins on Linux (and is ignored on Windows, where the structured adapter is
+   * authoritative).
+   *
    * @return the launch mode used for validation and process construction
    */
   private LaunchMode resolveLaunchMode() {
@@ -3039,20 +3089,23 @@ public class Micro6TargetRelaunchService {
     if (launchCommandTemplate != null) {
       return LaunchMode.CUSTOM_COMMAND_TEMPLATE;
     }
-    return isWindows() ? LaunchMode.WINDOWS_GRADLE : LaunchMode.NON_WINDOWS_GRADLE;
+    if (isWindows()) {
+      return LaunchMode.WINDOWS_GRADLE;
+    }
+    return LaunchMode.STRUCTURED_LINUX;
   }
 
   /**
    * Resolves the effective Gradle task reported by progress responses, run summaries, and launch
-   * operation metadata from the resolved launch mode. The structured Windows launch always reports
-   * the canonical run task — a configured legacy custom launch template is ignored on Windows and
-   * must never relabel the metadata as {@code custom_launch_command}. The template label applies
-   * only when the template mode is actually selected (non-Windows); direct Gradle launches report
-   * the configured canonical task.
+   * operation metadata from the resolved launch mode. The structured launches always report the
+   * canonical run task — a configured legacy custom launch template is ignored on Windows and must
+   * never relabel the metadata as {@code custom_launch_command}. The template label applies only
+   * when the template mode is actually selected; direct Gradle launches report the configured
+   * canonical task.
    */
   private String resolveEffectiveGradleTask(String configuredGradleRunTask) {
     LaunchMode launchMode = resolveLaunchMode();
-    if (launchMode == LaunchMode.STRUCTURED_WINDOWS) {
+    if (launchMode == LaunchMode.STRUCTURED_WINDOWS || launchMode == LaunchMode.STRUCTURED_LINUX) {
       return DEFAULT_GRADLE_RUN_TASK;
     }
     if (launchMode == LaunchMode.CUSTOM_COMMAND_TEMPLATE) {
@@ -3069,10 +3122,13 @@ public class Micro6TargetRelaunchService {
     if (launchMode == LaunchMode.STRUCTURED_WINDOWS) {
       return "launch-buildergoal-client.ps1";
     }
+    if (launchMode == LaunchMode.STRUCTURED_LINUX) {
+      return "launch-buildergoal-client.sh";
+    }
     if (launchMode == LaunchMode.CUSTOM_COMMAND_TEMPLATE) {
       return null;
     }
-    return launchMode == LaunchMode.WINDOWS_GRADLE ? "gradlew.bat" : "gradlew";
+    return "gradlew.bat";
   }
 
   protected Long resolveListeningPid(Integer port) {
@@ -3499,6 +3555,60 @@ public class Micro6TargetRelaunchService {
 
   protected boolean useStructuredWindowsLaunch() {
     return isWindows();
+  }
+
+  /**
+   * Linux uses the contract-v2 shell adapter ({@code launch-buildergoal-client.sh}) instead of a
+   * direct Gradle invocation, because {@code :client:runBuilderGoal} requires {@code
+   * MICRO6_CLIENT_ARGS_FILE} which only the adapter supplies. Overridable in tests so launch-mode
+   * resolution stays deterministic.
+   */
+  protected boolean useStructuredLinuxLaunch() {
+    return !isWindows();
+  }
+
+  /** True when either structured launcher adapter (Windows or Linux) is active. */
+  protected boolean isStructuredLaunch() {
+    return useStructuredWindowsLaunch() || useStructuredLinuxLaunch();
+  }
+
+  /** Resolves the structured adapter script for the current platform. */
+  protected Path resolveStructuredLauncherScript(Path projectDir) {
+    String scriptName =
+        isWindows() ? "launch-buildergoal-client.ps1" : "launch-buildergoal-client.sh";
+    return projectDir.resolve(scriptName).toAbsolutePath().normalize();
+  }
+
+  /** Builds the adapter invocation for the validate-only preflight mode. */
+  protected List<String> buildValidateOnlyCommand(Path launcherScript) {
+    if (!isWindows()) {
+      return List.of(
+          "bash", launcherScript.toAbsolutePath().normalize().toString(), "--validate-only");
+    }
+    return List.of(
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        launcherScript.toString(),
+        "-ValidateOnly");
+  }
+
+  /** Builds the adapter invocation for the contract-version check. */
+  protected List<String> buildContractVersionCommand(Path launcherScript) {
+    if (!isWindows()) {
+      return List.of(
+          "bash", launcherScript.toAbsolutePath().normalize().toString(), "--contract-version");
+    }
+    return List.of(
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        launcherScript.toString(),
+        "-ContractVersion");
   }
 
   private String normalizeOptionalString(String value) {
