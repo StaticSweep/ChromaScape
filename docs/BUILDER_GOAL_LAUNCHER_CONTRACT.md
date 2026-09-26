@@ -44,7 +44,7 @@ older launcher can start an executor that refuses to bind its port, so it is rej
 | `-ContractVersion` | Print the machine-readable contract JSON and exit 0. |
 | `-ValidateOnly` | Run `gradlew.bat --no-daemon --no-watch-fs help --task :client:runBuilderGoal`. Never launches the client and never stops processes. |
 | `-CompileOnly` | Run `gradlew.bat --no-daemon --no-watch-fs :client:prepareBuilderGoal`. Compiles Micro6 production classes; never launches the client. |
-| `-Authoritative` | Resolve `MICRO6_SOURCE_MODE=authoritative` and run `:client:runBuilderGoalAuthoritative`. |
+| `MICRO6_SOURCE_MODE=authoritative` (environment) | Select `:client:runBuilderGoalAuthoritative`; no separate command-line switch is required. |
 | `-PayloadFile <path>` | Path to the temporary JSON payload (`clientArgs`) written by ChromaScape. Required for normal launches. |
 
 ## Source mode: `disabled` versus `authoritative`
