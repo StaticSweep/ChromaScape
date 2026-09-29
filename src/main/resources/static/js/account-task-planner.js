@@ -5,7 +5,7 @@
  * approving/rejecting tasks, and triggering patch loop execution.
  */
 class AccountTaskPlanner {
-  static BUILDER_GOAL_BUNDLE_VERSION = '44';
+  static BUILDER_GOAL_BUNDLE_VERSION = '45';
   static BUILDER_GOAL_PRIMARY_ITEM_ID = 'builderGoalPrimary';
   static UNASSIGNED_FILTER = '__UNASSIGNED__';
   static BUILDER_GOAL_PUBLISH_TIMEOUT_MS = 240000;
@@ -467,6 +467,7 @@ class AccountTaskPlanner {
     this.builderGoalPayloadInput = document.getElementById('builderGoalPayloadInput');
     this.importBuilderGoalBtn = document.getElementById('importBuilderGoalBtn');
     this.runBuilderGoalBtn = document.getElementById('runBuilderGoalBtn');
+    this.packetCaptureCheckbox = document.getElementById('builderGoalPacketCapture');
     this.launchBuilderGoalAccountBtn = document.getElementById('launchBuilderGoalAccountBtn');
     this.publishBuilderGoalBtn = document.getElementById('publishBuilderGoalBtn');
     this.runImportedBuilderGoalBtn = document.getElementById('runImportedBuilderGoalBtn');
@@ -2136,6 +2137,11 @@ class AccountTaskPlanner {
   }
 
   updateBuilderGoalRunButtonState() {
+    if (this.packetCaptureCheckbox) {
+      const local = this.getSelectedBuilderGoalMachine()?.localMachine === true;
+      this.packetCaptureCheckbox.disabled = !local || this.builderGoalBundleMismatch;
+      if (this.packetCaptureCheckbox.disabled) this.packetCaptureCheckbox.checked = false;
+    }
     if (!this.runBuilderGoalBtn) return;
     if (this.builderGoalBundleMismatch) {
       this.runBuilderGoalBtn.disabled = true;
@@ -2669,7 +2675,8 @@ class AccountTaskPlanner {
         body: JSON.stringify({
           accountId: selectedAccount.accountId,
           launcherMachineUuid: selectedMachine.machineUuid,
-          world
+          world,
+          packetCapture: selectedMachine.localMachine === true && this.packetCaptureCheckbox?.checked === true
         })
       });
       const result = await response.json();

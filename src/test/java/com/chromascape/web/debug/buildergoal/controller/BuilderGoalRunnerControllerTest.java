@@ -48,6 +48,18 @@ class BuilderGoalRunnerControllerTest {
   }
 
   @Test
+  void launchAccount_packetCaptureMustBeBooleanAndIsForwarded() throws Exception {
+    assertThat(controller.launchAccount(objectMapper.readTree("{\"packetCapture\":\"true\"}"))
+        .getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    when(builderGoalRunnerService.launchAccount("a", "local", 360, false, true))
+        .thenReturn(Map.of("operationId", "capture"));
+    var response = controller.launchAccount(objectMapper.readTree(
+        "{\"accountId\":\"a\",\"launcherMachineUuid\":\"local\",\"world\":360,\"packetCapture\":true}"));
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+    verify(builderGoalRunnerService).launchAccount("a", "local", 360, false, true);
+  }
+
+  @Test
   void listMachines_returnsHttp200WithMachineSummaries() {
     Map<String, Object> machine = new LinkedHashMap<>();
     machine.put("machineUuid", "1d391d65-6c97-5b77-b676-964f157e8c73");

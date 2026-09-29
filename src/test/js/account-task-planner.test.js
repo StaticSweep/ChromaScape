@@ -1261,7 +1261,7 @@ test('refreshBuilderGoalRuns no unhandled rejection escapes the refresh method',
   assert.deepEqual(unhandled, [], 'no rejection may escape refreshBuilderGoalRuns');
 });
 
-test('builder goal bundle version markers agree on 44', () => {
+test('builder goal bundle version markers agree on 45', () => {
   const source = require('node:fs').readFileSync(
     path.resolve(__dirname, '../../main/resources/static/js/account-task-planner.js'),
     'utf8'
@@ -1271,7 +1271,7 @@ test('builder goal bundle version markers agree on 44', () => {
     'utf8'
   );
   const jsVersion = AccountTaskPlanner.BUILDER_GOAL_BUNDLE_VERSION;
-  assert.equal(jsVersion, '44');
+  assert.equal(jsVersion, '45');
   assert.ok(
     source.includes(`BUILDER_GOAL_BUNDLE_VERSION = '${jsVersion}'`),
     'JS source must declare the same bundle version'
@@ -1609,8 +1609,8 @@ test('isActivePublishState returns false for null/missing run', () => {
 
 // --- Bundle marker tests ---
 
-test('BUILDER_GOAL_BUNDLE_VERSION is 44', () => {
-  assert.equal(AccountTaskPlanner.BUILDER_GOAL_BUNDLE_VERSION, '44');
+test('BUILDER_GOAL_BUNDLE_VERSION is 45', () => {
+  assert.equal(AccountTaskPlanner.BUILDER_GOAL_BUNDLE_VERSION, '45');
 });
 
 test('ACTIVE_PRE_START_STATUSES includes RECONCILING and AWAITING_EXECUTOR_CONFIRMATION', () => {
