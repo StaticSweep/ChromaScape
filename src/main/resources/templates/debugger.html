@@ -436,7 +436,7 @@
       </div>
 
       <div class="task-planner-content" id="taskPlannerContent">
-        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="44">
+        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="45">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <label class="form-label mb-0">Builder Goal Runner</label>
             <button class="btn btn-sm btn-outline-secondary" id="refreshBuilderGoalRunsBtn" title="Refresh builder runs">
@@ -507,6 +507,11 @@
             <div class="small text-muted">
               Starts a task-owned ChromaScape recording after publish. Recording setup never blocks task execution.
             </div>
+          </div>
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="builderGoalPacketCapture" disabled>
+            <label class="form-check-label small" for="builderGoalPacketCapture">Packet Capture</label>
+            <div class="small text-muted">Launch Account through running RSProx on the local launch host. Optional; unavailable for remote hosts.</div>
           </div>
           <div class="d-flex gap-2 mb-2">
             <button class="btn btn-sm btn-primary flex-fill" id="runBuilderGoalBtn" disabled title="Launch the local Micro6 workspace for the account and publish the selected task">
@@ -1380,7 +1385,7 @@
   <script src="/js/ai-routine-state.js?v=1"></script>
   <script src="/js/ai-routine.js?v=3"></script>
   <script src="/js/patchloop.js?v=2"></script>
-<script src="/js/account-task-planner.js?v=44"></script>
+<script src="/js/account-task-planner.js?v=45"></script>
 </body>
 
 </html>

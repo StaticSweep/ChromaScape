@@ -40,6 +40,24 @@ class Micro6TargetPreparationServiceTest {
   }
 
   @Test
+  void remoteCaptureIsRejectedBeforeEitherLauncherRuns() {
+    var machine = new BuilderGoalLauncherControlService.LauncherMachine(
+        "remote", "Remote", "online", true, true, Map.of());
+    when(launcherControlService.findMachineByUuid("remote")).thenReturn(Optional.of(machine));
+    when(launcherControlService.isBuilderGoalRunnableMachine(machine)).thenReturn(true);
+    when(launcherControlService.isLocalMachine(machine)).thenReturn(false);
+    when(localLaunchCoordinator.holdsLease(any())).thenReturn(true);
+    var lease = new BuilderGoalLocalLaunchCoordinatorService.LeaseHandle(
+        "remote", 8098, "0123456789abcdef", "owner", java.util.UUID.randomUUID());
+    var request = new Micro6TargetPreparationService.PreparationRequest(
+        "account", "0123456789abcdef", "Account", "test@example.invalid", "dummy",
+        360, "remote", null, false, true);
+    assertThatThrownBy(() -> service.ensureReady(request, lease, BuilderGoalLaunchCancellation.NONE, null))
+        .hasMessageContaining("Packet Capture requires the local launch host");
+    org.mockito.Mockito.verifyNoInteractions(micro6TargetRelaunchService);
+  }
+
+  @Test
   void remoteMachineNeverInvokesLocalRelaunch() {
     var remote = org.mockito.Mockito.mock(Micro6RemoteLauncherService.class);
     org.springframework.test.util.ReflectionTestUtils.setField(service, "remoteLauncher", remote);

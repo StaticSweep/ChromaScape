@@ -292,6 +292,12 @@ public class BuilderGoalRunnerService {
 
   public Map<String, Object> launchAccount(
       String accountId, String launcherMachineUuid, Integer world, boolean forceRelaunch) {
+    return launchAccount(accountId, launcherMachineUuid, world, forceRelaunch, false);
+  }
+
+  public Map<String, Object> launchAccount(
+      String accountId, String launcherMachineUuid, Integer world, boolean forceRelaunch,
+      boolean packetCapture) {
     if (accountId == null || accountId.isBlank()) {
       throw new IllegalArgumentException("accountId is required");
     }
@@ -304,15 +310,19 @@ public class BuilderGoalRunnerService {
     requireLaunchReadyAccount(selectedAccount);
     requireValidWorld(world);
     requireLaunchableMachine(launcherMachineUuid);
+    if (packetCapture && !launcherControlService.isLocalMachine(resolveSelectedMachine(launcherMachineUuid))) {
+      throw new IllegalArgumentException("Packet Capture is available only on the local launch host");
+    }
 
     String accountKey = firstNonBlank(selectedAccount.accountHash(), selectedAccount.accountId());
     BuilderGoalLaunchOperationService.CreateResult createResult =
-        launchOperationService.createOrReuse(
+        packetCapture ? launchOperationService.createOrReuse(
             selectedAccount.accountId(),
             selectedAccount.accountHash(),
             selectedAccount.displayName(),
             launcherMachineUuid,
-            world);
+            world, true) : launchOperationService.createOrReuse(selectedAccount.accountId(),
+                selectedAccount.accountHash(), selectedAccount.displayName(), launcherMachineUuid, world);
     BuilderGoalLaunchOperationService.LaunchOperation operation = createResult.operation();
     if (createResult.deduplicated()) {
       logger.info(
@@ -366,6 +376,7 @@ public class BuilderGoalRunnerService {
                   launcherMachineUuid,
                   world,
                   forceRelaunch,
+                  packetCapture,
                   leaseHandle,
                   work);
             } finally {
@@ -397,6 +408,7 @@ public class BuilderGoalRunnerService {
       String launcherMachineUuid,
       Integer world,
       boolean forceRelaunch,
+      boolean packetCapture,
       BuilderGoalLocalLaunchCoordinatorService.LeaseHandle leaseHandle,
       ActiveLaunchWork work) {
     // Check cancellation before touching Micro6
@@ -433,7 +445,7 @@ public class BuilderGoalRunnerService {
                   world,
                   launcherMachineUuid,
                   null,
-                  forceRelaunch),
+                  forceRelaunch, packetCapture),
               leaseHandle,
               work,
               progress -> launchOperationService.updateProgress(operationId, progress));

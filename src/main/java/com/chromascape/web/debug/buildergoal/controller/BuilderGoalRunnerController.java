@@ -165,10 +165,16 @@ public class BuilderGoalRunnerController {
       String launcherMachineUuid = textValue(payload.path("launcherMachineUuid"));
       Integer world = intValue(payload.path("world"));
       boolean forceRelaunch = payload.path("forceRelaunch").asBoolean(false);
+      if (payload.has("packetCapture") && !payload.path("packetCapture").isBoolean()) {
+        return ResponseEntity.badRequest().body(Map.of("error", "packetCapture must be a boolean"));
+      }
+      boolean packetCapture = payload.path("packetCapture").asBoolean(false);
       // The launch runs on a dedicated executor with a server-side readiness watchdog. The POST
       // returns HTTP 202 immediately; the browser polls the operation via statusUrl.
       Map<String, Object> launchResponse =
-          forceRelaunch
+          packetCapture
+              ? builderGoalRunnerService.launchAccount(accountId, launcherMachineUuid, world, forceRelaunch, true)
+              : forceRelaunch
               ? builderGoalRunnerService.launchAccount(accountId, launcherMachineUuid, world, true)
               : builderGoalRunnerService.launchAccount(accountId, launcherMachineUuid, world);
       return ResponseEntity.accepted().body(launchResponse);
