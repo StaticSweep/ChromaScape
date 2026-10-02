@@ -123,3 +123,5 @@ Validate planning -> spec_ready with required UI mockup and all design artifacts
 ## Implementation decisions recorded during delivery
 
 Profiles include explicit schema_hash and requirements_hash as well as retained snapshots and settings/catalog hashes. The current development identity advances to sc641-current-v1 with four migrations. The SC-812 Code module is absent from the SC-665 base, so source links remain disabled until that workspace and exact SC-811 evidence exist; no current branch fallback is used. Browser preview access was denied, so visual browser verification is unrun. Static Fishing fixtures use bounded sample option lists; runtime metadata remains authoritative. See SC-641-CATALOG-PROFILES.md and the implementation/verification evidence for executed checks.
+
+Final review preserves structured Micro6 stale failure codes and original capture timestamps, rejects masked hard failures and unsupported option metadata, and includes 19 Micro6 fetcher regressions in the focused 44-test catalog lane. The SQL contract and UI remain unchanged; the 21 schema and 235 JavaScript checks remain applicable.

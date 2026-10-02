@@ -565,6 +565,8 @@ tasks.register<JavaExec>("aiPlayerSchemaFingerprintExport") {
 
 sourceSets.create("aiPlayerCatalogTest") {
     java.srcDir("src/test/java/com/chromascape/web/aiplayer/catalog")
+    java.srcDir("src/test/java/com/chromascape/web/integration/micro6/service")
+    java.include("Catalog*.java", "Micro6ExecutorCatalogServiceTest.java", "Micro6TestServers.java", "TestMicro6Catalog.java")
     resources.srcDir("src/test/resources")
     compileClasspath += sourceSets.main.get().output
     runtimeClasspath += sourceSets.main.get().output

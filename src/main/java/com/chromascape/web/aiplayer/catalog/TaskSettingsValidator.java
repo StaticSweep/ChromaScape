@@ -41,8 +41,8 @@ public final class TaskSettingsValidator {
           && f.path("min").decimalValue().compareTo(f.path("max").decimalValue()) > 0) {
         invalid("Inverted range.");
       }
-      if (f.has("options") && (!f.path("options").isArray() || f.path("options").size() > 1000)) {
-        invalid("Invalid options.");
+      if (f.has("options")) {
+        optionSchema(f.path("options"));
       }
       if (Set.of("select", "multi_select").contains(f.path("type").asText())
           && !f.path("options").isArray()
@@ -79,9 +79,7 @@ public final class TaskSettingsValidator {
       }
       if (f.has("options_by_dependency")) {
         for (JsonNode branch : f.path("options_by_dependency")) {
-          if (!branch.isArray() || branch.size() > 1000) {
-            invalid("Invalid dependent option branch.");
-          }
+          optionSchema(branch);
         }
       }
     }
@@ -207,6 +205,20 @@ public final class TaskSettingsValidator {
           .path(values.path(field.path("depends_on").asText()).asText());
     }
     return field.path("options");
+  }
+
+  private static void optionSchema(JsonNode options) {
+    if (!options.isArray() || options.size() > 1000) {
+      invalid("Invalid option branch.");
+    }
+    for (JsonNode option : options) {
+      JsonNode value = option.isObject() ? option.path("value") : option;
+      if (!value.isTextual()
+          || value.asText().length() > 4096
+          || option.isObject() && option.has("label") && !option.path("label").isTextual()) {
+        invalid("Unsupported option value or label.");
+      }
+    }
   }
 
   private static boolean contains(JsonNode list, JsonNode value) {

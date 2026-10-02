@@ -153,14 +153,21 @@ public class AiPlayerCatalogService {
     JsonNode reply = upstream.getCatalogForExecutor(endpoint, mode, refresh);
     JsonNode raw = reply.path("catalog");
     String state = reply.path("catalog_state").asText("UNAVAILABLE");
-    if (raw.isObject() && Set.of("READY", "STALE", "DEGRADED").contains(state)) {
+    boolean transientFailure = transientFailure(reply);
+    if (raw.isObject()
+        && Set.of("READY", "STALE", "DEGRADED").contains(state)
+        && (!state.equals("STALE") || transientFailure)) {
       try {
         ObjectNode normalized = CatalogNormalizer.normalize(raw, mode.equals("full"));
         normalized.put("state", state);
         normalized.put("endpoint_ref", endpoint);
         normalized.put("mode", mode);
         normalized.set("reasons", reply.path("reasons").deepCopy());
-        normalized.put("captured_at", java.time.Instant.now().toString());
+        normalized.put(
+            "captured_at",
+            reply
+                .path("captured_at")
+                .asText(state.equals("STALE") ? "unknown" : java.time.Instant.now().toString()));
         if (state.equals("READY")) {
           store.cache(endpoint, mode, normalized);
         }
@@ -179,17 +186,7 @@ public class AiPlayerCatalogService {
     // Only named transient failures permit stale metadata. Authorization/identity/hash errors
     // never expose a persisted cache under a possibly reassigned endpoint reference.
     String reason = reply.path("reason_code").asText();
-    if (Set.of(
-            "REGISTRY_FAILURE",
-            "RUNTIME_OFFLINE",
-            "CATALOG_UNAVAILABLE",
-            "FETCH_FAILED",
-            "CATALOG_FETCH_FAILED",
-            "RUNTIME_UNAVAILABLE",
-            "CATALOG_NOT_READY",
-            "SCHEMA_BUNDLE_NOT_READY",
-            "EXECUTOR_UNREACHABLE")
-        .contains(reason)) {
+    if (transientFailure) {
       ObjectNode cached = store.cached(endpoint, mode);
       if (cached != null) {
         cached.put("state", "STALE");
@@ -202,6 +199,30 @@ public class AiPlayerCatalogService {
     empty.put("reason", reason.isBlank() ? "No catalog is available." : reason);
     empty.putArray("tasks");
     return empty;
+  }
+
+  private boolean transientFailure(JsonNode reply) {
+    String reason = reply.path("reason_code").asText();
+    String detail = reply.path("detailed_reason_code").asText();
+    if (reason.equals("EXECUTOR_ERROR")) {
+      return detail.matches("CATALOG_HTTP_5[0-9]{2}");
+    }
+    if (reason.equals("REGISTRY_FAILURE") && !detail.isBlank()) {
+      return detail.equals("registry_unreachable") || detail.matches("registry_http_5[0-9]{2}");
+    }
+    return Set.of(
+            "REGISTRY_FAILURE",
+            "RUNTIME_NOT_SELECTABLE",
+            "EXECUTOR_UNAVAILABLE",
+            "RUNTIME_OFFLINE",
+            "CATALOG_UNAVAILABLE",
+            "FETCH_FAILED",
+            "CATALOG_FETCH_FAILED",
+            "RUNTIME_UNAVAILABLE",
+            "CATALOG_NOT_READY",
+            "SCHEMA_BUNDLE_NOT_READY",
+            "EXECUTOR_UNREACHABLE")
+        .contains(reason);
   }
 
   private ObjectNode source(JsonNode task, JsonNode catalog) {

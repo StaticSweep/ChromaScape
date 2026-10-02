@@ -30,6 +30,8 @@ public class CatalogStore {
   /** Persists a last-known-good catalog without modifying prior snapshots. */
   public void cache(String endpoint, String mode, ObjectNode payload) {
     String id = Micro6CanonicalHash.sha256WithPrefix(payload);
+    String capture = payload.path("captured_at").asText();
+    Instant captured = capture.isBlank() ? Instant.now() : Instant.parse(capture);
     run(
         () -> {
           jdbc.update(
@@ -43,7 +45,7 @@ public class CatalogStore {
               mode,
               payload.path("catalog_hash").asText(),
               payload.toString(),
-              java.sql.Timestamp.from(Instant.now()));
+              java.sql.Timestamp.from(captured));
           return null;
         });
   }

@@ -27,6 +27,10 @@ class CatalogServiceTest {
   private ObjectNode reply(ObjectNode raw, String state) {
     ObjectNode out = json.createObjectNode().put("catalog_state", state);
     out.set("catalog", raw);
+    if (state.equals("STALE")) {
+      out.put("reason_code", "REGISTRY_FAILURE");
+      out.put("detailed_reason_code", "registry_unreachable");
+    }
     out.putArray("reasons");
     return out;
   }
@@ -211,5 +215,38 @@ class CatalogServiceTest {
             .errors()
             .containsKey("name"));
     verifyNoInteractions(upstream, store);
+  }
+
+  @Test
+  void maskedHardFailuresInsideUpstreamStaleRepliesCannotExposeCachedMetadata() {
+    ObjectNode stale = reply(CatalogFixture.lightweight(), "STALE");
+    when(upstream.getCatalogForExecutor("fixture-ref", "lightweight", false)).thenReturn(stale);
+    for (String code :
+        java.util.List.of(
+            "CONTRACT_INVALID", "MALFORMED_CATALOG", "IDENTITY_CONFLICT", "RUNTIME_CHANGED")) {
+      stale.put("reason_code", code);
+      assertEquals("UNAVAILABLE", service.catalog("fixture-ref", false).path("state").asText());
+    }
+    stale.put("reason_code", "REGISTRY_FAILURE").put("detailed_reason_code", "registry_http_403");
+    assertEquals("UNAVAILABLE", service.catalog("fixture-ref", false).path("state").asText());
+    stale.put("reason_code", "EXECUTOR_ERROR").put("detailed_reason_code", "CATALOG_HTTP_401");
+    assertEquals("UNAVAILABLE", service.catalog("fixture-ref", false).path("state").asText());
+    verifyNoInteractions(store);
+  }
+
+  @Test
+  void structuredTemporaryExecutorFailuresCanStillBrowseValidStaleMetadata() {
+    ObjectNode stale =
+        reply(CatalogFixture.lightweight(), "STALE")
+            .put("reason_code", "EXECUTOR_ERROR")
+            .put("detailed_reason_code", "CATALOG_HTTP_502");
+    when(upstream.getCatalogForExecutor("fixture-ref", "lightweight", false)).thenReturn(stale);
+    stale.put("captured_at", "2026-01-01T00:00:00Z");
+    ObjectNode result = service.catalog("fixture-ref", false);
+    assertEquals("STALE", result.path("state").asText());
+    assertEquals("2026-01-01T00:00:00Z", result.path("captured_at").asText());
+    stale.put("reason_code", "EXECUTOR_UNAVAILABLE").put("detailed_reason_code", "CATALOG_503");
+    assertEquals("STALE", service.catalog("fixture-ref", false).path("state").asText());
+    verifyNoInteractions(store);
   }
 }

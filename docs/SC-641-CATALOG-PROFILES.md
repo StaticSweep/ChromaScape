@@ -41,7 +41,8 @@ Version history lists the newest 200 named versions; SC-665's unnamed test seed 
 A temporary registry outage can display persisted last-known-good metadata after an application
 restart. It is visibly STALE with its stored timestamp. STALE and DEGRADED details are
 browse-only; creating versions requires READY. Authorization, contract, ownership and hash
-failures do not fall back to persisted success. An unavailable source remains unavailable;
+failures do not fall back to persisted success. Cached upstream replies retain structured failure
+codes and their original capture time; masked hard failures cannot be treated as temporary outages. An unavailable source remains unavailable;
 an empty result is not presented as a valid catalog. Outdated async responses cannot replace
 newer task, catalog or profile selections.
 
@@ -106,7 +107,9 @@ npm test
 bash ./gradlew -I docs/sc-641/scoped-quality.gradle spotlessCheck checkstyleMain aiPlayerCatalogTest aiPlayerSchemaTest
 ```
 
-The catalog tests exercise backend contracts, controller/operator auth, real PostgreSQL profile
+The 44-test catalog lane includes 19 Micro6 fetcher regressions and an actual
+fetcher-to-AI-Player integrity-failure fence, alongside backend contracts, controller/operator
+auth and real PostgreSQL profile
 versioning/concurrency/immutability/cache persistence and the normal released V32 migration.
 The schema regression tests verify the four-migration current schema, all current JPA mappings,
 reset reproducibility, schema drift, unsafe targets and transactional provenance invariants.

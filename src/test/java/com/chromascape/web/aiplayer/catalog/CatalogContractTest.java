@@ -143,4 +143,19 @@ class CatalogContractTest {
         CatalogProblem.class,
         () -> TaskSettingsValidator.validate(required, JSON.createObjectNode()));
   }
+
+  @Test
+  void malformedOptionsAreUnavailableInsteadOfCrashingTheForm() throws Exception {
+    for (String options :
+        java.util.List.of("[null]", "[{\"value\":42}]", "[{\"value\":\"A\",\"label\":{}}]")) {
+      JsonNode schema =
+          JSON.readTree(
+              "{\"fields\":[{\"key\":\"choice\",\"type\":\"select\",\"options\":"
+                  + options
+                  + "}]}");
+      assertEquals(
+          "INVALID_SCHEMA",
+          assertThrows(CatalogProblem.class, () -> TaskSettingsValidator.schema(schema)).code());
+    }
+  }
 }
