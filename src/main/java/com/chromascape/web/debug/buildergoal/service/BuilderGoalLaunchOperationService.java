@@ -385,7 +385,8 @@ public class BuilderGoalLaunchOperationService {
         String accountHash,
         String accountName,
         String launcherMachineUuid,
-        Integer world, boolean packetCapture) {
+        Integer world,
+        boolean packetCapture) {
       this.operationId = operationId;
       this.accountId = accountId;
       this.accountHash = accountHash;
@@ -466,8 +467,13 @@ public class BuilderGoalLaunchOperationService {
     return createOrReuse(accountId, accountHash, accountName, launcherMachineUuid, world, false);
   }
 
-  public CreateResult createOrReuse(String accountId, String accountHash, String accountName,
-      String launcherMachineUuid, Integer world, boolean packetCapture) {
+  public CreateResult createOrReuse(
+      String accountId,
+      String accountHash,
+      String accountName,
+      String launcherMachineUuid,
+      Integer world,
+      boolean packetCapture) {
     pruneExpired();
     String accountKey = normalizeAccountKey(accountHash, accountId);
 
@@ -482,7 +488,8 @@ public class BuilderGoalLaunchOperationService {
                 LaunchOperation existing = operations.get(currentId);
                 if (existing != null && !existing.isTerminal()) {
                   if (existing.packetCapture != packetCapture) {
-                    throw new IllegalStateException("An account launch with a different Packet Capture setting is already active");
+                    throw new IllegalStateException(
+                        "An account launch with a different Packet Capture setting is already active");
                   }
                   deduplicated[0] = true;
                   return currentId;
@@ -495,7 +502,8 @@ public class BuilderGoalLaunchOperationService {
                       accountHash,
                       accountName,
                       launcherMachineUuid,
-                      world, packetCapture);
+                      world,
+                      packetCapture);
               operations.put(newOperationId, operation);
               return newOperationId;
             });
@@ -505,7 +513,8 @@ public class BuilderGoalLaunchOperationService {
       // The assigned mapping referenced an operation that was removed between compute and get;
       // clear the stale mapping and retry.
       activeByAccount.remove(accountKey, assigned);
-      return createOrReuse(accountId, accountHash, accountName, launcherMachineUuid, world, packetCapture);
+      return createOrReuse(
+          accountId, accountHash, accountName, launcherMachineUuid, world, packetCapture);
     }
     return new CreateResult(operation, deduplicated[0]);
   }
