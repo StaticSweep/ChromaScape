@@ -1,0 +1,43 @@
+# SC-665: opt-in clean disposable development database. No legacy migration history is used.
+spring:
+  datasource:
+    url: ${AI_PLAYER_DEV_JDBC_URL:jdbc:postgresql://127.0.0.1:5433/chromascape_aiplayer_dev?currentSchema=ai_player_dev}
+    username: ${AI_PLAYER_DEV_USERNAME}
+    password: ${AI_PLAYER_DEV_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: ai_player_dev
+  flyway:
+    enabled: true
+    locations: classpath:db/ai-player-current
+    schemas: ai_player_dev
+    default-schema: ai_player_dev
+    baseline-on-migrate: false
+    out-of-order: false
+    clean-disabled: true
+    group: true
+features:
+  ai-player:
+    enabled: false
+    control-enabled: false
+gameplay:
+  accountbuilder-orchestration:
+    enabled: false
+    live-delivery-enabled: false
+  provider-runtime:
+    enabled: false
+leeuwbot:
+  integration:
+    enabled: false
+    stream:
+      enabled: false
+sc967:
+  candidate:
+    builds-enabled: false
+replay:
+  enabled: false
+  worker:
+    enabled: false

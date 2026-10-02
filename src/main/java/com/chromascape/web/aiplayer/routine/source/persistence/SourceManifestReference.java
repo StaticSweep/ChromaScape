@@ -5,7 +5,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
@@ -42,7 +41,7 @@ public class SourceManifestReference {
   @Column(name = "created_at", nullable = false) private Instant createdAt = Instant.now();
   @Column(name = "pruned_at") private Instant prunedAt;
   @Column(name = "redacted_at") private Instant redactedAt;
-  @Lob @Column(name = "manifest_json", nullable = false) private String manifestJson;
+  @Column(name = "manifest_json", nullable = false, columnDefinition = "TEXT") private String manifestJson;
 
   public UUID getId() { return id; }
   public String getTaskKey() { return taskKey; }

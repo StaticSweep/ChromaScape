@@ -1,0 +1,13 @@
+allprojects { projectRef ->
+    afterEvaluate {
+        spotless {
+            java {
+                target(projectRef.fileTree(new File(projectRef.projectDir, 'src/main/java/com/chromascape/web/aiplayer/schema')) { include '**/*.java' }, projectRef.fileTree(new File(projectRef.projectDir, 'src/test/java/com/chromascape/web/aiplayer/schema')) { include '**/*.java' })
+            }
+        }
+        tasks.named('checkstyleMain') {
+            setSource(projectRef.fileTree(new File(projectRef.projectDir, 'src/main/java/com/chromascape/web/aiplayer/schema')) { include '**/*.java' })
+            doFirst { assert source.files.size() == 4 : 'SC665 scoped Checkstyle must inspect four production classes' }
+        }
+    }
+}
