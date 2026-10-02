@@ -1,7 +1,7 @@
 # SC-609 verification and review handoff
 
 Complete implemented plan: [SC-609-DELIVERY-PLAN.md](SC-609-DELIVERY-PLAN.md). Operations and compatibility: [SC-609-CAPTURE-PROVENANCE.md](SC-609-CAPTURE-PROVENANCE.md).
-Felix task `task_1790971893615_dult4y03`. Coordinated producer draft PR: https://github.com/ikiddoi/micro6/pull/160 (commit `caa19d25de`). This handoff distinguishes backend/UI verification from unrun native checks. Both projects use branch `codex/sc-609-recording-provenance`; ChromaScape stacks on SC-641, Micro6 on main.
+Felix task `task_1790971893615_dult4y03` is in review. Backend draft PR: https://github.com/ikiddoi/ChromaScape/pull/45 (source commit `9f5151be`). Shortcut SC-609 review synchronization succeeded with marker `[felix-sync:task_1790971893615_dult4y03:review]`, comment activity-1946. Coordinated producer draft PR: https://github.com/ikiddoi/micro6/pull/160 (commit `caa19d25de`). This handoff distinguishes backend/UI verification from unrun native checks. Both projects use branch `codex/sc-609-recording-provenance`; ChromaScape stacks on SC-641, Micro6 on main.
 
 ## Acceptance results
 
@@ -105,6 +105,8 @@ Canonical ChromaScape project:
 - `C:\Dev\IdeaProjects\ChromaScape\src\test\js\recording-catalog.test.js`
 - `C:\Dev\IdeaProjects\ChromaScape\src\test\js\replay-page.test.js`
 
+- `C:\Dev\IdeaProjects\ChromaScape\docs\SC-609-VERIFICATION.md`
+
 Coordinated Micro6 project:
 
 - `C:\Dev\IdeaProjects\micro6\runelite-client\src\main\java\net\runelite\client\plugins\debugrecorder\BehaviorCaptureOutbox.java`
@@ -117,4 +119,3 @@ Coordinated Micro6 project:
 - `C:\Dev\IdeaProjects\micro6\runelite-client\src\main\resources\contracts\behavior-semantic-v1.json`
 - `C:\Dev\IdeaProjects\micro6\runelite-client\src\test\java\net\runelite\client\plugins\debugrecorder\BehaviorCaptureOutboxTest.java`
 - `C:\Dev\IdeaProjects\micro6\runelite-client\src\test\java\net\runelite\client\plugins\debugrecorder\BehaviorSessionStartProvenanceTest.java`
-- `C:\Dev\IdeaProjects\ChromaScape\docs\SC-609-VERIFICATION.md`
