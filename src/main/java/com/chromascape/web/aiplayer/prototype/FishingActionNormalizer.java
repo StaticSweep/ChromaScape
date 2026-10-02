@@ -14,7 +14,10 @@ public final class FishingActionNormalizer {
 
   /** Supported fishing options. */
   public static final Set<String> SUPPORTED_OPTIONS =
-      Set.of("net", "bait", "lure", "cage", "harpoon");
+      com.chromascape.web.recording.provenance.BehaviorSemanticContract.actionIds().stream()
+          .filter(id -> id.startsWith("INTERACT_NPC_"))
+          .map(id -> id.substring("INTERACT_NPC_".length()).toLowerCase(java.util.Locale.ROOT))
+          .collect(java.util.stream.Collectors.toUnmodifiableSet());
 
   /** Supported NPC menu-action families. */
   public static final Set<String> SUPPORTED_MENU_ACTIONS =

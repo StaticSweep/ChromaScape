@@ -44,6 +44,34 @@ public class SessionStartResponse {
   @JsonInclude(JsonInclude.Include.NON_NULL)
   private String clientRequestId;
 
+  private Integer selectedTickBatchVersion;
+  private Integer selectedAckVersion;
+  private com.fasterxml.jackson.databind.JsonNode runContext;
+
+  public Integer getSelectedTickBatchVersion() {
+    return selectedTickBatchVersion;
+  }
+
+  public void setSelectedTickBatchVersion(Integer v) {
+    selectedTickBatchVersion = v;
+  }
+
+  public Integer getSelectedAckVersion() {
+    return selectedAckVersion;
+  }
+
+  public void setSelectedAckVersion(Integer v) {
+    selectedAckVersion = v;
+  }
+
+  public com.fasterxml.jackson.databind.JsonNode getRunContext() {
+    return runContext;
+  }
+
+  public void setRunContext(com.fasterxml.jackson.databind.JsonNode v) {
+    runContext = v;
+  }
+
   public SessionStartResponse() {}
 
   public SessionStartResponse(

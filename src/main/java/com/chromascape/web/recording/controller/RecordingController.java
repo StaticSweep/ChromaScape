@@ -7,12 +7,15 @@ import com.chromascape.web.recording.config.RecordingConfig;
 import com.chromascape.web.recording.config.RecordingTriggerSource;
 import com.chromascape.web.recording.dto.RecordingSessionMetadataResponse;
 import com.chromascape.web.recording.dto.RecordingSessionMetadataUpdateRequest;
+import com.chromascape.web.recording.dto.RecordingStartRequest;
 import com.chromascape.web.recording.entity.RecordingSession;
 import com.chromascape.web.recording.entity.RecordingSessionRepository;
 import com.chromascape.web.recording.exception.FrameCaptureException;
 import com.chromascape.web.recording.exception.RecordingAlreadyInProgressException;
 import com.chromascape.web.recording.exception.RecordingDisabledException;
 import com.chromascape.web.recording.exception.RecordingException;
+import com.chromascape.web.recording.provenance.ProvenanceException;
+import com.chromascape.web.recording.provenance.RecordingProvenance;
 import com.chromascape.web.recording.service.RecordingService;
 import com.chromascape.web.recording.service.RecordingService.RecordingMetadata;
 import com.chromascape.web.recording.service.RecordingSessionMetadataService;
@@ -85,18 +88,42 @@ public class RecordingController {
    */
   @PostMapping("/start")
   public ResponseEntity<Map<String, Object>> startRecording(
-      @RequestBody Map<String, String> request) {
-    String accountName = request.get("accountName");
-    String scriptName = request.get("scriptName");
-    String windowTitle = request.get("windowTitle");
+      @RequestBody RecordingStartRequest request) {
+    String accountName = request.accountName();
+    String scriptName = request.scriptName();
+    String windowTitle = request.windowTitle();
 
     // Get account from window selection if not provided
     if (accountName == null || accountName.isEmpty()) {
       WindowInfo window = windowSelectionService.getSelectedWindow();
-      accountName = window != null ? window.getAccountName() : "default";
+      accountName = window != null ? window.getAccountName() : null;
     }
 
     try {
+      RecordingProvenance provenance =
+          RecordingProvenance.capture(request.taskKey(), request.taskArgs());
+      if (request.runContext() != null && !request.runContext().isNull()) {
+        var response =
+            debugSessionService
+                .startSessionWithOutcome(
+                    accountName,
+                    scriptName,
+                    true,
+                    RecordingTriggerSource.MANUAL,
+                    null,
+                    request.taskKey(),
+                    request.taskArgs(),
+                    request.runContext())
+                .response();
+        Map<String, Object> result = new HashMap<>();
+        result.put("recordingId", response.getRecordingId());
+        result.put("sessionId", response.getSessionId());
+        result.put("status", response.getRecordingId() == null ? "tick-only" : "recording");
+        result.put("account", accountName);
+        result.put("runContext", response.getRunContext());
+        result.put("recordingFailureReason", response.getRecordingFailureReason());
+        return ResponseEntity.ok(result);
+      }
       String recordingId = recordingService.startRecording(RecordingTriggerSource.MANUAL);
       LocalDateTime preciseStartTime = recordingService.getRecordingStartTimeAsLocalDateTime();
 
@@ -116,6 +143,7 @@ public class RecordingController {
               RecordingSession.SessionTrigger.MANUAL,
               null); // videoPath will be set on stop
 
+      session.captureProvenance(provenance);
       recordingSessionRepository.save(session);
       logger.info("Created recording session: {} for account: {}", recordingId, accountName);
 
@@ -126,6 +154,9 @@ public class RecordingController {
       response.put("message", "Recording started");
       return ResponseEntity.ok(response);
 
+    } catch (ProvenanceException e) {
+      return ResponseEntity.badRequest()
+          .body(Map.of("errorType", e.getCode(), "message", "Invalid recording provenance"));
     } catch (RecordingAlreadyInProgressException e) {
       logger.warn("Attempt to start recording while already in progress");
       Map<String, Object> response = new HashMap<>();
@@ -377,75 +408,7 @@ public class RecordingController {
     try {
       List<RecordingSession> sessions = recordingSessionRepository.findAllByOrderByStartTimeDesc();
 
-      List<Map<String, Object>> response =
-          sessions.stream()
-              .map(
-                  session -> {
-                    Map<String, Object> map = new HashMap<>();
-                    map.put("id", session.getId());
-                    map.put("recordingId", session.getRecordingId());
-                    map.put("accountName", session.getAccountName());
-                    map.put("scriptName", session.getScriptName());
-                    map.put("startTime", session.getStartTime());
-                    map.put("endTime", session.getEndTime());
-                    map.put("triggerType", session.getTriggerType());
-                    map.put("videoCodec", session.getVideoCodec());
-                    map.put("replayName", session.getReplayName());
-                    map.put("replayTags", metadataService.parseTags(session.getReplayTagsJson()));
-                    map.put(
-                        "displayName",
-                        metadataService.computeDisplayName(
-                            session.getReplayName(),
-                            session.getAccountName(),
-                            session.getScriptName(),
-                            metadataService.formatStartTime(session.getStartTime())));
-
-                    // Playability flags for the replay selector
-                    boolean hasVideoPath =
-                        session.getVideoPath() != null && !session.getVideoPath().isBlank();
-                    boolean hasConfiguredVideoFile = sessionVideoFileExists(session);
-                    boolean hasOrphanVideoFile = videoFileExists(session.getRecordingId());
-                    boolean finalized = session.getEndTime() != null;
-                    String status;
-                    boolean playable;
-                    if (!finalized) {
-                      status = "RECORDING";
-                      playable = false;
-                    } else if (!hasVideoPath && hasOrphanVideoFile) {
-                      status = "UNFINALIZED";
-                      playable = false;
-                    } else if (!hasVideoPath || !hasConfiguredVideoFile) {
-                      status = "MISSING_VIDEO";
-                      playable = false;
-                    } else {
-                      status = "FINALIZED";
-                      playable = true;
-                    }
-                    map.put("playable", playable);
-                    map.put("status", status);
-                    map.put("videoAvailable", playable);
-                    map.put(
-                        "videoSizeBytes",
-                        hasConfiguredVideoFile
-                            ? sessionVideoFileSize(session)
-                            : (hasOrphanVideoFile
-                                ? videoFileSize(session.getRecordingId())
-                                : null));
-                    if (!playable) {
-                      if (!finalized) {
-                        map.put("videoError", "Recording is still in progress");
-                      } else if (!hasVideoPath && hasOrphanVideoFile) {
-                        map.put(
-                            "videoError",
-                            "Recording was not finalized properly - video path not set");
-                      } else {
-                        map.put("videoError", "Video file not found on disk");
-                      }
-                    }
-
-                    return map;
-                  })
-              .toList();
+      List<Map<String, Object>> response = sessions.stream().map(this::catalogEntry).toList();
 
       logger.info("Returned {} recording sessions", response.size());
       return ResponseEntity.ok(response);
@@ -453,6 +416,88 @@ public class RecordingController {
       logger.error("Failed to list recording sessions: {}", e.getMessage());
       return ResponseEntity.internalServerError().build();
     }
+  }
+
+  @Autowired private com.chromascape.web.recording.service.RecordingCatalogPager catalogPager;
+
+  /** Bounded versioned route; the original array route remains source/wire compatible. */
+  @GetMapping("/v1/sessions")
+  public ResponseEntity<Map<String, Object>> catalogPage(
+      @org.springframework.web.bind.annotation.RequestParam(required = false) String accountName,
+      @org.springframework.web.bind.annotation.RequestParam(required = false) String taskKey,
+      @org.springframework.web.bind.annotation.RequestParam(defaultValue = "50") int limit,
+      @org.springframework.web.bind.annotation.RequestParam(required = false) String cursor) {
+    var page = catalogPager.page(accountName, taskKey, limit, cursor);
+    Map<String, Object> response = new HashMap<>();
+    response.put("entries", page.entries().stream().map(this::catalogEntry).toList());
+    response.put("nextCursor", page.nextCursor());
+    response.put("hasMore", page.hasMore());
+    return ResponseEntity.ok(response);
+  }
+
+  private Map<String, Object> catalogEntry(RecordingSession session) {
+
+    Map<String, Object> map = new HashMap<>();
+    map.put("id", session.getId());
+    map.put("recordingId", session.getRecordingId());
+    map.put("accountName", session.getAccountName());
+    map.put("scriptName", session.getScriptName());
+    map.put("taskKey", session.getTaskKey());
+    map.put("taskArgs", session.getTaskArgs());
+    map.put("settingsHash", session.getSettingsHash());
+    map.put("startTime", session.getStartTime());
+    map.put("endTime", session.getEndTime());
+    map.put("triggerType", session.getTriggerType());
+    map.put("videoCodec", session.getVideoCodec());
+    map.put("replayName", session.getReplayName());
+    map.put("replayTags", metadataService.parseTags(session.getReplayTagsJson()));
+    map.put(
+        "displayName",
+        metadataService.computeDisplayName(
+            session.getReplayName(),
+            session.getAccountName(),
+            session.getScriptName(),
+            metadataService.formatStartTime(session.getStartTime())));
+
+    // Playability flags for the replay selector
+    boolean hasVideoPath = session.getVideoPath() != null && !session.getVideoPath().isBlank();
+    boolean hasConfiguredVideoFile = sessionVideoFileExists(session);
+    boolean hasOrphanVideoFile = videoFileExists(session.getRecordingId());
+    boolean finalized = session.getEndTime() != null;
+    String status;
+    boolean playable;
+    if (!finalized) {
+      status = "RECORDING";
+      playable = false;
+    } else if (!hasVideoPath && hasOrphanVideoFile) {
+      status = "UNFINALIZED";
+      playable = false;
+    } else if (!hasVideoPath || !hasConfiguredVideoFile) {
+      status = "MISSING_VIDEO";
+      playable = false;
+    } else {
+      status = "FINALIZED";
+      playable = true;
+    }
+    map.put("playable", playable);
+    map.put("status", status);
+    map.put("videoAvailable", playable);
+    map.put(
+        "videoSizeBytes",
+        hasConfiguredVideoFile
+            ? sessionVideoFileSize(session)
+            : (hasOrphanVideoFile ? videoFileSize(session.getRecordingId()) : null));
+    if (!playable) {
+      if (!finalized) {
+        map.put("videoError", "Recording is still in progress");
+      } else if (!hasVideoPath && hasOrphanVideoFile) {
+        map.put("videoError", "Recording was not finalized properly - video path not set");
+      } else {
+        map.put("videoError", "Video file not found on disk");
+      }
+    }
+
+    return map;
   }
 
   /**

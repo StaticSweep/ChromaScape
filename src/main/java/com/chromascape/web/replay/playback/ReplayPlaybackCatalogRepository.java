@@ -16,28 +16,33 @@ public class ReplayPlaybackCatalogRepository {
   private static final String FIND_CATALOG_ROWS_SQL =
       """
       WITH catalog_page AS (
-        SELECT ds.id AS cursor_id,
+        SELECT rs.id AS cursor_id,
                ds.recording_id AS recording_id,
                ds.session_id AS session_id,
-               ds.account_name AS account_name,
-               ds.script_name AS script_name,
-               ds.start_time AS start_time,
-               ds.end_time AS end_time,
+               rs.account_name AS account_name,
+               rs.script_name AS script_name,
+               rs.start_time AS start_time,
+               rs.end_time AS end_time,
                ds.start_tick AS start_tick,
-               ds.end_tick AS end_tick
-          FROM debug_sessions ds
-          INNER JOIN recording_sessions rs
-                  ON rs.recording_id = ds.recording_id
+               ds.end_tick AS end_tick,
+               rs.task_key, rs.task_args, rs.settings_hash
+          FROM recording_sessions rs
+          JOIN LATERAL (
+            SELECT linked.* FROM debug_sessions linked
+            WHERE linked.recording_id = rs.recording_id
+            ORDER BY linked.start_time DESC, linked.id DESC LIMIT 1
+          ) ds ON TRUE
          WHERE ds.recording_id IS NOT NULL
            AND (CAST(:accountName AS VARCHAR) IS NULL
-                OR ds.account_name = CAST(:accountName AS VARCHAR))
+                OR rs.account_name = CAST(:accountName AS VARCHAR))
+           AND (CAST(:taskKey AS VARCHAR) IS NULL OR rs.task_key = CAST(:taskKey AS VARCHAR))
            AND (
              CAST(:cursorStartTime AS TIMESTAMP) IS NULL
-             OR ds.start_time < CAST(:cursorStartTime AS TIMESTAMP)
-             OR (ds.start_time = CAST(:cursorStartTime AS TIMESTAMP)
-                 AND ds.id < CAST(:cursorId AS BIGINT))
+             OR rs.start_time < CAST(:cursorStartTime AS TIMESTAMP)
+             OR (rs.start_time = CAST(:cursorStartTime AS TIMESTAMP)
+                 AND rs.id < CAST(:cursorId AS BIGINT))
            )
-         ORDER BY ds.start_time DESC, ds.id DESC
+         ORDER BY rs.start_time DESC, rs.id DESC
          LIMIT :pageSize OFFSET :rowOffset
       )
       SELECT cp.cursor_id AS cursor_id,
@@ -51,7 +56,8 @@ public class ReplayPlaybackCatalogRepository {
              cp.end_tick AS end_tick,
              snapshot_counts.tick_count AS tick_count,
              snapshot_counts.position_frame_count AS position_frame_count,
-             log_counts.log_count AS log_count
+             log_counts.log_count AS log_count,
+             cp.task_key, cp.task_args, cp.settings_hash
         FROM catalog_page cp
         LEFT JOIN LATERAL (
           SELECT COUNT(ts.id) AS tick_count,
@@ -98,7 +104,19 @@ public class ReplayPlaybackCatalogRepository {
       Long cursorId,
       int pageSize,
       int rowOffset) {
+    return findCatalogRows(accountName, null, cursorStartTime, cursorId, pageSize, rowOffset);
+  }
+
+  @SuppressWarnings("unchecked")
+  public List<Object[]> findCatalogRows(
+      String accountName,
+      String taskKey,
+      LocalDateTime cursorStartTime,
+      Long cursorId,
+      int pageSize,
+      int rowOffset) {
     Query query = entityManager.createNativeQuery(FIND_CATALOG_ROWS_SQL);
+    query.setParameter("taskKey", taskKey);
     query.setParameter("accountName", accountName);
     query.setParameter("cursorStartTime", cursorStartTime);
     query.setParameter("cursorId", cursorId);

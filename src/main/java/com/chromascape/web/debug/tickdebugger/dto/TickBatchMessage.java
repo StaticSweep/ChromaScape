@@ -13,7 +13,29 @@ import java.util.Map;
  * <p>Each tick batch contains all relevant data for a single game tick including player state,
  * inventory, equipment, threats, projectiles, cooldowns, logs, and overlays.
  */
+@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public class TickBatchMessage {
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  private com.fasterxml.jackson.databind.JsonNode canonicalObservation;
+
+  public com.fasterxml.jackson.databind.JsonNode getCanonicalObservation() {
+    return canonicalObservation == null ? null : canonicalObservation.deepCopy();
+  }
+
+  public void setCanonicalObservation(com.fasterxml.jackson.databind.JsonNode value) {
+    canonicalObservation = value.deepCopy();
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  private com.fasterxml.jackson.databind.JsonNode canonicalFrame;
+
+  public com.fasterxml.jackson.databind.JsonNode getCanonicalFrame() {
+    return canonicalFrame == null ? null : canonicalFrame.deepCopy();
+  }
+
+  public void setCanonicalFrame(com.fasterxml.jackson.databind.JsonNode value) {
+    canonicalFrame = value.deepCopy();
+  }
 
   /** Message type identifier. */
   private String type;

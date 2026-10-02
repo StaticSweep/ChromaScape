@@ -16,8 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * xRSPS-neutral observed-playback endpoints for captured debugger evidence.
  *
- * <p>The versioned routes are canonical. The unversioned routes are one-cycle compatibility
- * aliases and intentionally delegate to exactly the same service and DTO schemas.
+ * <p>The versioned routes are canonical. The unversioned routes are one-cycle compatibility aliases
+ * and intentionally delegate to exactly the same service and DTO schemas.
  */
 @RestController
 @RequestMapping("/api/replay/playback")
@@ -36,7 +36,6 @@ public class ReplayPlaybackController {
   }
 
   /** Lists a keyset page of linked recordings and their observed-evidence aggregates. */
-  @GetMapping("/v1/recordings")
   public ResponseEntity<ReplayPlaybackCatalogResponse> catalog(
       Principal principal,
       @RequestParam(required = false) String accountName,
@@ -44,6 +43,17 @@ public class ReplayPlaybackController {
       @RequestParam(required = false) String cursor) {
     principalService.requirePrincipal(principal);
     return ResponseEntity.ok(playbackService.catalog(accountName, limit, cursor));
+  }
+
+  @GetMapping("/v1/recordings")
+  public ResponseEntity<ReplayPlaybackCatalogResponse> catalogFiltered(
+      Principal principal,
+      @RequestParam(required = false) String accountName,
+      @RequestParam(required = false) String taskKey,
+      @RequestParam(required = false, defaultValue = "50") int limit,
+      @RequestParam(required = false) String cursor) {
+    principalService.requirePrincipal(principal);
+    return ResponseEntity.ok(playbackService.catalog(accountName, taskKey, limit, cursor, 0));
   }
 
   /**
@@ -77,8 +87,7 @@ public class ReplayPlaybackController {
       @RequestParam(required = false, defaultValue = "100") int limit) {
     principalService.requirePrincipal(principal);
     return ResponseEntity.ok(
-        playbackService.frames(
-            requireRecordingIdForLink(recordingId), fromTick, cursor, limit));
+        playbackService.frames(requireRecordingIdForLink(recordingId), fromTick, cursor, limit));
   }
 
   /** Deprecated unversioned frame alias using the exact v1 response schema. */
@@ -106,8 +115,7 @@ public class ReplayPlaybackController {
 
   private static String requireRecordingIdForLink(String recordingId) {
     if (recordingId == null || recordingId.isBlank()) {
-      throw ReplayException.badRequest(
-          ReplayErrorCode.VALIDATION_ERROR, "recordingId is required");
+      throw ReplayException.badRequest(ReplayErrorCode.VALIDATION_ERROR, "recordingId is required");
     }
     return recordingId.trim();
   }

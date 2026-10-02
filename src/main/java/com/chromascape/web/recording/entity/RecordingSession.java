@@ -1,7 +1,11 @@
 package com.chromascape.web.recording.entity;
 
+import com.chromascape.web.recording.provenance.RecordingProvenance;
+import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * JPA entity for storing recording session metadata in the database.
@@ -13,7 +17,15 @@ import java.time.LocalDateTime;
     name = "recording_sessions",
     indexes = {
       @Index(name = "idx_recording_sessions_start_time", columnList = "start_time"),
-      @Index(name = "idx_recording_sessions_recording_id", columnList = "recording_id")
+      @Index(name = "idx_recording_sessions_recording_id", columnList = "recording_id"),
+      @Index(name = "idx_recording_catalog_cursor", columnList = "start_time DESC,id DESC"),
+      @Index(
+          name = "idx_recording_catalog_account",
+          columnList = "account_name,start_time DESC,id DESC"),
+      @Index(name = "idx_recording_catalog_task", columnList = "task_key,start_time DESC,id DESC"),
+      @Index(
+          name = "idx_recording_catalog_account_task",
+          columnList = "account_name,task_key,start_time DESC,id DESC")
     })
 public class RecordingSession {
 
@@ -44,6 +56,23 @@ public class RecordingSession {
   /** Script name being run during recording. */
   @Column(length = 100)
   private String scriptName;
+
+  @Column(length = 160)
+  private String taskKey;
+
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(columnDefinition = "jsonb")
+  private JsonNode taskArgs;
+
+  @Column(length = 71)
+  private String settingsHash;
+
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(columnDefinition = "jsonb")
+  private JsonNode runContext;
+
+  @Column(length = 24)
+  private String provenanceOrigin;
 
   /** When the recording started. */
   @Column(nullable = false)
@@ -99,6 +128,42 @@ public class RecordingSession {
     this.startTime = startTime;
     this.triggerType = triggerType;
     this.videoPath = videoPath;
+  }
+
+  /** Called only while creating a row; finalization never reconstructs provenance. */
+  public void captureProvenance(RecordingProvenance provenance) {
+    if (taskKey != null || taskArgs != null || settingsHash != null)
+      throw new IllegalStateException("IMMUTABLE_PROVENANCE");
+    taskKey = provenance.taskKey();
+    taskArgs = provenance.taskArgs();
+    settingsHash = provenance.settingsHash();
+    provenanceOrigin = "CAPTURED";
+  }
+
+  public String getTaskKey() {
+    return taskKey;
+  }
+
+  public JsonNode getTaskArgs() {
+    return taskArgs == null ? null : taskArgs.deepCopy();
+  }
+
+  public String getSettingsHash() {
+    return settingsHash;
+  }
+
+  public JsonNode getRunContext() {
+    return runContext == null ? null : runContext.deepCopy();
+  }
+
+  public String getProvenanceOrigin() {
+    return provenanceOrigin;
+  }
+
+  public void bindRunContext(JsonNode context, String origin) {
+    if (runContext != null) throw new IllegalStateException("IMMUTABLE_RUN_CONTEXT");
+    runContext = context.deepCopy();
+    provenanceOrigin = origin;
   }
 
   // Getters and Setters

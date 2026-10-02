@@ -403,10 +403,11 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/recording-catalog.js"></script>
     <script>
         const DEBUG_API_BASE = '/api/debug/replay';
-        const RECORDING_SESSIONS_API = '/api/recordings/sessions';
-        const REPLAY_TICK_CATALOG_API = '/api/replay/playback/recordings';
+        const RECORDING_SESSIONS_API = '/api/recordings/v1/sessions';
+        const REPLAY_TICK_CATALOG_API = '/api/replay/playback/v1/recordings';
         let isRecording = false;
         let currentRecordingId = null;
         let currentSessionId = null;
@@ -447,6 +448,22 @@
             hasMoreTicks: true
         };
 
+        const filters = document.createElement('div');
+        filters.className = 'd-flex gap-2 flex-wrap mb-3';
+        const accountFilter = document.createElement('input'); accountFilter.placeholder = 'Exact account name'; accountFilter.setAttribute('aria-label', 'Filter by account');
+        const taskFilter = document.createElement('input'); taskFilter.placeholder = 'Canonical task key'; taskFilter.setAttribute('aria-label', 'Filter by task');
+        const grouping = document.createElement('select'); grouping.setAttribute('aria-label', 'Recording grouping');
+        for (const [value, text] of [['account', 'Account → Task'], ['task', 'All accounts → Task']]) {
+            const option = document.createElement('option'); option.value = value; option.textContent = text; grouping.appendChild(option);
+        }
+        filters.append(accountFilter, taskFilter, grouping);
+        recordingsList.closest('table').before(filters);
+        let catalogGeneration = 0, catalogCursor = null, catalogSessions = [];
+        const catalogLoadMore = document.createElement('button'); catalogLoadMore.type='button';
+        catalogLoadMore.className='btn btn-outline-secondary'; catalogLoadMore.textContent='Load more'; catalogLoadMore.hidden=true;
+        filters.appendChild(catalogLoadMore); catalogLoadMore.addEventListener('click',()=>loadRecordings(true));
+        for (const element of [accountFilter, taskFilter, grouping]) element.addEventListener('change', loadRecordings);
+
         // Recording Controls
         recordBtn.addEventListener('click', async () => {
             if (isRecording) {
@@ -464,7 +481,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        accountName: 'Replay User',
+                        accountName: null,
                         scriptName: 'Manual Recording',
                         recordingEnabled: true,
                         sessionId: currentSessionId || null
@@ -524,25 +541,27 @@
         }
 
         // Load recordings and mark replayability by tick snapshot availability
-        async function loadRecordings() {
+        async function loadRecordings(append = false) {
+            // DOM events are not an append request.
+            append = append === true;
+            const generation = ++catalogGeneration;
+            catalogLoadMore.disabled=true;
+            if (!append) { catalogCursor=null; catalogSessions=[]; recordingsList.innerHTML='<tr><td colspan="5" class="text-center">Loading recordings…</td></tr>'; }
             try {
-                const response = await fetch(RECORDING_SESSIONS_API);
-                if (!response.ok) {
-                    throw new Error(`Recording catalog returned HTTP ${response.status}`);
-                }
-                const sessions = await response.json();
+                const catalogFilters = { accountName: accountFilter.value, taskKey: taskFilter.value };
+                const page = await RecordingCatalog.page(fetch, RECORDING_SESSIONS_API, catalogFilters, append ? catalogCursor : null);
+                if (generation !== catalogGeneration) return;
+                catalogSessions = append ? catalogSessions.concat(page.entries) : page.entries;
+                catalogCursor = page.nextCursor; catalogLoadMore.hidden=!page.hasMore;
+                const sessions = catalogSessions;
 
                 // Tick coverage enriches the list but never gates ordinary video playback.
                 // Authentication or xRSPS availability must not hide otherwise valid MP4 files.
                 const tickEntriesByRecording = new Map();
                 try {
-                    const tickResponse = await fetch(`${REPLAY_TICK_CATALOG_API}?limit=200&offset=0`);
-                    if (tickResponse.ok) {
-                        const tickCatalog = await tickResponse.json();
-                        (Array.isArray(tickCatalog.entries) ? tickCatalog.entries : []).forEach(entry => {
-                            if (entry.recordingId) tickEntriesByRecording.set(entry.recordingId, entry);
-                        });
-                    }
+                    const tickEntries = await RecordingCatalog.allPages(fetch, REPLAY_TICK_CATALOG_API, catalogFilters);
+                    for (const entry of tickEntries) if (entry.recordingId) tickEntriesByRecording.set(entry.recordingId, entry);
+
                 } catch (tickCatalogError) {
                     console.warn('Tick coverage unavailable; video playback remains available:', tickCatalogError);
                 }
@@ -562,6 +581,7 @@
                     };
                 });
 
+                if (generation !== catalogGeneration) return;
                 if (recordings.length === 0) {
                     recordingsList.innerHTML = '<tr><td colspan="5" class="text-center">No recordings found</td></tr>';
                     return;
@@ -572,7 +592,10 @@
                 while (recordingsList.firstChild) {
                     recordingsList.removeChild(recordingsList.firstChild);
                 }
-                for (const r of recordings) {
+                for (const group of RecordingCatalog.groups(recordings, grouping.value)) {
+                    const header = document.createElement('tr'), cell = document.createElement('th');
+                    cell.colSpan = 5; cell.textContent = group.label; header.appendChild(cell); recordingsList.appendChild(header);
+                for (const r of group.entries) {
                     const tr = document.createElement('tr');
                     tr.className = 'recording-item';
 
@@ -582,7 +605,8 @@
                     idCell.appendChild(codeEl);
 
                     const accountCell = document.createElement('td');
-                    accountCell.textContent = r.accountName || '-';
+                    accountCell.textContent = r.accountName || 'Unknown account';
+                    accountCell.appendChild(RecordingCatalog.settingsNode(document, r));
 
                     const startCell = document.createElement('td');
                     startCell.textContent = r.startTime ? new Date(r.startTime).toLocaleString() : '--';
@@ -619,6 +643,8 @@
                     recordingsList.appendChild(tr);
                 }
 
+                }
+
                 // Add select button listeners
                 document.querySelectorAll('.play-recording').forEach(btn => {
                     btn.addEventListener('click', async () => {
@@ -630,6 +656,7 @@
 
                 return recordings;
             } catch (error) {
+                if (generation !== catalogGeneration) return;
                 console.error('Failed to load recordings:', error);
                 recordingsList.replaceChildren();
                 const row = document.createElement('tr');
@@ -639,6 +666,8 @@
                 cell.textContent = `Could not load recordings: ${error.message}`;
                 row.appendChild(cell);
                 recordingsList.appendChild(row);
+            } finally {
+                if (generation === catalogGeneration) catalogLoadMore.disabled=false;
             }
         }
 

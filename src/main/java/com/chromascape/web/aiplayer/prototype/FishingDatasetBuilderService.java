@@ -40,6 +40,12 @@ public class FishingDatasetBuilderService {
   private final FishingRecordingLoader loader;
   private final ObjectMapper objectMapper;
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.chromascape.web.recording.provenance.BehaviorRunContextService runContexts;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.chromascape.web.recording.provenance.CanonicalFrameStore canonicalFrames;
+
   @Value("${ai-player.dataset.output-dir:.chromascape/datasets}")
   private String outputDir;
 
@@ -70,6 +76,12 @@ public class FishingDatasetBuilderService {
    */
   public TrainingResult train(String recordingId, Integer requiredCatchCount) {
     ensureEnabled();
+    if (runContexts == null)
+      throw new PrototypeApiException(
+          HttpStatus.BAD_REQUEST,
+          "RUN_CONTEXT_REQUIRED",
+          "Canonical recording provenance is required");
+    runContexts.requireTrainingContext(recordingId);
     int required =
         requiredCatchCount != null
             ? requiredCatchCount
@@ -134,13 +146,25 @@ public class FishingDatasetBuilderService {
   private List<DatasetExample> buildExamples(RecordingContext ctx, String recordingId) {
     List<DatasetExample> examples = new ArrayList<>();
     for (AlignedAction aligned : ctx.alignedActions()) {
+      var frame = canonicalFrames.atTick(recordingId, aligned.snapshotTick());
       FishingState state =
-          FishingStateExtractor.extract(
-              aligned.snapshot(), ctx.inventoryTotals(), ctx.initialInventoryTotal());
+          com.chromascape.web.recording.provenance.CanonicalObservation.knownFishingState(
+              com.chromascape.web.recording.provenance.CanonicalObservation.from(frame).payload());
       SemanticAction action = FishingActionNormalizer.classify(aligned.action()).semanticAction();
       if (action == null) {
         continue;
       }
+      String canonicalId = action.type() + "_" + action.option().toUpperCase(java.util.Locale.ROOT);
+      boolean matched = false;
+      for (var event : frame.payload().path("semanticEvents")) {
+        if (event.path("sourceTick").asLong(-1) == aligned.action().sourceTick()
+            && event.path("actionId").asText().equals(canonicalId)
+            && event.path("source").asText().equals("CLIENT_EVENT")
+            && event.path("humanObserved").asBoolean()) matched = true;
+      }
+      if (!matched)
+        throw new com.chromascape.web.recording.provenance.ProvenanceException(
+            "CANONICAL_HUMAN_ACTION_REQUIRED");
       examples.add(
           new DatasetExample(
               1,
@@ -149,7 +173,9 @@ public class FishingDatasetBuilderService {
               aligned.action().sourceTick(),
               aligned.snapshotTick(),
               state,
-              action));
+              action,
+              frame.digest(),
+              com.chromascape.web.recording.provenance.BehaviorSemanticContract.digest()));
     }
     return examples;
   }
@@ -194,6 +220,10 @@ public class FishingDatasetBuilderService {
     manifest.put("schemaVersion", 1);
     manifest.put("generatedAt", Instant.now().toString());
     manifest.put("recordingId", ctx.session().getRecordingId());
+    manifest.put("runContext", runContexts.requireTrainingContext(ctx.session().getRecordingId()));
+    manifest.put(
+        "semanticContractDigest",
+        com.chromascape.web.recording.provenance.BehaviorSemanticContract.digest());
     manifest.put("sessionId", ctx.session().getSessionId());
     manifest.put("snapshotCount", ctx.snapshots().size());
     manifest.put("actionCount", ctx.playerActions().size());

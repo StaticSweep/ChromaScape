@@ -20,4 +20,24 @@ public record DatasetExample(
     @JsonProperty("sourceTick") long sourceTick,
     @JsonProperty("snapshotTick") long snapshotTick,
     @JsonProperty("state") FishingState state,
-    @JsonProperty("action") SemanticAction action) {}
+    @JsonProperty("action") SemanticAction action,
+    @com.fasterxml.jackson.annotation.JsonInclude(
+            com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        @JsonProperty("frameDigest")
+        String frameDigest,
+    @com.fasterxml.jackson.annotation.JsonInclude(
+            com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        @JsonProperty("semanticContractDigest")
+        String semanticContractDigest) {
+  public DatasetExample(
+      int schemaVersion,
+      String recordingId,
+      String sessionId,
+      long sourceTick,
+      long snapshotTick,
+      FishingState state,
+      SemanticAction action) {
+    this(
+        schemaVersion, recordingId, sessionId, sourceTick, snapshotTick, state, action, null, null);
+  }
+}

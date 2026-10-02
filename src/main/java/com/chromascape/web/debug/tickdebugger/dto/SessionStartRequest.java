@@ -2,6 +2,7 @@ package com.chromascape.web.debug.tickdebugger.dto;
 
 import com.chromascape.web.recording.config.RecordingTriggerSource;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
 
 /** Request DTO for starting a debug session. */
 public class SessionStartRequest {
@@ -34,6 +35,53 @@ public class SessionStartRequest {
    */
   @JsonProperty("preferredSessionId")
   private String preferredSessionId;
+
+  private java.util.List<Integer> supportedTickBatchVersions;
+  private java.util.List<Integer> supportedAckVersions;
+
+  public java.util.List<Integer> getSupportedTickBatchVersions() {
+    return supportedTickBatchVersions;
+  }
+
+  public void setSupportedTickBatchVersions(java.util.List<Integer> v) {
+    supportedTickBatchVersions = v;
+  }
+
+  public java.util.List<Integer> getSupportedAckVersions() {
+    return supportedAckVersions;
+  }
+
+  public void setSupportedAckVersions(java.util.List<Integer> v) {
+    supportedAckVersions = v;
+  }
+
+  private String taskKey;
+  private JsonNode taskArgs;
+  private JsonNode runContext;
+
+  public String getTaskKey() {
+    return taskKey;
+  }
+
+  public void setTaskKey(String value) {
+    taskKey = value;
+  }
+
+  public JsonNode getTaskArgs() {
+    return taskArgs;
+  }
+
+  public void setTaskArgs(JsonNode value) {
+    taskArgs = value;
+  }
+
+  public JsonNode getRunContext() {
+    return runContext;
+  }
+
+  public void setRunContext(JsonNode value) {
+    runContext = value;
+  }
 
   public SessionStartRequest() {}
 

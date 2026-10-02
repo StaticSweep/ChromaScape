@@ -138,11 +138,11 @@ public final class Micro6CanonicalHash {
    *
    * <ul>
    *   <li>{@code AVAILABLE}: {@code settings_schema_version}, {@code settings_schema_hash}, and
-   *       {@code args_schema} are required.</li>
-   *   <li>{@code NOT_REQUESTED}: no schema-bearing or reason field is present.</li>
-   *   <li>{@code NOT_APPLICABLE}: {@code schema_not_applicable_reason} is present.</li>
+   *       {@code args_schema} are required.
+   *   <li>{@code NOT_REQUESTED}: no schema-bearing or reason field is present.
+   *   <li>{@code NOT_APPLICABLE}: {@code schema_not_applicable_reason} is present.
    *   <li>{@code ERROR}: {@code schema_error_reason} is present and {@code
-   *       schema_validation_errors} is a lexicographically sorted array.</li>
+   *       schema_validation_errors} is a lexicographically sorted array.
    * </ul>
    *
    * <p>Both {@code READY} and {@code DEGRADED} full catalogs carry a bundle; only a failed or
@@ -172,7 +172,8 @@ public final class Micro6CanonicalHash {
         // apply the same schema canonicalization before embedding it in the bundle.
         entry.put("args_schema", nodeValue(canonicalizeSchema(task.get("args_schema"))));
       } else if (SCHEMA_STATE_NOT_APPLICABLE.equals(state)) {
-        entry.put("schema_not_applicable_reason", nodeValue(task.get("schema_not_applicable_reason")));
+        entry.put(
+            "schema_not_applicable_reason", nodeValue(task.get("schema_not_applicable_reason")));
       } else if (SCHEMA_STATE_ERROR.equals(state)) {
         entry.put("schema_error_reason", nodeValue(task.get("schema_error_reason")));
         List<String> errors = new ArrayList<>();
@@ -209,6 +210,10 @@ public final class Micro6CanonicalHash {
   }
 
   /** Canonical JSON serialization with sorted object keys and Micro6-compatible escaping. */
+  public static String canonicalJson(JsonNode node) {
+    return canonicalize(node);
+  }
+
   private static String canonicalize(JsonNode node) {
     if (node == null || node.isNull()) {
       return "null";

@@ -102,8 +102,7 @@ public class TickStreamIngestionService {
       ObjectMapper objectMapper,
       @Autowired(required = false) LeeuwBotBridgeService leeuwBotBridgeService,
       @Autowired(required = false) LeeuwBotConfig leeuwBotConfig,
-      @Autowired(required = false)
-          ReplayRecordingActionIngestionService actionIngestionService) {
+      @Autowired(required = false) ReplayRecordingActionIngestionService actionIngestionService) {
     this.sessionService = sessionService;
     this.snapshotRepository = snapshotRepository;
     this.logRepository = logRepository;
@@ -155,7 +154,9 @@ public class TickStreamIngestionService {
       // Persist typed actions before any derived replay artifact is built. The ingestion service
       // performs ownership, schema, checksum, duplicate, and conflict validation. Legacy logs are
       // still persisted below and are intentionally not used as a replacement for this stream.
-      if (actionIngestionService != null && batch.getActions() != null && !batch.getActions().isEmpty()) {
+      if (actionIngestionService != null
+          && batch.getActions() != null
+          && !batch.getActions().isEmpty()) {
         actionIngestionService.ingest(batch, session.get().getRecordingId());
       }
 
@@ -298,6 +299,11 @@ public class TickStreamIngestionService {
   }
 
   private void validateStrictV2(TickBatchMessage batch) {
+    // V3 was already validated and durably accepted by the handler. Its redacted projection
+    // intentionally lacks raw sections required by legacy v2; never fabricate those sections.
+    if (Integer.valueOf(3).equals(batch.getSchemaVersion()) && batch.getCanonicalFrame() != null)
+      return;
+
     if (batch.getSchemaVersion() == null || batch.getSchemaVersion() < 2) {
       throw new IllegalArgumentException("Strict replay requires schemaVersion >= 2");
     }

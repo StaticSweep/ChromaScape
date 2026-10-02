@@ -48,11 +48,22 @@ public class DebugSessionController {
           request.getRecordingEnabled());
 
       SessionStartResponse response =
-          sessionService.startSession(
-              request.getAccountName(), request.getScriptName(), request.getRecordingEnabled());
+          sessionService
+              .startSessionWithOutcome(
+                  request.getAccountName(),
+                  request.getScriptName(),
+                  request.getRecordingEnabled(),
+                  request.getTriggerSource(),
+                  request.getPreferredSessionId(),
+                  request.getTaskKey(),
+                  request.getTaskArgs(),
+                  request.getRunContext())
+              .response();
 
       return ResponseEntity.ok(response);
 
+    } catch (com.chromascape.web.recording.provenance.ProvenanceException e) {
+      throw e;
     } catch (Exception e) {
       log.error("Error starting debug session: {}", e.getMessage(), e);
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();

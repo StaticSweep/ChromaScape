@@ -22,6 +22,18 @@ public class TaskDetectionService {
   private final RecordingService recordingService;
   private final TaskRecordingPreferenceService taskPreferenceService;
   private final RecordingSessionRepository recordingSessionRepository;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private com.chromascape.utils.core.screen.window.WindowSelectionService windows;
+
+  private String capturedAccount;
+  private com.chromascape.web.recording.provenance.RecordingProvenance capturedProvenance;
+
+  private String resolveAccount() {
+    var window = windows == null ? null : windows.getSelectedWindow();
+    return window == null ? null : window.getAccountName();
+  }
+
   private TaskType currentTask = null;
   private String currentTaskPlanId = null;
   private String currentTaskItemId = null;
@@ -54,6 +66,9 @@ public class TaskDetectionService {
     // Start new recording if this task is enabled
     if (taskPreferenceService.isTaskEnabled(taskType)) {
       log.info("Auto-starting recording for task: {}", taskType);
+      String accountAtStart = resolveAccount();
+      var provenanceAtStart =
+          com.chromascape.web.recording.provenance.RecordingProvenance.capture(null, null);
       String recordingId =
           recordingService.startRecordingAuto(
               taskType.getDisplayName(), RecordingTriggerSource.TASK_AUTO);
@@ -61,6 +76,8 @@ public class TaskDetectionService {
         // Only mark the task active after a recording actually started, so a failed start
         // does not pin the task and block a later retry of the same task.
         currentTask = taskType;
+        capturedAccount = accountAtStart;
+        capturedProvenance = provenanceAtStart;
         // Create RecordingSession entity for auto-start recording
         LocalDateTime startTime = recordingService.getRecordingStartTimeAsLocalDateTime();
         if (startTime != null) {
@@ -68,11 +85,12 @@ public class TaskDetectionService {
             RecordingSession session =
                 new RecordingSession(
                     recordingId,
-                    "auto-detected", // Account name not available in this context
+                    capturedAccount, // Capture once; missing identity remains unknown
                     taskType.getDisplayName(),
                     startTime,
                     RecordingSession.SessionTrigger.AUTO_START,
                     null);
+            session.captureProvenance(capturedProvenance);
             recordingSessionRepository.save(session);
             log.info("Created RecordingSession for auto-start: {}", recordingId);
           } else {
@@ -135,6 +153,9 @@ public class TaskDetectionService {
 
     if (taskPreferenceService.isTaskEnabled(TaskType.OTHER)) {
       log.info("Auto-starting recording for plan task: {}/{}", taskPlanId, taskItemId);
+      String accountAtStart = resolveAccount();
+      var provenanceAtStart =
+          com.chromascape.web.recording.provenance.RecordingProvenance.capture(null, null);
       String recordingId =
           recordingService.startRecordingAuto("plan-task", RecordingTriggerSource.TASK_AUTO);
       if (recordingId != null) {
@@ -144,6 +165,8 @@ public class TaskDetectionService {
         currentTaskPlanId = taskPlanId;
         currentTaskItemId = taskItemId;
         currentTask = TaskType.OTHER;
+        capturedAccount = accountAtStart;
+        capturedProvenance = provenanceAtStart;
 
         LocalDateTime startTime = recordingService.getRecordingStartTimeAsLocalDateTime();
         if (startTime != null
@@ -151,11 +174,12 @@ public class TaskDetectionService {
           RecordingSession session =
               new RecordingSession(
                   recordingId,
-                  "plan-task",
+                  capturedAccount,
                   taskPlanId,
                   startTime,
                   RecordingSession.SessionTrigger.AUTO_START,
                   null);
+          session.captureProvenance(capturedProvenance);
           recordingSessionRepository.save(session);
         }
       } else {
@@ -275,10 +299,10 @@ public class TaskDetectionService {
     String accountName;
     String scriptName;
     if (currentTaskPlanId != null) {
-      accountName = "plan-task";
+      accountName = capturedAccount;
       scriptName = currentTaskPlanId;
     } else {
-      accountName = "auto-detected";
+      accountName = capturedAccount;
       scriptName = currentTask != null ? currentTask.getDisplayName() : "unknown";
     }
 
@@ -294,11 +318,14 @@ public class TaskDetectionService {
             startTime,
             RecordingSession.SessionTrigger.AUTO_START,
             null);
+    if (capturedProvenance != null) session.captureProvenance(capturedProvenance);
     return session;
   }
 
   /** Clear current task context so stale state does not leak into the next recording. */
   private void clearTaskState() {
+    capturedAccount = null;
+    capturedProvenance = null;
     currentTask = null;
     currentTaskPlanId = null;
     currentTaskItemId = null;

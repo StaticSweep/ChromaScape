@@ -170,7 +170,7 @@ class TaskDetectionServiceTest {
             argThat(
                 s ->
                     "rec-1".equals(s.getRecordingId())
-                        && "auto-detected".equals(s.getAccountName())
+                        && s.getAccountName() == null
                         && "Woodcutting".equals(s.getScriptName())
                         && "/videos/rec-1.mp4".equals(s.getVideoPath())
                         && s.getEndTime() != null
@@ -355,7 +355,7 @@ class TaskDetectionServiceTest {
         .save(
             argThat(
                 s ->
-                    "auto-detected".equals(s.getAccountName())
+                    s.getAccountName() == null
                         && "Woodcutting".equals(s.getScriptName())
                         && !"plan-task".equals(s.getAccountName())));
   }
@@ -392,7 +392,7 @@ class TaskDetectionServiceTest {
             argThat(
                 s ->
                     "rec-plan".equals(s.getRecordingId())
-                        && "plan-task".equals(s.getAccountName())
+                        && s.getAccountName() == null
                         && "plan-42".equals(s.getScriptName())
                         && "/videos/rec-plan.mp4".equals(s.getVideoPath())
                         && Long.valueOf(8000L).equals(s.getDurationMs())
