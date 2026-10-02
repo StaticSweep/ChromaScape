@@ -13,8 +13,7 @@ public record TargetScanDiagnostics(
     int scannedEntries, int unreadableEntries, List<TargetSelectionDiagnostic> diagnostics) {
 
   /** Diagnostics of a scan that never ran. */
-  public static final TargetScanDiagnostics EMPTY =
-      new TargetScanDiagnostics(0, 0, List.of());
+  public static final TargetScanDiagnostics EMPTY = new TargetScanDiagnostics(0, 0, List.of());
 
   public TargetScanDiagnostics {
     diagnostics = diagnostics == null ? List.of() : List.copyOf(diagnostics);

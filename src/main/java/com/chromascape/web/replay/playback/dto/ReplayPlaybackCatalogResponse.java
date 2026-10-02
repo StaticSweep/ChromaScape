@@ -13,7 +13,10 @@ public class ReplayPlaybackCatalogResponse {
   private String nextCursor;
   private boolean hasMore;
 
-  /** Retained only for source compatibility with the pre-v1 DTO; it is not part of the v1 wire schema. */
+  /**
+   * Retained only for source compatibility with the pre-v1 DTO; it is not part of the v1 wire
+   * schema.
+   */
   @JsonIgnore private int legacyTotal;
 
   public ReplayPlaybackCatalogResponse() {
@@ -61,14 +64,18 @@ public class ReplayPlaybackCatalogResponse {
     this.hasMore = hasMore;
   }
 
-  /** @deprecated v1 deliberately does not expose an unbounded total count. */
+  /**
+   * @deprecated v1 deliberately does not expose an unbounded total count.
+   */
   @Deprecated
   @JsonIgnore
   public int getTotal() {
     return legacyTotal;
   }
 
-  /** @deprecated v1 deliberately does not expose an unbounded total count. */
+  /**
+   * @deprecated v1 deliberately does not expose an unbounded total count.
+   */
   @Deprecated
   @JsonIgnore
   public void setTotal(int total) {

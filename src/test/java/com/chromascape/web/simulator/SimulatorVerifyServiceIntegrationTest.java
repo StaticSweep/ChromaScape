@@ -9,8 +9,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.chromascape.testsupport.IsolatedPostgresTestDatabase;
 import com.chromascape.web.simulator.SimulatorVerifyJobStore.JobStatus;
 import com.chromascape.web.simulator.SimulatorVerifyJobStore.VerifyJob;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,8 +32,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -45,11 +61,159 @@ import org.springframework.test.context.DynamicPropertySource;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles({"test", "openrune-legacy"})
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@Import(SimulatorVerifyServiceIntegrationTest.SimulatorTestConfiguration.class)
 class SimulatorVerifyServiceIntegrationTest {
+
+  private static final Path SIMULATOR_ROOT = createSimulatorRoot();
+
+  private static Path createSimulatorRoot() {
+    try {
+      Path root = Files.createTempDirectory("chromascape-simulator-fixture-");
+      Files.createFile(root.resolve("fixture-verifier.jar"));
+      return root;
+    } catch (Exception exception) {
+      throw new ExceptionInInitializerError(exception);
+    }
+  }
 
   @DynamicPropertySource
   static void isolatedPostgres(DynamicPropertyRegistry registry) {
     IsolatedPostgresTestDatabase.register(registry);
+    registry.add("simulator.verifier.openrune-root", () -> SIMULATOR_ROOT.toString());
+    registry.add("simulator.verifier.verifier-jar-path", () -> "fixture-verifier.jar");
+    registry.add(
+        "simulator.verifier.reports-dir", () -> SIMULATOR_ROOT.resolve("reports").toString());
+    registry.add("simulator.verifier.job-timeout-seconds", () -> 10);
+  }
+
+  @TestConfiguration(proxyBeanMethods = false)
+  static class SimulatorTestConfiguration {
+    @Bean
+    @Primary
+    SimulatorVerifyService deterministicSimulatorVerifyService(
+        SimulatorVerifierProperties properties, SimulatorVerifyJobStore jobStore) {
+      return new DeterministicSimulatorVerifyService(properties, jobStore);
+    }
+  }
+
+  static final class DeterministicSimulatorVerifyService extends SimulatorVerifyService {
+    DeterministicSimulatorVerifyService(
+        SimulatorVerifierProperties properties, SimulatorVerifyJobStore jobStore) {
+      super(properties, jobStore);
+    }
+
+    @Override
+    boolean isBridgeReachable(String bridgeUrl) {
+      return "http://localhost:8092".equals(bridgeUrl);
+    }
+
+    @Override
+    Process createVerifierProcess(List<String> command, File workingDir)
+        throws java.io.IOException {
+      String session = argument(command, "--session");
+      String scenario = argument(command, "--scenario");
+      String reportPath = argument(command, "--output");
+      boolean failure = session != null && session.startsWith("nonexistent");
+      long durationMillis = "S1-happy-path".equals(scenario) ? 10_000 : 300;
+      String report =
+          "{\"passed\":"
+              + !failure
+              + ",\"summary\":{\"totalActions\":0,\"tickRange\":{\"start\":0,\"end\":0},"
+              + "\"actionTypeCounts\":{},\"playerCount\":0,\"durationTicks\":0},"
+              + "\"violations\":[],\"error\":\""
+              + (failure ? "session not found" : "")
+              + "\"}";
+      Path path = Path.of(reportPath);
+      Files.createDirectories(path.getParent());
+      Files.writeString(path, report, StandardCharsets.UTF_8);
+      return new DeterministicProcess(
+          failure ? 2 : 0, failure ? "Error: session not found" : "", durationMillis);
+    }
+
+    private String argument(List<String> command, String name) {
+      int index = command.indexOf(name);
+      return index >= 0 && index + 1 < command.size() ? command.get(index + 1) : null;
+    }
+  }
+
+  static final class DeterministicProcess extends Process {
+    private final int exitCode;
+    private final InputStream output;
+    private final CountDownLatch completion = new CountDownLatch(1);
+    private final AtomicBoolean alive = new AtomicBoolean(true);
+
+    DeterministicProcess(int exitCode, String output, long durationMillis) {
+      this.exitCode = exitCode;
+      this.output =
+          new ByteArrayInputStream(
+              (output + System.lineSeparator()).getBytes(StandardCharsets.UTF_8));
+      Thread completionThread =
+          new Thread(
+              () -> {
+                try {
+                  Thread.sleep(durationMillis);
+                } catch (InterruptedException exception) {
+                  Thread.currentThread().interrupt();
+                } finally {
+                  alive.set(false);
+                  completion.countDown();
+                }
+              },
+              "simulator-verifier-fixture");
+      completionThread.setDaemon(true);
+      completionThread.start();
+    }
+
+    @Override
+    public OutputStream getOutputStream() {
+      return new ByteArrayOutputStream();
+    }
+
+    @Override
+    public InputStream getInputStream() {
+      return output;
+    }
+
+    @Override
+    public InputStream getErrorStream() {
+      return InputStream.nullInputStream();
+    }
+
+    @Override
+    public int waitFor() throws InterruptedException {
+      completion.await();
+      return exitCode;
+    }
+
+    @Override
+    public boolean waitFor(long timeout, TimeUnit unit) throws InterruptedException {
+      return completion.await(timeout, unit);
+    }
+
+    @Override
+    public int exitValue() {
+      if (alive.get()) {
+        throw new IllegalThreadStateException("process is still running");
+      }
+      return exitCode;
+    }
+
+    @Override
+    public void destroy() {
+      destroyForcibly();
+    }
+
+    @Override
+    public Process destroyForcibly() {
+      alive.set(false);
+      completion.countDown();
+      return this;
+    }
+
+    @Override
+    public boolean isAlive() {
+      return alive.get();
+    }
   }
 
   @LocalServerPort private int port;
@@ -68,7 +232,7 @@ class SimulatorVerifyServiceIntegrationTest {
 
   @BeforeEach
   void setUp() {
-    IsolatedPostgresTestDatabase.assertRepositoryHeadAndNoUnresolvedMigration16(flyway, dataSource);
+    IsolatedPostgresTestDatabase.assertRepositoryHeadAndMigration16Applied(flyway, dataSource);
     baseUrl = "http://localhost:" + port + "/api/simulator/verify";
   }
 

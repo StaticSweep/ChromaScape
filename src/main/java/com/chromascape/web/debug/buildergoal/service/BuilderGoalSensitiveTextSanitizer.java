@@ -33,6 +33,9 @@ import java.util.regex.Pattern;
  */
 public final class BuilderGoalSensitiveTextSanitizer {
 
+  /** Bumped whenever a new redaction pattern is added so stored artifacts can be audited. */
+  public static final String SANITIZER_VERSION = "2";
+
   private static final String REDACTED = "********";
 
   private static final Pattern PROFILE_EMAIL_INLINE_PATTERN =
@@ -41,10 +44,30 @@ public final class BuilderGoalSensitiveTextSanitizer {
       Pattern.compile("(?i)(--profile-email)(\\s+)(\"[^\"]*\"|'[^']*'|\\S+)");
   private static final Pattern BEARER_PATTERN =
       Pattern.compile("(?i)((?:Authorization|auth)\\s*:\\s*Bearer\\s+)(\"[^\"]*\"|'[^']*'|\\S+)");
+  private static final Pattern BASIC_AUTH_PATTERN =
+      Pattern.compile("(?i)((?:Authorization|Proxy-Authorization)\\s*:\\s*Basic\\s+)(\\S+)");
   private static final Pattern PASSWORD_ASSIGN_PATTERN =
       Pattern.compile(
           "(?i)((?:password|passwd|pwd|pass|credential)\\s*[=:]\\s*)(\"[^\"]*\"|'[^']*'|\\S+)");
   private static final Pattern EMAIL_COLON_PASSWORD_PATTERN = Pattern.compile("\\S+@\\S+:\\S+");
+  private static final Pattern AUTHORIZATION_HEADER_PATTERN =
+      Pattern.compile(
+          "(?i)((?:proxy-authorization|www-authenticate|cookie|set-cookie)\\s*:\\s*)"
+              + "(\"[^\"]*\"|'[^']*'|\\S+)");
+  private static final Pattern API_TOKEN_PATTERN =
+      Pattern.compile(
+          "(?i)((?:api[-_]?key|api[-_]?token|access[-_]?token|secret[-_]?(?:key|token)|"
+              + "client[-_]?secret|private[-_]?key)\\s*[=:]\\s*)(\"[^\"]*\"|'[^']*'|\\S+)");
+  private static final Pattern URL_USERINFO_PATTERN =
+      Pattern.compile("(?i)([a-z][a-z0-9+.-]*://)([^/@\\s:]+):([^@\\s]+)@");
+  private static final Pattern SENSITIVE_QUERY_PARAMETER_PATTERN =
+      Pattern.compile(
+          "(?i)((?:[?&])(?:token|access_token|api_key|apikey|secret|password|sig|signature)=)"
+              + "[^&\\s]+");
+  private static final Pattern WINDOWS_HOME_PATH_PATTERN =
+      Pattern.compile("(?i)([A-Z]:\\\\Users\\\\)[^\\\\\\s:;\"]+");
+  private static final Pattern UNIX_HOME_PATH_PATTERN =
+      Pattern.compile("(?i)((?:/home/|/Users/|/root/?))[^/\\s:;\"]+");
 
   private BuilderGoalSensitiveTextSanitizer() {}
 
@@ -57,9 +80,56 @@ public final class BuilderGoalSensitiveTextSanitizer {
         PROFILE_EMAIL_INLINE_PATTERN.matcher(value).replaceAll("--profile-email=********");
     result = PROFILE_EMAIL_SPLIT_PATTERN.matcher(result).replaceAll("--profile-email ********");
     result = BEARER_PATTERN.matcher(result).replaceAll("$1********");
+    result = BASIC_AUTH_PATTERN.matcher(result).replaceAll("$1********");
+    result = AUTHORIZATION_HEADER_PATTERN.matcher(result).replaceAll("$1********");
     result = PASSWORD_ASSIGN_PATTERN.matcher(result).replaceAll("$1********");
+    result = API_TOKEN_PATTERN.matcher(result).replaceAll("$1********");
+    result = URL_USERINFO_PATTERN.matcher(result).replaceAll("$1********:********@");
+    result = SENSITIVE_QUERY_PARAMETER_PATTERN.matcher(result).replaceAll("$1********");
+    result = WINDOWS_HOME_PATH_PATTERN.matcher(result).replaceAll("$1********");
     result = EMAIL_COLON_PASSWORD_PATTERN.matcher(result).replaceAll("email:********");
+    result = UNIX_HOME_PATH_PATTERN.matcher(result).replaceAll("$1********");
     return result;
+  }
+
+  /**
+   * Redacts credential patterns and then every configured literal secret. Literal secrets are
+   * provided by the server (never logged) so environment-derived credentials disappear from stored
+   * artifacts, prompts, responses, and logs without ever appearing in redaction output.
+   */
+  public static String sanitizeArtifact(String value, java.util.Collection<String> literalSecrets) {
+    if (value == null || value.isEmpty()) {
+      return value;
+    }
+    String result = sanitize(value);
+    if (literalSecrets != null) {
+      for (String secret : literalSecrets) {
+        if (secret != null && secret.length() >= 6) {
+          result = result.replace(secret, REDACTED);
+        }
+      }
+    }
+    return result;
+  }
+
+  /** Literal secrets from the current process environment, for {@link #sanitizeArtifact}. */
+  public static java.util.List<String> environmentLiteralSecrets() {
+    java.util.List<String> secrets = new ArrayList<>();
+    System.getenv().entrySet().stream()
+        .filter(
+            entry ->
+                entry.getKey() != null
+                    && entry.getValue() != null
+                    && entry.getValue().length() >= 6
+                    && (entry.getKey().contains("SECRET")
+                        || entry.getKey().contains("TOKEN")
+                        || entry.getKey().contains("PASSWORD")
+                        || entry.getKey().contains("API_KEY")
+                        || entry.getKey().contains("APIKEY")
+                        || entry.getKey().contains("CREDENTIAL")))
+        .sorted(Map.Entry.comparingByKey())
+        .forEach(entry -> secrets.add(entry.getValue()));
+    return secrets;
   }
 
   /**

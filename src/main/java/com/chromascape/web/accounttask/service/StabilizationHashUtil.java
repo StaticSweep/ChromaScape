@@ -1,7 +1,6 @@
 package com.chromascape.web.accounttask.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.NullNode;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -50,9 +49,9 @@ public final class StabilizationHashUtil {
           "transitions");
 
   /**
-   * Fields excluded when recomputing an {@code attempt_manifest_hash} from a manifest
-   * {@code attempts[]} entry. Mirrors the Micro6 harness
-   * {@code HarnessRunManifest.AttemptEntry.computeAttemptManifestHash()} contract.
+   * Fields excluded when recomputing an {@code attempt_manifest_hash} from a manifest {@code
+   * attempts[]} entry. Mirrors the Micro6 harness {@code
+   * HarnessRunManifest.AttemptEntry.computeAttemptManifestHash()} contract.
    */
   public static final Set<String> ATTEMPT_MANIFEST_EXCLUSIONS =
       Set.of(
@@ -65,8 +64,8 @@ public final class StabilizationHashUtil {
 
   /**
    * Fields excluded when recomputing a harness {@code plan_hash} from the plan document. Mirrors
-   * the Micro6 harness {@code HarnessPlan.computePlanHash()} contract (canonicalize the plan
-   * minus {@code planHash}, excluding volatile identity/timestamp fields).
+   * the Micro6 harness {@code HarnessPlan.computePlanHash()} contract (canonicalize the plan minus
+   * {@code planHash}, excluding volatile identity/timestamp fields).
    */
   public static final Set<String> PLAN_EXCLUSIONS =
       Set.of(
@@ -109,7 +108,9 @@ public final class StabilizationHashUtil {
           out.append(',');
         }
         first = false;
-        out.append(quote(entry.getKey())).append(':').append(canonical(entry.getValue(), exclusions));
+        out.append(quote(entry.getKey()))
+            .append(':')
+            .append(canonical(entry.getValue(), exclusions));
       }
       return out.append('}').toString();
     }

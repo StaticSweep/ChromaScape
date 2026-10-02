@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.recording.service.RecordingServiceInitialFrameReadinessTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:10.767Z" hostname="fedora" time="2.155">
+  <properties/>
+  <testcase name="validFrameOnFirstAttemptIsReturnedImmediately()" classname="com.chromascape.web.recording.service.RecordingServiceInitialFrameReadinessTest" time="0.013"/>
+  <testcase name="timedOutStartRecordingResetsStartingGuardForLaterAttempt()" classname="com.chromascape.web.recording.service.RecordingServiceInitialFrameReadinessTest" time="0.523"/>
+  <testcase name="recoversAfterCaptureThrowsThenSucceeds()" classname="com.chromascape.web.recording.service.RecordingServiceInitialFrameReadinessTest" time="0.267"/>
+  <testcase name="interruptedWaitAbortsAndRestoresInterruptFlag()" classname="com.chromascape.web.recording.service.RecordingServiceInitialFrameReadinessTest" time="0.009"/>
+  <testcase name="retriesUntilAValidFrameArrives()" classname="com.chromascape.web.recording.service.RecordingServiceInitialFrameReadinessTest" time="0.523"/>
+  <testcase name="validInitialEventPinsExactRecordingSource()" classname="com.chromascape.web.recording.service.RecordingServiceInitialFrameReadinessTest" time="0.014"/>
+  <testcase name="rejectsZeroDimensionFramesAndKeepsRetrying()" classname="com.chromascape.web.recording.service.RecordingServiceInitialFrameReadinessTest" time="0.478"/>
+  <testcase name="timesOutWithFrameCaptureExceptionWhenNoValidFrameArrives()" classname="com.chromascape.web.recording.service.RecordingServiceInitialFrameReadinessTest" time="0.314"/>
+  <system-out><![CDATA[19:30:10.779 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Initial frame ready after 1 attempts in 1 ms: 8x7
+19:30:10.784 [Test worker] WARN  com.chromascape.web.recording.service.RecordingService - Failed to capture initial frame (attempt 1): capture returned no frame
+19:30:10.784 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Waiting for RuneLite window to become capturable (attempt 1, elapsed 0 ms)...
+19:30:11.036 [Test worker] ERROR com.chromascape.web.recording.service.RecordingService - Timed out waiting for initial frame after 2 attempts over 252 ms: capture returned no frame
+19:30:11.040 [Test worker] DEBUG com.chromascape.web.recording.service.RecordingService - Cleaning up recording resources
+19:30:11.045 [Test worker] WARN  com.chromascape.web.recording.service.RecordingService - Failed to capture initial frame (attempt 1): capture returned no frame
+19:30:11.045 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Waiting for RuneLite window to become capturable (attempt 1, elapsed 0 ms)...
+19:30:11.299 [Test worker] ERROR com.chromascape.web.recording.service.RecordingService - Timed out waiting for initial frame after 2 attempts over 253 ms: capture returned no frame
+19:30:11.301 [Test worker] DEBUG com.chromascape.web.recording.service.RecordingService - Cleaning up recording resources
+19:30:11.313 [Test worker] WARN  com.chromascape.web.recording.service.RecordingService - Failed to capture initial frame (attempt 1): Game window not found - is RuneLite running?
+19:30:11.313 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Waiting for RuneLite window to become capturable (attempt 1, elapsed 0 ms)...
+19:30:11.566 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Initial frame ready after 2 attempts in 253 ms: 4x4
+19:30:11.584 [Test worker] WARN  com.chromascape.web.recording.service.RecordingService - Failed to capture initial frame (attempt 1): capture returned no frame
+19:30:11.584 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Waiting for RuneLite window to become capturable (attempt 1, elapsed 0 ms)...
+19:30:11.584 [Test worker] WARN  com.chromascape.web.recording.service.RecordingService - Recording start interrupted while waiting for initial frame
+19:30:11.588 [Test worker] WARN  com.chromascape.web.recording.service.RecordingService - Failed to capture initial frame (attempt 1): capture returned no frame
+19:30:11.588 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Waiting for RuneLite window to become capturable (attempt 1, elapsed 0 ms)...
+19:30:12.103 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Initial frame ready after 3 attempts in 515 ms: 16x16
+19:30:12.117 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Initial frame ready after 1 attempts in 0 ms: 8x8
+19:30:12.348 [Test worker] WARN  com.chromascape.web.recording.service.RecordingService - Failed to capture initial frame (attempt 1): invalid dimensions 0x0
+19:30:12.349 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Waiting for RuneLite window to become capturable (attempt 1, elapsed 1 ms)...
+19:30:12.601 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Initial frame ready after 2 attempts in 253 ms: 10x10
+19:30:12.616 [Test worker] WARN  com.chromascape.web.recording.service.RecordingService - Failed to capture initial frame (attempt 1): capture returned no frame
+19:30:12.616 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Waiting for RuneLite window to become capturable (attempt 1, elapsed 0 ms)...
+19:30:12.918 [Test worker] ERROR com.chromascape.web.recording.service.RecordingService - Timed out waiting for initial frame after 3 attempts over 301 ms: capture returned no frame
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.kernel.XrspsKernelProcessConcurrencyTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:33.866Z" hostname="fedora" time="0.522">
+  <properties/>
+  <testcase name="concurrentSendersCannotConsumeEachOthersResponses()" classname="com.chromascape.web.replay.kernel.XrspsKernelProcessConcurrencyTest" time="0.522"/>
+  <system-out><![CDATA[19:30:33.875 [Test worker] INFO  com.chromascape.web.replay.kernel.XrspsKernelProcess - Started xRSPS kernel process: node <workspace>/ChromaScape-fedora-qualification/build/replay-certification/runtime-fixtures/XrspsKernelProcessConcurrencyTest-be9df9c5-beff-4374-9e09-b1bcb7acbe9b/serial-worker.js --stdio
+19:30:34.303 [Test worker] WARN  com.chromascape.web.replay.kernel.XrspsKernelProcess - xRSPS kernel dispose acknowledgement not received within deadline
+19:30:34.380 [Test worker] INFO  com.chromascape.web.replay.kernel.XrspsKernelProcess - xRSPS kernel process disposed
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

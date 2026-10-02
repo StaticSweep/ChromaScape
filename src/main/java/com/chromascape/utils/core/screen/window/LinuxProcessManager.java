@@ -16,8 +16,8 @@ import org.slf4j.LoggerFactory;
  * <p>Replaces the upstream first-match {@code cmdline.contains(RuneLite)} scan: every eligible
  * candidate is reported, sorted deterministically by (start time, pid), and consumers must resolve
  * an explicit selection or accept an {@link TargetSelectionDiagnostic#AMBIGUOUS_TARGET} refusal.
- * The frozen rule set is documented in
- * {@code docs/upstream-integration/sc-1663/process-identity-mapping.md}.
+ * The frozen rule set is documented in {@code
+ * docs/upstream-integration/sc-1663/process-identity-mapping.md}.
  *
  * <p>Matching is a pure predicate over in-memory command lines that are dropped immediately and are
  * never logged or included in diagnostics, because Micro6 client arguments can carry account
@@ -107,8 +107,12 @@ public class LinuxProcessManager implements ProcessManager {
     int scannedEntries = 0;
     int unreadableEntries = 0;
     long selfPid = ProcessHandle.current().pid();
+    // One boot-id read per scan: every identity of this scan observes the same host boot id, so a
+    // boot-id file change mid-scan cannot produce inconsistent identities.
+    String bootId = procFs.readBootId().orElse("");
 
-    for (long pid : procFs.listPidDirs()) {
+    ProcFs.PidListing listing = procFs.listPidDirectories();
+    for (long pid : listing.pids()) {
       scannedEntries++;
       if (pid == selfPid) {
         // ChromaScape's own JVM is never a target even if it references the same project tree
@@ -127,7 +131,7 @@ public class LinuxProcessManager implements ProcessManager {
       if (!isEligible(pid, rawCmdline)) {
         continue;
       }
-      Optional<ObservedProcess> observed = readObserved(pid);
+      Optional<ObservedProcess> observed = readObserved(pid, bootId);
       if (observed.isEmpty()) {
         unreadableEntries++;
         continue;
@@ -143,18 +147,22 @@ public class LinuxProcessManager implements ProcessManager {
     if (unreadableEntries > 0) {
       diagnostics.add(TargetSelectionDiagnostic.PROC_ENTRY_UNREADABLE);
     }
+    if (listing.truncated()) {
+      diagnostics.add(TargetSelectionDiagnostic.PROC_SCAN_TRUNCATED);
+    }
     lastScan = new TargetScanDiagnostics(scannedEntries, unreadableEntries, diagnostics);
     logger.debug(
-        "Discovered {} eligible local target(s) from {} procfs entries ({} unreadable)",
+        "Discovered {} eligible local target(s) from {} procfs entries ({} unreadable){}",
         targets.size(),
         scannedEntries,
-        unreadableEntries);
+        unreadableEntries,
+        listing.truncated() ? " [truncated]" : "");
     return targets;
   }
 
   @Override
   public Optional<ProcessIdentity> resolveLocal(long pid) {
-    return readObserved(pid).map(ObservedProcess::identity);
+    return readObserved(pid, procFs.readBootId().orElse("")).map(ObservedProcess::identity);
   }
 
   @Override
@@ -252,7 +260,7 @@ public class LinuxProcessManager implements ProcessManager {
     return Optional.of((int) estimated);
   }
 
-  private Optional<ObservedProcess> readObserved(long pid) {
+  private Optional<ObservedProcess> readObserved(long pid, String bootId) {
     Optional<long[]> ticksAndUptime = procFs.readStartTimeTicksAndUptime(pid);
     if (ticksAndUptime.isEmpty()) {
       return Optional.empty();
@@ -261,7 +269,6 @@ public class LinuxProcessManager implements ProcessManager {
     if (startTime.isEmpty()) {
       return Optional.empty();
     }
-    String bootId = procFs.readBootId().orElse("");
     ProcessIdentity identity =
         new ProcessIdentity(ProcessOrigin.LOCAL, hostId, pid, startTime.get(), bootId);
     return Optional.of(new ObservedProcess(identity, ticksAndUptime.get()[0]));
@@ -289,7 +296,8 @@ public class LinuxProcessManager implements ProcessManager {
   }
 
   private boolean isJavaExecutable(long pid, String argv0) {
-    String basename = procFs.readExeTarget(pid).map(LinuxProcessManager::basename).orElse(basename(argv0));
+    String basename =
+        procFs.readExeTarget(pid).map(LinuxProcessManager::basename).orElse(basename(argv0));
     return basename.equals("java") || basename.equals("javaw");
   }
 

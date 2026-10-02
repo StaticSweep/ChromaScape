@@ -20,20 +20,22 @@ import java.util.List;
  * <p>This is intentionally separate from the generic {@link
  * com.chromascape.web.aiplayer.contract.CanonicalJsonHasher} used for identity hashing elsewhere.
  * The SC-967 rule is fixed and shared with the Go registry and the Micro6 loader:
+ *
  * <ul>
- *   <li>object members recursively sorted by UTF-8 code point;</li>
- *   <li>array order preserved;</li>
- *   <li>UTF-8 serialization with no insignificant whitespace;</li>
+ *   <li>object members recursively sorted by UTF-8 code point;
+ *   <li>array order preserved;
+ *   <li>UTF-8 serialization with no insignificant whitespace;
  *   <li><strong>no string newline rewriting</strong> — CR/LF bytes inside string values are
- *       preserved and escaped verbatim, so {@code "\r\n"} and {@code "\n"} hash differently;</li>
- *   <li>duplicate object keys rejected;</li>
- *   <li>only integers within signed 64-bit range are allowed in the signed domain.</li>
+ *       preserved and escaped verbatim, so {@code "\r\n"} and {@code "\n"} hash differently;
+ *   <li>duplicate object keys rejected;
+ *   <li>only integers within signed 64-bit range are allowed in the signed domain.
  * </ul>
  */
 public final class Sc967CanonicalJson {
-  private static final ObjectMapper MAPPER = new ObjectMapper()
-      .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION)
-      .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+  private static final ObjectMapper MAPPER =
+      new ObjectMapper()
+          .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION)
+          .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
   private Sc967CanonicalJson() {}
 
@@ -81,7 +83,8 @@ public final class Sc967CanonicalJson {
       return;
     }
     if (node.isFloatingPointNumber() || (node.isNumber() && !node.canConvertToLong())) {
-      throw new IllegalArgumentException("Floating-point or out-of-range SC-967 number is not allowed");
+      throw new IllegalArgumentException(
+          "Floating-point or out-of-range SC-967 number is not allowed");
     }
     if (node.isContainerNode()) {
       node.elements().forEachRemaining(Sc967CanonicalJson::validateNumbers);
@@ -118,8 +121,9 @@ public final class Sc967CanonicalJson {
     byte[] rightBytes = right.getBytes(StandardCharsets.UTF_8);
     int limit = Math.min(leftBytes.length, rightBytes.length);
     for (int index = 0; index < limit; index++) {
-      int comparison = Integer.compare(Byte.toUnsignedInt(leftBytes[index]),
-          Byte.toUnsignedInt(rightBytes[index]));
+      int comparison =
+          Integer.compare(
+              Byte.toUnsignedInt(leftBytes[index]), Byte.toUnsignedInt(rightBytes[index]));
       if (comparison != 0) return comparison;
     }
     return Integer.compare(leftBytes.length, rightBytes.length);
@@ -131,7 +135,8 @@ public final class Sc967CanonicalJson {
     if (node.isObject()) {
       node.fieldNames().forEachRemaining(Sc967CanonicalJson::validateUnicodeString);
     }
-    if (node.isContainerNode()) node.elements().forEachRemaining(Sc967CanonicalJson::validateUnicode);
+    if (node.isContainerNode())
+      node.elements().forEachRemaining(Sc967CanonicalJson::validateUnicode);
   }
 
   private static void validateUnicodeString(String value) {

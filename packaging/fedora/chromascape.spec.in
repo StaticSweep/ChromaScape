@@ -1,0 +1,66 @@
+Name:           chromascape
+Version:        @RPMVERSION@
+Release:        1%{?dist}
+Summary:        ChromaScape game client debugger and automation service
+License:        GPLv3
+URL:            https://localhost/chromascape
+Source0:        @TARBALL@
+BuildArch:      x86_64
+
+# The package ships a prebuilt Boot jar and launcher; there is no compiled object
+# code to strip, so Fedora's debuginfo subpackage generation is disabled. Without
+# this the build emits an empty chromascape-debugsource %files and fails.
+%global debug_package %{nil}
+
+# ChromaScape requires a Java 17-or-newer runtime. The versioned capability is
+# portable across Fedora releases (Fedora 44 ships Java 25 only), unlike the
+# release-specific java-17-openjdk-headless package name.
+Requires:       java-headless >= 17
+
+%description
+ChromaScape is a game client debugger, recorder and automation service. This
+package installs a self-contained, prebuilt distribution: the Spring Boot
+application jar, a launcher, the project licence and, when the RemoteInput
+licence gate is closed at build time, the native attachment pair. No source
+tree, Gradle wrapper or compiler is required on the target host.
+
+%prep
+# The source is a ready-built distribution tarball; nothing is compiled here.
+%setup -q -n @TOP@
+
+%install
+install -d %{buildroot}%{_prefix}/lib/chromascape
+install -d %{buildroot}%{_bindir}
+install -d %{buildroot}%{_datadir}/licenses/chromascape
+
+cp -a application.jar %{buildroot}%{_prefix}/lib/chromascape/
+cp -a launcher %{buildroot}%{_prefix}/lib/chromascape/launcher
+chmod 0755 %{buildroot}%{_prefix}/lib/chromascape/launcher
+install -m 0644 licenses/ChromaScape-LICENSE %{buildroot}%{_datadir}/licenses/chromascape/LICENSE
+%if 0%{?with_native_payload}
+install -d %{buildroot}%{_prefix}/lib/chromascape/native/linux-x86_64
+cp -a native/linux-x86_64/libRemoteInput.so %{buildroot}%{_prefix}/lib/chromascape/native/linux-x86_64/
+cp -a native/linux-x86_64/remoteinput-manifest.json %{buildroot}%{_prefix}/lib/chromascape/native/linux-x86_64/
+%endif
+
+cat > %{buildroot}%{_bindir}/chromascape <<'SHIM'
+#!/usr/bin/env sh
+set -eu
+exec /usr/lib/chromascape/launcher "$@"
+SHIM
+chmod 0755 %{buildroot}%{_bindir}/chromascape
+
+%files
+%{_bindir}/chromascape
+%dir %{_prefix}/lib/chromascape
+%{_prefix}/lib/chromascape/application.jar
+%{_prefix}/lib/chromascape/launcher
+%if 0%{?with_native_payload}
+%{_prefix}/lib/chromascape/native/linux-x86_64/libRemoteInput.so
+%{_prefix}/lib/chromascape/native/linux-x86_64/remoteinput-manifest.json
+%endif
+%license %{_datadir}/licenses/chromascape/LICENSE
+
+%changelog
+* Thu Jan 01 2026 ChromaScape Packaging <packaging@localhost> - @RPMVERSION@-1
+- Prebuilt Linux x86_64 distribution.

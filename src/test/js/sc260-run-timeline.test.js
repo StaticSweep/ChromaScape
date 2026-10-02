@@ -245,3 +245,125 @@ test('SC-260 cancelled terminal branch performs the final timeline refresh', asy
   assert.deepEqual(refreshed, ['buildergoal_cancelled']);
   assert.ok(statusCalls.some(([message]) => /cancelled/i.test(message)));
 });
+
+
+function timelinePlanner(iterationId = 'bg_selected') {
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.builderGoalTimelineIterationId = iterationId;
+  planner.builderGoalRunTimeline = { innerHTML: '' };
+  planner.builderGoalTimelineEvents = [];
+  return planner;
+}
+
+test('SC-260 malformed JSON, invalid event lists and missing runs are explicit errors', async () => {
+  const originalFetch = global.fetch;
+  try {
+    for (const response of [
+      { ok: true, status: 200, json: async () => { throw new SyntaxError('Invalid JSON'); } },
+      { ok: true, status: 200, json: async () => ({ events: [] }) },
+      { ok: true, status: 200, json: async () => [null] },
+      { ok: false, status: 404 }
+    ]) {
+      const planner = timelinePlanner();
+      global.fetch = async () => response;
+      await planner.loadBuilderGoalRunTimeline('bg_selected');
+      assert.match(planner.builderGoalRunTimeline.innerHTML, /role="alert"/);
+      assert.doesNotMatch(planner.builderGoalRunTimeline.innerHTML, /No timeline events recorded/);
+    }
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('SC-260 stale request errors cannot overwrite a newly selected timeline', async () => {
+  const planner = timelinePlanner('bg_old');
+  let rejectOld;
+  const originalFetch = global.fetch;
+  try {
+    global.fetch = () => new Promise((resolve, reject) => { rejectOld = reject; });
+    const oldRequest = planner.loadBuilderGoalRunTimeline('bg_old');
+    planner.builderGoalTimelineIterationId = 'bg_new';
+    global.fetch = async () => ({ ok: true, status: 200, json: async () => [] });
+    await planner.loadBuilderGoalRunTimeline('bg_new');
+    const selectedHtml = planner.builderGoalRunTimeline.innerHTML;
+    rejectOld(new Error('Old request failed'));
+    await oldRequest;
+    assert.equal(planner.builderGoalRunTimeline.innerHTML, selectedHtml);
+    assert.doesNotMatch(selectedHtml, /Failed to load/);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('SC-260 older same-run responses cannot replace newer events', async () => {
+  const planner = timelinePlanner();
+  let resolveOld;
+  const originalFetch = global.fetch;
+  try {
+    global.fetch = () => new Promise(resolve => { resolveOld = resolve; });
+    const oldRequest = planner.loadBuilderGoalRunTimeline('bg_selected');
+    const latest = [{ id: 2, eventType: 'RUN_STOPPED', timestamp: '2026-10-02T20:00:00' }];
+    global.fetch = async () => ({ ok: true, status: 200, json: async () => latest });
+    await planner.loadBuilderGoalRunTimeline('bg_selected');
+    resolveOld({ ok: true, status: 200, json: async () => [] });
+    await oldRequest;
+    assert.deepEqual(planner.builderGoalTimelineEvents, latest);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('SC-260 selected timeline retries without a run tracker and stops polling on close', async () => {
+  const planner = timelinePlanner();
+  const originalFetch = global.fetch;
+  const originalSetTimeout = global.setTimeout;
+  const originalClearTimeout = global.clearTimeout;
+  const timers = [];
+  const cleared = [];
+  try {
+    global.setTimeout = (callback, delay) => {
+      timers.push({ callback, delay });
+      return timers.length;
+    };
+    global.clearTimeout = handle => cleared.push(handle);
+    global.fetch = async () => ({ ok: false, status: 503 });
+    planner.openBuilderGoalRunTimeline('bg_selected');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.match(planner.builderGoalRunTimeline.innerHTML, /Failed to load/);
+    assert.equal(timers.length, 1);
+    assert.equal(timers[0].delay, 3000);
+    global.fetch = async () => ({ ok: true, status: 200, json: async () => [] });
+    await timers[0].callback();
+    assert.match(planner.builderGoalRunTimeline.innerHTML, /No timeline events recorded/);
+    assert.equal(timers.length, 2);
+    planner.closeBuilderGoalRunTimeline();
+    assert.ok(cleared.includes(2));
+    assert.equal(planner.builderGoalTimelinePolling, false);
+  } finally {
+    global.fetch = originalFetch;
+    global.setTimeout = originalSetTimeout;
+    global.clearTimeout = originalClearTimeout;
+  }
+});
+
+
+test('SC-260 first status API failure immediately marks the panel degraded while retrying', async () => {
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.builderGoalRunTrackerIterationId = 'bg_selected';
+  planner.builderGoalRunTrackerPollGeneration = 1;
+  planner.builderGoalRunTrackerPollFailures = 0;
+  planner.builderGoalClientStatus = { innerHTML: 'Task running' };
+  const retryDelays = [];
+  planner.scheduleNextBuilderGoalRunPoll = delay => retryDelays.push(delay);
+  const originalFetch = global.fetch;
+  try {
+    global.fetch = async () => { throw new Error('API unavailable'); };
+    await planner.pollBuilderGoalRun();
+    assert.match(planner.builderGoalClientStatus.innerHTML, /role="alert"/);
+    assert.match(planner.builderGoalClientStatus.innerHTML, /Live status unavailable/);
+    assert.equal(planner.builderGoalRunTrackerPollFailures, 1);
+    assert.deepEqual(retryDelays, [4000]);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});

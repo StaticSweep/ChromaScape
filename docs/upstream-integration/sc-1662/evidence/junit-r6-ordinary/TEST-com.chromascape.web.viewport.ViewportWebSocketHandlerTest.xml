@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.viewport.ViewportWebSocketHandlerTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:41:56.162Z" hostname="fedora" time="0.222">
+  <properties/>
+  <testcase name="sessionLifecycleRegistersAndUnregistersViewportStreaming()" classname="com.chromascape.web.viewport.ViewportWebSocketHandlerTest" time="0.117"/>
+  <testcase name="broadcastSendsBinaryMessagesToActiveSessions()" classname="com.chromascape.web.viewport.ViewportWebSocketHandlerTest" time="0.105"/>
+  <system-out><![CDATA[12:41:56.279 [Test worker] INFO  com.chromascape.web.viewport.ViewportWebSocketHandler - Viewport WebSocket client connected
+12:41:56.279 [Test worker] INFO  com.chromascape.web.viewport.ViewportWebSocketHandler - Viewport WebSocket client disconnected
+12:41:56.281 [Test worker] INFO  com.chromascape.web.viewport.ViewportWebSocketHandler - Viewport WebSocket client connected
+12:41:56.281 [Test worker] DEBUG com.chromascape.web.viewport.ViewportWebSocketHandler - Broadcasting viewport frame, size: 4 bytes, sessions: 1
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

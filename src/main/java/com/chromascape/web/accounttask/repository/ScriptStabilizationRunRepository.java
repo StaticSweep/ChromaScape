@@ -37,5 +37,6 @@ public interface ScriptStabilizationRunRepository
 
   List<ScriptStabilizationRun> findByRunIdOrderByExecutedAtAsc(String runId);
 
-  Optional<ScriptStabilizationRun> findFirstByManifestHashOrderByExecutedAtDesc(String manifestHash);
+  Optional<ScriptStabilizationRun> findFirstByManifestHashOrderByExecutedAtDesc(
+      String manifestHash);
 }

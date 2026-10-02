@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.gateway.context.DebuggerContextServiceTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:29:48.133Z" hostname="fedora" time="0.378">
+  <properties/>
+  <testcase name="rejectsInvalidSelectorsBeforeRepositoryLookup()" classname="com.chromascape.web.gateway.context.DebuggerContextServiceTest" time="0.272"/>
+  <testcase name="identityValuesDoNotAuthorizeAnAnonymousOrDifferentPrincipal()" classname="com.chromascape.web.gateway.context.DebuggerContextServiceTest" time="0.045"/>
+  <testcase name="authenticatesAndAuthorizesBeforeResolvingCallerSelectors()" classname="com.chromascape.web.gateway.context.DebuggerContextServiceTest" time="0.058"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

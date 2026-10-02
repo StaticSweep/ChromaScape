@@ -56,6 +56,23 @@ class BuilderGoalRunnerControllerTest {
   }
 
   @Test
+  void launchAccount_packetCaptureMustBeBooleanAndIsForwarded() throws Exception {
+    assertThat(
+            controller
+                .launchAccount(objectMapper.readTree("{\"packetCapture\":\"true\"}"))
+                .getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    when(builderGoalRunnerService.launchAccount("a", "local", 360, false, true))
+        .thenReturn(Map.of("operationId", "capture"));
+    var response =
+        controller.launchAccount(
+            objectMapper.readTree(
+                "{\"accountId\":\"a\",\"launcherMachineUuid\":\"local\",\"world\":360,\"packetCapture\":true}"));
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+    verify(builderGoalRunnerService).launchAccount("a", "local", 360, false, true);
+  }
+
+  @Test
   void listMachines_returnsHttp200WithMachineSummaries() {
     Map<String, Object> machine = new LinkedHashMap<>();
     machine.put("machineUuid", "1d391d65-6c97-5b77-b676-964f157e8c73");
@@ -445,6 +462,58 @@ class BuilderGoalRunnerControllerTest {
             eq(360),
             anyBoolean(),
             any());
+  }
+
+  @Test
+  void publishTask_forwardsDisabledAutoRecordInProvenance() throws Exception {
+    when(builderGoalRunnerService.publishOnly(
+            any(), any(), any(), any(), any(), anyBoolean(), any()))
+        .thenReturn(Map.of("accepted", true));
+
+    JsonNode payload =
+        objectMapper.readTree(
+            """
+            {
+              "accountId": "hash-1",
+              "launcherMachineUuid": "machine-1",
+              "taskKey": "FISHING_TRAINING",
+              "world": 360,
+              "settings": {},
+              "autoRecord": false
+            }
+            """);
+
+    ResponseEntity<Object> response = controller.publishTask(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    org.mockito.ArgumentCaptor<Map<String, Object>> provenanceCaptor =
+        org.mockito.ArgumentCaptor.forClass(Map.class);
+    verify(builderGoalRunnerService)
+        .publishOnly(any(), any(), any(), any(), any(), anyBoolean(), provenanceCaptor.capture());
+    assertThat(provenanceCaptor.getValue()).containsEntry("auto_record", false);
+  }
+
+  @Test
+  void publishTask_rejectsNonBooleanAutoRecord() throws Exception {
+    JsonNode payload =
+        objectMapper.readTree(
+            """
+            {
+              "accountId": "hash-1",
+              "launcherMachineUuid": "machine-1",
+              "taskKey": "FISHING_TRAINING",
+              "world": 360,
+              "settings": {},
+              "autoRecord": "yes"
+            }
+            """);
+
+    ResponseEntity<Object> response = controller.publishTask(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).containsEntry("error", "autoRecord must be a boolean");
   }
 
   @Test

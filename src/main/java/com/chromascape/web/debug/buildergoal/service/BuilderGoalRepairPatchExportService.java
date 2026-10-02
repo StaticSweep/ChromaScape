@@ -34,10 +34,7 @@ public class BuilderGoalRepairPatchExportService {
   private static final Pattern SAFE_ID = Pattern.compile("[A-Za-z0-9._-]+");
   private static final List<String> FORBIDDEN_ADDITIONS =
       List.of(
-          "Runtime.getRuntime().exec",
-          "ProcessBuilder",
-          "System.exit",
-          "java.io.FilePermission");
+          "Runtime.getRuntime().exec", "ProcessBuilder", "System.exit", "java.io.FilePermission");
 
   private final PatchLoopIterationRepository iterationRepository;
   private final BuilderGoalRunStateMutationService mutationService;
@@ -193,8 +190,8 @@ public class BuilderGoalRepairPatchExportService {
     }
   }
 
-  private Set<String> validateChanges(
-      Path liveRoot, List<AnalysisV2PatchDraft.PatchChange> changes) throws IOException {
+  private Set<String> validateChanges(Path liveRoot, List<AnalysisV2PatchDraft.PatchChange> changes)
+      throws IOException {
     Set<String> files = new LinkedHashSet<>();
     for (AnalysisV2PatchDraft.PatchChange change : changes) {
       String relative = normalizeRelative(change.getFilePath());
@@ -241,9 +238,7 @@ public class BuilderGoalRepairPatchExportService {
               "Patch oldText must match exactly once in " + relative);
         }
         updated =
-            current.substring(0, first)
-                + newText
-                + current.substring(first + oldText.length());
+            current.substring(0, first) + newText + current.substring(first + oldText.length());
       } else if (change.getLineNumber() != null) {
         List<String> lines = new ArrayList<>(List.of(current.split("\\R", -1)));
         int index = Math.max(0, Math.min(lines.size(), change.getLineNumber() - 1));

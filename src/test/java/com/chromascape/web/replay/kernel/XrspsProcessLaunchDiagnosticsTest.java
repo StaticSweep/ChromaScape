@@ -2,7 +2,6 @@ package com.chromascape.web.replay.kernel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.chromascape.web.replay.config.ReplayProperties;
@@ -48,7 +47,8 @@ class XrspsProcessLaunchDiagnosticsTest {
     Path directStderr = fixtureRoot.resolve("direct.stderr").toAbsolutePath();
     Path javaStderr = fixtureRoot.resolve("java-processbuilder.stderr").toAbsolutePath();
     Path kernelStderr = fixtureRoot.resolve("kernel.stderr").toAbsolutePath();
-    String fixture = fixtureScript(directPid, javaPid, kernelPid, directStderr, javaStderr, kernelStderr);
+    String fixture =
+        fixtureScript(directPid, javaPid, kernelPid, directStderr, javaStderr, kernelStderr);
     Files.writeString(script, fixture, StandardCharsets.UTF_8);
 
     ProcessResult where = runProcess(resolveCommand("node"), Path.of(".").toAbsolutePath());
@@ -129,10 +129,13 @@ class XrspsProcessLaunchDiagnosticsTest {
     evidence.put("path", bounded(System.getenv("PATH")));
     evidence.put("workingDirectory", Path.of("").toAbsolutePath().toString());
     evidence.put("temporaryDirectoryRaw", System.getProperty("java.io.tmpdir"));
-    evidence.put("temporaryDirectoryAbsolute", Path.of(System.getProperty("java.io.tmpdir")).toAbsolutePath().toString());
+    evidence.put(
+        "temporaryDirectoryAbsolute",
+        Path.of(System.getProperty("java.io.tmpdir")).toAbsolutePath().toString());
     evidence.put("resolvedNode", resolvedNodePath.toString());
     evidence.put("fixturePath", script.toString());
-    evidence.put("fixtureBytesBase64", Base64.getEncoder().encodeToString(Files.readAllBytes(script)));
+    evidence.put(
+        "fixtureBytesBase64", Base64.getEncoder().encodeToString(Files.readAllBytes(script)));
     evidence.put("directPidPath", directPid.toString());
     evidence.put("javaProcessBuilderPidPath", javaPid.toString());
     evidence.put("kernelPidPath", kernelPid.toString());
@@ -152,7 +155,9 @@ class XrspsProcessLaunchDiagnosticsTest {
     evidence.put("kernelPid", kernelPidValue);
     evidence.put("kernelResponse", kernelResponse);
     evidence.put("kernelExitCode", kernelExitCode);
-    evidence.put("kernelAliveAfterClose", ProcessHandle.of(kernelPidValue).map(ProcessHandle::isAlive).orElse(false));
+    evidence.put(
+        "kernelAliveAfterClose",
+        ProcessHandle.of(kernelPidValue).map(ProcessHandle::isAlive).orElse(false));
     evidence.put("kernelStderrSidecar", readText(kernelStderr));
     evidence.put("kernelStderrBytesRead", kernelStderrBytes);
     evidence.put("kernelStderrBytesConsumed", kernelStderrBytesRead);
@@ -179,7 +184,8 @@ class XrspsProcessLaunchDiagnosticsTest {
   }
 
   private static String firstNonBlankLine(String output) {
-    return output.lines()
+    return output
+        .lines()
         .map(String::trim)
         .filter(line -> !line.isBlank())
         .findFirst()
@@ -197,9 +203,21 @@ class XrspsProcessLaunchDiagnosticsTest {
         + "const readline=require('readline');\n"
         + "const args=process.argv.slice(2);\n"
         + "const mode=args.includes('--stdio')?'kernel':args.includes('--java-processbuilder')?'java-processbuilder':'direct';\n"
-        + "const paths={direct:{pid:'" + js(directPid) + "',stderr:'" + js(directStderr) + "'},"
-        + "'java-processbuilder':{pid:'" + js(javaPid) + "',stderr:'" + js(javaStderr) + "'},"
-        + "kernel:{pid:'" + js(kernelPid) + "',stderr:'" + js(kernelStderr) + "'}};\n"
+        + "const paths={direct:{pid:'"
+        + js(directPid)
+        + "',stderr:'"
+        + js(directStderr)
+        + "'},"
+        + "'java-processbuilder':{pid:'"
+        + js(javaPid)
+        + "',stderr:'"
+        + js(javaStderr)
+        + "'},"
+        + "kernel:{pid:'"
+        + js(kernelPid)
+        + "',stderr:'"
+        + js(kernelStderr)
+        + "'}};\n"
         + "fs.writeFileSync(paths[mode].pid,String(process.pid));\n"
         + "fs.writeFileSync(paths[mode].stderr,mode+'-stderr\\n');\n"
         + "process.stderr.write(mode+'-stderr\\n');\n"
@@ -215,7 +233,9 @@ class XrspsProcessLaunchDiagnosticsTest {
   }
 
   private static String readText(Path path) throws IOException {
-    return Files.exists(path) ? bounded(Files.readString(path, StandardCharsets.UTF_8)) : "<missing>";
+    return Files.exists(path)
+        ? bounded(Files.readString(path, StandardCharsets.UTF_8))
+        : "<missing>";
   }
 
   private static String bounded(String value) {

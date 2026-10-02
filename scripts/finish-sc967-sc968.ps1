@@ -5,6 +5,7 @@ param(
   [string] $LeeuwBotRoot = 'C:\Dev\IdeaProjects\leeuwbotbackend\leeuwbot-api\leeuwbotapi',
   [string] $ChromaScapeRoot = 'C:\Dev\IdeaProjects\ChromaScape',
   [string] $Micro6Root = 'C:\Dev\IdeaProjects\micro6',
+  [string] $RuntimeMicro6Root = '',
   [string] $RuneLiteRoot = 'C:\Dev\IdeaProjects\runelite',
   [string] $EvidenceRoot = '',
   [switch] $PreparedWorktrees,
@@ -197,7 +198,7 @@ if (-not $PreparedWorktrees) {
     Write-Output "Prepared clean acceptance worktrees under $worktreeBase"
     & $PSCommandPath -ContractsRoot $contractsWorktree `
       -LeeuwBotRoot (Join-Path $leeuwWorktree $leeuwRelative) `
-      -ChromaScapeRoot $chromaWorktree -Micro6Root $microWorktree `
+      -ChromaScapeRoot $chromaWorktree -Micro6Root $microWorktree -RuntimeMicro6Root $RuntimeMicro6Root `
       -RuneLiteRoot $runeliteWorktree `
       -EvidenceRoot (Join-Path $sourceChromaRoot 'output\sc968') `
       -PreparedWorktrees -PreflightOnly:$PreflightOnly
@@ -287,6 +288,47 @@ if ($LASTEXITCODE -ne 0) { throw 'OpenSSL failed to encode the Ed25519 public ke
 Copy-Item -LiteralPath $publicKey -Destination (Join-Path $trustedRoot "$keyId.pem")
 $publicRing = $keyId + '=' + [Convert]::ToBase64String([IO.File]::ReadAllBytes($publicDer))
 
+# Source provenance has its own trust boundary. Use a separate ephemeral Ed25519 key so the
+# signed authoritative Micro6 source bundle cannot be confused with the candidate registry key.
+# Private key bytes remain process-scoped and are never written to acceptance evidence logs.
+$sourceKeyId = 'sc968-source-local-acceptance'
+$sourcePrivateKey = Join-Path $secretRoot 'source-private-key.pem'
+$sourcePublicKey = Join-Path $secretRoot 'source-public-key.pem'
+$sourcePublicDer = Join-Path $secretRoot 'source-public-key.der'
+$sourcePrivateDer = Join-Path $secretRoot 'source-private-key.der'
+& $opensslPath genpkey -algorithm ED25519 -out $sourcePrivateKey
+if ($LASTEXITCODE -ne 0) { throw 'OpenSSL failed to generate the source Ed25519 private key' }
+& $opensslPath pkey -in $sourcePrivateKey -pubout -out $sourcePublicKey
+if ($LASTEXITCODE -ne 0) { throw 'OpenSSL failed to derive the source Ed25519 public key' }
+& $opensslPath pkey -pubin -in $sourcePublicKey -outform DER -out $sourcePublicDer
+if ($LASTEXITCODE -ne 0) { throw 'OpenSSL failed to encode the source Ed25519 public key' }
+& $opensslPath pkey -in $sourcePrivateKey -outform DER -out $sourcePrivateDer
+if ($LASTEXITCODE -ne 0) { throw 'OpenSSL failed to encode the source Ed25519 private key' }
+$sourcePublicBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($sourcePublicDer))
+$sourcePrivateBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($sourcePrivateDer))
+$sourceEnvironment = 'sc968-native-acceptance'
+$sourceBundleRoot = Join-Path $outputRoot 'source-bundle'
+
+$env:MICRO6_SOURCE_BUNDLE_ROOT = $sourceBundleRoot
+$env:MICRO6_SOURCE_SIGNING_PRIVATE_KEY_BASE64 = $sourcePrivateBase64
+$env:MICRO6_SOURCE_SIGNING_KEY_ID = $sourceKeyId
+$env:MICRO6_SOURCE_VERIFICATION_PUBLIC_KEY_BASE64 = $sourcePublicBase64
+$env:MICRO6_SOURCE_VERIFICATION_KEY_ID = $sourceKeyId
+$env:MICRO6_SOURCE_ENVIRONMENT = $sourceEnvironment
+
+# ChromaScape consumes the same trust material and environment through its canonical source
+# properties. Keep the legacy aliases identical because startup validation rejects split trust
+# configuration instead of allowing the two services to disagree.
+$env:CHROMASCAPE_SOURCE_REQUIRE_SIGNATURE = 'true'
+$env:CHROMASCAPE_SOURCE_ALLOW_LEGACY = 'false'
+$env:CHROMASCAPE_SOURCE_PUBLIC_KEY_BASE64 = $sourcePublicBase64
+$env:CHROMASCAPE_SOURCE_PUBLIC_KEY_ID = $sourceKeyId
+$env:CHROMASCAPE_SOURCE_ENVIRONMENT = $sourceEnvironment
+$env:MICRO6_SOURCE_REQUIRE_SIGNATURE = 'true'
+$env:MICRO6_SOURCE_ALLOW_LEGACY = 'false'
+$env:MICRO6_SOURCE_PUBLIC_KEY_BASE64 = $sourcePublicBase64
+$env:MICRO6_SOURCE_PUBLIC_KEY_ID = $sourceKeyId
+
 Set-DefaultEnvironment 'SC968_CAPTURE_TOKEN' ([Guid]::NewGuid().ToString('N'))
 Set-DefaultEnvironment 'SC968_OPERATOR_TOKEN' ([Guid]::NewGuid().ToString('N'))
 Set-DefaultEnvironment 'SC968_OPERATOR_ID' 'sc968-local-operator'
@@ -312,6 +354,14 @@ if ($null -eq $microVersionLine) {
 $microVersionMatch = [regex]::Match([string]$microVersionLine, '^project\.build\.version=(.+)$')
 if (-not $microVersionMatch.Success) { throw 'Micro6 project.build.version is malformed' }
 Set-DefaultEnvironment 'SC968_EXPECTED_ARTIFACT_NAME' ("client-{0}-shaded.jar" -f $microVersionMatch.Groups[1].Value.Trim())
+# The isolated worker uses this only as a read-only dependency seed, never as its writable home.
+$candidateCacheSeed = $env:GRADLE_USER_HOME
+if ([string]::IsNullOrWhiteSpace($candidateCacheSeed)) { $candidateCacheSeed = Join-Path $env:USERPROFILE '.gradle' }
+Set-DefaultEnvironment 'SC967_GRADLE_USER_HOME' $candidateCacheSeed
+if (-not [IO.Path]::IsPathRooted($env:SC967_GRADLE_USER_HOME) -or
+    -not (Test-Path -LiteralPath (Join-Path $env:SC967_GRADLE_USER_HOME 'caches/modules-2') -PathType Container)) {
+  throw 'Candidate read-only Gradle dependency cache is missing or not absolute; configure SC967_GRADLE_USER_HOME before acceptance'
+}
 Set-DefaultEnvironment 'SC968_MICRO6_LAUNCH_SCRIPT' $microLauncher
 Set-DefaultEnvironment 'SC968_RUNELITE_LAUNCH_SCRIPT' $runeliteLauncher
 Set-DefaultEnvironment 'SC968_CHROMASCAPE_URL' 'http://127.0.0.1:18090'
@@ -328,6 +378,9 @@ if (-not [Uri]::TryCreate($env:SC968_CHROMASCAPE_URL, [UriKind]::Absolute, [ref]
     $chromaUri.AbsolutePath -ne '/' -or -not [string]::IsNullOrWhiteSpace($chromaUri.Query) -or
     -not [string]::IsNullOrWhiteSpace($chromaUri.Fragment)) {
   throw 'SC968_CHROMASCAPE_URL must be a loopback HTTP origin with an explicit port and no path, query, or fragment'
+}
+if ($chromaUri.Port -eq 8090) {
+  throw 'SC968 acceptance must use an isolated port; development port 8090 is not allowed'
 }
 $chromaPort = $chromaUri.Port
 $listener = Get-NetTCPConnection -State Listen -LocalPort $chromaPort -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -363,6 +416,7 @@ Write-Output ''
 
 & $acceptance -ContractsRoot $ContractsRoot -LeeuwBotRoot $LeeuwBotRoot `
   -ChromaScapeRoot $ChromaScapeRoot -Micro6Root $Micro6Root -RuneLiteRoot $RuneLiteRoot `
+  -RuntimeMicro6Root $RuntimeMicro6Root `
   -OutputRoot $outputRoot
 if ($LASTEXITCODE -ne 0) { throw "SC-967/SC-968 acceptance failed. Inspect $outputRoot\logs" }
 

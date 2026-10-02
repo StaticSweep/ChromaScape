@@ -1,10 +1,13 @@
 package com.chromascape.web.debug;
 
+import com.chromascape.utils.core.screen.FrameSourceBinding;
+import com.chromascape.web.debug.tickdebugger.service.ClientFrameMetrics;
 import com.chromascape.web.viewport.ViewportWebSocketHandler;
 import com.chromascape.web.viewport.WebsocketViewport;
 import com.chromascape.web.viewport.config.ViewportStreamConfig;
 import com.chromascape.web.viewport.service.ScreenCaptureService;
 import com.chromascape.web.viewport.service.UnifiedFrameCaptureService;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,35 +34,31 @@ public class ViewportPipelineDebugController {
   private final ViewportWebSocketHandler viewportWebSocketHandler;
   private final WebsocketViewport websocketViewport;
   private final ViewportStreamConfig viewportStreamConfig;
+  private final ClientFrameMetrics clientFrameMetrics;
 
+  /** Creates the diagnostics endpoint over every stage of the viewport pipeline. */
   public ViewportPipelineDebugController(
       UnifiedFrameCaptureService unifiedFrameCaptureService,
       ScreenCaptureService screenCaptureService,
       ViewportWebSocketHandler viewportWebSocketHandler,
       WebsocketViewport websocketViewport,
-      ViewportStreamConfig viewportStreamConfig) {
+      ViewportStreamConfig viewportStreamConfig,
+      ClientFrameMetrics clientFrameMetrics) {
     this.unifiedFrameCaptureService = unifiedFrameCaptureService;
     this.screenCaptureService = screenCaptureService;
     this.viewportWebSocketHandler = viewportWebSocketHandler;
     this.websocketViewport = websocketViewport;
     this.viewportStreamConfig = viewportStreamConfig;
+    this.clientFrameMetrics = clientFrameMetrics;
   }
 
+  /** Returns capture, forwarding, and WebSocket counters plus sanitized source identity. */
   @GetMapping("/pipeline")
   public ResponseEntity<Map<String, Object>> getPipelineMetrics() {
     Map<String, Object> payload =
         Map.of(
             "capture",
-            Map.of(
-                "running", unifiedFrameCaptureService.isCapturing(),
-                "subscribers", unifiedFrameCaptureService.getSubscriberCount(),
-                "attempts", unifiedFrameCaptureService.getCaptureAttempts(),
-                "successes", unifiedFrameCaptureService.getCaptureSuccesses(),
-                "errors", unifiedFrameCaptureService.getCaptureErrors(),
-                "avgCaptureMs", unifiedFrameCaptureService.getAverageCaptureDurationMs(),
-                "maxCaptureMs", unifiedFrameCaptureService.getMaxCaptureDurationMs(),
-                "dispatchAttempts", unifiedFrameCaptureService.getSubscriberDispatchAttempts(),
-                "dispatchErrors", unifiedFrameCaptureService.getSubscriberDispatchErrors()),
+            captureMetrics(),
             "forwarding",
             Map.of(
                 "running", screenCaptureService.isRunning(),
@@ -92,8 +91,47 @@ public class ViewportPipelineDebugController {
                 Map.entry("avgPayloadBytes", websocketViewport.getAveragePayloadBytes()),
                 Map.entry("targetFps", viewportStreamConfig.getTargetFps()),
                 Map.entry("jpegQuality", viewportStreamConfig.getJpegQuality()),
-                Map.entry("maxLongEdge", viewportStreamConfig.getMaxLongEdge())));
+                Map.entry("maxLongEdge", viewportStreamConfig.getMaxLongEdge())),
+            "clientFrames",
+            Map.ofEntries(
+                Map.entry("received", clientFrameMetrics.getReceived()),
+                Map.entry("forwarded", clientFrameMetrics.getForwarded()),
+                Map.entry("droppedAttached", clientFrameMetrics.getDroppedAttached()),
+                Map.entry("droppedDesktopWatch", clientFrameMetrics.getDroppedDesktopWatch()),
+                Map.entry("droppedInvalid", clientFrameMetrics.getDroppedInvalid()),
+                Map.entry("source", clientFrameMetrics.getLastSource()),
+                Map.entry(
+                    "sessionId",
+                    clientFrameMetrics.getLastSessionId() == null
+                        ? "none"
+                        : clientFrameMetrics.getLastSessionId()),
+                Map.entry("state", clientFrameMetrics.getFeedState()),
+                Map.entry("ageMillis", clientFrameMetrics.getLastForwardAgeMillis()),
+                Map.entry(
+                    "lastRejection",
+                    clientFrameMetrics.getLastRejection() == null
+                        ? "none"
+                        : clientFrameMetrics.getLastRejection()),
+                Map.entry("lastForwardedAtMillis", clientFrameMetrics.getLastForwardedAtMillis())));
 
     return ResponseEntity.ok(payload);
+  }
+
+  private Map<String, Object> captureMetrics() {
+    Map<String, Object> capture = new LinkedHashMap<>();
+    capture.put("running", unifiedFrameCaptureService.isCapturing());
+    capture.put("subscribers", unifiedFrameCaptureService.getSubscriberCount());
+    capture.put("attempts", unifiedFrameCaptureService.getCaptureAttempts());
+    capture.put("successes", unifiedFrameCaptureService.getCaptureSuccesses());
+    capture.put("errors", unifiedFrameCaptureService.getCaptureErrors());
+    capture.put("avgCaptureMs", unifiedFrameCaptureService.getAverageCaptureDurationMs());
+    capture.put("maxCaptureMs", unifiedFrameCaptureService.getMaxCaptureDurationMs());
+    capture.put("dispatchAttempts", unifiedFrameCaptureService.getSubscriberDispatchAttempts());
+    capture.put("dispatchErrors", unifiedFrameCaptureService.getSubscriberDispatchErrors());
+    capture.put("sourceTransitions", unifiedFrameCaptureService.getSourceTransitions());
+    capture.put("staleSourceDispatches", unifiedFrameCaptureService.getStaleSourceDispatches());
+    FrameSourceBinding binding = unifiedFrameCaptureService.getActiveSourceBinding();
+    capture.put("sourceBinding", binding != null ? binding.toDisplayString() : null);
+    return capture;
   }
 }

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.buildergoal.service.BuilderGoalSensitiveTextSanitizerTest" tests="15" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:39:41.314Z" hostname="fedora" time="0.01">
+  <properties/>
+  <testcase name="sanitizeRedactsEmailColonPasswordPayloads()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSensitiveTextSanitizerTest" time="0.0"/>
+  <testcase name="unsupportedMutableLeafTypesAreRejectedWithoutExposingToStringContent()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSensitiveTextSanitizerTest" time="0.0"/>
+  <testcase name="sanitizeAndFreezeReturnsDeeplyImmutableNestedStructures()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSensitiveTextSanitizerTest" time="0.002"/>
+  <testcase name="sanitizeHandlesNullAndEmpty()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSensitiveTextSanitizerTest" time="0.0"/>
+  <testcase name="sanitizeRedactsPasswordPwdAndPassAssignments()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSensitiveTextSanitizerTest" time="0.0"/>
+  <testcase name="sanitizeRedactsQuotedProfileEmailValues()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSensitiveTextSanitizerTest" time="0.0"/>
+  <testcase name="sanitizeRedactsAuthorizationAndAuthBearers()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSensitiveTextSanitizerTest" time="0.001"/>
+  <testcase name="sanitizeAndFreezeCopiesSetsCollectionsAndArraysIntoImmutableLists()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSensitiveTextSanitizerTest" time="0.001"/>
+  <testcase name="sanitizeRedactsInlineProfileEmail()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSensitiveTextSanitizerTest" time="0.0"/>
+  <testcase name="sanitizeRedactsQuotedPasswordAssignmentsContainingSpaces()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSensitiveTextSanitizerTest" time="0.0"/>
+  <testcase name="sanitizeIsCaseInsensitiveForOptionNames()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSensitiveTextSanitizerTest" time="0.0"/>
+  <testcase name="sanitizeRedactsSplitProfileEmail()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSensitiveTextSanitizerTest" time="0.001"/>
+  <testcase name="sanitizeAndFreezeCopiesMeanMutatingOriginalsCannotAffectSnapshot()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSensitiveTextSanitizerTest" time="0.0"/>
+  <testcase name="sanitizeRecursivelyProcessesMapsListsAndNestedStrings()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSensitiveTextSanitizerTest" time="0.001"/>
+  <testcase name="sanitizeLeavesOrdinaryDisplayNamesIntact()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSensitiveTextSanitizerTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

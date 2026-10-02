@@ -6,8 +6,8 @@ import java.util.Optional;
 /**
  * Discovery for platforms without a client discovery implementation (macOS/unknown).
  *
- * <p>Fails bounded instead of throwing at startup: discovery returns no targets and reports
- * {@link TargetSelectionDiagnostic#UNSUPPORTED_PLATFORM}.
+ * <p>Fails bounded instead of throwing at startup: discovery returns no targets and reports {@link
+ * TargetSelectionDiagnostic#UNSUPPORTED_PLATFORM}.
  */
 public class UnsupportedProcessManager implements ProcessManager {
 

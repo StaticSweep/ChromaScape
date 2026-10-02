@@ -1,0 +1,946 @@
+{
+  "comment": "SC-265 quest.helper.runtime.v1 golden fixtures. Cases: full, degraded, unavailable, failed, legacy-v1, nested-step, unknown-requirement, evaluation-error, cycle, truncation, synthetic-current. ChromaScape mirrors this file byte-for-byte under src/test/resources/contracts/quest/.",
+  "fixtures": {
+    "full": {
+      "schema": "quest.helper.runtime.v1",
+      "schemaVersion": 1,
+      "source": "micro6.questhelper",
+      "tick": 12345,
+      "outcome": "FULL",
+      "usable": true,
+      "complete": true,
+      "collectionMode": "questhelper",
+      "activeQuest": {
+        "questKey": "cooks_assistant",
+        "questName": "Cook's Assistant",
+        "questState": "IN_PROGRESS",
+        "questVarType": "VARBIT",
+        "questVarId": 29,
+        "questVarValue": 2,
+        "started": true,
+        "finished": false
+      },
+      "currentStep": {
+        "stepId": "cooks_assistant:7c63d1a2b4c5",
+        "structuralPath": "panel/000/step/000",
+        "ordinal": 0,
+        "index": 1,
+        "panelIndex": 0,
+        "panelTitle": "Getting started",
+        "depth": 0,
+        "text": "Talk to the Cook in Lumbridge Castle.",
+        "status": "ACTIVE",
+        "current": true,
+        "synthetic": false,
+        "source": "questhelper"
+      },
+      "steps": [
+        {
+          "stepId": "cooks_assistant:7c63d1a2b4c5",
+          "structuralPath": "panel/000/step/000",
+          "ordinal": 0,
+          "index": 1,
+          "panelIndex": 0,
+          "panelTitle": "Getting started",
+          "depth": 0,
+          "text": "Talk to the Cook in Lumbridge Castle.",
+          "status": "ACTIVE",
+          "current": true,
+          "synthetic": false,
+          "source": "questhelper"
+        },
+        {
+          "stepId": "cooks_assistant:91af2c4d8e01",
+          "structuralPath": "panel/000/step/001",
+          "ordinal": 1,
+          "index": 2,
+          "panelIndex": 0,
+          "panelTitle": "Getting started",
+          "depth": 0,
+          "text": "Collect a pot of flour, an egg, and a bucket of milk.",
+          "status": "AVAILABLE",
+          "current": false,
+          "synthetic": false,
+          "source": "questhelper"
+        }
+      ],
+      "requirements": {
+        "all": [
+          {
+            "requirementId": "cooks_assistant:req:1a2b3c4d5e6f",
+            "type": "ITEM",
+            "scope": "QUEST",
+            "sourcePath": "requirements/items/0",
+            "text": "Pot of flour",
+            "name": "Pot of flour",
+            "status": "MISSING",
+            "blocking": true,
+            "itemId": 1931,
+            "itemIds": [1931],
+            "quantityRequired": 1,
+            "quantityOwned": 0
+          },
+          {
+            "requirementId": "cooks_assistant:req:2b3c4d5e6f7a",
+            "type": "SKILL",
+            "scope": "QUEST",
+            "sourcePath": "requirements/general/0",
+            "text": "Level 1 Cooking",
+            "skill": "COOKING",
+            "status": "MET",
+            "blocking": true,
+            "requiredLevel": 1,
+            "currentLevel": 1,
+            "boostable": false
+          }
+        ],
+        "met": [
+          {
+            "requirementId": "cooks_assistant:req:2b3c4d5e6f7a",
+            "type": "SKILL",
+            "scope": "QUEST",
+            "sourcePath": "requirements/general/0",
+            "text": "Level 1 Cooking",
+            "skill": "COOKING",
+            "status": "MET",
+            "blocking": true,
+            "requiredLevel": 1,
+            "currentLevel": 1,
+            "boostable": false
+          }
+        ],
+        "missing": [
+          {
+            "requirementId": "cooks_assistant:req:1a2b3c4d5e6f",
+            "type": "ITEM",
+            "scope": "QUEST",
+            "sourcePath": "requirements/items/0",
+            "text": "Pot of flour",
+            "name": "Pot of flour",
+            "status": "MISSING",
+            "blocking": true,
+            "itemId": 1931,
+            "itemIds": [1931],
+            "quantityRequired": 1,
+            "quantityOwned": 0
+          }
+        ],
+        "unknown": [],
+        "errors": [],
+        "blockedBy": [
+          {
+            "type": "ITEM",
+            "text": "Missing item requirement: Pot of flour",
+            "name": "Pot of flour",
+            "itemId": 1931
+          }
+        ]
+      },
+      "targets": [
+        {
+          "type": "NPC",
+          "sourceStepId": "cooks_assistant:7c63d1a2b4c5",
+          "name": "Cook",
+          "id": 4626
+        }
+      ],
+      "overlays": [],
+      "varbits": {
+        "VARBIT_29": {
+          "id": 29,
+          "type": "VARBIT",
+          "value": 2
+        }
+      },
+      "events": [],
+      "diagnostics": [],
+      "debug": {
+        "collectionMode": "questhelper",
+        "questHelperPluginEnabled": true,
+        "fullSnapshotDue": true,
+        "lastCollectionError": null,
+        "activeHelperClass": "CooksAssistant"
+      }
+    },
+    "degraded": {
+      "schema": "quest.helper.runtime.v1",
+      "schemaVersion": 1,
+      "source": "micro6.questhelper",
+      "tick": 12350,
+      "outcome": "DEGRADED",
+      "usable": true,
+      "complete": false,
+      "collectionMode": "questhelper",
+      "activeQuest": {
+        "questKey": "cooks_assistant",
+        "questName": "Cook's Assistant",
+        "questState": "IN_PROGRESS",
+        "questVarType": "VARBIT",
+        "questVarId": 29,
+        "questVarValue": 2,
+        "started": true,
+        "finished": false
+      },
+      "currentStep": {
+        "stepId": "cooks_assistant:7c63d1a2b4c5",
+        "structuralPath": "panel/000/step/000",
+        "ordinal": 0,
+        "index": 1,
+        "depth": 0,
+        "text": "Talk to the Cook in Lumbridge Castle.",
+        "status": "ACTIVE",
+        "current": true,
+        "synthetic": false,
+        "source": "questhelper"
+      },
+      "steps": [
+        {
+          "stepId": "cooks_assistant:7c63d1a2b4c5",
+          "structuralPath": "panel/000/step/000",
+          "ordinal": 0,
+          "index": 1,
+          "depth": 0,
+          "text": "Talk to the Cook in Lumbridge Castle.",
+          "status": "ACTIVE",
+          "current": true,
+          "synthetic": false,
+          "source": "questhelper"
+        }
+      ],
+      "requirements": {
+        "all": [
+          {
+            "requirementId": "cooks_assistant:req:3c4d5e6f7a8b",
+            "type": "CUSTOM",
+            "scope": "QUEST",
+            "sourcePath": "requirements/general/1",
+            "text": "Unusual plugin condition",
+            "status": "UNKNOWN",
+            "blocking": false,
+            "diagnosticCode": "REQUIREMENT_UNSUPPORTED"
+          }
+        ],
+        "met": [],
+        "missing": [],
+        "unknown": [
+          {
+            "requirementId": "cooks_assistant:req:3c4d5e6f7a8b",
+            "type": "CUSTOM",
+            "scope": "QUEST",
+            "sourcePath": "requirements/general/1",
+            "text": "Unusual plugin condition",
+            "status": "UNKNOWN",
+            "blocking": false,
+            "diagnosticCode": "REQUIREMENT_UNSUPPORTED"
+          }
+        ],
+        "errors": [],
+        "blockedBy": []
+      },
+      "targets": [],
+      "overlays": [],
+      "varbits": {
+        "VARBIT_29": {
+          "id": 29,
+          "type": "VARBIT",
+          "value": 2
+        }
+      },
+      "events": [],
+      "diagnostics": [
+        {
+          "severity": "INFO",
+          "code": "REQUIREMENT_UNSUPPORTED",
+          "path": "requirements/general/1",
+          "message": "Requirement type is not typed-mapped in v1; display text preserved as CUSTOM.",
+          "retryable": false
+        },
+        {
+          "severity": "INFO",
+          "code": "CLIENT_UNAVAILABLE",
+          "path": "client",
+          "message": "No RuneLite client is available; dynamic values and requirement checks are UNKNOWN.",
+          "retryable": true
+        }
+      ],
+      "debug": {
+        "collectionMode": "questhelper",
+        "questHelperPluginEnabled": true,
+        "fullSnapshotDue": false,
+        "lastCollectionError": null,
+        "activeHelperClass": "CooksAssistant"
+      }
+    },
+    "unavailable": {
+      "schema": "quest.helper.runtime.v1",
+      "schemaVersion": 1,
+      "source": "micro6.questhelper",
+      "tick": 12360,
+      "outcome": "UNAVAILABLE",
+      "usable": false,
+      "complete": false,
+      "collectionMode": "unavailable",
+      "activeQuest": {},
+      "currentStep": null,
+      "steps": [],
+      "requirements": {
+        "all": [],
+        "met": [],
+        "missing": [],
+        "unknown": [],
+        "errors": [],
+        "blockedBy": []
+      },
+      "targets": [],
+      "overlays": [],
+      "varbits": {},
+      "events": [],
+      "diagnostics": [
+        {
+          "severity": "INFO",
+          "code": "NO_ACTIVE_QUEST",
+          "path": "task",
+          "message": "No active quest task is available.",
+          "retryable": false
+        }
+      ],
+      "debug": {
+        "collectionMode": "unavailable",
+        "questHelperPluginEnabled": false,
+        "fullSnapshotDue": false,
+        "lastCollectionError": null,
+        "activeHelperClass": null
+      }
+    },
+    "failed": {
+      "schema": "quest.helper.runtime.v1",
+      "schemaVersion": 1,
+      "source": "micro6.questhelper",
+      "tick": 12370,
+      "outcome": "FAILED",
+      "usable": false,
+      "complete": false,
+      "collectionMode": "error",
+      "activeQuest": {},
+      "currentStep": null,
+      "steps": [],
+      "requirements": {
+        "all": [],
+        "met": [],
+        "missing": [],
+        "unknown": [],
+        "errors": [],
+        "blockedBy": []
+      },
+      "targets": [],
+      "overlays": [],
+      "varbits": {},
+      "events": [],
+      "diagnostics": [
+        {
+          "severity": "ERROR",
+          "code": "UNEXPECTED_ADAPTER_FAILURE",
+          "path": "adapter",
+          "message": "Unexpected adapter failure: quest graph collapsed",
+          "sourceType": "illegal_state_exception",
+          "retryable": true
+        }
+      ],
+      "debug": {
+        "collectionMode": "error",
+        "questHelperPluginEnabled": false,
+        "fullSnapshotDue": false,
+        "lastCollectionError": "UNEXPECTED_ADAPTER_FAILURE: quest graph collapsed",
+        "activeHelperClass": null
+      }
+    },
+    "legacyV1": {
+      "schemaVersion": 1,
+      "source": "micro6.questhelper",
+      "collectionMode": "questhelper",
+      "activeQuest": {
+        "questKey": "cooks_assistant",
+        "questName": "Cook's Assistant",
+        "questState": "IN_PROGRESS",
+        "questVarType": "VARBIT",
+        "questVarId": 29,
+        "questVarValue": 2,
+        "started": true,
+        "finished": false
+      },
+      "currentStep": {
+        "stepId": "cooks_assistant.step_001_talk_to_the_cook",
+        "index": 1,
+        "text": "Talk to the Cook in Lumbridge Castle.",
+        "status": "ACTIVE",
+        "changedThisTick": false,
+        "startedAtTick": 100,
+        "lastChangedAtTick": 100,
+        "source": "questhelper"
+      },
+      "steps": [
+        {
+          "stepId": "cooks_assistant.step_001_talk_to_the_cook",
+          "index": 1,
+          "text": "Talk to the Cook in Lumbridge Castle.",
+          "status": "ACTIVE",
+          "source": "questhelper"
+        }
+      ],
+      "requirements": {
+        "met": [],
+        "missing": [
+          {
+            "type": "ITEM",
+            "name": "Pot of flour",
+            "text": "Pot of flour x1",
+            "quantityRequired": 1,
+            "quantityOwned": 0,
+            "met": false
+          }
+        ],
+        "blockedBy": [
+          {
+            "type": "ITEM",
+            "text": "Missing item requirement: Pot of flour x1"
+          }
+        ]
+      },
+      "targets": [],
+      "overlays": [],
+      "varbits": {
+        "VARBIT_29": {
+          "id": 29,
+          "type": "VARBIT",
+          "value": 2
+        }
+      },
+      "events": [],
+      "debug": {
+        "collectionMode": "questhelper",
+        "questHelperPluginEnabled": true,
+        "fullSnapshotDue": false,
+        "lastCollectionError": null,
+        "activeHelperClass": "CooksAssistant"
+      }
+    },
+    "nestedSteps": {
+      "schema": "quest.helper.runtime.v1",
+      "schemaVersion": 1,
+      "source": "micro6.questhelper",
+      "tick": 12400,
+      "outcome": "FULL",
+      "usable": true,
+      "complete": true,
+      "collectionMode": "questhelper",
+      "activeQuest": {
+        "questKey": "/demo",
+        "questName": "Demo Quest",
+        "questState": "IN_PROGRESS",
+        "started": true,
+        "finished": false
+      },
+      "currentStep": {
+        "stepId": "demo:aa11bb22cc33",
+        "structuralPath": "panel/000/step/000",
+        "ordinal": 0,
+        "index": 1,
+        "depth": 0,
+        "text": "Choose an option.",
+        "status": "ACTIVE",
+        "current": true,
+        "synthetic": false,
+        "source": "questhelper"
+      },
+      "steps": [
+        {
+          "stepId": "demo:aa11bb22cc33",
+          "structuralPath": "panel/000/step/000",
+          "ordinal": 0,
+          "index": 1,
+          "depth": 0,
+          "text": "Choose an option.",
+          "status": "ACTIVE",
+          "current": true,
+          "synthetic": false,
+          "source": "questhelper"
+        },
+        {
+          "stepId": "demo:bb22cc33dd44",
+          "structuralPath": "panel/000/step/000/substep/000",
+          "ordinal": 1,
+          "index": 2,
+          "parentStepId": "demo:aa11bb22cc33",
+          "depth": 1,
+          "text": "Option A detail.",
+          "status": "AVAILABLE",
+          "current": false,
+          "synthetic": false,
+          "source": "questhelper"
+        },
+        {
+          "stepId": "demo:cc33dd44ee55",
+          "structuralPath": "panel/000/step/000/substep/001",
+          "ordinal": 2,
+          "index": 3,
+          "parentStepId": "demo:aa11bb22cc33",
+          "depth": 1,
+          "text": "Option B detail.",
+          "status": "AVAILABLE",
+          "current": false,
+          "synthetic": false,
+          "source": "questhelper"
+        }
+      ],
+      "requirements": {
+        "all": [],
+        "met": [],
+        "missing": [],
+        "unknown": [],
+        "errors": [],
+        "blockedBy": []
+      },
+      "targets": [],
+      "overlays": [],
+      "varbits": {},
+      "events": [],
+      "diagnostics": [],
+      "debug": {
+        "collectionMode": "questhelper",
+        "questHelperPluginEnabled": true,
+        "fullSnapshotDue": false,
+        "lastCollectionError": null,
+        "activeHelperClass": null
+      }
+    },
+    "unknownRequirement": {
+      "schema": "quest.helper.runtime.v1",
+      "schemaVersion": 1,
+      "source": "micro6.questhelper",
+      "tick": 12410,
+      "outcome": "DEGRADED",
+      "usable": true,
+      "complete": false,
+      "collectionMode": "questhelper",
+      "activeQuest": {
+        "questKey": "demo",
+        "questName": "Demo Quest",
+        "questState": "IN_PROGRESS",
+        "started": true,
+        "finished": false
+      },
+      "currentStep": {
+        "stepId": "demo:dd44ee55ff66",
+        "structuralPath": "panel/000/step/000",
+        "ordinal": 0,
+        "index": 1,
+        "depth": 0,
+        "text": "Do the thing.",
+        "status": "ACTIVE",
+        "current": true,
+        "synthetic": false,
+        "source": "questhelper"
+      },
+      "steps": [
+        {
+          "stepId": "demo:dd44ee55ff66",
+          "structuralPath": "panel/000/step/000",
+          "ordinal": 0,
+          "index": 1,
+          "depth": 0,
+          "text": "Do the thing.",
+          "status": "ACTIVE",
+          "current": true,
+          "synthetic": false,
+          "source": "questhelper"
+        }
+      ],
+      "requirements": {
+        "all": [
+          {
+            "requirementId": "demo:req:ee55ff66aa77",
+            "type": "CUSTOM",
+            "scope": "STEP",
+            "sourcePath": "panel/000/requirements/0",
+            "text": "Exotic requirement",
+            "status": "UNKNOWN",
+            "blocking": false,
+            "diagnosticCode": "REQUIREMENT_UNSUPPORTED"
+          }
+        ],
+        "met": [],
+        "missing": [],
+        "unknown": [
+          {
+            "requirementId": "demo:req:ee55ff66aa77",
+            "type": "CUSTOM",
+            "scope": "STEP",
+            "sourcePath": "panel/000/requirements/0",
+            "text": "Exotic requirement",
+            "status": "UNKNOWN",
+            "blocking": false,
+            "diagnosticCode": "REQUIREMENT_UNSUPPORTED"
+          }
+        ],
+        "errors": [],
+        "blockedBy": []
+      },
+      "targets": [],
+      "overlays": [],
+      "varbits": {},
+      "events": [],
+      "diagnostics": [
+        {
+          "severity": "INFO",
+          "code": "REQUIREMENT_UNSUPPORTED",
+          "path": "panel/000/requirements/0",
+          "message": "Requirement type is not typed-mapped in v1; display text preserved as CUSTOM.",
+          "retryable": false
+        }
+      ],
+      "debug": {
+        "collectionMode": "questhelper",
+        "questHelperPluginEnabled": true,
+        "fullSnapshotDue": false,
+        "lastCollectionError": null,
+        "activeHelperClass": null
+      }
+    },
+    "evaluationError": {
+      "schema": "quest.helper.runtime.v1",
+      "schemaVersion": 1,
+      "source": "micro6.questhelper",
+      "tick": 12420,
+      "outcome": "DEGRADED",
+      "usable": true,
+      "complete": false,
+      "collectionMode": "questhelper",
+      "activeQuest": {
+        "questKey": "demo",
+        "questName": "Demo Quest",
+        "questState": "IN_PROGRESS",
+        "started": true,
+        "finished": false
+      },
+      "currentStep": {
+        "stepId": "demo:ff66aa77bb88",
+        "structuralPath": "panel/000/step/000",
+        "ordinal": 0,
+        "index": 1,
+        "depth": 0,
+        "text": "Fight the boss.",
+        "status": "ACTIVE",
+        "current": true,
+        "synthetic": false,
+        "source": "questhelper"
+      },
+      "steps": [
+        {
+          "stepId": "demo:ff66aa77bb88",
+          "structuralPath": "panel/000/step/000",
+          "ordinal": 0,
+          "index": 1,
+          "depth": 0,
+          "text": "Fight the boss.",
+          "status": "ACTIVE",
+          "current": true,
+          "synthetic": false,
+          "source": "questhelper"
+        }
+      ],
+      "requirements": {
+        "all": [
+          {
+            "requirementId": "demo:req:aa77bb88cc99",
+            "type": "COMBAT",
+            "scope": "QUEST",
+            "sourcePath": "requirements/general/0",
+            "text": "Combat Level 70",
+            "status": "ERROR",
+            "blocking": true,
+            "diagnosticCode": "REQUIREMENT_EVALUATION_FAILED"
+          }
+        ],
+        "met": [],
+        "missing": [],
+        "unknown": [],
+        "errors": [
+          {
+            "requirementId": "demo:req:aa77bb88cc99",
+            "type": "COMBAT",
+            "scope": "QUEST",
+            "sourcePath": "requirements/general/0",
+            "text": "Combat Level 70",
+            "status": "ERROR",
+            "blocking": true,
+            "diagnosticCode": "REQUIREMENT_EVALUATION_FAILED"
+          }
+        ],
+        "blockedBy": [
+          {
+            "type": "COMBAT",
+            "text": "Missing combat requirement: Combat Level 70"
+          }
+        ]
+      },
+      "targets": [],
+      "overlays": [],
+      "varbits": {},
+      "events": [],
+      "diagnostics": [
+        {
+          "severity": "WARNING",
+          "code": "REQUIREMENT_EVALUATION_FAILED",
+          "path": "requirements/general/0",
+          "message": "Requirement evaluation did not succeed: ERROR",
+          "retryable": true
+        }
+      ],
+      "debug": {
+        "collectionMode": "questhelper",
+        "questHelperPluginEnabled": true,
+        "fullSnapshotDue": false,
+        "lastCollectionError": null,
+        "activeHelperClass": null
+      }
+    },
+    "cycle": {
+      "schema": "quest.helper.runtime.v1",
+      "schemaVersion": 1,
+      "source": "micro6.questhelper",
+      "tick": 12430,
+      "outcome": "DEGRADED",
+      "usable": true,
+      "complete": false,
+      "collectionMode": "questhelper",
+      "activeQuest": {
+        "questKey": "demo",
+        "questName": "Demo Quest",
+        "questState": "IN_PROGRESS",
+        "started": true,
+        "finished": false
+      },
+      "currentStep": {
+        "stepId": "demo:bb88cc99dd00",
+        "structuralPath": "panel/000/step/000",
+        "ordinal": 0,
+        "index": 1,
+        "depth": 0,
+        "text": "Loop entry.",
+        "status": "ACTIVE",
+        "current": true,
+        "synthetic": false,
+        "source": "questhelper"
+      },
+      "steps": [
+        {
+          "stepId": "demo:bb88cc99dd00",
+          "structuralPath": "panel/000/step/000",
+          "ordinal": 0,
+          "index": 1,
+          "depth": 0,
+          "text": "Loop entry.",
+          "status": "ACTIVE",
+          "current": true,
+          "synthetic": false,
+          "source": "questhelper"
+        },
+        {
+          "stepId": "demo:cc99dd00ee11",
+          "structuralPath": "panel/000/step/000/substep/000",
+          "ordinal": 1,
+          "index": 2,
+          "parentStepId": "demo:bb88cc99dd00",
+          "depth": 1,
+          "text": "Looping child.",
+          "status": "AVAILABLE",
+          "current": false,
+          "synthetic": false,
+          "source": "questhelper"
+        }
+      ],
+      "requirements": {
+        "all": [],
+        "met": [],
+        "missing": [],
+        "unknown": [],
+        "errors": [],
+        "blockedBy": []
+      },
+      "targets": [],
+      "overlays": [],
+      "varbits": {},
+      "events": [],
+      "diagnostics": [
+        {
+          "severity": "WARNING",
+          "code": "STEP_GRAPH_CYCLE",
+          "path": "panel/000/step/000/substep/001",
+          "message": "Cyclic substep edge detected; the node is not followed a second time.",
+          "retryable": false
+        }
+      ],
+      "debug": {
+        "collectionMode": "questhelper",
+        "questHelperPluginEnabled": true,
+        "fullSnapshotDue": false,
+        "lastCollectionError": null,
+        "activeHelperClass": null
+      }
+    },
+    "truncation": {
+      "schema": "quest.helper.runtime.v1",
+      "schemaVersion": 1,
+      "source": "micro6.questhelper",
+      "tick": 12440,
+      "outcome": "DEGRADED",
+      "usable": true,
+      "complete": false,
+      "collectionMode": "questhelper",
+      "activeQuest": {
+        "questKey": "demo",
+        "questName": "Demo Quest",
+        "questState": "IN_PROGRESS",
+        "started": true,
+        "finished": false
+      },
+      "currentStep": {
+        "stepId": "demo:dd00ee11ff22",
+        "structuralPath": "panel/000/step/000",
+        "ordinal": 0,
+        "index": 1,
+        "depth": 0,
+        "text": "First step.",
+        "status": "ACTIVE",
+        "current": true,
+        "synthetic": false,
+        "source": "questhelper"
+      },
+      "steps": [
+        {
+          "stepId": "demo:dd00ee11ff22",
+          "structuralPath": "panel/000/step/000",
+          "ordinal": 0,
+          "index": 1,
+          "depth": 0,
+          "text": "First step.",
+          "status": "ACTIVE",
+          "current": true,
+          "synthetic": false,
+          "source": "questhelper"
+        }
+      ],
+      "requirements": {
+        "all": [],
+        "met": [],
+        "missing": [],
+        "unknown": [],
+        "errors": [],
+        "blockedBy": []
+      },
+      "targets": [],
+      "overlays": [],
+      "varbits": {},
+      "events": [],
+      "diagnostics": [
+        {
+          "severity": "WARNING",
+          "code": "STEP_LIMIT_EXCEEDED",
+          "path": "steps",
+          "message": "Step output truncated at the configured maximum.",
+          "retryable": false
+        }
+      ],
+      "debug": {
+        "collectionMode": "questhelper",
+        "questHelperPluginEnabled": true,
+        "fullSnapshotDue": false,
+        "lastCollectionError": null,
+        "activeHelperClass": null
+      }
+    },
+    "syntheticCurrent": {
+      "schema": "quest.helper.runtime.v1",
+      "schemaVersion": 1,
+      "source": "micro6.questhelper",
+      "tick": 12450,
+      "outcome": "FULL",
+      "usable": true,
+      "complete": true,
+      "collectionMode": "questhelper",
+      "activeQuest": {
+        "questKey": "demo",
+        "questName": "Demo Quest",
+        "questState": "IN_PROGRESS",
+        "started": true,
+        "finished": false
+      },
+      "currentStep": {
+        "stepId": "demo:current:ee11ff22aa33",
+        "structuralPath": "",
+        "ordinal": 1,
+        "index": 2,
+        "depth": 0,
+        "text": "Live widget-driven step not present in panels.",
+        "status": "ACTIVE",
+        "current": true,
+        "synthetic": true,
+        "source": "questhelper"
+      },
+      "steps": [
+        {
+          "stepId": "demo:ee11ff22aa33",
+          "structuralPath": "panel/000/step/000",
+          "ordinal": 0,
+          "index": 1,
+          "depth": 0,
+          "text": "Panel step.",
+          "status": "AVAILABLE",
+          "current": false,
+          "synthetic": false,
+          "source": "questhelper"
+        },
+        {
+          "stepId": "demo:current:ee11ff22aa33",
+          "structuralPath": "",
+          "ordinal": 1,
+          "index": 2,
+          "depth": 0,
+          "text": "Live widget-driven step not present in panels.",
+          "status": "ACTIVE",
+          "current": true,
+          "synthetic": true,
+          "source": "questhelper"
+        }
+      ],
+      "requirements": {
+        "all": [],
+        "met": [],
+        "missing": [],
+        "unknown": [],
+        "errors": [],
+        "blockedBy": []
+      },
+      "targets": [],
+      "overlays": [],
+      "varbits": {},
+      "events": [],
+      "diagnostics": [
+        {
+          "severity": "INFO",
+          "code": "CURRENT_STEP_NOT_IN_GRAPH",
+          "path": "currentStep",
+          "message": "Live current step is not present in the panel graph; appended a synthetic current descriptor.",
+          "retryable": false
+        }
+      ],
+      "debug": {
+        "collectionMode": "questhelper",
+        "questHelperPluginEnabled": true,
+        "fullSnapshotDue": false,
+        "lastCollectionError": null,
+        "activeHelperClass": null
+      }
+    }
+  }
+}

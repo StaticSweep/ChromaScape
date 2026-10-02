@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizerTest" tests="5" skipped="0" failures="5" errors="0" timestamp="2026-09-19T17:29:47.137Z" hostname="fedora" time="0.067">
+  <properties/>
+  <testcase name="normalizesClaudeAndCodexGoldenProposalsToEquivalentDecisions()" classname="com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizerTest" time="0.02">
+    <failure message="com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeException: Provider output was not one valid structured result" type="com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeException">com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeException: Provider output was not one valid structured result
+	at app//com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizer.invalid(ProviderOutputNormalizer.java:155)
+	at app//com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizer.normalize(ProviderOutputNormalizer.java:77)
+	at app//com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizerTest.normalizesClaudeAndCodexGoldenProposalsToEquivalentDecisions(ProviderOutputNormalizerTest.java:46)
+	at java.base@17.0.20.1/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <testcase name="rejectsProseMultipleDecisionsAndUnsupportedActions()" classname="com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizerTest" time="0.015">
+    <failure message="java.lang.ClassCastException: class com.fasterxml.jackson.databind.node.MissingNode cannot be cast to class com.fasterxml.jackson.databind.node.ObjectNode (com.fasterxml.jackson.databind.node.MissingNode and com.fasterxml.jackson.databind.node.ObjectNode are in unnamed module of loader 'app')" type="java.lang.ClassCastException">java.lang.ClassCastException: class com.fasterxml.jackson.databind.node.MissingNode cannot be cast to class com.fasterxml.jackson.databind.node.ObjectNode (com.fasterxml.jackson.databind.node.MissingNode and com.fasterxml.jackson.databind.node.ObjectNode are in unnamed module of loader 'app')
+	at com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizerTest.rejectsProseMultipleDecisionsAndUnsupportedActions(ProviderOutputNormalizerTest.java:117)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <testcase name="rejectsEvidenceOutsidePinnedInput()" classname="com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizerTest" time="0.006">
+    <failure message="java.lang.ClassCastException: class com.fasterxml.jackson.databind.node.MissingNode cannot be cast to class com.fasterxml.jackson.databind.node.ArrayNode (com.fasterxml.jackson.databind.node.MissingNode and com.fasterxml.jackson.databind.node.ArrayNode are in unnamed module of loader 'app')" type="java.lang.ClassCastException">java.lang.ClassCastException: class com.fasterxml.jackson.databind.node.MissingNode cannot be cast to class com.fasterxml.jackson.databind.node.ArrayNode (com.fasterxml.jackson.databind.node.MissingNode and com.fasterxml.jackson.databind.node.ArrayNode are in unnamed module of loader 'app')
+	at com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizerTest.rejectsEvidenceOutsidePinnedInput(ProviderOutputNormalizerTest.java:132)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <testcase name="extractsOneClaudeTerminalResultFromBoundedTransportEvents()" classname="com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizerTest" time="0.019">
+    <failure message="com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeException: Provider output was not one valid structured result" type="com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeException">com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeException: Provider output was not one valid structured result
+	at app//com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizer.invalid(ProviderOutputNormalizer.java:155)
+	at app//com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizer.normalize(ProviderOutputNormalizer.java:77)
+	at app//com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizerTest.extractsOneClaudeTerminalResultFromBoundedTransportEvents(ProviderOutputNormalizerTest.java:75)
+	at java.base@17.0.20.1/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <testcase name="acceptsOnlyThePinnedAbstainAction()" classname="com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizerTest" time="0.006">
+    <failure message="com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeException: Provider output was not one valid structured result" type="com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeException">com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeException: Provider output was not one valid structured result
+	at app//com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizer.invalid(ProviderOutputNormalizer.java:155)
+	at app//com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizer.normalize(ProviderOutputNormalizer.java:77)
+	at app//com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizerTest.acceptsOnlyThePinnedAbstainAction(ProviderOutputNormalizerTest.java:88)
+	at java.base@17.0.20.1/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

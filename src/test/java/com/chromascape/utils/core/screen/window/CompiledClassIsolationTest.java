@@ -14,6 +14,15 @@ import org.junit.jupiter.api.Test;
  * Machine-checked isolation guarantees for SC-1663: the Linux discovery path must reference no
  * RemoteInput/attachment symbol and no Win32/JNA window class. The scan inspects the compiled
  * constant pools, which is the load-time-proof form of "discovery never attaches".
+ *
+ * <p>Scope note (deliberate): the facade {@code TargetDiscoveryService} returns {@link
+ * WindowHandler.WindowCandidate}, the Windows-owned nested record, so the UI candidate shape stays
+ * unchanged — its constant pool therefore contains a {@code WindowHandler} reference by design.
+ * Instantiating that nested record does not initialize {@link WindowHandler}, whose static state
+ * loads the Win32 user32 library; {@link LinuxFacadeIsolationTest} proves at runtime, with an empty
+ * {@code jna.library.path}, that facade enumeration and resolution never trigger that
+ * initialization. The facade is still scanned for {@code User32}/{@code user32} and {@code
+ * WindowsProcessManager} references below.
  */
 class CompiledClassIsolationTest {
 
@@ -50,6 +59,14 @@ class CompiledClassIsolationTest {
             "TargetSelection",
             "SelectionValidation"),
         List.of("WindowHandler", "WindowsProcessManager", "user32", "User32"));
+  }
+
+  @Test
+  void facadeNeverReferencesUser32OrTheWindowsImplementation() throws IOException {
+    // The facade's WindowCandidate return type references WindowHandler by design (see the class
+    // javadoc); any direct Win32 library or Windows-implementation reference is still forbidden.
+    assertForbiddenSymbolsAbsent(
+        List.of("TargetDiscoveryService"), List.of("WindowsProcessManager", "user32", "User32"));
   }
 
   private static void assertForbiddenSymbolsAbsent(List<String> classNames, List<String> forbidden)

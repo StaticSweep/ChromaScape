@@ -12,7 +12,6 @@ import com.chromascape.web.simulator.SimulatorVerifyController;
 import com.chromascape.web.simulator.SimulatorVerifyJobStore;
 import com.chromascape.web.simulator.SimulatorVerifyService;
 import java.util.Arrays;
-import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.Profile;
 

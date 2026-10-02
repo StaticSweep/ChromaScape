@@ -55,6 +55,12 @@ public class RecordingController {
 
   private static final Logger logger = LogManager.getLogger(RecordingController.class);
 
+  /** Minimum captured-frame coverage before a finalized recording is flagged as degraded. */
+  private static final double DEGRADED_CONTENT_COVERAGE_THRESHOLD = 0.2;
+
+  /** Recordings shorter than this are not flagged as degraded. */
+  private static final long DEGRADED_MIN_DURATION_MS = 5_000L;
+
   private final RecordingService recordingService;
   private final RecordingSessionRepository recordingSessionRepository;
   private final WindowSelectionService windowSelectionService;
@@ -443,6 +449,8 @@ public class RecordingController {
                       }
                     }
 
+                    applyContentQuality(session, map);
+
                     return map;
                   })
               .toList();
@@ -734,6 +742,76 @@ public class RecordingController {
       }
     }
 
+    applyContentQuality(session, response);
+
     return response;
+  }
+
+  /**
+   * Adds content-coverage metadata and flags recordings whose captured frame count is far below
+   * what the configured FPS predicts.
+   *
+   * <p>A recording where the encoder duplicated a static frame for most of its duration (for
+   * example because the capture size changed and frames were dropped) is technically playable but
+   * contains almost no gameplay. {@code contentCoverage} is {@code capturedFrames / (durationSec *
+   * fps)}; recordings below {@value #DEGRADED_CONTENT_COVERAGE_THRESHOLD} of the expected frames
+   * are marked {@code degraded} with a human-readable {@code videoWarning}.
+   *
+   * @param session the recording session row
+   * @param response the response map to enrich
+   */
+  private void applyContentQuality(RecordingSession session, Map<String, Object> response) {
+    Long frames = session.getFrameCount();
+    Long durationMs = session.getDurationMs();
+    Integer fps = session.getFps();
+
+    if (frames != null) {
+      response.put("frameCount", frames);
+    }
+    if (fps != null) {
+      response.put("fps", fps);
+    }
+    if (durationMs != null) {
+      response.put("durationMs", durationMs);
+    }
+    if (session.getVideoCodec() != null) {
+      response.put("videoCodec", session.getVideoCodec());
+    }
+
+    Double coverage = computeContentCoverage(frames, durationMs, fps);
+    if (coverage == null) {
+      response.put("degraded", false);
+      return;
+    }
+
+    response.put("contentCoverage", coverage);
+    boolean finalized = session.getEndTime() != null;
+    boolean degraded =
+        finalized
+            && durationMs != null
+            && durationMs >= DEGRADED_MIN_DURATION_MS
+            && coverage < DEGRADED_CONTENT_COVERAGE_THRESHOLD;
+    response.put("degraded", degraded);
+    if (degraded) {
+      response.put(
+          "videoWarning",
+          "Recording contains very few captured frames ("
+              + frames
+              + " frames over "
+              + Math.round(durationMs / 1000.0)
+              + "s); the video is likely a repeated static image.");
+    }
+  }
+
+  /**
+   * Computes captured-frame coverage as {@code frames / (durationSeconds * fps)}.
+   *
+   * @return coverage ratio, or {@code null} when the inputs are missing or invalid
+   */
+  private static Double computeContentCoverage(Long frameCount, Long durationMs, Integer fps) {
+    if (frameCount == null || durationMs == null || fps == null || fps <= 0 || durationMs <= 0) {
+      return null;
+    }
+    return frameCount / ((durationMs / 1000.0) * fps);
   }
 }

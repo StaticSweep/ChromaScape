@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Non-JSON upstream error bodies" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:41:52.220Z" hostname="fedora" time="0.008">
+  <properties/>
+  <testcase name="propagates 401 upstream status even with non-JSON body" classname="com.chromascape.web.simulator.SimulatorReplayControlServiceTest$NonJsonUpstreamError" time="0.005"/>
+  <testcase name="propagates upstream status when error body is plain text" classname="com.chromascape.web.simulator.SimulatorReplayControlServiceTest$NonJsonUpstreamError" time="0.003"/>
+  <system-out><![CDATA[12:41:52.223 [Test worker] INFO  com.chromascape.web.simulator.SimulatorReplayControlService - SimulatorReplayControlService initialized - enabled: false, url: http://127.0.0.1:8095
+12:41:52.223 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'httpClient' of type [null] on target object [com.chromascape.web.simulator.SimulatorReplayControlService@7a2d9b6e] or target class [class com.chromascape.web.simulator.SimulatorReplayControlService] to value [httpClient]
+12:41:52.227 [Test worker] INFO  com.chromascape.web.simulator.SimulatorReplayControlService - SimulatorReplayControlService initialized - enabled: false, url: http://127.0.0.1:8095
+12:41:52.227 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'httpClient' of type [null] on target object [com.chromascape.web.simulator.SimulatorReplayControlService@6bc9e56d] or target class [class com.chromascape.web.simulator.SimulatorReplayControlService] to value [httpClient]
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

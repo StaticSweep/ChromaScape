@@ -3,6 +3,7 @@ package com.chromascape.web.debug.startup;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
+import com.chromascape.testsupport.IsolatedPostgresTestDatabase;
 import com.chromascape.web.aiplayer.routine.source.SourceDebuggerReadService;
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalRepairIncidentService;
 import com.chromascape.web.logs.LogWebSocketHandler;
@@ -13,20 +14,22 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * Regression for the SC-1103 startup blocker.
  *
  * <p>Both {@link SourceDebuggerReadService} and {@link BuilderGoalRepairIncidentService} expose a
- * production constructor plus a package-private test-only convenience constructor. If Spring can
- * no longer resolve a single unambiguous constructor it fails with "No default constructor found"
- * and the whole context fails to refresh, exactly as seen in chroma_bootrun.log. This test fails
- * in that case, and also proves the {@code @Autowired} production constructor was selected so no
+ * production constructor plus a package-private test-only convenience constructor. If Spring can no
+ * longer resolve a single unambiguous constructor it fails with "No default constructor found" and
+ * the whole context fails to refresh, exactly as seen in chroma_bootrun.log. This test fails in
+ * that case, and also proves the {@code @Autowired} production constructor was selected so no
  * alternate (test-only) constructor silently drops a required collaborator.
  *
- * <p>RANDOM_PORT is used so the embedded servlet container registers the JSR-356
- * {@code ServerContainer} that {@code WebSocketConfig#createWebSocketContainer} requires, matching
- * how the application actually runs on port 8090.
+ * <p>RANDOM_PORT is used so the embedded servlet container registers the JSR-356 {@code
+ * ServerContainer} that {@code WebSocketConfig#createWebSocketContainer} requires, matching how the
+ * application actually runs on port 8090.
  */
 @SpringBootTest(
     classes = com.chromascape.web.ChromaScapeApplication.class,
@@ -34,9 +37,16 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles("test")
 class CdiStartupRegressionTest {
 
+  @DynamicPropertySource
+  static void registerDatabase(DynamicPropertyRegistry registry) {
+    IsolatedPostgresTestDatabase.register(registry);
+  }
+
   @Autowired private ApplicationContext context;
 
-  /** The logging handler is outside this constructor regression and absent from the test profile. */
+  /**
+   * The logging handler is outside this constructor regression and absent from the test profile.
+   */
   @MockBean private LogWebSocketHandler logWebSocketHandler;
 
   @Test

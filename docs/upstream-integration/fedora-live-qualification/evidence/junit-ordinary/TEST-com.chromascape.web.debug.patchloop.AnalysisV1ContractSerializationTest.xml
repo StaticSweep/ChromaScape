@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.patchloop.AnalysisV1ContractSerializationTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:28:18.474Z" hostname="fedora" time="0.029">
+  <properties/>
+  <testcase name="Request deserializes from JSON correctly" classname="com.chromascape.web.debug.patchloop.AnalysisV1ContractSerializationTest" time="0.007"/>
+  <testcase name="Request without schemaVersion uses default (backward compatibility)" classname="com.chromascape.web.debug.patchloop.AnalysisV1ContractSerializationTest" time="0.003"/>
+  <testcase name="Response deserializes from JSON correctly" classname="com.chromascape.web.debug.patchloop.AnalysisV1ContractSerializationTest" time="0.008"/>
+  <testcase name="TickWindow serialization includes startTick and endTick" classname="com.chromascape.web.debug.patchloop.AnalysisV1ContractSerializationTest" time="0.001"/>
+  <testcase name="TimeWindow serialization includes start and end" classname="com.chromascape.web.debug.patchloop.AnalysisV1ContractSerializationTest" time="0.001"/>
+  <testcase name="Response serializes to JSON correctly" classname="com.chromascape.web.debug.patchloop.AnalysisV1ContractSerializationTest" time="0.001"/>
+  <testcase name="Response failure case serializes correctly" classname="com.chromascape.web.debug.patchloop.AnalysisV1ContractSerializationTest" time="0.001"/>
+  <testcase name="Evidence bundle with all types serializes correctly" classname="com.chromascape.web.debug.patchloop.AnalysisV1ContractSerializationTest" time="0.003"/>
+  <testcase name="Request serializes to JSON correctly" classname="com.chromascape.web.debug.patchloop.AnalysisV1ContractSerializationTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

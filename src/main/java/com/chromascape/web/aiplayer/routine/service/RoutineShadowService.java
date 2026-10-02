@@ -32,11 +32,16 @@ public class RoutineShadowService {
   private final RoutineShadowRunRepository runs;
   private final RoutineShadowDecisionRepository decisions;
   private final RoutineCaptureIngestionService captures;
-  private final RoutineShadowCompatibilityValidator compatibility = new RoutineShadowCompatibilityValidator();
+  private final RoutineShadowCompatibilityValidator compatibility =
+      new RoutineShadowCompatibilityValidator();
 
-  public RoutineShadowService(ObjectMapper mapper, RoutineModelRepository models,
-      RoutineReplayTraceRepository traces, RoutineShadowRunRepository runs,
-      RoutineShadowDecisionRepository decisions, RoutineCaptureIngestionService captures) {
+  public RoutineShadowService(
+      ObjectMapper mapper,
+      RoutineModelRepository models,
+      RoutineReplayTraceRepository traces,
+      RoutineShadowRunRepository runs,
+      RoutineShadowDecisionRepository decisions,
+      RoutineCaptureIngestionService captures) {
     this.mapper = mapper;
     this.models = models;
     this.traces = traces;
@@ -55,11 +60,15 @@ public class RoutineShadowService {
 
     Map<String, Object> session = captures.status(sessionId);
     if (!"RECORDING".equals(session.get("status"))) {
-      throw error("CAPTURE_NOT_RECORDING", "shadow sessions must be opened while capture is RECORDING");
+      throw error(
+          "CAPTURE_NOT_RECORDING", "shadow sessions must be opened while capture is RECORDING");
     }
-    RoutineModel model = models.findByModelId(modelId).orElseThrow(() -> error("NOT_FOUND", "model not found"));
-    RoutineReplayTrace replay = traces.findFirstByModelIdAndTraceModeOrderByCreatedAtDesc(modelId, "POLICY_REPLAY")
-        .orElseThrow(() -> error("MODEL_REPLAY_REQUIRED", "model has no policy replay"));
+    RoutineModel model =
+        models.findByModelId(modelId).orElseThrow(() -> error("NOT_FOUND", "model not found"));
+    RoutineReplayTrace replay =
+        traces
+            .findFirstByModelIdAndTraceModeOrderByCreatedAtDesc(modelId, "POLICY_REPLAY")
+            .orElseThrow(() -> error("MODEL_REPLAY_REQUIRED", "model has no policy replay"));
     if (!"PASSED".equals(readNode(replay.getResultJson()).path("status").asText())) {
       throw error("MODEL_REPLAY_REQUIRED", "model policy replay did not pass");
     }
@@ -82,11 +91,15 @@ public class RoutineShadowService {
 
   @Transactional(readOnly = true)
   public Map<String, Object> status(String shadowRunId) {
-    RoutineShadowRun run = runs.findByShadowRunId(shadowRunId)
-        .orElseThrow(() -> error("NOT_FOUND", "shadow run not found"));
+    RoutineShadowRun run =
+        runs.findByShadowRunId(shadowRunId)
+            .orElseThrow(() -> error("NOT_FOUND", "shadow run not found"));
     Map<String, Object> value = response(run);
-    value.put("decisions", decisions.findByShadowRunIdOrderByDecisionOrdinal(shadowRunId)
-        .stream().map(this::decision).toList());
+    value.put(
+        "decisions",
+        decisions.findByShadowRunIdOrderByDecisionOrdinal(shadowRunId).stream()
+            .map(this::decision)
+            .toList());
     return value;
   }
 
@@ -96,18 +109,23 @@ public class RoutineShadowService {
    */
   @Transactional
   public Map<String, Object> complete(String shadowRunId) {
-    RoutineShadowRun run = runs.findWithLockByShadowRunId(shadowRunId)
-        .orElseThrow(() -> error("NOT_FOUND", "shadow run not found"));
+    RoutineShadowRun run =
+        runs.findWithLockByShadowRunId(shadowRunId)
+            .orElseThrow(() -> error("NOT_FOUND", "shadow run not found"));
     if ("COMPLETED".equals(run.getState())) return response(run);
-    if (!"ACTIVE".equals(run.getState())) throw error("SHADOW_NOT_ACTIVE", "shadow run is not active");
+    if (!"ACTIVE".equals(run.getState()))
+      throw error("SHADOW_NOT_ACTIVE", "shadow run is not active");
     Map<String, Object> capture = captures.status(run.getSessionId());
     if (!"COMPLETED".equals(capture.get("status"))) {
       throw error("CAPTURE_NOT_COMPLETED", "capture must be completed before shadow completion");
     }
     int expected = number(capture.get("tick_count")) + number(capture.get("action_count"));
-    List<RoutineShadowDecision> values = decisions.findByShadowRunIdOrderByDecisionOrdinal(shadowRunId);
-    if (values.isEmpty()) throw error("SHADOW_DECISION_MISSING", "shadow run has no persisted decisions");
-    if (values.size() < expected) throw error("SHADOW_PROCESSING", "accepted capture batches are still being evaluated");
+    List<RoutineShadowDecision> values =
+        decisions.findByShadowRunIdOrderByDecisionOrdinal(shadowRunId);
+    if (values.isEmpty())
+      throw error("SHADOW_DECISION_MISSING", "shadow run has no persisted decisions");
+    if (values.size() < expected)
+      throw error("SHADOW_PROCESSING", "accepted capture batches are still being evaluated");
 
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("schema", "routine-shadow-result/v1");
@@ -115,9 +133,12 @@ public class RoutineShadowService {
     result.put("model_id", run.getModelId());
     result.put("session_id", run.getSessionId());
     result.put("decision_count", values.size());
-    result.put("matched_count", values.stream().filter(v -> "MATCHED".equals(v.getOutcome())).count());
-    result.put("diverged_count", values.stream().filter(v -> "DIVERGED".equals(v.getOutcome())).count());
-    result.put("abstained_count", values.stream().filter(v -> "ABSTAINED".equals(v.getStatus())).count());
+    result.put(
+        "matched_count", values.stream().filter(v -> "MATCHED".equals(v.getOutcome())).count());
+    result.put(
+        "diverged_count", values.stream().filter(v -> "DIVERGED".equals(v.getOutcome())).count());
+    result.put(
+        "abstained_count", values.stream().filter(v -> "ABSTAINED".equals(v.getStatus())).count());
     result.put("model_identity", read(run.getModelIdentityJson()));
     result.put("session_identity", read(run.getSessionIdentityJson()));
     result.put("control_allowed", false);
@@ -134,13 +155,17 @@ public class RoutineShadowService {
   @Transactional
   public void process(RoutineCaptureBatchAccepted event) {
     for (RoutineShadowRun candidate : active(event.sessionId())) {
-      RoutineShadowRun run = runs.findWithLockByShadowRunId(candidate.getShadowRunId()).orElse(null);
+      RoutineShadowRun run =
+          runs.findWithLockByShadowRunId(candidate.getShadowRunId()).orElse(null);
       if (run == null || !"ACTIVE".equals(run.getState())) continue;
       List<JsonNode> expectedActions = expectedActions(run);
-      List<RoutineShadowDecision> existing = decisions.findByShadowRunIdOrderByDecisionOrdinal(run.getShadowRunId());
+      List<RoutineShadowDecision> existing =
+          decisions.findByShadowRunIdOrderByDecisionOrdinal(run.getShadowRunId());
       for (int index = 0; index < event.values().size(); index++) {
-        if (decisions.findByShadowRunIdAndSourceEventKindAndSourceBatchSequenceAndSourceEventIndex(
-            run.getShadowRunId(), event.kind(), event.sequence(), index).isPresent()) continue;
+        if (decisions
+            .findByShadowRunIdAndSourceEventKindAndSourceBatchSequenceAndSourceEventIndex(
+                run.getShadowRunId(), event.kind(), event.sequence(), index)
+            .isPresent()) continue;
         JsonNode value = event.values().get(index);
         long tick = value.path("tick").asLong(-1);
         boolean validTick = tick >= 0;
@@ -154,29 +179,55 @@ public class RoutineShadowService {
         decision.setSourceEventIndex(index);
         decision.setTick(tick);
         RoutineShadowDecision pending = latestPending(existing);
-        JsonNode expected = run.getGraphCursor() < expectedActions.size() ? expectedActions.get(run.getGraphCursor()) : null;
-        String abstention = !validTick ? "INVALID_TICK_STATE" : expected == null ? "MODEL_CURSOR_TERMINAL" : null;
+        JsonNode expected =
+            run.getGraphCursor() < expectedActions.size()
+                ? expectedActions.get(run.getGraphCursor())
+                : null;
+        String abstention =
+            !validTick ? "INVALID_TICK_STATE" : expected == null ? "MODEL_CURSOR_TERMINAL" : null;
         if ("TICKS".equals(event.kind())) {
           decision.setStatus(abstention == null ? "PREDICTED" : "ABSTAINED");
           decision.setOutcome(abstention == null ? "PENDING" : "NOT_APPLICABLE");
-          decision.setRecommendationJson(abstention == null
-              ? write(Map.of("mode", "OBSERVE_ONLY", "action", expected, "control_allowed", false))
-              : write(Map.of("mode", "OBSERVE_ONLY", "abstention_reason", abstention, "control_allowed", false)));
+          decision.setRecommendationJson(
+              abstention == null
+                  ? write(
+                      Map.of("mode", "OBSERVE_ONLY", "action", expected, "control_allowed", false))
+                  : write(
+                      Map.of(
+                          "mode",
+                          "OBSERVE_ONLY",
+                          "abstention_reason",
+                          abstention,
+                          "control_allowed",
+                          false)));
         } else {
-          boolean matched = pending != null && expectedAction(pending) != null
-              && CanonicalJsonHasher.canonical(expectedAction(pending)).equals(CanonicalJsonHasher.canonical(value));
+          boolean matched =
+              pending != null
+                  && expectedAction(pending) != null
+                  && CanonicalJsonHasher.canonical(expectedAction(pending))
+                      .equals(CanonicalJsonHasher.canonical(value));
           decision.setStatus(pending == null ? "ABSTAINED" : "PREDICTED");
-          decision.setOutcome(pending == null ? "NOT_APPLICABLE" : matched ? "MATCHED" : "DIVERGED");
-          decision.setRecommendationJson(pending == null
-              ? write(Map.of("mode", "OBSERVE_ONLY", "abstention_reason", "NO_APPLICABLE_ACTION", "control_allowed", false))
-              : pending.getRecommendationJson());
+          decision.setOutcome(
+              pending == null ? "NOT_APPLICABLE" : matched ? "MATCHED" : "DIVERGED");
+          decision.setRecommendationJson(
+              pending == null
+                  ? write(
+                      Map.of(
+                          "mode",
+                          "OBSERVE_ONLY",
+                          "abstention_reason",
+                          "NO_APPLICABLE_ACTION",
+                          "control_allowed",
+                          false))
+                  : pending.getRecommendationJson());
           decision.setObservedActionJson(write(value));
           if (pending != null) {
             pending.setOutcome(matched ? "MATCHED" : "DIVERGED");
             pending.setObservedActionJson(write(value));
             pending.setDecisionContentHash(identityHash(write(decisionContent(pending, value))));
             decisions.save(pending);
-            if (matched) run.setGraphCursor(Math.min(run.getGraphCursor() + 1, expectedActions.size()));
+            if (matched)
+              run.setGraphCursor(Math.min(run.getGraphCursor() + 1, expectedActions.size()));
           }
         }
         decision.setModelIdentityHash(identityHash(run.getModelIdentityJson()));
@@ -198,7 +249,10 @@ public class RoutineShadowService {
     for (RoutineShadowRun run : active(sessionId)) {
       run.setState("FAILED");
       run.setFailureCode(code == null || code.isBlank() ? "SHADOW_PROCESSING_FAILED" : code);
-      run.setFailureMessage(message == null ? "shadow processing failed" : message.substring(0, Math.min(500, message.length())));
+      run.setFailureMessage(
+          message == null
+              ? "shadow processing failed"
+              : message.substring(0, Math.min(500, message.length())));
       runs.save(run);
     }
   }
@@ -215,7 +269,9 @@ public class RoutineShadowService {
     value.put("session_id", run.getSessionId());
     value.put("state", run.getState());
     value.put("graph_cursor", run.getGraphCursor());
-    value.put("decision_count", decisions.findByShadowRunIdOrderByDecisionOrdinal(run.getShadowRunId()).size());
+    value.put(
+        "decision_count",
+        decisions.findByShadowRunIdOrderByDecisionOrdinal(run.getShadowRunId()).size());
     value.put("model_identity", read(run.getModelIdentityJson()));
     value.put("session_identity", read(run.getSessionIdentityJson()));
     value.put("result_hash", run.getResultHash());
@@ -261,7 +317,8 @@ public class RoutineShadowService {
   private RoutineShadowDecision latestPending(List<RoutineShadowDecision> values) {
     for (int index = values.size() - 1; index >= 0; index--) {
       RoutineShadowDecision value = values.get(index);
-      if ("PREDICTED".equals(value.getStatus()) && "PENDING".equals(value.getOutcome())) return value;
+      if ("PREDICTED".equals(value.getStatus()) && "PENDING".equals(value.getOutcome()))
+        return value;
     }
     return null;
   }
@@ -273,23 +330,79 @@ public class RoutineShadowService {
   }
 
   private List<JsonNode> expectedActions(RoutineShadowRun run) {
-    RoutineModel model = models.findByModelId(run.getModelId()).orElseThrow(() -> error("MODEL_NOT_FOUND", "shadow model not found"));
+    RoutineModel model =
+        models
+            .findByModelId(run.getModelId())
+            .orElseThrow(() -> error("MODEL_NOT_FOUND", "shadow model not found"));
     Map<String, Object> definition = readMap(model.getDefinitionJson());
     JsonNode graph = mapper.valueToTree(definition.get("graph"));
-    JsonNode nodes = graph != null && graph.isObject() && graph.has("nodes") ? graph.get("nodes") : mapper.valueToTree(definition.get("nodes"));
+    JsonNode nodes =
+        graph != null && graph.isObject() && graph.has("nodes")
+            ? graph.get("nodes")
+            : mapper.valueToTree(definition.get("nodes"));
     List<JsonNode> actions = new ArrayList<>();
     if (nodes != null && nodes.isArray()) {
-      for (JsonNode node : nodes) if ("ACTION".equals(node.path("type").asText())) actions.add(node.path("semantics").path("recorded_action"));
+      for (JsonNode node : nodes)
+        if ("ACTION".equals(node.path("type").asText()))
+          actions.add(node.path("semantics").path("recorded_action"));
     }
     return actions;
   }
 
-  private int number(Object value) { return value instanceof Number ? ((Number) value).intValue() : 0; }
-  private String identityHash(String json) { return CanonicalJsonHasher.hash(readNode(json), null); }
-  private JsonNode readNode(String value) { try { return value == null ? mapper.nullNode() : mapper.readTree(value); } catch (Exception e) { throw error("SHADOW_JSON_INVALID", "shadow JSON is invalid"); } }
-  private CurrentSliceIdentity read(String value) { try { CurrentSliceIdentity result = mapper.readValue(value, CurrentSliceIdentity.class); result.validate(); return result; } catch (Exception e) { throw error("IDENTITY_MISMATCH", "shadow identity is invalid"); } }
-  private String map(Object value) { try { return mapper.writeValueAsString(value); } catch (Exception e) { throw error("IDENTITY_MISMATCH", "session identity is invalid"); } }
-  @SuppressWarnings("unchecked") private Map<String, Object> readMap(String value) { try { return mapper.readValue(value, Map.class); } catch (Exception e) { throw error("SHADOW_JSON_INVALID", "shadow model JSON is invalid"); } }
-  private String write(Object value) { try { return mapper.writeValueAsString(value); } catch (Exception e) { throw error("SHADOW_RESULT_INVALID", "shadow result is not serializable"); } }
-  private static RoutineCaptureIngestionService.RoutineCaptureException error(String code, String message) { return new RoutineCaptureIngestionService.RoutineCaptureException(HttpStatus.UNPROCESSABLE_ENTITY, code, message); }
+  private int number(Object value) {
+    return value instanceof Number ? ((Number) value).intValue() : 0;
+  }
+
+  private String identityHash(String json) {
+    return CanonicalJsonHasher.hash(readNode(json), null);
+  }
+
+  private JsonNode readNode(String value) {
+    try {
+      return value == null ? mapper.nullNode() : mapper.readTree(value);
+    } catch (Exception e) {
+      throw error("SHADOW_JSON_INVALID", "shadow JSON is invalid");
+    }
+  }
+
+  private CurrentSliceIdentity read(String value) {
+    try {
+      CurrentSliceIdentity result = mapper.readValue(value, CurrentSliceIdentity.class);
+      result.validate();
+      return result;
+    } catch (Exception e) {
+      throw error("IDENTITY_MISMATCH", "shadow identity is invalid");
+    }
+  }
+
+  private String map(Object value) {
+    try {
+      return mapper.writeValueAsString(value);
+    } catch (Exception e) {
+      throw error("IDENTITY_MISMATCH", "session identity is invalid");
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> readMap(String value) {
+    try {
+      return mapper.readValue(value, Map.class);
+    } catch (Exception e) {
+      throw error("SHADOW_JSON_INVALID", "shadow model JSON is invalid");
+    }
+  }
+
+  private String write(Object value) {
+    try {
+      return mapper.writeValueAsString(value);
+    } catch (Exception e) {
+      throw error("SHADOW_RESULT_INVALID", "shadow result is not serializable");
+    }
+  }
+
+  private static RoutineCaptureIngestionService.RoutineCaptureException error(
+      String code, String message) {
+    return new RoutineCaptureIngestionService.RoutineCaptureException(
+        HttpStatus.UNPROCESSABLE_ENTITY, code, message);
+  }
 }

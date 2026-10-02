@@ -25,6 +25,7 @@ public abstract class BaseScript {
   private final HotkeyListener hotkeyListener;
   private volatile boolean running = true;
   private Thread scriptThread;
+  private boolean firstCycleCompleted;
 
   /** Constructs a BaseScript. */
   public BaseScript() {
@@ -55,7 +56,7 @@ public abstract class BaseScript {
           break;
         }
         try {
-          cycle();
+          executeCycle();
         } catch (ScriptStoppedException e) {
           logger.error("Cycle interrupted: {}", e.getMessage());
           break;
@@ -70,6 +71,24 @@ public abstract class BaseScript {
       controller.shutdown();
     }
     logger.info("Finished running script.");
+  }
+
+  final void executeCycle() {
+    if (!firstCycleCompleted) {
+      onFirstCycle();
+      firstCycleCompleted = true;
+    }
+    cycle();
+  }
+
+  /**
+   * Performs one-time setup immediately before the first call to {@link #cycle()}.
+   *
+   * <p>The hook runs only after the controller and stop hotkey are initialized. If it fails, the
+   * normal script error path tears the controller down and the first cycle is not executed.
+   */
+  protected void onFirstCycle() {
+    // Optional subclass hook.
   }
 
   /**

@@ -22,6 +22,9 @@ public class Micro6TargetPreparationService {
   public static final String PHASE_BUILDING_MICRO6 = "BUILDING_MICRO6";
   public static final String PHASE_BUILD_FAILED = "BUILD_FAILED";
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private Micro6RemoteLauncherService remoteLauncher;
+
   private final BuilderGoalLauncherControlService launcherControlService;
   private final Micro6TargetRelaunchService micro6TargetRelaunchService;
   private final BuilderGoalLocalLaunchCoordinatorService localLaunchCoordinator;
@@ -122,10 +125,26 @@ public class Micro6TargetPreparationService {
                 || Thread.currentThread().isInterrupted()
                 || !localLaunchCoordinator.holdsLease(lease);
 
+    if (!launcherControlService.isLocalMachine(selectedMachine)) {
+      if (request.packetCapture()) {
+        throw new PreparationException(PHASE_PREPARING_TARGET, "Packet Capture requires the local launch host");
+      }
+      return remoteLauncher.ensureReady(
+          request,
+          selectedMachine,
+          lease.ownerToken().toString(),
+          combinedCancellation,
+          progressListener);
+    }
+
     Micro6TargetRelaunchService.RelaunchResult relaunchResult;
     try {
       relaunchResult =
-          request.forceRelaunch()
+          request.packetCapture()
+              ? micro6TargetRelaunchService.restartTarget(
+                  accountName, request.accountHash(), request.accountEmail(), request.accountPassword(),
+                  request.world(), request.targetBaseUrl(), progressListener, combinedCancellation, true, true)
+              : request.forceRelaunch()
               ? micro6TargetRelaunchService.restartTarget(
                   accountName,
                   request.accountHash(),
@@ -166,6 +185,7 @@ public class Micro6TargetPreparationService {
     metadata.put("state", PHASE_READY_TO_PUBLISH);
     metadata.put("message", "Local Micro6 workspace launched and executor is dispatch-ready");
     metadata.put("launch_mode", "local_micro6_project");
+    metadata.put("packetCapture", request.packetCapture());
     metadata.put("launcher_machine_uuid", selectedMachine.machineUuid());
     metadata.put("launcher_machine_name", selectedMachine.displayName());
     metadata.put("launcher_pid", relaunchResult.launcherPid());
@@ -219,7 +239,14 @@ public class Micro6TargetPreparationService {
       Integer world,
       String launcherMachineUuid,
       String targetBaseUrl,
-      boolean forceRelaunch) {
+      boolean forceRelaunch, boolean packetCapture) {
+    public PreparationRequest(String accountIdentifier, String accountHash, String accountName,
+        String accountEmail, String accountPassword, Integer world, String launcherMachineUuid,
+        String targetBaseUrl, boolean forceRelaunch) {
+      this(accountIdentifier, accountHash, accountName, accountEmail, accountPassword, world,
+          launcherMachineUuid, targetBaseUrl, forceRelaunch, false);
+    }
+
     public PreparationRequest(
         String accountIdentifier,
         String accountHash,

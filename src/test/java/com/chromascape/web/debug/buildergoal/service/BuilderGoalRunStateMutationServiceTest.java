@@ -351,6 +351,33 @@ class BuilderGoalRunStateMutationServiceTest {
   }
 
   @Test
+  void applyExecutorStatus_finalizesStopWhenDeliveredEntryDisappears() {
+    mutationService =
+        new BuilderGoalRunStateMutationService(
+            iterationRepository, persistenceService, objectMapper, 300_000L, 1, 1_000L, null);
+    PatchLoopIteration iteration = publishedIteration("bg_stopped_missing0001", "STOPPING");
+    Map<String, Object> metadata =
+        objectMapper.convertValue(iteration.getTaskMetadataJson(), Map.class);
+    publishMetadata(metadata).put("published_at", LocalDateTime.now().minusMinutes(1).toString());
+    publishMetadata(metadata)
+        .put("stop_requested_at", LocalDateTime.now().minusSeconds(5).toString());
+    iteration.setTaskMetadataJson(objectMapper.valueToTree(metadata));
+    when(iterationRepository.findByIterationIdForUpdate("bg_stopped_missing0001"))
+        .thenReturn(Optional.of(iteration));
+
+    ScriptExecutionService.Micro6RunStatusResult missing =
+        new ScriptExecutionService.Micro6RunStatusResult(
+            false, "UNKNOWN", "entry_id not tracked", null, "http://127.0.0.1:8098", 1001);
+    BuilderGoalRunStateMutationService.StatusApplyResult result =
+        mutationService.applyExecutorStatus(
+            "bg_stopped_missing0001", 1001, missing, LocalDateTime.now());
+
+    assertThat(result.terminal()).isTrue();
+    assertThat(iteration.getStatus()).isEqualTo(PatchLoopStatus.CANCELLED);
+    assertThat(readPublish(iteration)).containsEntry("status", "CANCELLED");
+  }
+
+  @Test
   void applyExecutorStatus_mapsAcceptedQueuedAssignedRunning() {
     PatchLoopIteration iteration = publishedIteration("bg_activation0001", "ACCEPTED");
     when(iterationRepository.findByIterationIdForUpdate("bg_activation0001"))
@@ -399,6 +426,54 @@ class BuilderGoalRunStateMutationServiceTest {
     assertThat(readPublish(iteration)).containsEntry("status", "RUNNING");
     assertThat(readPublish(iteration)).containsEntry("activation_state", "ACTIVE");
     assertThat(iteration.getStatus()).isEqualTo(PatchLoopStatus.RUNNING_SCRIPT);
+  }
+
+  @Test
+  void applyExecutorStatus_stampsRunStartWhenTaskStarts() {
+    PatchLoopIteration iteration = publishedIteration("bg_startstamp0001", "QUEUED");
+    when(iterationRepository.findByIterationIdForUpdate("bg_startstamp0001"))
+        .thenReturn(Optional.of(iteration));
+    LocalDateTime observed = LocalDateTime.now();
+
+    mutationService.applyExecutorStatus(
+        "bg_startstamp0001",
+        1001,
+        executorStatus(
+            "RUNNING",
+            null,
+            Map.of(
+                "status", "RUNNING",
+                "activation_state", "ACTIVE",
+                "task_started", true,
+                "debug_session_id", "session-1")),
+        observed);
+
+    assertThat(iteration.getRunStartTime()).isEqualTo(observed);
+    assertThat(iteration.getStatus()).isEqualTo(PatchLoopStatus.RUNNING_SCRIPT);
+  }
+
+  @Test
+  void applyExecutorStatus_doesNotOverwriteExistingRunStart() {
+    PatchLoopIteration iteration = publishedIteration("bg_startkeep0001", "RUNNING");
+    LocalDateTime originalStart = LocalDateTime.now().minusMinutes(3);
+    iteration.setRunStartTime(originalStart);
+    when(iterationRepository.findByIterationIdForUpdate("bg_startkeep0001"))
+        .thenReturn(Optional.of(iteration));
+
+    mutationService.applyExecutorStatus(
+        "bg_startkeep0001",
+        1001,
+        executorStatus(
+            "RUNNING",
+            null,
+            Map.of(
+                "status", "RUNNING",
+                "activation_state", "ACTIVE",
+                "task_started", true,
+                "debug_session_id", "session-1")),
+        LocalDateTime.now());
+
+    assertThat(iteration.getRunStartTime()).isEqualTo(originalStart);
   }
 
   @Test
@@ -464,9 +539,7 @@ class BuilderGoalRunStateMutationServiceTest {
             "bg_paused_unbound0001",
             1001,
             executorStatus(
-                "PAUSED",
-                null,
-                Map.of("status", "PAUSED", "activation_state", "PAUSED")),
+                "PAUSED", null, Map.of("status", "PAUSED", "activation_state", "PAUSED")),
             LocalDateTime.now().plusMinutes(10));
 
     assertThat(result.terminal()).isFalse();

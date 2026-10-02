@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.patchloop.PatchLoopPersistenceServiceTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:40:13.789Z" hostname="fedora" time="0.026">
+  <properties/>
+  <testcase name="saveAnalysisResults_v2_storesPatchIdSeparately_withoutMutatingDiagnosisSummary()" classname="com.chromascape.web.debug.patchloop.PatchLoopPersistenceServiceTest" time="0.005"/>
+  <testcase name="saveInsufficientEvidence_includesCountsInContext()" classname="com.chromascape.web.debug.patchloop.PatchLoopPersistenceServiceTest" time="0.001"/>
+  <testcase name="saveAnalysisRequest_persistsJsonNode()" classname="com.chromascape.web.debug.patchloop.PatchLoopPersistenceServiceTest" time="0.0"/>
+  <testcase name="markGraphExecutionFailed_marksBothExecutionAndIterationAsFailed()" classname="com.chromascape.web.debug.patchloop.PatchLoopPersistenceServiceTest" time="0.002"/>
+  <testcase name="saveIteration_persistsIterationState()" classname="com.chromascape.web.debug.patchloop.PatchLoopPersistenceServiceTest" time="0.001"/>
+  <testcase name="markIterationFailed_persistsCodeReasonContextAndTerminalState()" classname="com.chromascape.web.debug.patchloop.PatchLoopPersistenceServiceTest" time="0.001"/>
+  <testcase name="saveEvidenceCounts_persistsCountsAndTimeWindow()" classname="com.chromascape.web.debug.patchloop.PatchLoopPersistenceServiceTest" time="0.001"/>
+  <testcase name="saveInsufficientEvidence_setsSpecificFailureCodeNotGeneric()" classname="com.chromascape.web.debug.patchloop.PatchLoopPersistenceServiceTest" time="0.001"/>
+  <testcase name="saveEvidenceCounts_handlesNullTimeWindow()" classname="com.chromascape.web.debug.patchloop.PatchLoopPersistenceServiceTest" time="0.001"/>
+  <testcase name="markGraphExecutionFailed_handlesExecutionNotFound()" classname="com.chromascape.web.debug.patchloop.PatchLoopPersistenceServiceTest" time="0.001"/>
+  <testcase name="updateIterationStatus_transitionsToTerminalState()" classname="com.chromascape.web.debug.patchloop.PatchLoopPersistenceServiceTest" time="0.001"/>
+  <testcase name="updateIterationStatus_persistsStatusAndUpdatesTimestamp()" classname="com.chromascape.web.debug.patchloop.PatchLoopPersistenceServiceTest" time="0.001"/>
+  <testcase name="markIterationFailed_preservesExistingFailureCode()" classname="com.chromascape.web.debug.patchloop.PatchLoopPersistenceServiceTest" time="0.001"/>
+  <testcase name="saveAnalysisResults_v2_patchIdIsNullWhenPatchDraftMissing()" classname="com.chromascape.web.debug.patchloop.PatchLoopPersistenceServiceTest" time="0.001"/>
+  <testcase name="markGraphExecutionFailed_handlesNullIterationId()" classname="com.chromascape.web.debug.patchloop.PatchLoopPersistenceServiceTest" time="0.001"/>
+  <testcase name="saveAnalysisResults_handlesNullDiagnosis()" classname="com.chromascape.web.debug.patchloop.PatchLoopPersistenceServiceTest" time="0.001"/>
+  <testcase name="saveAnalysisResults_persistsResponseAndDiagnosisFields()" classname="com.chromascape.web.debug.patchloop.PatchLoopPersistenceServiceTest" time="0.001"/>
+  <testcase name="saveAnalysisResults_handlesNullConfidence()" classname="com.chromascape.web.debug.patchloop.PatchLoopPersistenceServiceTest" time="0.001"/>
+  <testcase name="markGraphExecutionFailed_skipsIfExecutionAlreadyTerminal()" classname="com.chromascape.web.debug.patchloop.PatchLoopPersistenceServiceTest" time="0.001"/>
+  <system-out><![CDATA[12:40:13.798 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopPersistenceService - Marked graph execution exec-123 as FAILED: Async submission failed
+12:40:13.805 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.PatchLoopPersistenceService - Cannot mark graph execution nonexistent as FAILED: not found
+12:40:13.810 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopPersistenceService - Marked graph execution exec-789 as FAILED: No iteration
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

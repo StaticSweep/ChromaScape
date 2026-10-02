@@ -25,7 +25,8 @@ public class ReplayPlaybackFrameCursorCodec {
   /** Encodes a {@code (tick,id)} ordering tuple as unpadded URL-safe Base64 JSON. */
   public String encode(long tick, long id) {
     if (tick < 0 || id <= 0) {
-      throw new IllegalArgumentException("A frame cursor requires a nonnegative tick and positive row id");
+      throw new IllegalArgumentException(
+          "A frame cursor requires a nonnegative tick and positive row id");
     }
     try {
       byte[] json =

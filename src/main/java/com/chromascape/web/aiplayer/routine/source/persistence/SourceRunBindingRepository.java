@@ -8,5 +8,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface SourceRunBindingRepository extends JpaRepository<SourceRunBinding, UUID> {
   Optional<SourceRunBinding> findByRunId(String runId);
+
   Optional<SourceRunBinding> findByRecordingId(String recordingId);
 }

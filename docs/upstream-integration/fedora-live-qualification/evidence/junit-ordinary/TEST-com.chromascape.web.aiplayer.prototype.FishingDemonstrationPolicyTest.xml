@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.prototype.FishingDemonstrationPolicyTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:21.598Z" hostname="fedora" time="0.006">
+  <properties/>
+  <testcase name="a matching state predicts the demonstrated fishing action" classname="com.chromascape.web.aiplayer.prototype.FishingDemonstrationPolicyTest" time="0.001"/>
+  <testcase name="a state on another plane causes abstention" classname="com.chromascape.web.aiplayer.prototype.FishingDemonstrationPolicyTest" time="0.0"/>
+  <testcase name="more than 12 tiles of displacement causes abstention" classname="com.chromascape.web.aiplayer.prototype.FishingDemonstrationPolicyTest" time="0.0"/>
+  <testcase name="small position variation selects the same semantic target" classname="com.chromascape.web.aiplayer.prototype.FishingDemonstrationPolicyTest" time="0.001"/>
+  <testcase name="no unsupported action type can be emitted" classname="com.chromascape.web.aiplayer.prototype.FishingDemonstrationPolicyTest" time="0.0"/>
+  <testcase name="a missing fishing spot causes abstention" classname="com.chromascape.web.aiplayer.prototype.FishingDemonstrationPolicyTest" time="0.001"/>
+  <testcase name="tie-breaking prefers the earliest training tick" classname="com.chromascape.web.aiplayer.prototype.FishingDemonstrationPolicyTest" time="0.001"/>
+  <testcase name="the prediction reports policy distance and the matched source tick" classname="com.chromascape.web.aiplayer.prototype.FishingDemonstrationPolicyTest" time="0.0"/>
+  <testcase name="NPC index and coordinate changes do not cause a semantic mismatch" classname="com.chromascape.web.aiplayer.prototype.FishingDemonstrationPolicyTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

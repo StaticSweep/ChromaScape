@@ -21,8 +21,9 @@ class PatchCandidateBuildDispatcherTest {
     IsolatedPatchWorker.BuildResult result =
         new IsolatedPatchWorker.BuildResult("FAILED", "base", List.of(), failureCode, null);
 
-    assertTrue(dispatcher.persistBuildResult("proposal-1", "attempt-1", result,
-        "{\"status\":\"FAILED\"}"));
+    assertTrue(
+        dispatcher.persistBuildResult(
+            "proposal-1", "attempt-1", result, "{\"status\":\"FAILED\"}"));
 
     assertEquals("BUILD_FAILED", entity.getState());
     assertEquals(160, entity.getLastFailureCode().length());

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:34.627Z" hostname="fedora" time="0.48">
+  <properties/>
+  <testcase name="headerless2xxStillRequiresContentLength()" classname="com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest" time="0.418"/>
+  <testcase name="headerless404LookupIsRejectedByStatusBeforeContentLength()" classname="com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest" time="0.011"/>
+  <testcase name="lookupHeaderMustMatchExpectedStagedHash()" classname="com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest" time="0.01"/>
+  <testcase name="bodyHashMismatchIsRejected()" classname="com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest" time="0.01"/>
+  <testcase name="truncatedBodyIsRejectedEvenWhenHashMatchesTheAvailableBytes()" classname="com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest" time="0.011"/>
+  <testcase name="headerless404DownloadIsRejectedByStatusBeforeContentLength()" classname="com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest" time="0.009"/>
+  <testcase name="lookupReturnsLiteralRawManifestBytesAndChecksBodyHash()" classname="com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest" time="0.01"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

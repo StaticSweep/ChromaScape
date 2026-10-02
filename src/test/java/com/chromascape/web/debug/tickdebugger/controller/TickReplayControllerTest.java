@@ -7,6 +7,8 @@ import com.chromascape.web.debug.tickdebugger.dto.DebugSessionSummary;
 import com.chromascape.web.debug.tickdebugger.dto.TickCardData;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository;
+import com.chromascape.web.debug.tickdebugger.entity.PacketObservation;
+import com.chromascape.web.debug.tickdebugger.entity.PacketObservationRepository;
 import com.chromascape.web.debug.tickdebugger.entity.TickLog;
 import com.chromascape.web.debug.tickdebugger.entity.TickLogRepository;
 import com.chromascape.web.debug.tickdebugger.entity.TickOverlayRepository;
@@ -49,6 +51,7 @@ class TickReplayControllerTest {
   @Mock private RecordingSessionRepository recordingSessionRepository;
   @Mock private LogRepository standardLogRepository;
   @Mock private DebugSessionService debugSessionService;
+  @Mock private PacketObservationRepository packetObservationRepository;
 
   private TickReplayController controller;
 
@@ -883,5 +886,260 @@ class TickReplayControllerTest {
     assertTrue(tree.get("logs").isArray(), "logs must serialize as a JSON array");
     assertEquals(0, tree.get("logs").size());
     assertEquals(false, tree.get("hasAnyLogs").asBoolean());
+  }
+
+  private PacketObservation packetRow(String sessionId, long tick, long sequence, long id) {
+    PacketObservation row = new PacketObservation(sessionId, tick, "proxy-session", sequence);
+    row.setDirection("SERVER_TO_CLIENT");
+    row.setOpcode(81);
+    row.setProtocolName("NPC_INFO_LARGE");
+    row.setEncodedSize(137);
+    row.setDecodeStatus("DECODED");
+    row.setSynthetic(false);
+    org.springframework.test.util.ReflectionTestUtils.setField(row, "id", id);
+    return row;
+  }
+
+  private PacketObservation v2PacketRow(
+      String sessionId, long tick, String sourceSessionId, long observationSequence, long id) {
+    PacketObservation row =
+        new PacketObservation(
+            sessionId,
+            tick,
+            sourceSessionId,
+            "rsprox-packet/v2",
+            observationSequence,
+            observationSequence + 4800L);
+    row.setDirection("SERVER_TO_CLIENT");
+    row.setOpcode(81);
+    row.setProtocolName("NPC_INFO_LARGE");
+    row.setEncodedSize(137);
+    row.setDecodeStatus("DECODED");
+    row.setSynthetic(false);
+    org.springframework.test.util.ReflectionTestUtils.setField(row, "id", id);
+    return row;
+  }
+
+  @Test
+  @DisplayName("Packet endpoint pages through the repository with limit+1")
+  void packets_pagesThroughRepositoryWithLimitPlusOne() {
+    String sessionId = "debug-packets";
+    when(sessionRepository.findBySessionId(sessionId))
+        .thenReturn(Optional.of(createSession(sessionId)));
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        controller, "packetObservationRepository", packetObservationRepository);
+
+    PacketObservation first = packetRow(sessionId, 100L, 1L, 11L);
+    PacketObservation second = packetRow(sessionId, 100L, 2L, 12L);
+    PacketObservation extra = packetRow(sessionId, 100L, 3L, 13L);
+    when(packetObservationRepository.searchPacketsPage(
+            eq(sessionId),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            any()))
+        .thenReturn(List.of(first, second, extra));
+
+    ResponseEntity<Map<String, Object>> response =
+        controller.getPackets(
+            sessionId, null, null, null, null, null, null, null, null, null, 2, false);
+
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    assertNotNull(response.getBody());
+    assertEquals(true, response.getBody().get("hasMore"));
+    assertEquals(2, ((List<?>) response.getBody().get("packets")).size());
+    assertFalse(((String) response.getBody().get("cursor")).isBlank());
+    verify(packetObservationRepository)
+        .searchPacketsPage(
+            eq(sessionId),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            any());
+  }
+
+  @Test
+  @DisplayName("Packet cursor follows source/schema/observation identity for interleaved v2 rows")
+  void packets_v2CursorUsesCompleteOrderingTuple() {
+    String sessionId = "debug-packets-v2-cursor";
+    when(sessionRepository.findBySessionId(sessionId))
+        .thenReturn(Optional.of(createSession(sessionId)));
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        controller, "packetObservationRepository", packetObservationRepository);
+
+    PacketObservation sourceA = v2PacketRow(sessionId, 100L, "source-a", 7L, 31L);
+    PacketObservation sourceB = v2PacketRow(sessionId, 100L, "source-b", 0L, 32L);
+    PacketObservation next = v2PacketRow(sessionId, 100L, "source-b", 1L, 33L);
+    when(packetObservationRepository.searchPacketsPageOrdered(
+            eq(sessionId),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            any()))
+        .thenReturn(List.of(sourceA, sourceB, next));
+
+    ResponseEntity<Map<String, Object>> firstPage =
+        controller.getPackets(
+            sessionId, null, null, null, null, null, null, null, null, null, 2, false);
+
+    assertEquals(HttpStatus.OK, firstPage.getStatusCode());
+    assertNotNull(firstPage.getBody());
+    List<?> firstPackets = (List<?>) firstPage.getBody().get("packets");
+    assertEquals(2, firstPackets.size());
+    assertEquals("source-a", ((Map<?, ?>) firstPackets.get(0)).get("sourceSessionId"));
+    assertEquals("source-b", ((Map<?, ?>) firstPackets.get(1)).get("sourceSessionId"));
+    String cursor = (String) firstPage.getBody().get("cursor");
+    assertFalse(cursor.isBlank());
+
+    when(packetObservationRepository.searchPacketsPageOrdered(
+            eq(sessionId),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            eq(100L),
+            eq("source-b"),
+            eq("rsprox-packet/v2"),
+            eq(0L),
+            eq(32L),
+            any()))
+        .thenReturn(List.of(next));
+
+    ResponseEntity<Map<String, Object>> secondPage =
+        controller.getPackets(
+            sessionId, null, null, null, null, null, null, null, null, cursor, 2, false);
+    assertEquals(HttpStatus.OK, secondPage.getStatusCode());
+    assertNotNull(secondPage.getBody());
+    assertEquals(1, ((List<?>) secondPage.getBody().get("packets")).size());
+    verify(packetObservationRepository)
+        .searchPacketsPageOrdered(
+            eq(sessionId),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            eq(100L),
+            eq("source-b"),
+            eq("rsprox-packet/v2"),
+            eq(0L),
+            eq(32L),
+            any());
+  }
+
+  @Test
+  @DisplayName("Packet endpoint clears the cursor on the final page")
+  void packets_clearsCursorOnFinalPage() {
+    String sessionId = "debug-packets-final";
+    when(sessionRepository.findBySessionId(sessionId))
+        .thenReturn(Optional.of(createSession(sessionId)));
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        controller, "packetObservationRepository", packetObservationRepository);
+
+    PacketObservation first = packetRow(sessionId, 100L, 1L, 21L);
+    when(packetObservationRepository.searchPacketsPage(
+            eq(sessionId),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            any()))
+        .thenReturn(List.of(first));
+
+    ResponseEntity<Map<String, Object>> response =
+        controller.getPackets(
+            sessionId, null, null, null, null, null, null, null, null, null, 2, false);
+
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    assertNotNull(response.getBody());
+    assertEquals(false, response.getBody().get("hasMore"));
+    assertEquals("", response.getBody().get("cursor"));
+    assertEquals(1, ((List<?>) response.getBody().get("packets")).size());
+  }
+
+  @Test
+  @DisplayName("Packet endpoint pushes the text filter into the repository query")
+  void packets_pushesTextFilterIntoRepositoryQuery() {
+    String sessionId = "debug-packets-search";
+    when(sessionRepository.findBySessionId(sessionId))
+        .thenReturn(Optional.of(createSession(sessionId)));
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        controller, "packetObservationRepository", packetObservationRepository);
+    when(packetObservationRepository.searchPacketsPage(
+            eq(sessionId),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            eq("npc_info"),
+            isNull(),
+            isNull(),
+            isNull(),
+            any()))
+        .thenReturn(List.of());
+
+    ResponseEntity<Map<String, Object>> response =
+        controller.getPackets(
+            sessionId, null, null, null, null, null, null, null, "NPC_INFO", null, 100, false);
+
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    verify(packetObservationRepository)
+        .searchPacketsPage(
+            eq(sessionId),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            isNull(),
+            eq("npc_info"),
+            isNull(),
+            isNull(),
+            isNull(),
+            any());
   }
 }

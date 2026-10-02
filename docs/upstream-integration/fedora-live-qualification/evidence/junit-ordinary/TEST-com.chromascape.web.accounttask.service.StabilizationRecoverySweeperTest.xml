@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.accounttask.service.StabilizationRecoverySweeperTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:19.093Z" hostname="fedora" time="0.006">
+  <properties/>
+  <testcase name="orphaned final and staging files are removed while verified artifacts are kept" classname="com.chromascape.web.accounttask.service.StabilizationRecoverySweeperTest" time="0.006"/>
+  <system-out><![CDATA[19:27:19.097 [Test worker] INFO  com.chromascape.web.accounttask.service.StabilizationRecoverySweeper - [StabilizationRecovery] removed uncommitted staging file staging-orphan
+19:27:19.098 [Test worker] INFO  com.chromascape.web.accounttask.service.StabilizationRecoverySweeper - [StabilizationRecovery] removed journal file some-uuid.tmp
+19:27:19.098 [Test worker] INFO  com.chromascape.web.accounttask.service.StabilizationRecoverySweeper - [StabilizationRecovery] removed orphaned artifact file 9c935a90-39ef-4595-b9dd-ec9f9db3ba22.meta
+19:27:19.098 [Test worker] INFO  com.chromascape.web.accounttask.service.StabilizationRecoverySweeper - [StabilizationRecovery] removed orphaned artifact file 9c935a90-39ef-4595-b9dd-ec9f9db3ba22
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

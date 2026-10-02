@@ -24,13 +24,20 @@ public class LogFileTailer implements Closeable {
   private static final Logger log = LoggerFactory.getLogger(LogFileTailer.class);
 
   private final Path logFilePath;
+  private final boolean startAtEnd;
   private RandomAccessFile raf;
   private long lastReadPosition = 0;
   private long lastFileSize = 0;
   private boolean notifiedMissing = false;
+  private boolean initialized = false;
 
   public LogFileTailer(String filePath) {
+    this(filePath, false);
+  }
+
+  public LogFileTailer(String filePath, boolean startAtEnd) {
     this.logFilePath = Path.of(filePath);
+    this.startAtEnd = startAtEnd;
   }
 
   /**
@@ -52,6 +59,14 @@ public class LogFileTailer implements Closeable {
 
     // 2. Detect file rotation (file size < last position)
     long currentSize = Files.size(logFilePath);
+    if (!initialized) {
+      initialized = true;
+      if (startAtEnd) {
+        lastReadPosition = currentSize;
+        lastFileSize = currentSize;
+        return Collections.emptyList();
+      }
+    }
     if (currentSize < lastReadPosition) {
       log.info("Log file rotation detected, resetting position");
       closeRaf();

@@ -2,6 +2,7 @@ package com.chromascape.web.debug.buildergoal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryService.TargetClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,7 +11,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -354,33 +357,62 @@ class Micro6TargetRelaunchServiceTest {
     return project;
   }
 
-  private Path createUnixGradleProject(String name, boolean executable) throws Exception {
+  private Path createUnixLauncherProject(String name, boolean executable) throws Exception {
     Path project = createProjectDir(name);
-    Path wrapper = project.resolve("gradlew");
-    Files.writeString(wrapper, "#!/bin/sh\necho unix wrapper\n", StandardCharsets.UTF_8);
-    if (executable) {
-      wrapper.toFile().setExecutable(true, false);
-    }
+    Path launcher = project.resolve("launch-buildergoal-client.sh");
+    Files.writeString(launcher, "#!/bin/bash\necho unix launcher\n", StandardCharsets.UTF_8);
+    launcher.toFile().setExecutable(executable, false);
     return project;
   }
 
   /**
-   * Creates a project whose fake {@code gradlew} launcher spawns a long-lived foreground child and
-   * a backgrounded descendant (writing both PIDs to {@code pids.txt}), then writes {@code
-   * started.marker}. The launcher tree stays alive so cancellation boundaries can be exercised.
+   * Creates a project whose fake {@code launch-buildergoal-client.sh} adapter answers the
+   * contract-v3 preflights ({@code --contract-version}, {@code --validate-only}, {@code
+   * --compile-only}) and otherwise spawns a long-lived foreground child and a backgrounded
+   * descendant (writing both PIDs to {@code pids.txt}), then writes {@code started.marker}. The
+   * launcher tree stays alive so cancellation boundaries can be exercised.
    */
   private Path createFakeLauncherProject(String name) throws Exception {
     Path project = createProjectDir(name);
-    Path wrapper = project.resolve("gradlew");
+    Path launcher = project.resolve("launch-buildergoal-client.sh");
     Files.writeString(
-        wrapper,
+        launcher,
         "#!/bin/bash\n"
+            + "if [ \"$1\" = \"--contract-version\" ]; then\n"
+            + "  echo '{\"contract_version\":3,\"validate_only\":true,\"compile_only\":true,\"run_task\":\":client:runBuilderGoal\",\"prepare_task\":\":client:prepareBuilderGoal\",\"authoritative_run_task\":\":client:runBuilderGoalAuthoritative\",\"source_mode_env\":\"MICRO6_SOURCE_MODE\",\"source_modes\":[\"disabled\",\"authoritative\"]}'\n"
+            + "  exit 0\n"
+            + "fi\n"
+            + "if [ \"$1\" = \"--validate-only\" ] || [ \"$1\" = \"--compile-only\" ]; then\n"
+            + "  exit 0\n"
+            + "fi\n"
             + "sleep 600 &\n"
             + "echo \"$$ $!\" > pids.txt\n"
             + "touch started.marker\n"
             + "sleep 600\n",
         StandardCharsets.UTF_8);
-    wrapper.toFile().setExecutable(true, false);
+    launcher.toFile().setExecutable(true, false);
+    return project;
+  }
+
+  /**
+   * Creates a project whose fake {@code gradlew} launcher publishes a fatal executor startup marker
+   * to the launch log and then stays alive, modelling the real refusal where the executor logs the
+   * cause and the client keeps running without ever binding its port. Both the root and a
+   * backgrounded descendant PID are recorded in {@code pids.txt}.
+   */
+  private Path createFatalMarkerLauncherProject(String name) throws Exception {
+    Path project = createFakeLauncherProject(name);
+    Path wrapper = project.resolve("launch-buildergoal-client.sh");
+    String script =
+        Files.readString(wrapper)
+            .replace(
+                "touch started.marker",
+                "echo '[Micro6Executor] refusing startup: running packaged artifact identity is unavailable'\n"
+                    + "echo '[AccountBuilderPlugin] Local builder executor did not start:'\n"
+                    + "echo 'source_startup_failed:running packaged artifact identity is unavailable'\n"
+                    + "touch started.marker");
+    Files.writeString(wrapper, script);
+
     return project;
   }
 
@@ -481,9 +513,123 @@ class Micro6TargetRelaunchServiceTest {
 
     assertThat(environment)
         .containsEntry("MICRO6_LOCAL_EXECUTOR_ENABLED", "true")
+        .containsEntry("MICRO6_SOURCE_MODE", "disabled")
         .containsEntry("MICRO6_EXECUTOR_BIND_ADDR", "127.0.0.1:8098")
         .containsEntry("CHROMASCAPE_BASE_URL", "http://localhost:8090")
         .containsEntry("LEEUWBOT_API_URL", "http://localhost:8086");
+  }
+
+  /**
+   * The executor resolves its source contract from MICRO6_SOURCE_MODE alone, so ChromaScape's local
+   * launch must declare it. This is the regression guard for the launch that refused startup
+   * because a developer .env defined MICRO6_SOURCE_* values and the mode was inferred from their
+   * presence.
+   */
+  @Test
+  void localLaunchDeclaresDisabledSourceModeEvenWhenSourceValuesArePresent() throws Exception {
+    Micro6TargetRelaunchService service =
+        new Micro6TargetRelaunchService(
+            new ObjectMapper(),
+            "C:/Dev/IdeaProjects/micro6",
+            "",
+            "",
+            "",
+            380,
+            180_000L,
+            2_000L,
+            "micro6-recovery-launch.log",
+            "http://localhost:8090",
+            "http://127.0.0.1:8098",
+            "http://localhost:8086");
+
+    Map<String, String> environment = new LinkedHashMap<>();
+    // Simulate an inherited developer .env: these must not influence the declared mode.
+    environment.put("MICRO6_SOURCE_BUNDLE_ROOT", "C:\\Dev\\SC810\\micro6-source-bundles");
+    environment.put("MICRO6_SOURCE_ENVIRONMENT", "native-windows-local");
+    Method method =
+        Micro6TargetRelaunchService.class.getDeclaredMethod(
+            "applyBuilderGoalEnvironment", Map.class, Integer.class);
+    method.setAccessible(true);
+    method.invoke(service, environment, 8098);
+
+    assertThat(environment).containsEntry("MICRO6_SOURCE_MODE", "disabled");
+  }
+
+  @Test
+  void fatalExecutorStartupMarkersAreDetectedForEveryPublishedCause() {
+    assertThat(
+            Micro6TargetRelaunchService.detectFatalExecutorStartupMarker(
+                List.of("[Micro6Executor] Local builder executor did not start")))
+        .isEqualTo("Local builder executor did not start");
+    // The specific artifact-attestation cause outranks the generic source_startup_failed wrapper
+    // that Micro6 prepends to it, so the operator sees the actionable failure.
+    assertThat(
+            Micro6TargetRelaunchService.detectFatalExecutorStartupMarker(
+                List.of(
+                    "[Micro6Executor] refusing startup: "
+                        + "source_startup_failed:running packaged artifact identity is unavailable")))
+        .isEqualTo("running packaged artifact identity is unavailable");
+    assertThat(
+            Micro6TargetRelaunchService.detectFatalExecutorStartupMarker(
+                List.of(
+                    "[Micro6Executor] refusing authoritative artifact identity: no artifact sidecar configured")))
+        .isNull();
+    assertThat(
+            Micro6TargetRelaunchService.detectFatalExecutorStartupMarker(
+                List.of("[Micro6Source] running packaged artifact identity is unavailable")))
+        .isNull();
+  }
+
+  @Test
+  void nonFatalArtifactDiagnosticAfterDisabledStartupDoesNotRejectHealthyExecutor() {
+    assertThat(
+            Micro6TargetRelaunchService.detectFatalExecutorStartupMarker(
+                List.of(
+                    "[buildergoal] source_mode=disabled",
+                    "[Micro6Executor] refusing authoritative artifact identity: no artifact sidecar configured",
+                    "[AccountBuilderPlugin] Local builder executor started on 127.0.0.1:8098")))
+        .isNull();
+  }
+
+  @Test
+  void ordinaryReadinessOutputIsNeverClassifiedAsAStartupRejection() {
+    assertThat(
+            Micro6TargetRelaunchService.detectFatalExecutorStartupMarker(
+                List.of(
+                    "> Task :client:runBuilderGoal",
+                    "[buildergoal] phase=LAUNCHING_PROCESS",
+                    "[Micro6Executor] local builder executor listening on 127.0.0.1:8098")))
+        .isNull();
+    assertThat(Micro6TargetRelaunchService.detectFatalExecutorStartupMarker(List.of())).isNull();
+    assertThat(Micro6TargetRelaunchService.detectFatalExecutorStartupMarker(null)).isNull();
+  }
+
+  @Test
+  void fatalExecutorStartupMarkersPreferTheMostSpecificCauseInRealLogSequence() {
+    // Real-log ordering: Micro6 first publishes the executor-side specific refusal, then the plugin
+    // reports the generic bind failure with the same underlying cause appended. Both the specific
+    // artifact refusal and the generic bind refusal are present in the tail, and the specific cause
+    // must win so the operator never receives only "Local builder executor did not start".
+    assertThat(
+            Micro6TargetRelaunchService.detectFatalExecutorStartupMarker(
+                List.of(
+                    "[Micro6Executor] attempting startup on 127.0.0.1:8098",
+                    "[Micro6Executor] refusing startup: running packaged artifact identity is unavailable",
+                    "[AccountBuilderPlugin] Local builder executor did not start: "
+                        + "source_startup_failed:running packaged artifact identity is unavailable")))
+        .isEqualTo("running packaged artifact identity is unavailable");
+
+    // Every published marker is present; specificity order decides, not log order.
+    assertThat(
+            Micro6TargetRelaunchService.detectFatalExecutorStartupMarker(
+                List.of(
+                    "[AccountBuilderPlugin] Local builder executor did not start: "
+                        + "source_startup_failed:something went wrong",
+                    "[Micro6Source] running packaged artifact identity is unavailable",
+                    "[Micro6Executor] refusing authoritative artifact identity: "
+                        + "no artifact sidecar configured",
+                    "[Micro6Executor] refusing startup: source_startup_failed")))
+        .isEqualTo("no artifact sidecar configured");
   }
 
   @Test
@@ -527,6 +673,7 @@ class Micro6TargetRelaunchServiceTest {
 
     assertThat(clientArgs)
         .contains("--clean-jagex-launcher")
+        .contains("--disable-gpu")
         .contains("--auto-enable-accountbuilder")
         .contains("--profile=udasuAvuco")
         .contains("--expected-account-hash=b01c7f006bace664")
@@ -614,6 +761,151 @@ class Micro6TargetRelaunchServiceTest {
         .hasMessageContaining("launch-buildergoal-client.ps1");
   }
 
+  @Test
+  void structuredLinux_payloadIsCreatedOnlyWhenBuildingAnAttemptCommand() throws Exception {
+    Path project = createProjectDir("structured-linux-payload");
+    Files.writeString(
+        project.resolve("launch-buildergoal-client.sh"), "#!/bin/bash\necho linux launcher\n");
+    ControlledPlatformService service = newUnixService(project.toString(), "", "");
+    Method method =
+        Micro6TargetRelaunchService.class.getDeclaredMethod(
+            "buildLaunchCommand",
+            List.class,
+            Path.class,
+            String.class,
+            String.class,
+            String.class,
+            int.class,
+            Integer.class,
+            String.class);
+    method.setAccessible(true);
+    @SuppressWarnings("unchecked")
+    List<String> command =
+        (List<String>)
+            method.invoke(
+                service,
+                List.of(
+                    "--profile=account", "--profile-email=user@example.com:secret", "--world=360"),
+                project,
+                "account",
+                "user@example.com",
+                "secret",
+                360,
+                8098,
+                "http://127.0.0.1:8098");
+    // Credentials travel in the payload file, never on the command line.
+    assertThat(command).hasSize(4);
+    assertThat(command.get(0)).isEqualTo("bash");
+    assertThat(command.get(1))
+        .isEqualTo(project.resolve("launch-buildergoal-client.sh").toString());
+    assertThat(command.get(2)).isEqualTo("--payload-file");
+    Path payload = Path.of(command.get(3));
+    assertThat(payload).isRegularFile();
+    com.fasterxml.jackson.databind.JsonNode payloadJson =
+        new ObjectMapper().readTree(payload.toFile());
+    assertThat(payloadJson.path("clientArgs").toString())
+        .contains("--profile=account")
+        .contains("--world=360");
+    assertThat(String.join(" ", command)).doesNotContain("secret");
+
+    Method cleanup =
+        Micro6TargetRelaunchService.class.getDeclaredMethod("deleteOwnedLaunchFiles", List.class);
+    cleanup.setAccessible(true);
+    cleanup.invoke(service, command);
+    assertThat(payload).doesNotExist();
+  }
+
+  @Test
+  void structuredLinux_buildCompileOnlyCommandHasNoPayload() throws Exception {
+    ControlledPlatformService service = newUnixService(tempDir.toString(), "", "");
+    Path launcher = tempDir.resolve("launch-buildergoal-client.sh");
+    Files.writeString(launcher, "#!/bin/bash\necho linux launcher\n", StandardCharsets.UTF_8);
+
+    Method method =
+        Micro6TargetRelaunchService.class.getDeclaredMethod("buildCompileOnlyCommand", Path.class);
+    method.setAccessible(true);
+    @SuppressWarnings("unchecked")
+    List<String> command = (List<String>) method.invoke(service, launcher);
+
+    assertThat(command).containsExactly("bash", launcher.toString(), "--compile-only");
+    assertThat(command).doesNotContain("--payload-file");
+    assertThat(command.stream().noneMatch(c -> c.contains("buildergoal-launch-"))).isTrue();
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void structuredLinux_preflightCommandsUseBashAdapter() throws Exception {
+    ControlledPlatformService service = newUnixService(tempDir.toString(), "", "");
+    Path launcher = tempDir.resolve("launch-buildergoal-client.sh");
+
+    Method validate =
+        Micro6TargetRelaunchService.class.getDeclaredMethod("buildValidateOnlyCommand", Path.class);
+    validate.setAccessible(true);
+    assertThat((List<String>) validate.invoke(service, launcher))
+        .containsExactly("bash", launcher.toString(), "--validate-only");
+
+    Method contract =
+        Micro6TargetRelaunchService.class.getDeclaredMethod(
+            "buildContractVersionCommand", Path.class);
+    contract.setAccessible(true);
+    assertThat((List<String>) contract.invoke(service, launcher))
+        .containsExactly("bash", launcher.toString(), "--contract-version");
+  }
+
+  @Test
+  @EnabledOnOs({OS.LINUX, OS.MAC})
+  void structuredLinux_realLauncherCompileOnlySucceeds() throws Exception {
+    Path project = createProjectDir("compile-linux-success");
+    Files.writeString(
+        project.resolve("launch-buildergoal-client.sh"),
+        "#!/bin/bash\necho \"got: $*\"\nexit 0\n",
+        StandardCharsets.UTF_8);
+    Path logFile = project.resolve("micro6-recovery-launch.log");
+    ControlledPlatformService service = newUnixService(project.toString(), "", "");
+
+    Method method =
+        Micro6TargetRelaunchService.class.getDeclaredMethod(
+            "compileMicro6ProductionClasses",
+            Path.class,
+            Path.class,
+            BuilderGoalLaunchCancellation.class);
+    method.setAccessible(true);
+    method.invoke(service, project, logFile, null);
+
+    String output = Files.readString(logFile, StandardCharsets.UTF_8);
+    assertThat(output).contains("--compile-only");
+    assertThat(output).doesNotContain("--payload-file");
+  }
+
+  @Test
+  @EnabledOnOs({OS.LINUX, OS.MAC})
+  void structuredLinux_realLauncherCompileOnlyFailureThrows() throws Exception {
+    Path project = createProjectDir("compile-linux-failure");
+    Files.writeString(
+        project.resolve("launch-buildergoal-client.sh"),
+        "#!/bin/bash\nexit 1\n",
+        StandardCharsets.UTF_8);
+    Path logFile = project.resolve("micro6-recovery-launch.log");
+    ControlledPlatformService service = newUnixService(project.toString(), "", "");
+
+    Method method =
+        Micro6TargetRelaunchService.class.getDeclaredMethod(
+            "compileMicro6ProductionClasses",
+            Path.class,
+            Path.class,
+            BuilderGoalLaunchCancellation.class);
+    method.setAccessible(true);
+    try {
+      method.invoke(service, project, logFile, null);
+      throw new AssertionError("expected RelaunchException");
+    } catch (java.lang.reflect.InvocationTargetException e) {
+      Throwable cause = e.getCause();
+      assertThat(cause).isInstanceOf(Micro6TargetRelaunchService.RelaunchException.class);
+      assertThat(((Micro6TargetRelaunchService.RelaunchException) cause).getFailureKind())
+          .isEqualTo("GRADLE_TASK_FAILED");
+    }
+  }
+
   /** Reads the private effective Gradle task selected at construction time. */
   private String readEffectiveGradleTask(Micro6TargetRelaunchService service) throws Exception {
     java.lang.reflect.Field field =
@@ -688,8 +980,8 @@ class Micro6TargetRelaunchServiceTest {
   }
 
   @Test
-  void directGradleLaunchWithoutTemplateReportsCanonicalTask() throws Exception {
-    Path project = createProjectDir("direct-gradle-task");
+  void structuredLinuxLaunchWithoutTemplateReportsCanonicalTask() throws Exception {
+    Path project = createProjectDir("structured-linux-task");
     ControlledPlatformService service = newUnixService(project.toString(), "", "");
 
     assertThat(readEffectiveGradleTask(service)).isEqualTo(":client:runBuilderGoal");
@@ -733,54 +1025,44 @@ class Micro6TargetRelaunchServiceTest {
   }
 
   @Test
-  void unixGradle_missingGradlewFailsWithPathAndMode() throws Exception {
-    Path project = createProjectDir("unix-gradle-missing");
+  void structuredLinux_missingLauncherScriptFailsWithPathAndMode() throws Exception {
+    Path project = createProjectDir("linux-launcher-missing");
     ControlledPlatformService service = newUnixService(project.toString(), "", "");
 
     assertThatThrownBy(() -> invokeValidate(service, project))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining(project.toString())
-        .hasMessageContaining("gradlew");
+        .hasMessageContaining("STRUCTURED_LINUX")
+        .hasMessageContaining("launch-buildergoal-client.sh");
   }
 
   @Test
-  void unixGradle_nonExecutableGradlewFailsWithPathAndMode() throws Exception {
-    Path project = createUnixGradleProject("unix-gradle-not-exec", false);
-    Path wrapper = project.resolve("gradlew");
-    wrapper.toFile().setExecutable(false, false);
-    ControlledPlatformService service = newUnixService(project.toString(), "", "");
-
-    // The executability check only applies on non-Windows hosts (Windows does not honor
-    // Unix execute bits), and the test platform is pinned to non-Windows via the subclass.
-    boolean checkApplies = !System.getProperty("os.name", "").toLowerCase().contains("win");
-    if (checkApplies) {
-      assertThatThrownBy(() -> invokeValidate(service, project))
-          .isInstanceOf(IllegalStateException.class)
-          .hasMessageContaining(project.toString())
-          .hasMessageContaining("gradlew")
-          .hasMessageContaining("not executable");
-    } else {
-      invokeValidate(service, project);
-    }
-  }
-
-  @Test
-  void unixGradle_executableGradlewPasses() throws Exception {
-    Path project = createUnixGradleProject("unix-gradle-exec", true);
+  void structuredLinux_nonExecutableLauncherScriptPasses() throws Exception {
+    // The adapter is invoked via `bash <script>`, so the execute bit is not required.
+    Path project = createUnixLauncherProject("linux-launcher-not-exec", false);
+    project.resolve("launch-buildergoal-client.sh").toFile().setExecutable(false, false);
     ControlledPlatformService service = newUnixService(project.toString(), "", "");
 
     invokeValidate(service, project);
   }
 
   @Test
-  void unixGradle_directoryNamedGradlewFails() throws Exception {
-    Path project = createProjectDir("unix-gradle-directory");
-    Files.createDirectory(project.resolve("gradlew"));
+  void structuredLinux_launcherScriptPresentPasses() throws Exception {
+    Path project = createUnixLauncherProject("linux-launcher-present", true);
+    ControlledPlatformService service = newUnixService(project.toString(), "", "");
+
+    invokeValidate(service, project);
+  }
+
+  @Test
+  void structuredLinux_directoryNamedLauncherScriptFails() throws Exception {
+    Path project = createProjectDir("linux-launcher-directory");
+    Files.createDirectory(project.resolve("launch-buildergoal-client.sh"));
 
     assertThatThrownBy(() -> invokeValidate(newUnixService(project.toString(), "", ""), project))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("regular required entry point")
-        .hasMessageContaining("gradlew");
+        .hasMessageContaining("launch-buildergoal-client.sh");
   }
 
   @Test
@@ -957,7 +1239,7 @@ class Micro6TargetRelaunchServiceTest {
     assertThatThrownBy(() -> invokeValidate(service, missing))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining(missing.toString())
-        .hasMessageContaining("NON_WINDOWS_GRADLE")
+        .hasMessageContaining("STRUCTURED_LINUX")
         .hasMessageContaining("does not exist");
   }
 
@@ -970,7 +1252,7 @@ class Micro6TargetRelaunchServiceTest {
     assertThatThrownBy(() -> invokeValidate(service, file))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining(file.toString())
-        .hasMessageContaining("NON_WINDOWS_GRADLE")
+        .hasMessageContaining("STRUCTURED_LINUX")
         .hasMessageContaining("is not a directory");
   }
 
@@ -1275,6 +1557,48 @@ class Micro6TargetRelaunchServiceTest {
 
   @Test
   @EnabledOnOs({OS.LINUX, OS.MAC})
+  void integrated_fatalStartupMarkerDuringPollingKillsOwnedTreeAndReportsStartupRejection()
+      throws Exception {
+    Path project = createFatalMarkerLauncherProject("fatal-marker");
+    ProgrammableHealthService service = new ProgrammableHealthService(project.toString());
+    List<String> emittedPhases = Collections.synchronizedList(new ArrayList<>());
+
+    assertThatThrownBy(
+            () ->
+                service.restartTarget(
+                    "fatalMarker",
+                    "1111111111111111",
+                    "user@example.com",
+                    "secret",
+                    360,
+                    null,
+                    progress -> emittedPhases.add(progress.phase()),
+                    BuilderGoalLaunchCancellation.NONE))
+        .isInstanceOfSatisfying(
+            Micro6TargetRelaunchService.RelaunchException.class,
+            relaunch -> {
+              assertThat(relaunch.getPhase())
+                  .as("a refusal detected while the client is still alive uses a dedicated phase")
+                  .isEqualTo(Micro6TargetRelaunchService.PHASE_EXECUTOR_STARTUP_REJECTED);
+              assertThat(relaunch.getFailureKind()).isEqualTo("EXECUTOR_STARTUP_REJECTED");
+              assertThat(relaunch.getFailureDetail())
+                  .contains("running packaged artifact identity is unavailable");
+            });
+
+    assertThat(emittedPhases).contains(Micro6TargetRelaunchService.PHASE_EXECUTOR_STARTUP_REJECTED);
+    assertThat(emittedPhases)
+        .as(
+            "a refusal published while the client is explicitly still alive must never be reported as PROCESS_EXITED")
+        .doesNotContain(Micro6TargetRelaunchService.PHASE_PROCESS_EXITED);
+    // The refused client never binds the executor port, so it must not outlive the failed attempt:
+    // both the owned root and its backgrounded descendant are dead before the lease-owning method
+    // returns.
+    assertNoOwnedSurvivors(project, "fatalMarker");
+    assertChildPidsDead(project);
+  }
+
+  @Test
+  @EnabledOnOs({OS.LINUX, OS.MAC})
   void integrated_progressListenerFailureAfterProcessCreationTerminatesOwnedTree()
       throws Exception {
     Path project = createFakeLauncherProject("progress-listener-failure");
@@ -1558,8 +1882,7 @@ class Micro6TargetRelaunchServiceTest {
   void readHealthyExecutorTarget_doesNotPromoteRequestedHashToObservedTargetIdentity()
       throws Exception {
     com.sun.net.httpserver.HttpServer server =
-        com.sun.net.httpserver.HttpServer.create(
-            new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
     try {
       // This is the legacy name-fallback case: the game name is known, but no actual hash has
       // been resolved. Identity is a readiness field, so a missing resolved hash keeps the
@@ -1616,7 +1939,13 @@ class Micro6TargetRelaunchServiceTest {
       // Resolved identity is missing; only the launch-args requested identity is present.
       String body =
           healthPayload(
-              null, null, "1111111111111111", "bigGreenMeat", false, "accountbuilder_ready", "logged_in");
+              null,
+              null,
+              "1111111111111111",
+              "bigGreenMeat",
+              false,
+              "accountbuilder_ready",
+              "logged_in");
       server.createContext(
           "/health",
           exchange -> {
@@ -1828,6 +2157,34 @@ class Micro6TargetRelaunchServiceTest {
     assertThat(detail).doesNotContain("writeBuilderGoalRuntimeClasspath");
   }
 
+  @Test
+  void analyzeLaunchFailure_classifiesLaunchedJvmNativeCrashAsProcessExited() throws Exception {
+    ControlledPlatformService service = newUnixService(tempDir.toString(), "", "");
+    Path logFile = tempDir.resolve("native-client-crash.log");
+    Files.writeString(
+        logFile,
+        "> Task :client:runBuilderGoal FAILED\n"
+            + "FAILURE: Build failed with an exception.\n\n"
+            + "* What went wrong:\n"
+            + "Execution failed for task ':client:runBuilderGoal'.\n"
+            + "> Process 'command 'C:\\Java\\bin\\java.exe'' finished with non-zero exit value -1073741819\n\n"
+            + "BUILD FAILED in 2m 52s\n",
+        StandardCharsets.UTF_8);
+
+    Method method =
+        Micro6TargetRelaunchService.class.getDeclaredMethod(
+            "analyzeLaunchFailure", Path.class, long.class);
+    method.setAccessible(true);
+    Object result = method.invoke(service, logFile, 0L);
+
+    assertThat(result.getClass().getDeclaredMethod("kind").invoke(result).toString())
+        .isEqualTo("PROCESS_EXITED");
+    assertThat(result.getClass().getDeclaredMethod("detail").invoke(result).toString())
+        .contains("-1073741819")
+        .contains("0xC0000005")
+        .contains("EXCEPTION_ACCESS_VIOLATION");
+  }
+
   /**
    * Windows service whose launch-configuration validation always fails, pinning the behavior that a
    * broken Gradle task or launcher configuration must fail before any existing Micro6 process is
@@ -1953,14 +2310,14 @@ class Micro6TargetRelaunchServiceTest {
         Path projectDir, Path logFile, BuilderGoalLaunchCancellation cancellation) {
       throw new Micro6TargetRelaunchService.RelaunchException(
           Micro6TargetRelaunchService.PHASE_BUILD_FAILED,
-          "Builder Goal launcher contract is incompatible (expected contract_version 2). Check "
+          "Builder Goal launcher contract is incompatible (expected contract_version 3). Check "
               + logFile.toAbsolutePath(),
           true,
           logFile,
           ":client:runBuilderGoal",
           null,
           "LAUNCH_CONFIGURATION_INVALID",
-          "Builder Goal launcher contract is incompatible (expected contract_version 2)",
+          "Builder Goal launcher contract is incompatible (expected contract_version 3)",
           Micro6TargetRelaunchService.PHASE_PREPARING_BUILD,
           "attempt-1");
     }
@@ -2289,6 +2646,155 @@ class Micro6TargetRelaunchServiceTest {
     // No ChromaScape-owned payload temp file is referenced anywhere in the command.
     assertThat(command.stream().noneMatch(c -> c.contains("buildergoal-launch-"))).isTrue();
     assertThat(command.get(command.indexOf("-File") + 1)).isEqualTo(launcher.toString());
+  }
+
+  /**
+   * Writes a fake launcher that answers {@code -ContractVersion} with the supplied contract JSON.
+   */
+  private Path writeContractLauncher(Path project, String contractJson) throws Exception {
+    Path launcher = project.resolve("launch-buildergoal-client.ps1");
+    Files.writeString(
+        launcher,
+        "param([string]$PayloadFile, [switch]$CompileOnly, [switch]$ValidateOnly, [switch]$ContractVersion)\n"
+            + "if ($ContractVersion) { [Console]::Out.Write('"
+            + contractJson.replace("'", "''")
+            + "'); exit 0 }\n"
+            + "exit 0\n",
+        StandardCharsets.UTF_8);
+    return launcher;
+  }
+
+  /**
+   * Unwraps reflection wrapping. {@code Method.invoke} reports a target failure as an {@code
+   * InvocationTargetException} whose own message is null, so the cause must be followed to assert
+   * on the launcher-contract failure itself.
+   */
+  private static Throwable rootCauseOf(Throwable thrown) {
+    Throwable current = thrown;
+    while (current.getCause() != null && current.getCause() != current) {
+      current = current.getCause();
+    }
+    return current;
+  }
+
+  private static void invokeVerifyLauncherContract(
+      Micro6TargetRelaunchService service, Path project, Path logFile) throws Exception {
+    Method method =
+        Micro6TargetRelaunchService.class.getDeclaredMethod(
+            "verifyLauncherContract", Path.class, Path.class, BuilderGoalLaunchCancellation.class);
+    method.setAccessible(true);
+    method.invoke(service, project, logFile, null);
+  }
+
+  /**
+   * Contract version 3 is required: it is the version that adopts ChromaScape's explicitly declared
+   * MICRO6_SOURCE_MODE instead of defaulting the mode from ambient environment state.
+   */
+  @Test
+  @EnabledOnOs(OS.WINDOWS)
+  void launcherContractRejectsThePreSourceModeContractVersion() throws Exception {
+    Path project = createProjectDir("contract-v2");
+    writeContractLauncher(
+        project,
+        "{\"contract_version\":2,\"validate_only\":true,\"compile_only\":true,"
+            + "\"run_task\":\":client:runBuilderGoal\",\"prepare_task\":\":client:prepareBuilderGoal\"}");
+    Path logFile = project.resolve("micro6-recovery-launch.log");
+    ControlledPlatformService service = newWindowsService(project.toString(), "", "");
+
+    assertThat(rootCauseOf(catchThrowable(() -> invokeVerifyLauncherContract(service, project, logFile))))
+        .isInstanceOf(Micro6TargetRelaunchService.RelaunchException.class)
+        .hasMessageContaining("launcher contract is incompatible");
+  }
+
+  /**
+   * A launcher that does not advertise the explicit source mode would reintroduce inference from
+   * ambient MICRO6_SOURCE_* values, which is the defect this change removes.
+   */
+  @Test
+  @EnabledOnOs(OS.WINDOWS)
+  void launcherContractRejectsALauncherWithoutExplicitSourceModeSupport() throws Exception {
+    Path project = createProjectDir("contract-no-source-mode");
+    writeContractLauncher(
+        project,
+        "{\"contract_version\":3,\"validate_only\":true,\"compile_only\":true,"
+            + "\"run_task\":\":client:runBuilderGoal\",\"prepare_task\":\":client:prepareBuilderGoal\"}");
+    Path logFile = project.resolve("micro6-recovery-launch.log");
+    ControlledPlatformService service = newWindowsService(project.toString(), "", "");
+
+    assertThat(rootCauseOf(catchThrowable(() -> invokeVerifyLauncherContract(service, project, logFile))))
+        .isInstanceOf(Micro6TargetRelaunchService.RelaunchException.class)
+        .hasMessageContaining("explicit source mode");
+  }
+
+  @Test
+  @EnabledOnOs(OS.WINDOWS)
+  void launcherContractAcceptsTheExplicitSourceModeContract() throws Exception {
+    Path project = createProjectDir("contract-v3");
+    writeContractLauncher(
+        project,
+        "{\"contract_version\":3,\"validate_only\":true,\"compile_only\":true,"
+            + "\"run_task\":\":client:runBuilderGoal\",\"prepare_task\":\":client:prepareBuilderGoal\","
+            + "\"authoritative_run_task\":\":client:runBuilderGoalAuthoritative\","
+            + "\"source_mode_env\":\"MICRO6_SOURCE_MODE\","
+            + "\"source_modes\":[\"disabled\",\"authoritative\"]}");
+    Path logFile = project.resolve("micro6-recovery-launch.log");
+    ControlledPlatformService service = newWindowsService(project.toString(), "", "");
+
+    invokeVerifyLauncherContract(service, project, logFile);
+  }
+
+  /**
+   * Contract version 3 promises the dedicated authoritative launch task. A launcher that omits it
+   * cannot run authoritative preparation, so a current version number alone is not sufficient.
+   */
+  @Test
+  @EnabledOnOs(OS.WINDOWS)
+  void launcherContractRejectsAV3LauncherWithoutTheAuthoritativeRunTask() throws Exception {
+    Path project = createProjectDir("contract-v3-no-authoritative-task");
+    writeContractLauncher(
+        project,
+        "{\"contract_version\":3,\"validate_only\":true,\"compile_only\":true,"
+            + "\"run_task\":\":client:runBuilderGoal\",\"prepare_task\":\":client:prepareBuilderGoal\","
+            + "\"source_mode_env\":\"MICRO6_SOURCE_MODE\","
+            + "\"source_modes\":[\"disabled\",\"authoritative\"]}");
+    Path logFile = project.resolve("micro6-recovery-launch.log");
+    ControlledPlatformService service = newWindowsService(project.toString(), "", "");
+
+    Throwable thrown =
+        catchThrowable(() -> invokeVerifyLauncherContract(service, project, logFile));
+
+    assertThat(thrown).isNotNull();
+    assertThat(rootCauseOf(thrown))
+        .isInstanceOf(Micro6TargetRelaunchService.RelaunchException.class)
+        .hasMessageContaining("authoritative Gradle task");
+  }
+
+  /**
+   * The documented v3 schema lists both supported source modes. A launcher that advertises only
+   * some of them cannot honor every mode ChromaScape can select, so it is an incomplete v3
+   * contract.
+   */
+  @Test
+  @EnabledOnOs(OS.WINDOWS)
+  void launcherContractRejectsAV3LauncherWhoseSourceModesOmitAuthoritative() throws Exception {
+    Path project = createProjectDir("contract-v3-missing-authoritative-mode");
+    writeContractLauncher(
+        project,
+        "{\"contract_version\":3,\"validate_only\":true,\"compile_only\":true,"
+            + "\"run_task\":\":client:runBuilderGoal\",\"prepare_task\":\":client:prepareBuilderGoal\","
+            + "\"authoritative_run_task\":\":client:runBuilderGoalAuthoritative\","
+            + "\"source_mode_env\":\"MICRO6_SOURCE_MODE\","
+            + "\"source_modes\":[\"disabled\"]}");
+    Path logFile = project.resolve("micro6-recovery-launch.log");
+    ControlledPlatformService service = newWindowsService(project.toString(), "", "");
+
+    Throwable thrown =
+        catchThrowable(() -> invokeVerifyLauncherContract(service, project, logFile));
+
+    assertThat(thrown).isNotNull();
+    assertThat(rootCauseOf(thrown))
+        .isInstanceOf(Micro6TargetRelaunchService.RelaunchException.class)
+        .hasMessageContaining("explicit source mode");
   }
 
   /**

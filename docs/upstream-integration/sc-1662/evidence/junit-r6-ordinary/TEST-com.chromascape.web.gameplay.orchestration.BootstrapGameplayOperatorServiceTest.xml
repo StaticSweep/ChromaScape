@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorServiceTest" tests="3" skipped="0" failures="2" errors="0" timestamp="2026-09-16T10:39:08.353Z" hostname="fedora" time="0.067">
+  <properties/>
+  <testcase name="approvalRequiresHumanConfirmationOfTheCurrentDigest()" classname="com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorServiceTest" time="0.035">
+    <failure message="com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation: $: null found, object expected" type="com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation">com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation: $: null found, object expected
+	at app//com.chromascape.web.gameplay.contract.GameplayContractValidator.validate(GameplayContractValidator.java:56)
+	at app//com.chromascape.web.gameplay.provider.ClosedGameplayProviderAdapter.adapt(ClosedGameplayProviderAdapter.java:21)
+	at app//com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorService.validatedDecision(BootstrapGameplayOperatorService.java:192)
+	at app//com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorService.preview(BootstrapGameplayOperatorService.java:91)
+	at app//com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorServiceTest.approvalRequiresHumanConfirmationOfTheCurrentDigest(BootstrapGameplayOperatorServiceTest.java:111)
+	at java.base@17.0.20.1/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <testcase name="previewApproveAndDispatchConsumeOneExactHumanApproval()" classname="com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorServiceTest" time="0.016">
+    <failure message="com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation: $: null found, object expected" type="com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation">com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation: $: null found, object expected
+	at app//com.chromascape.web.gameplay.contract.GameplayContractValidator.validate(GameplayContractValidator.java:56)
+	at app//com.chromascape.web.gameplay.provider.ClosedGameplayProviderAdapter.adapt(ClosedGameplayProviderAdapter.java:21)
+	at app//com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorService.validatedDecision(BootstrapGameplayOperatorService.java:192)
+	at app//com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorService.preview(BootstrapGameplayOperatorService.java:91)
+	at app//com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorServiceTest.previewApproveAndDispatchConsumeOneExactHumanApproval(BootstrapGameplayOperatorServiceTest.java:82)
+	at java.base@17.0.20.1/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <testcase name="operatorAuthenticationAndStopFailClosed()" classname="com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorServiceTest" time="0.014"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

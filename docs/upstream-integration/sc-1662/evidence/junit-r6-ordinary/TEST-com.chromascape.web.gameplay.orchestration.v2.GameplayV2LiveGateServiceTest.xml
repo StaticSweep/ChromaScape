@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" tests="22" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:41:05.487Z" hostname="fedora" time="0.699">
+  <properties/>
+  <testcase name="restartWithSharedDurableStoreKeepsReservationAndReconciles()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.052"/>
+  <testcase name="concurrentIdenticalReserveAdmitsExactlyOneTransportCall()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.05"/>
+  <testcase name="disabledLiveFlagDeniesBeforeTransport()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.03"/>
+  <testcase name="mutationAfterValidationDoesNotChangeTransmittedBytes()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.029"/>
+  <testcase name="validFullSequenceReservesDeliveryPendingWithOneTransportCall()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.041"/>
+  <testcase name="disconnectBeforeAndAfterAcknowledgementReconcilesWithoutRedispatch()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.022"/>
+  <testcase name="reconciliationOfRemoteReservedRestoresStartableDeliveryPending()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.027"/>
+  <testcase name="idempotencyConflictOnDifferentRequestWithSameKey()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.054"/>
+  <testcase name="restartRecoveryMarksInFlightRowsNeedsReconciliation()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.023"/>
+  <testcase name="concurrentStartsDispatchExactlyOneMicro6Start()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.03"/>
+  <testcase name="definitiveMicro6StartRejectionMarksRowFailed()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.022"/>
+  <testcase name="substitutedCatalogIsDeniedBeforeTransport()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.011"/>
+  <testcase name="transmittedBytesCarryCompleteBundleWithCanonicalProviderDecisionKey()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.022"/>
+  <testcase name="verifiedStopPersistsEvidenceBeforeReportingStopped()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.023"/>
+  <testcase name="fabricatedEligibilityIsDeniedBeforeTransport()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.012"/>
+  <testcase name="mutatedProviderDecisionGoalPlanOrEnvelopeIsDeniedBeforeTransport()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.027"/>
+  <testcase name="invalidSchemaOrMissingAuthorityIsDeniedBeforeTransport()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.02"/>
+  <testcase name="malformedStopReceiptNeedsReconciliation()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.033"/>
+  <testcase name="malformedStartReceiptNeedsReconciliationWithoutRedispatch()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.045"/>
+  <testcase name="authorityReuseWithDifferentBytesIsDenied()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.05"/>
+  <testcase name="staleLeaseAndFenceAreDeniedBeforeTransport()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.024"/>
+  <testcase name="crashAfterPersistentReservationReconcilesWithoutRedispatch()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateServiceTest" time="0.041"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

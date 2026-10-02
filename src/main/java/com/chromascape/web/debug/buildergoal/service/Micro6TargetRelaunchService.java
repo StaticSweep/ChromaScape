@@ -12,6 +12,8 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -22,6 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -41,9 +44,31 @@ public class Micro6TargetRelaunchService {
   private static final String DEFAULT_GRADLE_PREPARE_TASK = ":client:prepareBuilderGoal";
   private static final String CUSTOM_LAUNCH_COMMAND = "custom_launch_command";
   private static final int MAX_LAUNCH_ATTEMPTS = 2;
+
+  /**
+   * Windows spawns a fresh PowerShell for every listener probe, and cold start alone routinely
+   * exceeds five seconds on a loaded workstation (measured at ~8.4s while a Micro6 client, a second
+   * ChromaScape instance and a Docker stack were running). The probe is fail-closed: a timeout
+   * yields {@code UNKNOWN}, which both blocks executor replacement and prevents a healthy executor
+   * from being reused, so an over-tight bound silently converts transient machine load into
+   * spurious dispatch failures. The bound stays finite so a genuinely hung probe still fails closed
+   * rather than stalling a launch indefinitely.
+   */
   private static final long GRACEFUL_TERMINATION_WAIT_MS = 3_000L;
+
   private static final long FORCE_TERMINATION_WAIT_MS = 2_000L;
   private static final long OWNED_TREE_SETTLE_MS = 1_500L;
+
+  /**
+   * Bounded wait for a listener probe subprocess. {@code Get-NetTCPConnection} is a CIM/WMI cmdlet
+   * that can stall for several seconds under load, so the bound must be generous enough that a slow
+   * but healthy probe is not misclassified as {@code UNKNOWN}.
+   */
+  private static final long PORT_PROBE_TIMEOUT_MS = 30_000L;
+
+  /** Delay before retrying the native netstat fallback after an indeterminate listener probe. */
+  private static final long PORT_PROBE_FALLBACK_RETRY_DELAY_MS = 750L;
+
   private static final String FAILURE_KIND_BUILD_OUTPUT_LOCK = "BUILD_OUTPUT_LOCK";
   private static final String FAILURE_KIND_PROCESS_EXITED = "PROCESS_EXITED";
   private static final String FAILURE_KIND_GRADLE_TASK_FAILED = "GRADLE_TASK_FAILED";
@@ -53,11 +78,79 @@ public class Micro6TargetRelaunchService {
   private static final String FAILURE_KIND_EXECUTOR_REPLACEMENT_BLOCKED =
       "EXECUTOR_REPLACEMENT_BLOCKED";
 
+  /**
+   * Terminal executor startup refusal: the process is alive but will never become dispatch-ready.
+   */
+  private static final String FAILURE_KIND_EXECUTOR_STARTUP_REJECTED = "EXECUTOR_STARTUP_REJECTED";
+
+  /** Launcher contract version ChromaScape requires; version 3 adds the explicit source mode. */
+  private static final int LAUNCHER_CONTRACT_VERSION = 3;
+
+  private static final String SOURCE_MODE_ENVIRONMENT_KEY = "MICRO6_SOURCE_MODE";
+  private static final String SOURCE_MODE_DISABLED = "disabled";
+  private static final String SOURCE_MODE_AUTHORITATIVE = "authoritative";
+
+  /**
+   * Authoritative launch task the launcher contract must advertise; mirrors the Gradle composite.
+   */
+  private static final String AUTHORITATIVE_GRADLE_RUN_TASK = ":client:runBuilderGoalAuthoritative";
+
+  /**
+   * Micro6 startup refusals that can never resolve by waiting. Each marker is emitted by the
+   * executor (or the launch task) before it exits, and every one of them means the executor will
+   * not bind its port for this attempt.
+   *
+   * <p>{@code source_startup_failed} covers every fail-closed authoritative source violation,
+   * including an unknown mode and a promoted bundle that does not match the running artifact.
+   * {@code no artifact sidecar configured} and {@code running packaged artifact identity is
+   * unavailable} are the artifact-attestation refusals. {@code Local builder executor did not
+   * start} is the generic bind refusal.
+   *
+   * <p>Ordered most specific first: the executor can publish the generic bind refusal on the same
+   * startup path as the specific underlying cause, so the artifact-attestation markers and the
+   * fail-closed source marker must be matched before the generic one. Otherwise a caller would only
+   * ever see {@code Local builder executor did not start} and lose the actionable cause.
+   */
+  private static final List<String> FATAL_EXECUTOR_STARTUP_MARKERS =
+      List.of(
+          "no artifact sidecar configured",
+          "running packaged artifact identity is unavailable",
+          "source_startup_failed",
+          "Local builder executor did not start");
+
+  /** Highest-priority marker first: the most specific published cause wins. */
+  static String detectFatalExecutorStartupMarker(List<String> lines) {
+    if (lines == null || lines.isEmpty()) {
+      return null;
+    }
+    // Artifact-identity diagnostics can also be emitted by a running development executor while
+    // answering health. They are fatal only when the same attempt contains an explicit startup
+    // refusal. Without this gate a healthy disabled-mode executor can bind 8098 and then be killed
+    // solely because its classes-directory launch has no packaged-JAR sidecar.
+    boolean startupRefused =
+        lines.stream()
+            .anyMatch(
+                line ->
+                    line != null
+                        && (line.contains("[Micro6Executor] refusing startup:")
+                            || line.contains("source_startup_failed")
+                            || line.contains("Local builder executor did not start")));
+    if (!startupRefused) {
+      return null;
+    }
+    for (String marker : FATAL_EXECUTOR_STARTUP_MARKERS) {
+      if (lines.stream().anyMatch(line -> line != null && line.contains(marker))) {
+        return marker;
+      }
+    }
+    return null;
+  }
+
   private enum LaunchMode {
     STRUCTURED_WINDOWS,
+    STRUCTURED_LINUX,
     CUSTOM_COMMAND_TEMPLATE,
-    WINDOWS_GRADLE,
-    NON_WINDOWS_GRADLE
+    WINDOWS_GRADLE
   }
 
   // Preparation lifecycle phases persisted in target_preparation metadata.
@@ -81,6 +174,13 @@ public class Micro6TargetRelaunchService {
   public static final String PHASE_READY = Micro6ExecutorReadinessEvaluator.PHASE_READY;
   public static final String PHASE_BUILD_FAILED = "BUILD_FAILED";
   public static final String PHASE_PROCESS_EXITED = "PROCESS_EXITED";
+
+  /**
+   * Terminal executor startup refusal: the client process is still alive but has published a marker
+   * proving it will never bind the executor port. Distinct from {@link #PHASE_PROCESS_EXITED}
+   * because the process has not exited when this phase is published.
+   */
+  public static final String PHASE_EXECUTOR_STARTUP_REJECTED = "EXECUTOR_STARTUP_REJECTED";
 
   private final ObjectMapper objectMapper;
   private final HttpClient httpClient;
@@ -220,6 +320,27 @@ public class Micro6TargetRelaunchService {
       BuilderGoalLaunchCancellation cancellation,
       boolean forceRelaunch)
       throws Exception {
+    return restartTarget(accountName, accountHash, accountEmail, accountPassword, world,
+        targetBaseUrl, progressListener, cancellation, forceRelaunch, false);
+  }
+
+  public RelaunchResult restartTarget(String accountName, String accountHash, String accountEmail,
+      String accountPassword, Integer world, String targetBaseUrl,
+      Consumer<RelaunchProgress> progressListener, BuilderGoalLaunchCancellation cancellation,
+      boolean forceRelaunch, boolean packetCapture) throws Exception {
+    try (RsproxLaunchSession capture = packetCapture ? RsproxLaunchSession.connect() : null) {
+      RelaunchResult result = restartTargetWithCapture(accountName, accountHash, accountEmail,
+          accountPassword, world, targetBaseUrl, progressListener, cancellation,
+          forceRelaunch || packetCapture, capture);
+      if (capture != null) capture.retain();
+      return result;
+    }
+  }
+
+  private RelaunchResult restartTargetWithCapture(String accountName, String accountHash,
+      String accountEmail, String accountPassword, Integer world, String targetBaseUrl,
+      Consumer<RelaunchProgress> progressListener, BuilderGoalLaunchCancellation cancellation,
+      boolean forceRelaunch, RsproxLaunchSession capture) throws Exception {
     if (accountName == null || accountName.isBlank()) {
       throw new IllegalArgumentException("Target account name is required for Micro6 relaunch");
     }
@@ -405,7 +526,8 @@ public class Micro6TargetRelaunchService {
         null,
         null,
         null);
-    verifyLauncherContract(projectDir, logFile.toPath(), cancellation);
+    if (capture != null) verifyLauncherContract(projectDir, logFile.toPath(), cancellation, true);
+    else verifyLauncherContract(projectDir, logFile.toPath(), cancellation);
     if (cancellation != null) {
       cancellation.throwIfCancelled();
     }
@@ -416,6 +538,12 @@ public class Micro6TargetRelaunchService {
     compileMicro6ProductionClasses(projectDir, logFile.toPath(), cancellation);
     if (cancellation != null) {
       cancellation.throwIfCancelled();
+    }
+
+    if (capture != null) {
+      if (!isWindows()) throw new IllegalStateException("Packet Capture requires the Windows structured launcher");
+      capture.prepare(projectDir);
+      if (cancellation != null) cancellation.throwIfCancelled();
     }
 
     // Step 4: Executor is not dispatch-ready or not account-matched — stop and launch fresh.
@@ -513,14 +641,10 @@ public class Micro6TargetRelaunchService {
         // launch attempt owns this process (used to verify process ownership before replacement).
         List<String> attemptClientArgs =
             buildClientArgs(
-                accountName,
-                accountHash,
-                accountEmail,
-                accountPassword,
-                world,
-                attemptId);
-        command =
-            buildLaunchCommand(
+                accountName, accountHash, accountEmail, accountPassword, world, attemptId);
+        command = capture != null
+            ? buildStructuredWindowsLaunchCommand(attemptClientArgs, projectDir, capture.payload())
+            : buildLaunchCommand(
                 attemptClientArgs,
                 projectDir,
                 accountName,
@@ -539,6 +663,7 @@ public class Micro6TargetRelaunchService {
                 command,
                 localExecutorBaseUrl,
                 resolvedBaseUrl);
+        if (capture != null) capture.attach(process);
         if (cancellation != null) {
           cancellation.throwIfCancelled();
         }
@@ -624,8 +749,13 @@ public class Micro6TargetRelaunchService {
       if (attemptResult.success() != null) {
         return attemptResult.success();
       }
+      // An unsuccessful attempt can still own a live process tree: waitForTargetReady returns
+      // instead of throwing on a fatal executor startup rejection, where the client process stays
+      // alive but will never bind the executor port. Terminate the owned tree before retrying or
+      // throwing so a rejected RuneLite instance cannot outlive the failed attempt.
+      terminateOwnedProcessTree(process);
       LaunchFailure failure = attemptResult.failure();
-      if (attemptNumber < MAX_LAUNCH_ATTEMPTS && failure != null && failure.retryable()) {
+      if (capture == null && attemptNumber < MAX_LAUNCH_ATTEMPTS && failure != null && failure.retryable()) {
         logger.warn(
             "Retrying local Micro6 Builder Goal launch for account {} after retryable failure {}: {}",
             accountName,
@@ -687,6 +817,53 @@ public class Micro6TargetRelaunchService {
     String lastReadinessReason = null;
     String lastReadinessPhase = PHASE_LAUNCHING_PROCESS;
     while (Instant.now().isBefore(deadline)) {
+      // A terminal startup refusal is checked before the health probe: the executor publishes these
+      // markers only on paths that end startup, so waiting cannot make one resolve. Returning now
+      // keeps the launch failure prompt and stops the owned process tree rather than leaving
+      // RuneLite open with nothing listening on the executor port.
+      LaunchFailure fatalStartupFailure =
+          detectFatalExecutorStartupFailure(logFile, attemptStartOffset);
+      if (fatalStartupFailure != null) {
+        emitProgress(
+            progressListener,
+            new HealthCheckResult(
+                Optional.empty(),
+                PHASE_EXECUTOR_STARTUP_REJECTED,
+                fatalStartupFailure.detail(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null),
+            false,
+            localExecutorBaseUrl,
+            gradleRunTask,
+            maskedLaunchArgs,
+            logFile,
+            fatalStartupFailure.kind(),
+            fatalStartupFailure.detail(),
+            attemptId);
+        return new RelaunchAttemptResult(
+            null, fatalStartupFailure, lastReadinessPhase, lastReadinessReason, attemptId);
+      }
       HealthCheckResult healthCheck =
           readHealthyExecutorTarget(
               localExecutorBaseUrl,
@@ -736,9 +913,14 @@ public class Micro6TargetRelaunchService {
       if (!process.isAlive()) {
         boolean markerSeen = hasSeenLaunchingProcessMarker(logFile, attemptStartOffset);
         LaunchFailure failure = analyzeLaunchFailure(logFile, attemptStartOffset);
-        // If the client Java process launched (marker seen) and then exited, the failure is a
-        // process exit, never a Gradle/build failure from this attempt's log bytes.
-        if (markerSeen) {
+        // A published startup refusal outranks the generic process-exit classification: the exit is
+        // a consequence of the refusal, and the refusal is the actionable cause. It is re-checked
+        // here because the refusal can be written after this iteration's earlier log read.
+        LaunchFailure startupRejection =
+            detectFatalExecutorStartupFailure(logFile, attemptStartOffset);
+        if (startupRejection != null) {
+          failure = startupRejection;
+        } else if (markerSeen) {
           failure =
               new LaunchFailure(
                   FAILURE_KIND_PROCESS_EXITED,
@@ -1305,12 +1487,19 @@ public class Micro6TargetRelaunchService {
       if (probe.state() == PortProbeState.FREE) {
         return;
       }
+      logger.warn(
+          "Blocking Micro6 executor replacement: port {} ownership is unverifiable (owner={}, probe={})",
+          targetPort,
+          probe.pid() != null ? probe.pid() : "unknown",
+          probe.detail());
       throw replacementBlocked(
           launchLog,
           "Unable to verify that the Micro6 executor port "
               + targetPort
               + " is owned by a Builder Goal process; replacement is blocked (owner="
               + (probe.pid() != null ? probe.pid() : "unknown")
+              + ", probe="
+              + probe.detail()
               + ")");
     }
 
@@ -1329,12 +1518,20 @@ public class Micro6TargetRelaunchService {
     }
     if (ownership != PortOwnershipState.VERIFIED_OWNER) {
       PortProbe probe = probeListeningPort(targetPort);
+      logger.warn(
+          "Blocking Micro6 executor termination: port {} ownership is unverifiable before termination"
+              + " (owner={}, probe={})",
+          targetPort,
+          probe.pid() != null ? probe.pid() : "unknown",
+          probe.detail());
       throw replacementBlocked(
           launchLog,
           "Unable to verify that the Micro6 executor port "
               + targetPort
               + " is owned by a Builder Goal process before termination; replacement is blocked (owner="
               + (probe.pid() != null ? probe.pid() : "unknown")
+              + ", probe="
+              + probe.detail()
               + ")");
     }
 
@@ -1687,25 +1884,26 @@ public class Micro6TargetRelaunchService {
 
   /**
    * Non-destructively validates the Micro6 launch configuration by invoking the production
-   * launcher's {@code -ValidateOnly} mode, which runs {@code gradlew.bat --no-daemon --no-watch-fs
-   * help --task :client:runBuilderGoal}. It never launches the Micro6 Java client or stops existing
-   * processes; Gradle may configure or build supporting included-build tasks needed to discover the
-   * canonical task. A bounded, configurable timeout prevents a wedged invocation from hanging the
-   * preparation. Any failure throws {@code LAUNCH_CONFIGURATION_INVALID} (or {@code
-   * GRADLE_TIMEOUT}) before existing Micro6 processes are stopped.
+   * launcher's validate-only mode ({@code -ValidateOnly} on Windows, {@code --validate-only} via
+   * {@code launch-buildergoal-client.sh} on Linux), which resolves the canonical {@code
+   * :client:runBuilderGoal} task without launching the client. It never launches the Micro6 Java
+   * client or stops existing processes. A bounded, configurable timeout prevents a wedged
+   * invocation from hanging the preparation. Any failure throws {@code
+   * LAUNCH_CONFIGURATION_INVALID} (or {@code GRADLE_TIMEOUT}) before existing Micro6 processes are
+   * stopped.
    */
   protected void validateLaunchConfiguration(
       Path projectDir, Path logFile, BuilderGoalLaunchCancellation cancellation) throws Exception {
-    // Validate-only is a Windows production-launcher capability. Non-Windows Gradle launches have
-    // no PowerShell adapter; a broken configuration fails fast as a Gradle task failure instead.
-    if (!useStructuredWindowsLaunch()) {
+    // Validate-only is a structured-launcher capability (Windows PowerShell adapter or Linux
+    // contract-v2 shell adapter). Custom-template launches have no adapter; a broken
+    // configuration fails fast as a launch failure instead.
+    if (!isStructuredLaunch()) {
       return;
     }
     if (cancellation != null) {
       cancellation.throwIfCancelled();
     }
-    Path launcherScript =
-        projectDir.resolve("launch-buildergoal-client.ps1").toAbsolutePath().normalize();
+    Path launcherScript = resolveStructuredLauncherScript(projectDir);
     if (!Files.isRegularFile(launcherScript)) {
       throw new RelaunchException(
           PHASE_BUILD_FAILED,
@@ -1719,15 +1917,7 @@ public class Micro6TargetRelaunchService {
           PHASE_PREPARING_BUILD,
           null);
     }
-    List<String> command =
-        List.of(
-            "powershell.exe",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            launcherScript.toString(),
-            "-ValidateOnly");
+    List<String> command = buildValidateOnlyCommand(launcherScript);
     Process process = null;
     try {
       process =
@@ -1793,36 +1983,34 @@ public class Micro6TargetRelaunchService {
   }
 
   /**
-   * Verifies the production launcher contract by invoking the launcher's {@code -ContractVersion}
-   * mode. ChromaScape requires contract version 2 (which guarantees {@code -ValidateOnly}, {@code
-   * -CompileOnly}, and the canonical run/prepare Gradle tasks). An incompatible launcher fails
-   * before any preflight or process cleanup.
+   * Verifies the production launcher contract by invoking the launcher's contract-version mode
+   * ({@code -ContractVersion} on Windows, {@code --contract-version} via {@code
+   * launch-buildergoal-client.sh} on Linux). ChromaScape requires contract version 2 (which
+   * guarantees validate-only, compile-only, and the canonical run/prepare Gradle tasks). An
+   * incompatible launcher fails before any preflight or process cleanup.
    */
   protected void verifyLauncherContract(
       Path projectDir, Path logFile, BuilderGoalLaunchCancellation cancellation) throws Exception {
-    if (!useStructuredWindowsLaunch()) {
+    verifyLauncherContract(projectDir, logFile, cancellation, false);
+  }
+
+  private void verifyLauncherContract(
+      Path projectDir, Path logFile, BuilderGoalLaunchCancellation cancellation, boolean capture)
+      throws Exception {
+    if (!isStructuredLaunch()) {
       return;
     }
     if (cancellation != null) {
       cancellation.throwIfCancelled();
     }
-    Path launcherScript =
-        projectDir.resolve("launch-buildergoal-client.ps1").toAbsolutePath().normalize();
+    Path launcherScript = resolveStructuredLauncherScript(projectDir);
     if (!Files.isRegularFile(launcherScript)) {
       throw launcherContractException(
           logFile,
           "Builder Goal launcher script does not exist: " + launcherScript,
           "Builder Goal launcher script does not exist: " + launcherScript);
     }
-    List<String> command =
-        List.of(
-            "powershell.exe",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            launcherScript.toString(),
-            "-ContractVersion");
+    List<String> command = buildContractVersionCommand(launcherScript);
     Process process = null;
     try {
       ProcessBuilder builder =
@@ -1862,14 +2050,26 @@ public class Micro6TargetRelaunchService {
       } catch (Exception ignored) {
         // Classified as incompatible below.
       }
+      // Contract version 3 adds the authoritative launch task and the explicit MICRO6_SOURCE_MODE
+      // requirement. It is contract-significant: an older launcher defaults the mode from ambient
+      // environment state instead of adopting the value ChromaScape declares, so it must be
+      // rejected rather than tolerated.
       if (contract == null
           || !contract.isObject()
-          || contract.path("contract_version").asInt(-1) != 2) {
+          || contract.path("contract_version").asInt(-1) != LAUNCHER_CONTRACT_VERSION) {
         throw launcherContractException(
             logFile,
-            "Builder Goal launcher contract is incompatible (expected contract_version 2). Check "
+            "Builder Goal launcher contract is incompatible (expected contract_version "
+                + LAUNCHER_CONTRACT_VERSION
+                + "). Check "
                 + launcherScript,
-            "Builder Goal launcher contract is incompatible (expected contract_version 2)");
+            "Builder Goal launcher contract is incompatible (expected contract_version "
+                + LAUNCHER_CONTRACT_VERSION
+                + ")");
+      }
+      if (capture && contract.path("packet_capture_version").asInt() != 1) {
+        throw launcherContractException(logFile, "Update Micro6: launcher does not support Packet Capture",
+            "Missing packet_capture_version=1");
       }
       if (!contract.path("validate_only").asBoolean(false)
           || !contract.path("compile_only").asBoolean(false)) {
@@ -1878,6 +2078,34 @@ public class Micro6TargetRelaunchService {
             "Builder Goal launcher contract is missing preflight capabilities. Check "
                 + launcherScript,
             "Builder Goal launcher contract is missing preflight capabilities");
+      }
+      // The launcher must declare that it adopts the explicitly supplied source mode. A launcher
+      // that ignores MICRO6_SOURCE_MODE would reintroduce mode inference from ambient values, and a
+      // launcher that advertises only some of the modes cannot honor every mode ChromaScape
+      // selects.
+      List<?> declaredSourceModes =
+          contract.path("source_modes").isArray()
+              ? objectMapper.convertValue(contract.path("source_modes"), List.class)
+              : List.of();
+      if (!SOURCE_MODE_ENVIRONMENT_KEY.equals(contract.path("source_mode_env").asText(null))
+          || !declaredSourceModes.contains(SOURCE_MODE_DISABLED)
+          || !declaredSourceModes.contains(SOURCE_MODE_AUTHORITATIVE)) {
+        throw launcherContractException(
+            logFile,
+            "Builder Goal launcher contract does not support the explicit source mode. Check "
+                + launcherScript,
+            "Builder Goal launcher contract does not support the explicit source mode");
+      }
+      // Contract version 3 also promises the dedicated authoritative launch task. A launcher that
+      // does not advertise it cannot run authoritative preparation, so it is an incomplete v3
+      // contract and must be rejected even though its version number is current.
+      if (!AUTHORITATIVE_GRADLE_RUN_TASK.equals(
+          contract.path("authoritative_run_task").asText(null))) {
+        throw launcherContractException(
+            logFile,
+            "Builder Goal launcher contract does not advertise the authoritative Gradle task. Check "
+                + launcherScript,
+            "Builder Goal launcher contract does not advertise the authoritative Gradle task");
       }
       // The launcher must advertise exactly the canonical Gradle tasks ChromaScape will invoke;
       // a launcher that runs a different run/prepare task is incompatible even when the version
@@ -1906,7 +2134,7 @@ public class Micro6TargetRelaunchService {
   }
 
   /**
-   * Compiles Micro6 production classes via the launcher's {@code -CompileOnly} mode ({@code
+   * Compiles Micro6 production classes via the launcher's compile-only mode (which runs {@code
    * :client:prepareBuilderGoal}). This runs only after the launcher contract and configuration
    * validate successfully and always before any existing Micro6 process is stopped, so a compile
    * failure never kills a running client. A bounded, configurable timeout prevents a wedged
@@ -1914,14 +2142,13 @@ public class Micro6TargetRelaunchService {
    */
   protected void compileMicro6ProductionClasses(
       Path projectDir, Path logFile, BuilderGoalLaunchCancellation cancellation) throws Exception {
-    if (!useStructuredWindowsLaunch()) {
+    if (!isStructuredLaunch()) {
       return;
     }
     if (cancellation != null) {
       cancellation.throwIfCancelled();
     }
-    Path launcherScript =
-        projectDir.resolve("launch-buildergoal-client.ps1").toAbsolutePath().normalize();
+    Path launcherScript = resolveStructuredLauncherScript(projectDir);
     if (!Files.isRegularFile(launcherScript)) {
       throw new RelaunchException(
           PHASE_BUILD_FAILED,
@@ -2005,11 +2232,16 @@ public class Micro6TargetRelaunchService {
   }
 
   /**
-   * Builds the PowerShell invocation for the launcher's compile-only preflight mode. Compile-only
-   * never passes a payload or client arguments: the launcher runs {@code
-   * :client:prepareBuilderGoal} directly.
+   * Builds the launcher invocation for the compile-only preflight mode. Compile-only never passes a
+   * payload or client arguments: the launcher runs {@code :client:prepareBuilderGoal} directly.
+   * Windows uses the PowerShell adapter ({@code -CompileOnly}); Linux uses the contract-v2 shell
+   * adapter ({@code --compile-only}), invoked via {@code bash} so the script needs no execute bit.
    */
   protected List<String> buildCompileOnlyCommand(Path launcherScript) {
+    if (!isWindows()) {
+      return List.of(
+          "bash", launcherScript.toAbsolutePath().normalize().toString(), "--compile-only");
+    }
     return List.of(
         "powershell.exe",
         "-NoProfile",
@@ -2049,6 +2281,8 @@ public class Micro6TargetRelaunchService {
     switch (launchMode) {
       case STRUCTURED_WINDOWS:
         return buildStructuredWindowsLaunchCommand(clientArgs, projectDir);
+      case STRUCTURED_LINUX:
+        return buildStructuredLinuxLaunchCommand(clientArgs, projectDir);
       case CUSTOM_COMMAND_TEMPLATE:
         String expanded =
             expandLaunchCommandTemplate(
@@ -2070,18 +2304,46 @@ public class Micro6TargetRelaunchService {
         String commandLine =
             "call gradlew.bat \"" + gradleRunTask + "\" \"--args=" + escapedRunArgs + "\"";
         return List.of("cmd.exe", "/c", commandLine);
-      case NON_WINDOWS_GRADLE:
-        return List.of(
-            "bash",
-            "-lc",
-            "./gradlew " + gradleRunTask + " '--args=" + escapeSingleQuotes(runArgs) + "'");
       default:
         throw new IllegalStateException("Unsupported Micro6 launch mode: " + launchMode);
     }
   }
 
+  /**
+   * Builds the Linux structured launch command via the contract-v2 shell adapter ({@code
+   * launch-buildergoal-client.sh --payload-file}). Client arguments travel in a credential-bearing
+   * JSON payload file (never on the command line); the adapter writes the args file, exports {@code
+   * MICRO6_CLIENT_ARGS_FILE}, and runs {@code :client:runBuilderGoal}. Invoked via {@code bash} so
+   * the adapter needs no execute bit.
+   */
+  private List<String> buildStructuredLinuxLaunchCommand(List<String> clientArgs, Path projectDir)
+      throws IOException {
+    Path launcherScript =
+        projectDir.resolve("launch-buildergoal-client.sh").toAbsolutePath().normalize();
+    if (!Files.isRegularFile(launcherScript)) {
+      throw new IllegalStateException(
+          "Builder Goal launcher script does not exist: " + launcherScript);
+    }
+    Path payloadFile = Files.createTempFile("buildergoal-launch-", ".json");
+    try {
+      Map<String, Object> payload = new LinkedHashMap<>();
+      payload.put("clientArgs", clientArgs);
+      objectMapper.writeValue(payloadFile.toFile(), payload);
+      restrictPayloadFile(payloadFile);
+      return List.of("bash", launcherScript.toString(), "--payload-file", payloadFile.toString());
+    } catch (IOException | RuntimeException e) {
+      Files.deleteIfExists(payloadFile);
+      throw e;
+    }
+  }
+
   private List<String> buildStructuredWindowsLaunchCommand(List<String> clientArgs, Path projectDir)
       throws IOException {
+    return buildStructuredWindowsLaunchCommand(clientArgs, projectDir, null);
+  }
+
+  private List<String> buildStructuredWindowsLaunchCommand(List<String> clientArgs, Path projectDir,
+      Map<String, Object> capture) throws IOException {
     Path launcherScript =
         projectDir.resolve("launch-buildergoal-client.ps1").toAbsolutePath().normalize();
     if (!Files.isRegularFile(launcherScript)) {
@@ -2092,6 +2354,7 @@ public class Micro6TargetRelaunchService {
     try {
       Map<String, Object> payload = new LinkedHashMap<>();
       payload.put("clientArgs", clientArgs);
+      if (capture != null) payload.put("packetCapture", capture);
       objectMapper.writeValue(payloadFile.toFile(), payload);
       restrictPayloadFile(payloadFile);
       return List.of(
@@ -2110,17 +2373,24 @@ public class Micro6TargetRelaunchService {
   }
 
   /**
-   * Restricts a credential-bearing payload to its owning user where the filesystem supports ACLs.
+   * Restricts a credential-bearing payload to its owning user.
    *
-   * <p>The payload is created by ChromaScape and later read by the launcher PowerShell process that
-   * runs under the same account. Restricting the file is required because the payload carries
-   * client credentials; but the DACL must actually let the current user read it. Java NIO's {@code
-   * AclFileAttributeView.setAcl} writes an ACL that Windows denies even to the owning user when the
-   * JVM is elevated (owner resolves to the Administrators group and the launcher token is UAC
-   * filtered), so the restriction is applied via {@code icacls} granting the explicit current-user
-   * principal, which has been verified readable by a separate PowerShell process.
+   * <p>On Windows the payload is created by ChromaScape and later read by the launcher PowerShell
+   * process that runs under the same account. Restricting the file is required because the payload
+   * carries client credentials; but the DACL must actually let the current user read it. Java NIO's
+   * {@code AclFileAttributeView.setAcl} writes an ACL that Windows denies even to the owning user
+   * when the JVM is elevated (owner resolves to the Administrators group and the launcher token is
+   * UAC filtered), so the restriction is applied via {@code icacls} granting the explicit
+   * current-user principal, which has been verified readable by a separate PowerShell process.
+   *
+   * <p>On Linux the payload is read by {@code launch-buildergoal-client.sh}; the file is restricted
+   * to owner read/write via POSIX permissions.
    */
   private void restrictPayloadFile(Path payloadFile) throws IOException {
+    if (!isWindows()) {
+      restrictPayloadFilePosix(payloadFile);
+      return;
+    }
     String user = currentUserPrincipal();
     if (user == null || user.isBlank()) {
       logger.warn("Could not resolve current user; leaving Builder Goal payload unrestricted");
@@ -2138,7 +2408,8 @@ public class Micro6TargetRelaunchService {
     try {
       process = pb.start();
     } catch (IOException e) {
-      logger.warn("icacls failed to start for Builder Goal payload {}: {}", payloadFile, e.getMessage());
+      logger.warn(
+          "icacls failed to start for Builder Goal payload {}: {}", payloadFile, e.getMessage());
       return;
     }
     try (java.io.InputStream in = process.getInputStream()) {
@@ -2147,10 +2418,29 @@ public class Micro6TargetRelaunchService {
     try {
       int exitCode = process.waitFor();
       if (exitCode != 0) {
-        logger.warn("icacls returned {} while restricting Builder Goal payload {}", exitCode, payloadFile);
+        logger.warn(
+            "icacls returned {} while restricting Builder Goal payload {}", exitCode, payloadFile);
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
+    }
+  }
+
+  /**
+   * Restricts the credential-bearing payload to owner read/write on POSIX filesystems. Failures
+   * only warn: the launcher still deletes the payload after parsing, and a hard failure here must
+   * never block a launch.
+   */
+  private void restrictPayloadFilePosix(Path payloadFile) {
+    try {
+      Set<PosixFilePermission> permissions = PosixFilePermissions.fromString("rw-------");
+      Files.setPosixFilePermissions(payloadFile, permissions);
+    } catch (UnsupportedOperationException e) {
+      logger.warn(
+          "POSIX permissions unsupported for Builder Goal payload {}; leaving default permissions",
+          payloadFile);
+    } catch (IOException e) {
+      logger.warn("Failed to restrict Builder Goal payload {}: {}", payloadFile, e.getMessage());
     }
   }
 
@@ -2177,7 +2467,9 @@ public class Micro6TargetRelaunchService {
       return;
     }
     for (int index = 0; index + 1 < command.size(); index++) {
-      if (!"-PayloadFile".equalsIgnoreCase(command.get(index))) {
+      String token = command.get(index);
+      // Windows structured launch uses -PayloadFile; Linux uses --payload-file.
+      if (!"-PayloadFile".equalsIgnoreCase(token) && !"--payload-file".equals(token)) {
         continue;
       }
       Path payload = Paths.get(command.get(index + 1));
@@ -2221,6 +2513,13 @@ public class Micro6TargetRelaunchService {
       return;
     }
     environment.put("MICRO6_LOCAL_EXECUTOR_ENABLED", "true");
+    // ChromaScape owns this value as part of the trusted launch environment. The ordinary local
+    // Builder Goal launch serves no authoritative source, and declaring that explicitly is what
+    // keeps the executor's fail-closed source startup contract from being selected by whatever
+    // MICRO6_SOURCE_* values the developer's .env happens to define. Without this the executor
+    // refuses startup, never binds its port, and the launcher waits out the full readiness timeout
+    // while RuneLite sits open. This is deliberately not a browser-controlled payload field.
+    environment.put("MICRO6_SOURCE_MODE", "disabled");
     if (targetPort != null && targetPort > 0) {
       environment.put("MICRO6_EXECUTOR_BIND_ADDR", "127.0.0.1:" + targetPort);
     }
@@ -2243,6 +2542,9 @@ public class Micro6TargetRelaunchService {
       String launchAttemptId) {
     List<String> clientArgs = new ArrayList<>();
     clientArgs.add("--clean-jagex-launcher");
+    // Builder Goal automation does not need GPU rendering. Keeping it off avoids native OpenGL
+    // driver crashes while leaving Account Builder enabled (unlike RuneLite's broad --safe-mode).
+    clientArgs.add("--disable-gpu");
     clientArgs.add("--auto-enable-accountbuilder");
     clientArgs.add("--profile=" + accountName.trim());
     clientArgs.add("--expected-account-hash=" + accountHash.trim().toLowerCase(Locale.ENGLISH));
@@ -2820,6 +3122,12 @@ public class Micro6TargetRelaunchService {
    * Resolves the launch mode used for both validation and command construction so the two cannot
    * disagree.
    *
+   * <p>Windows prefers the structured PowerShell adapter; Linux uses the structured contract-v2
+   * shell adapter ({@code launch-buildergoal-client.sh}), which supplies {@code
+   * MICRO6_CLIENT_ARGS_FILE} required by {@code :client:runBuilderGoal}. A configured custom
+   * command template wins on Linux (and is ignored on Windows, where the structured adapter is
+   * authoritative).
+   *
    * @return the launch mode used for validation and process construction
    */
   private LaunchMode resolveLaunchMode() {
@@ -2829,20 +3137,23 @@ public class Micro6TargetRelaunchService {
     if (launchCommandTemplate != null) {
       return LaunchMode.CUSTOM_COMMAND_TEMPLATE;
     }
-    return isWindows() ? LaunchMode.WINDOWS_GRADLE : LaunchMode.NON_WINDOWS_GRADLE;
+    if (isWindows()) {
+      return LaunchMode.WINDOWS_GRADLE;
+    }
+    return LaunchMode.STRUCTURED_LINUX;
   }
 
   /**
    * Resolves the effective Gradle task reported by progress responses, run summaries, and launch
-   * operation metadata from the resolved launch mode. The structured Windows launch always reports
-   * the canonical run task — a configured legacy custom launch template is ignored on Windows and
-   * must never relabel the metadata as {@code custom_launch_command}. The template label applies
-   * only when the template mode is actually selected (non-Windows); direct Gradle launches report
-   * the configured canonical task.
+   * operation metadata from the resolved launch mode. The structured launches always report the
+   * canonical run task — a configured legacy custom launch template is ignored on Windows and must
+   * never relabel the metadata as {@code custom_launch_command}. The template label applies only
+   * when the template mode is actually selected; direct Gradle launches report the configured
+   * canonical task.
    */
   private String resolveEffectiveGradleTask(String configuredGradleRunTask) {
     LaunchMode launchMode = resolveLaunchMode();
-    if (launchMode == LaunchMode.STRUCTURED_WINDOWS) {
+    if (launchMode == LaunchMode.STRUCTURED_WINDOWS || launchMode == LaunchMode.STRUCTURED_LINUX) {
       return DEFAULT_GRADLE_RUN_TASK;
     }
     if (launchMode == LaunchMode.CUSTOM_COMMAND_TEMPLATE) {
@@ -2859,10 +3170,13 @@ public class Micro6TargetRelaunchService {
     if (launchMode == LaunchMode.STRUCTURED_WINDOWS) {
       return "launch-buildergoal-client.ps1";
     }
+    if (launchMode == LaunchMode.STRUCTURED_LINUX) {
+      return "launch-buildergoal-client.sh";
+    }
     if (launchMode == LaunchMode.CUSTOM_COMMAND_TEMPLATE) {
       return null;
     }
-    return launchMode == LaunchMode.WINDOWS_GRADLE ? "gradlew.bat" : "gradlew";
+    return "gradlew.bat";
   }
 
   protected Long resolveListeningPid(Integer port) {
@@ -2877,11 +3191,42 @@ public class Micro6TargetRelaunchService {
     if (port == null || port <= 0) {
       return new PortProbe(PortProbeState.FREE, null, "no port configured");
     }
+    PortProbe primary = runListenerProbe(port);
+    if (primary.state() != PortProbeState.UNKNOWN || !isWindows()) {
+      return primary;
+    }
+    // The PowerShell probe is CIM/WMI-backed and can stall or fail under load. A transient
+    // indeterminate result must not be treated as "port occupied by an unverifiable process",
+    // because that blocks replacement of an executor that is already gone. Fall back to the
+    // native, locale-independent netstat probe (retried once) before failing closed.
+    PortProbe fallback = runWindowsNetstatProbe(port);
+    if (fallback.state() == PortProbeState.UNKNOWN) {
+      sleepQuietly(PORT_PROBE_FALLBACK_RETRY_DELAY_MS);
+      fallback = runWindowsNetstatProbe(port);
+    }
+    if (fallback.state() != PortProbeState.UNKNOWN) {
+      logger.warn(
+          "PowerShell listener probe for port {} was indeterminate ({}); netstat reported {} ({})",
+          port,
+          primary.detail(),
+          fallback.state(),
+          fallback.detail());
+      return fallback;
+    }
+    logger.warn(
+        "Listener probe for port {} is indeterminate (powershell={}, netstat={})",
+        port,
+        primary.detail(),
+        fallback.detail());
+    return primary;
+  }
+
+  private PortProbe runListenerProbe(Integer port) {
     try {
       List<String> command =
           isWindows() ? buildWindowsPortProbeCommand(port) : buildUnixPortProbeCommand(port);
       Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-      boolean finished = boundedWaitFor(process, 5_000L);
+      boolean finished = boundedWaitFor(process, PORT_PROBE_TIMEOUT_MS);
       if (!finished) {
         return new PortProbe(PortProbeState.UNKNOWN, null, "listener probe timed out");
       }
@@ -2896,6 +3241,82 @@ public class Micro6TargetRelaunchService {
           PortProbeState.UNKNOWN,
           null,
           "listener probe failed: " + firstNonBlank(e.getMessage(), "unknown error"));
+    }
+  }
+
+  /**
+   * Windows-only fallback used when the PowerShell listener probe is indeterminate. It parses
+   * {@code netstat -ano -p tcp} structurally — a LISTENING socket has the target port in its local
+   * endpoint and the all-zero wildcard as its foreign endpoint — instead of matching the localized
+   * state column, so it is stable across Windows display languages.
+   */
+  protected PortProbe runWindowsNetstatProbe(Integer port) {
+    try {
+      Process process =
+          new ProcessBuilder("netstat", "-ano", "-p", "tcp").redirectErrorStream(true).start();
+      boolean finished = boundedWaitFor(process, PORT_PROBE_TIMEOUT_MS);
+      if (!finished) {
+        return new PortProbe(PortProbeState.UNKNOWN, null, "netstat listener probe timed out");
+      }
+      String output = new String(process.getInputStream().readAllBytes());
+      int exitCode = process.exitValue();
+      return parseWindowsNetstatProbeOutput(output, exitCode, port);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      return new PortProbe(PortProbeState.UNKNOWN, null, "netstat listener probe interrupted");
+    } catch (Exception e) {
+      return new PortProbe(
+          PortProbeState.UNKNOWN,
+          null,
+          "netstat listener probe failed: " + firstNonBlank(e.getMessage(), "unknown error"));
+    }
+  }
+
+  protected PortProbe parseWindowsNetstatProbeOutput(String output, int exitCode, Integer port) {
+    if (exitCode != 0) {
+      return new PortProbe(PortProbeState.UNKNOWN, null, "netstat probe exited with " + exitCode);
+    }
+    if (output == null || output.isBlank()) {
+      return new PortProbe(PortProbeState.UNKNOWN, null, "netstat probe returned no result");
+    }
+    String suffix = ":" + port;
+    for (String rawLine : output.split("\\R")) {
+      String line = rawLine == null ? "" : rawLine.trim();
+      if (line.isEmpty()) {
+        continue;
+      }
+      String[] parts = line.split("\\s+");
+      if (parts.length < 5) {
+        continue;
+      }
+      if (!parts[1].endsWith(suffix) || !isWildcardForeignEndpoint(parts[2])) {
+        continue;
+      }
+      String pidText = parts[parts.length - 1];
+      if (pidText.isEmpty() || !pidText.matches("[0-9]+")) {
+        continue;
+      }
+      try {
+        long pid = Long.parseLong(pidText);
+        if (pid > 0L) {
+          return new PortProbe(PortProbeState.OCCUPIED, pid, "netstat listener present");
+        }
+      } catch (NumberFormatException ignored) {
+        // Keep scanning the remaining lines.
+      }
+    }
+    return new PortProbe(PortProbeState.FREE, null, "no listener (netstat)");
+  }
+
+  private boolean isWildcardForeignEndpoint(String foreign) {
+    return "0.0.0.0:0".equals(foreign) || "[::]:0".equals(foreign) || "*:*".equals(foreign);
+  }
+
+  private void sleepQuietly(long millis) {
+    try {
+      Thread.sleep(millis);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
     }
   }
 
@@ -3184,8 +3605,84 @@ public class Micro6TargetRelaunchService {
     return isWindows();
   }
 
+  /**
+   * Linux uses the contract-v2 shell adapter ({@code launch-buildergoal-client.sh}) instead of a
+   * direct Gradle invocation, because {@code :client:runBuilderGoal} requires {@code
+   * MICRO6_CLIENT_ARGS_FILE} which only the adapter supplies. Overridable in tests so launch-mode
+   * resolution stays deterministic.
+   */
+  protected boolean useStructuredLinuxLaunch() {
+    return !isWindows();
+  }
+
+  /** True when either structured launcher adapter (Windows or Linux) is active. */
+  protected boolean isStructuredLaunch() {
+    return useStructuredWindowsLaunch() || useStructuredLinuxLaunch();
+  }
+
+  /** Resolves the structured adapter script for the current platform. */
+  protected Path resolveStructuredLauncherScript(Path projectDir) {
+    String scriptName =
+        isWindows() ? "launch-buildergoal-client.ps1" : "launch-buildergoal-client.sh";
+    return projectDir.resolve(scriptName).toAbsolutePath().normalize();
+  }
+
+  /** Builds the adapter invocation for the validate-only preflight mode. */
+  protected List<String> buildValidateOnlyCommand(Path launcherScript) {
+    if (!isWindows()) {
+      return List.of(
+          "bash", launcherScript.toAbsolutePath().normalize().toString(), "--validate-only");
+    }
+    return List.of(
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        launcherScript.toString(),
+        "-ValidateOnly");
+  }
+
+  /** Builds the adapter invocation for the contract-version check. */
+  protected List<String> buildContractVersionCommand(Path launcherScript) {
+    if (!isWindows()) {
+      return List.of(
+          "bash", launcherScript.toAbsolutePath().normalize().toString(), "--contract-version");
+    }
+    return List.of(
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        launcherScript.toString(),
+        "-ContractVersion");
+  }
+
   private String normalizeOptionalString(String value) {
     return value == null || value.isBlank() ? null : value.trim();
+  }
+
+  /**
+   * Classifies a terminal executor startup refusal from this attempt's own log bytes. Returns null
+   * when the attempt has published no fatal marker, so ordinary readiness polling is unaffected.
+   *
+   * <p>The detail is built only from a fixed marker list and the log path. Raw log content is never
+   * forwarded, so a sanitized reason can be surfaced to the launch-operation response.
+   */
+  private LaunchFailure detectFatalExecutorStartupFailure(Path logFile, long attemptStartOffset) {
+    String marker = detectFatalExecutorStartupMarker(readLogTail(logFile, 240, attemptStartOffset));
+    if (marker == null) {
+      return null;
+    }
+    return new LaunchFailure(
+        FAILURE_KIND_EXECUTOR_STARTUP_REJECTED,
+        "Micro6 local executor refused startup: "
+            + marker
+            + ". It will not listen on the executor port for this attempt, so the launch was stopped "
+            + "instead of waiting for readiness. Check "
+            + logFile.toAbsolutePath(),
+        false);
   }
 
   private LaunchFailure analyzeLaunchFailure(Path logFile, long attemptStartOffset) {
@@ -3210,11 +3707,14 @@ public class Micro6TargetRelaunchService {
     }
     String extractedFailureDetail = extractLaunchFailureDetail(lines);
     if (extractedFailureDetail != null) {
+      boolean launchedJvmProcessFailure = isLaunchedJvmProcessFailure(combined);
       return new LaunchFailure(
-          combined.contains("BUILD FAILED")
+          combined.contains("BUILD FAILED") && !launchedJvmProcessFailure
               ? FAILURE_KIND_GRADLE_TASK_FAILED
               : FAILURE_KIND_PROCESS_EXITED,
-          extractedFailureDetail,
+          launchedJvmProcessFailure
+              ? addNativeWindowsExitHint(extractedFailureDetail)
+              : extractedFailureDetail,
           false);
     }
     if (combined.contains("BUILD FAILED")) {
@@ -3229,6 +3729,29 @@ public class Micro6TargetRelaunchService {
         "Micro6 relaunch process exited before the local executor became ready. Check "
             + logFile.toAbsolutePath(),
         false);
+  }
+
+  /**
+   * Distinguishes a Gradle build/configuration failure from the JavaExec child process crashing.
+   * Gradle prints {@code BUILD FAILED} for both cases, but once {@code runBuilderGoal} launched
+   * RuneLite, a nonzero Java process exit is a runtime failure and must not be presented to the
+   * operator as "the client could not launch".
+   */
+  private boolean isLaunchedJvmProcessFailure(String output) {
+    if (output == null || output.isBlank()) {
+      return false;
+    }
+    return output.contains("Execution failed for task ':client:runBuilderGoal'.")
+        && output.contains("Process 'command '")
+        && output.contains("java")
+        && output.contains("finished with non-zero exit value");
+  }
+
+  private String addNativeWindowsExitHint(String detail) {
+    if (detail.contains("-1073741819") && !detail.contains("0xC0000005")) {
+      return detail + "\nNative Windows exit code: 0xC0000005 (EXCEPTION_ACCESS_VIOLATION).";
+    }
+    return detail;
   }
 
   private String extractLaunchFailureDetail(List<String> lines) {
@@ -3491,13 +4014,21 @@ public class Micro6TargetRelaunchService {
                 "Micro6 relaunch process exited before the local executor became ready. Check "
                     + logFile.toAbsolutePath(),
                 false);
-    // Use BUILD_FAILED phase for Gradle/build failures, PROCESS_EXITED otherwise.
+    // Use BUILD_FAILED phase for Gradle/build failures, the dedicated startup-refusal phase for a
+    // terminal executor refusal, and PROCESS_EXITED otherwise.
     boolean buildRelated =
         FAILURE_KIND_GRADLE_TASK_FAILED.equals(resolvedFailure.kind())
             || FAILURE_KIND_BUILD_OUTPUT_LOCK.equals(resolvedFailure.kind())
             || FAILURE_KIND_LAUNCH_CONFIGURATION_INVALID.equals(resolvedFailure.kind())
             || FAILURE_KIND_GRADLE_TIMEOUT.equals(resolvedFailure.kind());
-    String phase = buildRelated ? PHASE_BUILD_FAILED : PHASE_PROCESS_EXITED;
+    String phase;
+    if (buildRelated) {
+      phase = PHASE_BUILD_FAILED;
+    } else if (FAILURE_KIND_EXECUTOR_STARTUP_REJECTED.equals(resolvedFailure.kind())) {
+      phase = PHASE_EXECUTOR_STARTUP_REJECTED;
+    } else {
+      phase = PHASE_PROCESS_EXITED;
+    }
     if (buildRelated) {
       emitBuildFailedProgress(
           progressListener,

@@ -43,7 +43,9 @@ public class ProcessManagerFactory {
     this(ProcFs.production(), micro6ProjectRoot, localMachineUuid);
   }
 
-  /** Non-Spring convenience constructor: production procfs, no project-root matching, no host id. */
+  /**
+   * Non-Spring convenience constructor: production procfs, no project-root matching, no host id.
+   */
   public ProcessManagerFactory() {
     this(ProcFs.production(), "", "");
   }

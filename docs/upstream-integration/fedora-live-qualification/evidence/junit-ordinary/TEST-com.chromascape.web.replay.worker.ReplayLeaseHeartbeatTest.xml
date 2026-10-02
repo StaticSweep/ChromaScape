@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.worker.ReplayLeaseHeartbeatTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:44.339Z" hostname="fedora" time="2.114">
+  <properties/>
+  <testcase name="persistentDatabaseFailuresPoisonHandleOnceLeaseWindowElapses()" classname="com.chromascape.web.replay.worker.ReplayLeaseHeartbeatTest" time="1.277"/>
+  <testcase name="zeroRowRenewalPoisonsHandleAndAssertHealthyThrows()" classname="com.chromascape.web.replay.worker.ReplayLeaseHeartbeatTest" time="0.114"/>
+  <testcase name="stopHaltsFurtherRenewals()" classname="com.chromascape.web.replay.worker.ReplayLeaseHeartbeatTest" time="0.274"/>
+  <testcase name="transientRenewalErrorDoesNotPoisonHandleWithinLeaseWindow()" classname="com.chromascape.web.replay.worker.ReplayLeaseHeartbeatTest" time="0.223"/>
+  <testcase name="renewsPeriodicallyWhileWorkerThreadIsBlocked()" classname="com.chromascape.web.replay.worker.ReplayLeaseHeartbeatTest" time="0.215"/>
+  <system-out><![CDATA[19:30:44.539 [Test worker] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat started for run e5724b28-df5a-4c65-baf0-88427282a0cd attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee every 40 ms
+19:30:44.581 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:44.624 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:44.667 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:44.709 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:44.751 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:44.793 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:44.836 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:44.881 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:44.925 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:44.968 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:45.010 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:45.053 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:45.097 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:45.141 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:45.185 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:45.229 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:45.271 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:45.313 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:45.356 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:45.398 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:45.441 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:45.483 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:45.525 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee: database unreachable
+19:30:45.571 [replay-lease-heartbeat] WARN  com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Run e5724b28-df5a-4c65-baf0-88427282a0cd attempt 3cbc56cb-8b26-465a-8374-7ca6fd485cee heartbeat poisoned after repeated database failures
+java.lang.IllegalStateException: database unreachable
+	at com.chromascape.web.replay.worker.ReplayLeaseRenewalService.renew(ReplayLeaseRenewalService.java:64) ~[main/:?]
+	at com.chromascape.web.replay.worker.ReplayLeaseHeartbeat$Handle.renew(ReplayLeaseHeartbeat.java:119) ~[main/:?]
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:539) [?:?]
+	at java.base/java.util.concurrent.FutureTask.runAndReset(FutureTask.java:305) [?:?]
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:305) [?:?]
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136) [?:?]
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635) [?:?]
+	at java.base/java.lang.Thread.run(Thread.java:840) [?:?]
+19:30:45.622 [Test worker] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat started for run d10acf78-0d9e-4c5e-9bfc-a139b5f57297 attempt df389546-7cd7-4fad-8f14-ad8aa05c64c9 every 40 ms
+19:30:45.667 [replay-lease-heartbeat] WARN  com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Run d10acf78-0d9e-4c5e-9bfc-a139b5f57297 attempt df389546-7cd7-4fad-8f14-ad8aa05c64c9 lost its lease (renewal matched zero rows)
+19:30:45.742 [Test worker] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat started for run 67f860a5-73cd-4d23-9369-5044c8281e25 attempt a4506c3b-a2d9-481b-ab71-58fbdbd01169 every 40 ms
+19:30:46.021 [Test worker] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat started for run a41e6b2f-729c-4711-8486-3fa9bc04e6cf attempt 770cf718-7aaa-47a7-8a88-700e99976494 every 40 ms
+19:30:46.065 [replay-lease-heartbeat] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat renewal error for attempt 770cf718-7aaa-47a7-8a88-700e99976494: transient connection loss
+19:30:46.244 [Test worker] DEBUG com.chromascape.web.replay.worker.ReplayLeaseHeartbeat - Heartbeat started for run 9da2655f-70bd-4e13-807e-76a632ee617e attempt 0842c5d0-8c5d-43cc-9704-4e60f3cb6836 every 40 ms
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

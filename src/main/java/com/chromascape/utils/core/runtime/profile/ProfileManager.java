@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Objects;
@@ -32,11 +31,8 @@ import org.apache.logging.log4j.Logger;
  */
 @SuppressWarnings("checkstyle:SummaryJavadoc")
 public class ProfileManager {
-  /** Path to the current user's home directory. */
-  private final String userHome = System.getProperty("user.home");
-
-  /** RuneLite profile directory (typically ~/.runelite/profiles2). */
-  private final Path profileDir = Paths.get(userHome, ".runelite/profiles2");
+  /** RuneLite profile directory for a host-native client. */
+  private final Path profileDir = resolveHostNativeProfileDir(System.getProperty("user.home"));
 
   /** List of all loaded RuneLite profiles from profiles.json. */
   private List<Profile> profiles = null;
@@ -50,6 +46,16 @@ public class ProfileManager {
   /** Creates a new {@code ProfileManager} with a default Jackson ObjectMapper. */
   public ProfileManager() {
     mapper = new ObjectMapper();
+  }
+
+  /**
+   * Resolves the host-native RuneLite profile directory without probing sandbox-specific paths.
+   *
+   * @param userHome current user's home directory
+   * @return the host-native RuneLite profile directory
+   */
+  static Path resolveHostNativeProfileDir(String userHome) {
+    return Path.of(userHome, ".runelite", "profiles2");
   }
 
   /**

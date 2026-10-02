@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.viewport.WebsocketViewportTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:53.613Z" hostname="fedora" time="0.323">
+  <properties/>
+  <testcase name="publishFrameBroadcastsBinaryPayloadWithHeader()" classname="com.chromascape.web.viewport.WebsocketViewportTest" time="0.317"/>
+  <testcase name="publishFrameSkipsEncodeWhenNoSessionsAreActive()" classname="com.chromascape.web.viewport.WebsocketViewportTest" time="0.004"/>
+  <system-out><![CDATA[19:30:53.912 [pool-105-thread-1] WARN  com.chromascape.web.viewport.WebsocketViewport - Slow JPEG encode: 91ms
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

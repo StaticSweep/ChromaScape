@@ -17,9 +17,14 @@ class SelectionValidationTest {
   private static final class StubProcessManager implements ProcessManager {
 
     private final Map<Long, ProcessIdentity> processes = new HashMap<>();
+    private int resolveCalls;
 
     void add(ProcessIdentity identity) {
       processes.put(identity.pid(), identity);
+    }
+
+    int resolveCalls() {
+      return resolveCalls;
     }
 
     @Override
@@ -29,6 +34,7 @@ class SelectionValidationTest {
 
     @Override
     public Optional<ProcessIdentity> resolveLocal(long pid) {
+      resolveCalls++;
       return Optional.ofNullable(processes.get(pid));
     }
   }
@@ -111,6 +117,61 @@ class SelectionValidationTest {
     assertEquals(
         SelectionValidation.STALE_GENERATION, service.validateSelected(processManager, 1L));
     assertEquals(SelectionValidation.VALID, service.validateSelected(processManager, 2L));
+  }
+
+  @Test
+  void exactCurrentGenerationIsAccepted() {
+    StubProcessManager processManager = new StubProcessManager();
+    ProcessIdentity identity = new ProcessIdentity(ProcessOrigin.LOCAL, "", 10L, START, "boot-1");
+    processManager.add(identity);
+    WindowSelectionService service = new WindowSelectionService();
+    service.setSelectedWindow(windowWith(identity));
+
+    assertEquals(
+        SelectionValidation.VALID,
+        service.validateSelected(processManager, service.getSelectedGeneration()));
+  }
+
+  @Test
+  void futureGenerationIsRejected() {
+    StubProcessManager processManager = new StubProcessManager();
+    ProcessIdentity identity = new ProcessIdentity(ProcessOrigin.LOCAL, "", 10L, START, "boot-1");
+    processManager.add(identity);
+    WindowSelectionService service = new WindowSelectionService();
+    service.setSelectedWindow(windowWith(identity));
+
+    // The live identity matches, but the caller observed a generation the selection never had:
+    // exact fencing must refuse it instead of validating
+    assertEquals(
+        SelectionValidation.STALE_GENERATION,
+        service.validateSelected(processManager, service.getSelectedGeneration() + 1L));
+  }
+
+  @Test
+  void clearAfterSelectionValidatesToNone() {
+    StubProcessManager processManager = new StubProcessManager();
+    ProcessIdentity identity = new ProcessIdentity(ProcessOrigin.LOCAL, "", 10L, START, "boot-1");
+    processManager.add(identity);
+    WindowSelectionService service = new WindowSelectionService();
+    service.setSelectedWindow(windowWith(identity));
+    long captured = service.getSelectedGeneration();
+    service.clearSelection();
+
+    assertEquals(SelectionValidation.NONE, service.validateSelected(processManager, captured));
+  }
+
+  @Test
+  void noProcessResolutionOccursAfterAGenerationMismatch() {
+    StubProcessManager processManager = new StubProcessManager();
+    ProcessIdentity identity = new ProcessIdentity(ProcessOrigin.LOCAL, "", 10L, START, "boot-1");
+    processManager.add(identity);
+    WindowSelectionService service = new WindowSelectionService();
+    service.setSelectedWindow(windowWith(identity));
+
+    service.validateSelected(processManager, service.getSelectedGeneration() - 1L);
+    service.validateSelected(processManager, service.getSelectedGeneration() + 1L);
+
+    assertEquals(0, processManager.resolveCalls());
   }
 
   @Test

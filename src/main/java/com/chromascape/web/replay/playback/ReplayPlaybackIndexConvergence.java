@@ -16,9 +16,9 @@ import org.springframework.stereotype.Component;
 /**
  * Converges the playback indexes after Hibernate has created or updated its managed tables.
  *
- * <p>V22 remains responsible for upgrading databases where the debugger tables already exist.
- * This runner covers a fresh Hibernate-managed bootstrap, where Flyway necessarily reaches V22
- * before those tables are present.
+ * <p>V22 remains responsible for upgrading databases where the debugger tables already exist. This
+ * runner covers a fresh Hibernate-managed bootstrap, where Flyway necessarily reaches V22 before
+ * those tables are present.
  */
 @Component
 @DependsOn("entityManagerFactory")
@@ -174,8 +174,7 @@ public class ReplayPlaybackIndexConvergence implements ApplicationRunner {
     String normalizedSchema = normalizeSql(schema == null ? "" : schema);
     if (!normalizedSchema.isBlank()) {
       normalized =
-          normalized.replaceAll(
-              "(?<![a-z0-9_$])" + Pattern.quote(normalizedSchema) + "\\.", "");
+          normalized.replaceAll("(?<![a-z0-9_$])" + Pattern.quote(normalizedSchema) + "\\.", "");
     }
 
     int where = normalized.indexOf(" where ");
@@ -188,8 +187,8 @@ public class ReplayPlaybackIndexConvergence implements ApplicationRunner {
   }
 
   /**
-   * Normalizes the presentation emitted by {@code pg_indexes}, while retaining SQL punctuation
-   * and string literal contents. PostgreSQL may quote identifiers and qualify them with the active
+   * Normalizes the presentation emitted by {@code pg_indexes}, while retaining SQL punctuation and
+   * string literal contents. PostgreSQL may quote identifiers and qualify them with the active
    * schema; neither difference changes the index contract being checked here.
    */
   private static String normalizeSql(String sql) {
@@ -280,11 +279,7 @@ public class ReplayPlaybackIndexConvergence implements ApplicationRunner {
         normalized.append(current);
       }
     }
-    return normalized
-        .toString()
-        .replace("where(", "where (")
-        .replaceAll("\\s+", " ")
-        .trim();
+    return normalized.toString().replace("where(", "where (").replaceAll("\\s+", " ").trim();
   }
 
   private static void trimTrailingSpace(StringBuilder value) {

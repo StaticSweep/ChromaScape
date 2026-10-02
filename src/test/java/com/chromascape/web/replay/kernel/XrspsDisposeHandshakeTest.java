@@ -9,8 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.chromascape.web.replay.config.ReplayProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.nio.charset.StandardCharsets;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -181,7 +181,8 @@ class XrspsDisposeHandshakeTest {
       assertTrue(external.contains("stderrBytes="));
       assertTrue(external.contains("diagnosticRef=xrsps-"));
 
-      awaitStderrBytesAtLeast(kernel, "SECRET_MARKER_7f9b2e".getBytes(StandardCharsets.UTF_8).length);
+      awaitStderrBytesAtLeast(
+          kernel, "SECRET_MARKER_7f9b2e".getBytes(StandardCharsets.UTF_8).length);
       String preview = kernel.stderrPreview();
       assertFalse(preview.contains("SECRET_MARKER_7f9b2e"));
       assertFalse(preview.contains("developer@example.com"));
@@ -196,14 +197,17 @@ class XrspsDisposeHandshakeTest {
 
   @Test
   void diagnosticPreviewLimitDoesNotSplitUtf8CodePoints() throws Exception {
-    var sanitizer = XrspsKernelProcess.class.getDeclaredMethod("sanitizeDiagnosticPreview", String.class);
+    var sanitizer =
+        XrspsKernelProcess.class.getDeclaredMethod("sanitizeDiagnosticPreview", String.class);
     sanitizer.setAccessible(true);
     String raw = "a".repeat(8190) + "€" + "tail";
 
     String preview = (String) sanitizer.invoke(null, raw);
 
     assertTrue(preview.getBytes(StandardCharsets.UTF_8).length <= 8 * 1024);
-    assertFalse(preview.contains("\uFFFD"), "preview must not contain a replacement from a split code point");
+    assertFalse(
+        preview.contains("\uFFFD"),
+        "preview must not contain a replacement from a split code point");
   }
 
   private static void awaitStderrBytesAtLeast(XrspsKernelProcess kernel, long expected)
@@ -346,8 +350,10 @@ class XrspsDisposeHandshakeTest {
       if (Files.isRegularFile(pidFile)) {
         try {
           boolean hasValidPid =
-              Files.readString(pidFile).lines().map(String::trim).anyMatch(
-                  XrspsDisposeHandshakeTest::isPositivePid);
+              Files.readString(pidFile)
+                  .lines()
+                  .map(String::trim)
+                  .anyMatch(XrspsDisposeHandshakeTest::isPositivePid);
           if (hasValidPid) {
             return;
           }
@@ -388,8 +394,7 @@ class XrspsDisposeHandshakeTest {
   void closeWithMultipleIgnoringDescendantsRespectsOneGlobalDeadline() throws Exception {
     Path child = writeFixture("kernel-ignoring-child.js", IGNORING_CHILD);
     Path pidFile = fixturePath("kernel-tree-pids.txt");
-    Path parent =
-        writeFixture("kernel-tree-parent.js", treeParentScript(child, pidFile));
+    Path parent = writeFixture("kernel-tree-parent.js", treeParentScript(child, pidFile));
     long shutdownTimeoutMs = 1500;
     ReplayProperties.Xrsps cfg = config(parent, shutdownTimeoutMs);
 
@@ -423,8 +428,7 @@ class XrspsDisposeHandshakeTest {
   void terminatorStandaloneOverloadBoundsTheWholeTreeWithOneDeadline() throws Exception {
     Path child = writeFixture("standalone-ignoring-child.js", IGNORING_CHILD);
     Path pidFile = fixturePath("standalone-pids.txt");
-    Path parent =
-        writeFixture("standalone-tree-parent.js", treeParentScript(child, pidFile));
+    Path parent = writeFixture("standalone-tree-parent.js", treeParentScript(child, pidFile));
 
     Process process = new ProcessBuilder("node", parent.toAbsolutePath().toString()).start();
     awaitPidFile(pidFile);
@@ -465,8 +469,7 @@ class XrspsDisposeHandshakeTest {
   @Test
   void malformedDisposeAcknowledgementEscalatesWithinTheSharedDeadline() throws Exception {
     Path pidFile = fixturePath("bad-ack-pid.txt");
-    Path script =
-        writeFixture("bad-ack.js", pidFilePreamble(pidFile) + BAD_DISPOSE_ACK_WORKER);
+    Path script = writeFixture("bad-ack.js", pidFilePreamble(pidFile) + BAD_DISPOSE_ACK_WORKER);
     ReplayProperties.Xrsps cfg = config(script, 1500);
 
     long startedAt = System.nanoTime();
@@ -521,8 +524,7 @@ class XrspsDisposeHandshakeTest {
   @Test
   void oversizedStdoutLineIsAProtocolViolationThatTerminatesTheTree() throws Exception {
     Path pidFile = fixturePath("oversized-pid.txt");
-    Path script =
-        writeFixture("oversized.js", pidFilePreamble(pidFile) + OVERSIZED_LINE_WORKER);
+    Path script = writeFixture("oversized.js", pidFilePreamble(pidFile) + OVERSIZED_LINE_WORKER);
     ReplayProperties.Xrsps cfg = config(script, 3000);
     cfg.setMaxStdoutLineBytes(4096);
 
@@ -556,8 +558,7 @@ class XrspsDisposeHandshakeTest {
   @Test
   void closeHandlesAProcessThatAlreadyExited() throws Exception {
     Path pidFile = fixturePath("exited-pid.txt");
-    Path script =
-        writeFixture("exited.js", pidFilePreamble(pidFile) + EXIT_IMMEDIATELY_WORKER);
+    Path script = writeFixture("exited.js", pidFilePreamble(pidFile) + EXIT_IMMEDIATELY_WORKER);
     ReplayProperties.Xrsps cfg = config(script, 2000);
 
     long startedAt = System.nanoTime();

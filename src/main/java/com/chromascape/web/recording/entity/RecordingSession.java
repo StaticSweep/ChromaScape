@@ -78,6 +78,10 @@ public class RecordingSession {
   @Column(length = 160)
   private String replayName;
 
+  /** When the recording was archived (null if active). Owned by Flyway V10. */
+  @Column(name = "archived_at")
+  private LocalDateTime archivedAt;
+
   /** Tags stored as JSON array string (nullable). Normalized in service layer. */
   @Column(columnDefinition = "TEXT")
   private String replayTagsJson;
@@ -205,6 +209,14 @@ public class RecordingSession {
 
   public void setReplayName(String replayName) {
     this.replayName = replayName;
+  }
+
+  public LocalDateTime getArchivedAt() {
+    return archivedAt;
+  }
+
+  public void setArchivedAt(LocalDateTime archivedAt) {
+    this.archivedAt = archivedAt;
   }
 
   public String getReplayTagsJson() {

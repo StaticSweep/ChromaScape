@@ -1,14 +1,20 @@
 package com.chromascape.web.gameplay.orchestration.accountbuilder;
 
+import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import com.chromascape.web.gameplay.contract.GameplayContracts;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderBudgetPolicy.OrchestrationBudget;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.AuthorityConsumption;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayCorrelation;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayReceipt;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Lease;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationView;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.State;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.TerminalResult;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;
@@ -43,25 +49,58 @@ public final class InMemoryAccountBuilderOrchestrationStore
           State.NEEDS_RECONCILIATION);
 
   private final Clock clock;
+  private final CanonicalGameplayJson canonicalJson;
+  private final AccountBuilderAuthorityVerifier authorityVerifier;
   private final Map<String, Entry> entries = new HashMap<>();
+  private final Map<String, GatewayCorrelation> correlations = new HashMap<>();
   private final Map<String, String> requestOwners = new HashMap<>();
   private final Map<String, String> idempotencyOwners = new HashMap<>();
   private final Map<String, AuthorityConsumption> authorities = new HashMap<>();
   private final Map<String, String> authorityOwners = new HashMap<>();
   private final Map<String, TerminalResult> terminalResults = new HashMap<>();
   private final Map<String, Long> eventCounts = new HashMap<>();
+  private final Map<String, AccountBuilderBudgetPolicy.OrchestrationBudget> budgets =
+      new HashMap<>();
 
   public InMemoryAccountBuilderOrchestrationStore() {
-    this(Clock.systemUTC());
+    this(Clock.systemUTC(), (authority, envelope) -> false);
   }
 
   public InMemoryAccountBuilderOrchestrationStore(Clock clock) {
-    this.clock = clock;
+    this(clock, (authority, envelope) -> false);
+  }
+
+  /** Explicit verifier injection is required for deterministic unit tests. */
+  public InMemoryAccountBuilderOrchestrationStore(
+      AccountBuilderAuthorityVerifier authorityVerifier) {
+    this(Clock.systemUTC(), authorityVerifier);
+  }
+
+  public InMemoryAccountBuilderOrchestrationStore(
+      Clock clock, AccountBuilderAuthorityVerifier authorityVerifier) {
+    this(clock, authorityVerifier, defaultCanonicalJson());
+  }
+
+  public InMemoryAccountBuilderOrchestrationStore(
+      AccountBuilderAuthorityVerifier authorityVerifier, Clock clock) {
+    this(clock, authorityVerifier);
+  }
+
+  InMemoryAccountBuilderOrchestrationStore(
+      Clock clock,
+      AccountBuilderAuthorityVerifier authorityVerifier,
+      CanonicalGameplayJson canonicalJson) {
+    this.clock = Objects.requireNonNull(clock, "clock");
+    this.authorityVerifier = Objects.requireNonNull(authorityVerifier, "authorityVerifier");
+    this.canonicalJson = Objects.requireNonNull(canonicalJson, "canonicalJson");
   }
 
   @Override
   public synchronized Claim claim(
-      OrchestrationRequest request, String fingerprint, String envelopeDigest) {
+      OrchestrationRequest request,
+      String fingerprint,
+      String envelopeDigest,
+      AccountBuilderBudgetPolicy.OrchestrationBudget budget) {
     if (request == null
         || !validId(request.orchestrationId())
         || !validId(request.requestId())
@@ -76,7 +115,8 @@ public final class InMemoryAccountBuilderOrchestrationStore
         || request.observation() == null
         || request.deadline() == null
         || !validDigest(fingerprint)
-        || !validDigest(envelopeDigest)) {
+        || !validDigest(envelopeDigest)
+        || budget == null) {
       throw failure(FailureCode.INVALID_CONTRACT, "Durable orchestration identities are malformed");
     }
     Set<String> owners = new HashSet<>();
@@ -94,7 +134,13 @@ public final class InMemoryAccountBuilderOrchestrationStore
         throw integrity("Identity indexes point at multiple orchestration owners");
       }
       Entry owned = entries.get(owners.iterator().next());
-      if (owned == null
+      OrchestrationBudget existingBudget = budgets.get(owned.view.orchestrationId());
+      if (existingBudget == null) {
+        // A durable claim without a budget is an incomplete aggregate and never replays.
+        throw integrity("Durable orchestration claim has no immutable budget");
+      }
+      if (!sameBudget(existingBudget, budget)
+          || owned == null
           || !owned.view.requestFingerprint().equals(fingerprint)
           || !owned.view.orchestrationId().equals(request.orchestrationId())
           || !owned.view.requestId().equals(request.requestId())
@@ -126,10 +172,52 @@ public final class InMemoryAccountBuilderOrchestrationStore
             now,
             now);
     entries.put(request.orchestrationId(), new Entry(request, view));
+    correlations.put(request.orchestrationId(), toCorrelation(request, envelopeDigest));
     requestOwners.put(request.requestId(), request.orchestrationId());
     idempotencyOwners.put(request.idempotencyKey(), request.orchestrationId());
+    budgets.put(request.orchestrationId(), budget);
     eventCounts.put(request.orchestrationId(), 1L);
     return new Claim(view, true);
+  }
+
+  /** Replay compares only the immutable limits; started/expires derive from the claim instant. */
+  private boolean sameBudget(OrchestrationBudget persisted, OrchestrationBudget candidate) {
+    return persisted.maxActions() == candidate.maxActions()
+        && persisted.maxAttempts() == candidate.maxAttempts()
+        && persisted.maxElapsedMs() == candidate.maxElapsedMs();
+  }
+
+  @Override
+  public synchronized Optional<AccountBuilderBudgetPolicy.OrchestrationBudget> findBudget(
+      String orchestrationId) {
+    return Optional.ofNullable(budgets.get(orchestrationId));
+  }
+
+  @Override
+  public synchronized AccountBuilderBudgetPolicy.OrchestrationBudget consumeBudget(
+      String orchestrationId, boolean action, boolean attempt) {
+    OrchestrationBudget budget = budgets.get(orchestrationId);
+    if (budget == null) {
+      throw failure(
+          FailureCode.INVALID_CONTRACT, "No durable budget was claimed for this orchestration");
+    }
+    Instant now = now();
+    if (budget.expiredAt(now)) {
+      throw failure(FailureCode.DEADLINE_EXPIRED, "The orchestration budget horizon has expired");
+    }
+    if ((action && budget.actionsExhausted()) || (attempt && budget.attemptsExhausted())) {
+      throw failure(
+          FailureCode.BUDGET_EXHAUSTED, "No orchestration budget capacity remains for delivery");
+    }
+    OrchestrationBudget advanced = budget;
+    if (attempt) {
+      advanced = advanced.withAttemptUsed();
+    }
+    if (action) {
+      advanced = advanced.withActionUsed();
+    }
+    budgets.put(orchestrationId, advanced);
+    return advanced;
   }
 
   @Override
@@ -144,8 +232,7 @@ public final class InMemoryAccountBuilderOrchestrationStore
     }
     validateAuthority(entry.request, authority, envelopeDigest);
     if (!entry.request.mode().deliveryMode()) {
-      throw failure(
-          FailureCode.MODE_NOT_DELIVERABLE, "Only delivery modes can consume authority");
+      throw failure(FailureCode.MODE_NOT_DELIVERABLE, "Only delivery modes can consume authority");
     }
     if (!authority.expiresAt().isAfter(clock.instant())) {
       throw failure(FailureCode.AUTHORITY_EXPIRED, "The human authority has expired");
@@ -234,9 +321,14 @@ public final class InMemoryAccountBuilderOrchestrationStore
         && (authority != null || lease != null)) {
       throw integrity("Held and shadow orchestrations cannot own delivery evidence");
     }
+    GatewayCorrelation correlation = correlations.get(orchestrationId);
+    if (correlation == null) {
+      throw integrity("The normalized gateway correlation is missing");
+    }
     return new NormalizedAggregate(
         entry.view,
-        entry.request,
+        correlation,
+        redactedRequestSnapshot(entry.request),
         entry.request.bindings(),
         authority,
         lease,
@@ -261,8 +353,116 @@ public final class InMemoryAccountBuilderOrchestrationStore
   }
 
   @Override
-  public synchronized OrchestrationRequest request(String orchestrationId) {
-    return require(orchestrationId).request;
+  public synchronized GatewayCorrelation correlation(String orchestrationId) {
+    require(orchestrationId);
+    GatewayCorrelation correlation = correlations.get(orchestrationId);
+    if (correlation == null) {
+      throw integrity("The normalized gateway correlation is missing");
+    }
+    return correlation;
+  }
+
+  private GatewayCorrelation toCorrelation(OrchestrationRequest request, String envelopeDigest) {
+    return new GatewayCorrelation(
+        AccountBuilderOrchestrationModels.VERSION,
+        request.orchestrationId(),
+        request.requestId(),
+        request.idempotencyKey(),
+        envelopeDigest,
+        request.mode(),
+        request.sourceType(),
+        request.envelope().taskKey(),
+        request.envelope().authorityId(),
+        canonicalJson.digest(request.envelope().identities()),
+        canonicalJson.digest(request.envelope().settings()),
+        canonicalJson.digest(request.envelope().budgets()),
+        request.envelope().expectedObservationRevision(),
+        request.envelope().expectedTaskRevision(),
+        truncate(request.deadline()));
+  }
+
+  private OrchestrationRequest redactedRequestSnapshot(OrchestrationRequest request) {
+    GameplayContracts.ProviderDecision decision = request.decision();
+    GameplayContracts.ExecutionEnvelope envelope = request.envelope();
+    GameplayContracts.HumanAuthority authority = request.authority();
+    GameplayContracts.ProviderDecision redactedDecision =
+        new GameplayContracts.ProviderDecision(
+            decision.contractVersion(),
+            decision.provider(),
+            decision.modelVersion(),
+            decision.decisionId(),
+            decision.policyConfidence(),
+            digestNode(decision.semanticAction()),
+            decision.evidenceRefs() == null
+                ? List.of()
+                : decision.evidenceRefs().stream().map(this::opaqueDigest).toList());
+    GameplayContracts.ExecutionEnvelope redactedEnvelope =
+        new GameplayContracts.ExecutionEnvelope(
+            envelope.contractVersion(),
+            envelope.provider(),
+            envelope.modelVersion(),
+            envelope.decisionId(),
+            envelope.requestId(),
+            envelope.idempotencyKey(),
+            envelope.goalPlanDigest(),
+            envelope.taskSkillDigests(),
+            envelope.taskKey(),
+            digestNode(envelope.settings()),
+            digestNode(envelope.identities()),
+            envelope.catalogDigest(),
+            envelope.schemaDigest(),
+            envelope.policyDigest(),
+            envelope.knowledgeDigest(),
+            envelope.semanticActionDigest(),
+            envelope.expectedTransition(),
+            envelope.verifierId(),
+            envelope.buildId(),
+            envelope.expectedObservationRevision(),
+            envelope.expectedTaskRevision(),
+            envelope.authorityId(),
+            envelope.leaseGeneration(),
+            envelope.fence(),
+            digestNode(envelope.budgets()),
+            envelope.deadline(),
+            envelope.killSwitchScope());
+    GameplayContracts.HumanAuthority redactedAuthority =
+        authority == null
+            ? null
+            : new GameplayContracts.HumanAuthority(
+                authority.contractVersion(),
+                authority.authorityId(),
+                authority.actorType(),
+                authority.approvedBy(),
+                authority.approvedAt(),
+                authority.expiresAt(),
+                authority.envelopeDigest(),
+                authority.scopeDigest(),
+                authority.oneUse(),
+                null);
+    return new OrchestrationRequest(
+        request.orchestrationId(),
+        request.requestId(),
+        request.idempotencyKey(),
+        request.requestFingerprint(),
+        request.mode(),
+        request.sourceType(),
+        redactedDecision,
+        redactedEnvelope,
+        request.bindings(),
+        redactedAuthority,
+        digestNode(request.observation()),
+        request.deadline());
+  }
+
+  private ObjectNode digestNode(Object value) {
+    ObjectNode result = JsonNodeFactory.instance.objectNode();
+    result.put("digest", canonicalJson.digest(value));
+    result.put("redacted", true);
+    return result;
+  }
+
+  private static CanonicalGameplayJson defaultCanonicalJson() {
+    return new CanonicalGameplayJson(new ObjectMapper().findAndRegisterModules());
   }
 
   @Override
@@ -474,6 +674,9 @@ public final class InMemoryAccountBuilderOrchestrationStore
       throw failure(
           FailureCode.AUTHORITY_INVALID, "The authority does not bind the request exactly");
     }
+    if (!authorityVerifier.verifyBoundAuthority(authority, request.envelope())) {
+      throw failure(FailureCode.AUTHORITY_INVALID, "Human authority signature or scope is invalid");
+    }
   }
 
   private void ensureSameAuthority(
@@ -552,7 +755,8 @@ public final class InMemoryAccountBuilderOrchestrationStore
         lease,
         evidenceRefs,
         receipt.at() == null ? null : truncate(receipt.at()),
-        receipt.receiptId() == null ? null : opaqueDigest(receipt.receiptId()));
+        receipt.receiptId() == null ? null : opaqueDigest(receipt.receiptId()),
+        receipt.killSwitch());
   }
 
   private String opaqueDigest(String value) {
@@ -640,7 +844,11 @@ public final class InMemoryAccountBuilderOrchestrationStore
   }
 
   private boolean requiresLease(State state) {
-    return LEASE_STATES.contains(state) && state != State.NEEDS_RECONCILIATION;
+    // A proven pre-submission terminal failure (connection refused before submission) carries no
+    // lease and never needs one; a lease attached to a terminal state is still validated.
+    return LEASE_STATES.contains(state)
+        && state != State.NEEDS_RECONCILIATION
+        && state != State.FAILED;
   }
 
   private boolean samePersistedReceipt(List<GatewayReceipt> persisted, GatewayReceipt candidate) {

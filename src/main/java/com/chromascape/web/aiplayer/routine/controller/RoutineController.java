@@ -1,7 +1,9 @@
 package com.chromascape.web.aiplayer.routine.controller;
 
 import com.chromascape.web.aiplayer.contract.CurrentSliceIdentity;
+import com.chromascape.web.aiplayer.routine.dto.BehaviorGraphDraftDtos;
 import com.chromascape.web.aiplayer.routine.dto.RoutineApiDtos;
+import com.chromascape.web.aiplayer.routine.service.BehaviorGraphDraftService;
 import com.chromascape.web.aiplayer.routine.service.BehaviorGraphService;
 import com.chromascape.web.aiplayer.routine.service.CurrentSliceRunService;
 import com.chromascape.web.aiplayer.routine.service.RoutineCaptureIngestionService;
@@ -22,6 +24,7 @@ public class RoutineController {
   private final RoutineCurationService curation;
   private final BehaviorGraphService graphs;
   private final SourceRunOrchestrationService sourceOrchestration;
+  private final BehaviorGraphDraftService draftService;
 
   @Value("${ai-routine.capture.token:}")
   private String captureToken;
@@ -32,12 +35,14 @@ public class RoutineController {
       RoutineCaptureIngestionService captures,
       RoutineCurationService curation,
       BehaviorGraphService graphs,
-      SourceRunOrchestrationService sourceOrchestration) {
+      SourceRunOrchestrationService sourceOrchestration,
+      BehaviorGraphDraftService draftService) {
     this.runs = runs;
     this.captures = captures;
     this.curation = curation;
     this.graphs = graphs;
     this.sourceOrchestration = sourceOrchestration;
+    this.draftService = draftService;
   }
 
   /** Compatibility constructor for controller tests that predate SC-810 run binding. */
@@ -46,7 +51,7 @@ public class RoutineController {
       RoutineCaptureIngestionService captures,
       RoutineCurationService curation,
       BehaviorGraphService graphs) {
-    this(runs, captures, curation, graphs, null);
+    this(runs, captures, curation, graphs, null, null);
   }
 
   @PostMapping("/runs/from-stabilization/{attemptId}")
@@ -160,6 +165,35 @@ public class RoutineController {
     return ResponseEntity.ok(graphs.publish(graphId));
   }
 
+  @GetMapping("/drafts/{draftId}")
+  public ResponseEntity<Object> getDraft(@PathVariable String draftId) {
+    return ResponseEntity.ok(requireDrafts().getDraft(draftId));
+  }
+
+  @PostMapping("/drafts")
+  public ResponseEntity<Object> createDraft(
+      @RequestBody BehaviorGraphDraftDtos.DraftCreateRequest request) {
+    return ResponseEntity.status(HttpStatus.CREATED).body(requireDrafts().createDraft(request));
+  }
+
+  @PutMapping("/drafts/{draftId}")
+  public ResponseEntity<Object> updateDraft(
+      @PathVariable String draftId,
+      @RequestBody BehaviorGraphDraftDtos.DraftUpdateRequest request) {
+    return ResponseEntity.ok(requireDrafts().updateDraft(draftId, request));
+  }
+
+  @PostMapping("/drafts/{draftId}/publish")
+  public ResponseEntity<Object> publishDraft(
+      @PathVariable String draftId, @RequestBody BehaviorGraphDraftDtos.PublishRequest request) {
+    return ResponseEntity.ok(requireDrafts().publishDraft(draftId, request));
+  }
+
+  private BehaviorGraphDraftService requireDrafts() {
+    if (draftService == null) throw new IllegalStateException("draft service is unavailable");
+    return draftService;
+  }
+
   private void authorize(String authorization) {
     if (captureToken == null
         || captureToken.isBlank()
@@ -205,6 +239,14 @@ public class RoutineController {
                 e.code().name(),
                 "message",
                 "source request failed"));
+  }
+
+  @ExceptionHandler(BehaviorGraphDraftService.DraftException.class)
+  public ResponseEntity<Object> draftError(BehaviorGraphDraftService.DraftException e) {
+    java.util.LinkedHashMap<String, Object> body = new java.util.LinkedHashMap<>(e.details());
+    body.put("code", e.code());
+    body.put("message", e.getMessage());
+    return ResponseEntity.status(e.status()).body(body);
   }
 
   @ExceptionHandler(Exception.class)

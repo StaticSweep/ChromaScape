@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.worker.ReplayRecoveryReportTransactionTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:31:37.371Z" hostname="fedora" time="0.031">
+  <properties/>
+  <testcase name="advisoryLockLoserSkipsWithoutTouchingAnything()" classname="com.chromascape.web.replay.worker.ReplayRecoveryReportTransactionTest" time="0.008"/>
+  <testcase name="nonTerminalRunsAreSkippedAfterLocking()" classname="com.chromascape.web.replay.worker.ReplayRecoveryReportTransactionTest" time="0.004"/>
+  <testcase name="existingReportsShortCircuitAsAlreadyPresent()" classname="com.chromascape.web.replay.worker.ReplayRecoveryReportTransactionTest" time="0.003"/>
+  <testcase name="constraintViolationsEscapeWithoutBeingCaughtInsideTheTransaction()" classname="com.chromascape.web.replay.worker.ReplayRecoveryReportTransactionTest" time="0.008"/>
+  <testcase name="insertsThePreparedReportWhenEverythingIsEligible()" classname="com.chromascape.web.replay.worker.ReplayRecoveryReportTransactionTest" time="0.006"/>
+  <system-out><![CDATA[19:31:37.401 [Test worker] INFO  com.chromascape.web.replay.worker.ReplayRecoveryReportTransaction - Inserted recovery report for run 22967fd5-4bbd-464b-a403-c21bbfdcfd9d outcome=INFRASTRUCTURE_FAILURE reason=LEASE_EXPIRED
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

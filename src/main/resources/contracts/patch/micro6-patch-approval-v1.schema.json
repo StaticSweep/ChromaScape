@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://chromascape.local/contracts/patch/micro6-patch-approval-v1.schema.json",
+  "title": "Micro6 patch approval receipt",
+  "type": "object",
+  "required": [
+    "schema", "proposal_id", "proposal_hash", "source_binding_hash", "preimage_set_hash",
+    "validation_plan_hash", "actor_id", "actor_role", "reason", "policy_version",
+    "approved_at", "expires_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "micro6-patch-approval/v1" },
+    "proposal_id": { "type": "string", "maxLength": 80 },
+    "proposal_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "source_binding_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "preimage_set_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "validation_plan_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "actor_id": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "actor_role": { "type": "string", "maxLength": 60 },
+    "reason": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "environment": { "type": ["string", "null"], "maxLength": 60 },
+    "policy_version": { "type": "string", "maxLength": 30 },
+    "approved_at": { "type": "string", "format": "date-time" },
+    "expires_at": { "type": "string", "format": "date-time" }
+  }
+}

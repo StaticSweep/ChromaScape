@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.screen.window.TargetDiscoveryServiceTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:16.342Z" hostname="fedora" time="0.025">
+  <properties/>
+  <testcase name="resolutionReportsNoEligibleTargetWhenNothingMatches()" classname="com.chromascape.utils.core.screen.window.TargetDiscoveryServiceTest" time="0.003"/>
+  <testcase name="resolutionReportsUnsupportedPlatforms()" classname="com.chromascape.utils.core.screen.window.TargetDiscoveryServiceTest" time="0.001"/>
+  <testcase name="resolutionRefusesMultipleCandidatesWithoutSelection()" classname="com.chromascape.utils.core.screen.window.TargetDiscoveryServiceTest" time="0.003"/>
+  <testcase name="unsupportedPlatformListingsAreEmpty()" classname="com.chromascape.utils.core.screen.window.TargetDiscoveryServiceTest" time="0.001"/>
+  <testcase name="resolutionRefusesSelectionThatMatchesNoCandidate()" classname="com.chromascape.utils.core.screen.window.TargetDiscoveryServiceTest" time="0.002"/>
+  <testcase name="resolutionHonorsAnExplicitSelectionAmongMultipleCandidates()" classname="com.chromascape.utils.core.screen.window.TargetDiscoveryServiceTest" time="0.002"/>
+  <testcase name="resolutionReturnsOneCandidate()" classname="com.chromascape.utils.core.screen.window.TargetDiscoveryServiceTest" time="0.001"/>
+  <testcase name="linuxCandidatesCarryTheNeutralShapeWithoutWindowHandles()" classname="com.chromascape.utils.core.screen.window.TargetDiscoveryServiceTest" time="0.002"/>
+  <testcase name="legacySelectionWithoutIdentityFailsClosedInsteadOfMatchingByPid()" classname="com.chromascape.utils.core.screen.window.TargetDiscoveryServiceTest" time="0.003"/>
+  <testcase name="windowsCandidateIdentitySurvivesEnumerationSelectionAndResolution()" classname="com.chromascape.utils.core.screen.window.TargetDiscoveryServiceTest" time="0.003"/>
+  <system-out><![CDATA[19:27:16.344 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 0 eligible local target(s) from 0 procfs entries (0 unreadable)
+19:27:16.349 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 2 eligible local target(s) from 2 procfs entries (0 unreadable)
+19:27:16.352 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+19:27:16.353 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 1 eligible local target(s) from 1 procfs entries (0 unreadable)
+19:27:16.355 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+19:27:16.356 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 2 eligible local target(s) from 2 procfs entries (0 unreadable)
+19:27:16.358 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 1 eligible local target(s) from 1 procfs entries (0 unreadable)
+19:27:16.361 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 1 eligible local target(s) from 1 procfs entries (0 unreadable)
+19:27:16.362 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+19:27:16.363 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 1 eligible local target(s) from 1 procfs entries (0 unreadable)
+19:27:16.366 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: RuneLite - alpha
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

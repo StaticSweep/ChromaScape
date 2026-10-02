@@ -10,7 +10,7 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet"
     integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr" crossorigin="anonymous" />
   <link rel="stylesheet" href="/css/style.css" />
-  <link rel="stylesheet" href="/css/debugger.css?v=18" />
+  <link rel="stylesheet" href="/css/debugger.css?v=19" />
   <link rel="stylesheet" href="/css/ai-routine.css?v=1" />
   <link rel="stylesheet" href="/css/ai-training.css?v=1" />
   <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
@@ -123,6 +123,12 @@
           <i class="bi bi-broadcast me-1"></i>
           <span>Debug Feed: Off</span>
         </button>
+        <button type="button" id="watchBtn" class="btn btn-outline-secondary ms-2"
+            title="Watch the local desktop in the viewport without taking input (view-only)">
+          <i class="bi bi-eye me-1"></i>
+          <span>Watch: Off</span>
+        </button>
+          <span id="clientFrameStatus" role="status" aria-live="polite">Viewport: waiting</span>
         <div id="recordingStatus" class="recording-status d-none">
           <i class="bi bi-record-fill blink"></i>
           <span id="recordingStatusDuration">00:00</span>
@@ -190,9 +196,10 @@
       <i class="bi bi-tools"></i>
       <div>
         <h2>No run is open for recovery</h2>
-        <p>Choose a failed run in Runs, then select <strong>Open Recovery Workspace</strong>.</p>
+        <p>Choose any run below or in Runs, then select <strong>Open Recovery Workspace</strong>. Cancelled runs can be reviewed and patch-planned here too.</p>
       </div>
-      <button type="button" class="btn btn-primary" data-workspace-link="runs">View failed runs</button>
+      <button type="button" class="btn btn-primary" data-workspace-link="runs">Browse all runs</button>
+      <div id="recoveryRunPicker" class="task-plans-list"></div>
     </section>
 
     <!-- Auto-Record Tasks Panel -->
@@ -429,7 +436,7 @@
       </div>
 
       <div class="task-planner-content" id="taskPlannerContent">
-        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="41">
+        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="46">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <label class="form-label mb-0">Builder Goal Runner</label>
             <button class="btn btn-sm btn-outline-secondary" id="refreshBuilderGoalRunsBtn" title="Refresh builder runs">
@@ -493,6 +500,18 @@
             <div class="small text-muted mt-1">
               Saved with the run config and reused for rerun and recovery relaunch.
             </div>
+          </div>
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" role="switch" id="builderGoalAutoRecord" checked>
+            <label class="form-check-label small" for="builderGoalAutoRecord">Auto record when the task starts</label>
+            <div class="small text-muted">
+              Starts a task-owned ChromaScape recording after publish. Recording setup never blocks task execution.
+            </div>
+          </div>
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="builderGoalPacketCapture" disabled>
+            <label class="form-check-label small" for="builderGoalPacketCapture">Packet Capture</label>
+            <div class="small text-muted">Launch Account through running RSProx on the local launch host. Optional; unavailable for remote hosts.</div>
           </div>
           <div class="d-flex gap-2 mb-2">
             <button class="btn btn-sm btn-primary flex-fill" id="runBuilderGoalBtn" disabled title="Launch the local Micro6 workspace for the account and publish the selected task">
@@ -661,6 +680,9 @@
           <!-- Inline recovery replay state (loading / missing / failed) shown next to the canonical replay surface -->
           <div id="recoveryReplayAlert" class="recovery-replay-alert" hidden></div>
 
+          <!-- Degraded-recording warning (video playable but contains almost no captured frames) -->
+          <div id="replayVideoWarning" class="alert alert-warning py-2 px-3 mb-2" role="status" hidden></div>
+
           <div class="viewport-stage" id="viewportStage">
             <div id="viewport-loader" class="loader-container">
               <div class="glass-loader"></div>
@@ -772,6 +794,7 @@
             <button class="section-toggle active" data-section="objects" title="Show game objects">Objects</button>
             <button class="section-toggle active" data-section="groundObjects" title="Show ground objects">Ground Objects</button>
             <button class="section-toggle active" data-section="groundItems" title="Show ground items">Ground Items</button>
+            <button class="section-toggle active" data-section="packets" title="Show RSProx game packets (SC-1618)">Packets</button>
             <button class="section-toggle active" data-section="animation" title="Show animation action logs">Animation</button>
             <button class="section-toggle active" data-section="walkhere" title="Show walk-here action logs">Walk Here</button>
             <button class="section-toggle active" data-section="menu" title="Show menu action logs">Menu</button>
@@ -1266,6 +1289,7 @@
 
   <script src="/js/fishing-shadow-core.js?v=1"></script>
   <script src="/js/debugger-session-sync-core.js?v=1"></script>
+  <script src="/js/debugger-replay-core.js?v=2"></script>
   <section id="aiTrainingPanel" class="ai-training-panel" aria-label="AI training catalog">
     <div class="ai-training-toolbar">
       <label>
@@ -1369,13 +1393,13 @@
     <button type="button" data-ai-candidate-reconcile>Reconcile candidate registration</button>
     <pre data-ai-routine-output aria-live="polite"></pre>
   </section>
-  <script src="/js/debugger.js?v=21"></script>
+  <script src="/js/debugger.js?v=27"></script>
   <script src="/js/ai-training.js?v=1"></script>
   <script src="/js/replay-debugger.js?v=3"></script>
   <script src="/js/ai-routine-state.js?v=1"></script>
   <script src="/js/ai-routine.js?v=3"></script>
   <script src="/js/patchloop.js?v=2"></script>
-<script src="/js/account-task-planner.js?v=41"></script>
+<script src="/js/account-task-planner.js?v=46"></script>
 </body>
 
 </html>

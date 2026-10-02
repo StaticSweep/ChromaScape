@@ -34,7 +34,9 @@ public class SourceRunOrchestrationService {
     this.transactions = new TransactionTemplate(transactionManager);
   }
 
-  /** Maximum attempts for the whole short write transaction after an immutable-identity conflict. */
+  /**
+   * Maximum attempts for the whole short write transaction after an immutable-identity conflict.
+   */
   private static final int MAX_CONFLICT_RETRIES = 3;
 
   /**
@@ -53,12 +55,14 @@ public class SourceRunOrchestrationService {
     SourceManifestException lastConflict = null;
     for (int attempt = 1; attempt <= MAX_CONFLICT_RETRIES; attempt++) {
       try {
-        Map<String, Object> result = transactions.execute(status -> {
-          bindings.verifyAndPersist(taskKey, fetched.manifestJson(), fetched.expected());
-          runs.create(attemptId, identity);
-          bindings.bindRun(runId, null, taskKey, fetched.verified());
-          return runs.get(runId);
-        });
+        Map<String, Object> result =
+            transactions.execute(
+                status -> {
+                  bindings.verifyAndPersist(taskKey, fetched.manifestJson(), fetched.expected());
+                  runs.create(attemptId, identity);
+                  bindings.bindRun(runId, null, taskKey, fetched.verified());
+                  return runs.get(runId);
+                });
         if (result == null) {
           throw new IllegalStateException("source-bound run orchestration produced no result");
         }
@@ -71,7 +75,8 @@ public class SourceRunOrchestrationService {
         lastConflict = exception;
       }
     }
-    throw lastConflict == null ? new IllegalStateException("source-bound run orchestration failed")
+    throw lastConflict == null
+        ? new IllegalStateException("source-bound run orchestration failed")
         : lastConflict;
   }
 }

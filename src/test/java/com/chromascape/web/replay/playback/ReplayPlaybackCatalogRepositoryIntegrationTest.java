@@ -9,8 +9,8 @@ import com.chromascape.web.debug.tickdebugger.entity.TickLogRepository;
 import com.chromascape.web.debug.tickdebugger.entity.TickSnapshot;
 import com.chromascape.web.debug.tickdebugger.entity.TickSnapshotRepository;
 import com.chromascape.web.recording.entity.RecordingSession;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.chromascape.web.replay.support.HostPortWaitStrategy;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -93,7 +93,9 @@ class ReplayPlaybackCatalogRepositoryIntegrationTest {
 
   @BeforeEach
   void cleanDatabase() {
-    entityManager.createNativeQuery("TRUNCATE tick_logs, tick_snapshots, debug_sessions, recording_sessions").executeUpdate();
+    entityManager
+        .createNativeQuery("TRUNCATE tick_logs, tick_snapshots, debug_sessions, recording_sessions")
+        .executeUpdate();
   }
 
   @Test
@@ -101,11 +103,7 @@ class ReplayPlaybackCatalogRepositoryIntegrationTest {
     LocalDateTime start = LocalDateTime.of(2026, 8, 28, 3, 0);
     persistRecording("recording-linked", "account-a", start);
     DebugSession linked = persistDebugSession("debug-linked", "recording-linked", start);
-    persistSnapshot(
-        linked.getSessionId(),
-        1L,
-        "{\"position\":{\"x\":3200,\"y\":3201}}",
-        start);
+    persistSnapshot(linked.getSessionId(), 1L, "{\"position\":{\"x\":3200,\"y\":3201}}", start);
     persistSnapshot(linked.getSessionId(), 2L, "{\"x\":3202,\"z\":3203}", start.plusSeconds(1));
     persistLog(linked.getSessionId(), 2L, "dialogue", "ChatMessage");
     persistLog(linked.getSessionId(), 2L, "Game", "VarBitChanged");
@@ -176,8 +174,7 @@ class ReplayPlaybackCatalogRepositoryIntegrationTest {
     LocalDateTime cursorTime = asLocalDateTime(firstPage.get(0)[5]);
     Long cursorId = ((Number) firstPage.get(0)[0]).longValue();
 
-    persistRecording(
-        "recording-inserted-newer", "account-a", firstPageTime.plusMinutes(1));
+    persistRecording("recording-inserted-newer", "account-a", firstPageTime.plusMinutes(1));
     persistDebugSession(
         "debug-inserted-newer", "recording-inserted-newer", firstPageTime.plusMinutes(1));
     entityManager.flush();
@@ -254,7 +251,8 @@ class ReplayPlaybackCatalogRepositoryIntegrationTest {
 
   @Test
   void databaseFrameCursorPreservesDuplicateTickRowsAcrossPages() throws Exception {
-    DebugSession session = persistDebugSession("debug-frames", "recording-frames", LocalDateTime.now());
+    DebugSession session =
+        persistDebugSession("debug-frames", "recording-frames", LocalDateTime.now());
     persistSnapshot(session.getSessionId(), 4L, "{}", LocalDateTime.now());
     persistSnapshot(session.getSessionId(), 4L, "{}", LocalDateTime.now());
     persistSnapshot(session.getSessionId(), 4L, "{}", LocalDateTime.now());
@@ -270,11 +268,13 @@ class ReplayPlaybackCatalogRepositoryIntegrationTest {
             session.getSessionId(), 4L, cursorId, PageRequest.of(0, 3));
 
     assertEquals(3, firstPage.getContent().size());
-    assertEquals(List.of(4L, 5L), secondPage.getContent().stream().map(TickSnapshot::getTick).toList());
+    assertEquals(
+        List.of(4L, 5L), secondPage.getContent().stream().map(TickSnapshot::getTick).toList());
     assertTrue(secondPage.getContent().get(0).getId() > cursorId);
   }
 
-  private RecordingSession persistRecording(String recordingId, String accountName, LocalDateTime start) {
+  private RecordingSession persistRecording(
+      String recordingId, String accountName, LocalDateTime start) {
     RecordingSession recording =
         new RecordingSession(
             recordingId,
@@ -309,12 +309,7 @@ class ReplayPlaybackCatalogRepositoryIntegrationTest {
   private void persistLog(String sessionId, long tick, String subsystem, String eventType) {
     TickLog log =
         new TickLog(
-            sessionId,
-            tick,
-            LocalDateTime.of(2026, 8, 28, 3, 0),
-            subsystem,
-            "INFO",
-            "event");
+            sessionId, tick, LocalDateTime.of(2026, 8, 28, 3, 0), subsystem, "INFO", "event");
     log.setEventType(eventType);
     entityManager.persist(log);
   }

@@ -21,7 +21,7 @@ class Micro6CanonicalHashTest {
   private static final String GOLDEN_SETTINGS_SCHEMA_HASH =
       "sha256:95d587eacd8492a5f65e56e34fcf6085ab0c85aa2643da7f69823b9be0cf0957";
   private static final String GOLDEN_SCHEMA_BUNDLE_HASH =
-      "sha256:815b527d3704999719e42c882536740f6313401b1bba9ed4422b173c04a4f100";
+      "sha256:93e263fa9413599010166a886f710579b056ab72487ff8fa8fab6fac7f0f073f";
 
   private static ObjectNode fishingTask(boolean withSchema) {
     ObjectNode task = MAPPER.createObjectNode();
@@ -130,7 +130,9 @@ class Micro6CanonicalHashTest {
   @Test
   void catalogHashIsIdenticalForLightweightAndFullCatalogs() {
     assertThat(Micro6CanonicalHash.catalogHash(lightweightPayload(), "micro6-executor/v1"))
-        .isEqualTo(Micro6CanonicalHash.catalogHash(fullPayload(), "micro6-executor/v1"));
+        .isEqualTo(GOLDEN_CATALOG_HASH);
+    assertThat(Micro6CanonicalHash.catalogHash(fullPayload(), "micro6-executor/v1"))
+        .isEqualTo(GOLDEN_CATALOG_HASH);
   }
 
   @Test
@@ -160,6 +162,18 @@ class Micro6CanonicalHashTest {
     withVolatile.put("queue_state", "QUEUED");
     assertThat(Micro6CanonicalHash.catalogHash(withVolatile, "micro6-executor/v1"))
         .isEqualTo(GOLDEN_CATALOG_HASH);
+  }
+
+  @Test
+  void canonicalHashIgnoresProducerExclusionsRecursively() {
+    ObjectNode baseline = fullPayload();
+    ObjectNode changed = fullPayload();
+    changed.put("generated_at", "2026-01-01T00:00:00Z");
+    ((ObjectNode) changed.path("tasks").get(0).path("args_schema"))
+        .put("source_timestamp", "2026-01-01T00:00:00Z");
+
+    assertThat(Micro6CanonicalHash.catalogHash(changed, "micro6-executor/v1"))
+        .isEqualTo(Micro6CanonicalHash.catalogHash(baseline, "micro6-executor/v1"));
   }
 
   @Test
