@@ -562,3 +562,19 @@ tasks.register<JavaExec>("aiPlayerSchemaFingerprintExport") {
     classpath = sourceSets["aiPlayerSchemaTest"].runtimeClasspath
     mainClass.set("com.chromascape.web.aiplayer.schema.SchemaFingerprintExport")
 }
+
+sourceSets.create("aiPlayerCatalogTest") {
+    java.srcDir("src/test/java/com/chromascape/web/aiplayer/catalog")
+    resources.srcDir("src/test/resources")
+    compileClasspath += sourceSets.main.get().output
+    runtimeClasspath += sourceSets.main.get().output
+}
+configurations.named("aiPlayerCatalogTestImplementation") { extendsFrom(configurations.testImplementation.get()) }
+configurations.named("aiPlayerCatalogTestRuntimeOnly") { extendsFrom(configurations.testRuntimeOnly.get()) }
+tasks.register<Test>("aiPlayerCatalogTest") {
+    group = "verification"
+    description = "SC-641 backend and disposable PostgreSQL acceptance"
+    testClassesDirs = sourceSets["aiPlayerCatalogTest"].output.classesDirs
+    classpath = sourceSets["aiPlayerCatalogTest"].runtimeClasspath
+    useJUnitPlatform()
+}

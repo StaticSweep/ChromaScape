@@ -1,0 +1,4 @@
+allprojects { p -> afterEvaluate {
+    spotless { java { target(p.fileTree(new File(p.projectDir,'src/main/java/com/chromascape/web/aiplayer/catalog')) { include '**/*.java' },p.fileTree(new File(p.projectDir,'src/test/java/com/chromascape/web/aiplayer/catalog')) { include '**/*.java' }) } }
+    tasks.named('checkstyleMain') { setSource(p.fileTree(new File(p.projectDir,'src/main/java/com/chromascape/web/aiplayer/catalog')) { include '**/*.java' }); doFirst { assert source.files.size()==6 } }
+} }

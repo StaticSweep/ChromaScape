@@ -14,7 +14,7 @@ import org.springframework.core.io.ClassPathResource;
  * Owns only the explicitly disposable SC-665 schema. No application/runtime services are started.
  */
 public final class AiPlayerCurrentSchema {
-  public static final String IDENTITY = "sc665-current-v1";
+  public static final String IDENTITY = "sc641-current-v1";
   public static final String LOCATION = "classpath:db/ai-player-current";
   private static final long LOCK = 66520261002L;
   private final DataSource dataSource;
@@ -175,12 +175,12 @@ public final class AiPlayerCurrentSchema {
       if (java.util.Arrays.stream(flyway.info().all())
                   .filter(info -> info.getVersion() != null)
                   .count()
-              != 3
+              != 4
           || flyway.info().pending().length != 0
           || java.util.Arrays.stream(flyway.info().applied())
                   .filter(info -> info.getVersion() != null)
                   .count()
-              != 3) {
+              != 4) {
         throw mismatch();
       }
       if (!IDENTITY.equals(pinned.getProperty("identity"))

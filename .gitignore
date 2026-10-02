@@ -86,3 +86,6 @@ output/*
 
 # recordings
 recordings/
+
+# Node DOM test dependencies
+/node_modules/
