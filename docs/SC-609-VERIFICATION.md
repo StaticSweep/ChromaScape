@@ -4,9 +4,9 @@ Complete implemented plan: [SC-609-DELIVERY-PLAN.md](SC-609-DELIVERY-PLAN.md). O
 
 ## Delivery status — 2026-10-03
 
-Micro6 PR #160 is merged into main at `77c758e91dda00fef16e3984cdb676d1741e5e63`; it includes #159's AccountBuilder lifecycle fixes. ChromaScape dependencies #44 (SC-260), #42 (SC-665) and #43 (SC-641) are merged. PR #45 is reconciled with their resulting main revision `5050b79d`, for submission directly to main.
+Micro6 PR #160 is merged into main at `77c758e91dda00fef16e3984cdb676d1741e5e63`; it includes #159's AccountBuilder lifecycle fixes. ChromaScape dependencies #44 (SC-260), #42 (SC-665) and #43 (SC-641) are merged. PR #45 is reconciled with their resulting main revision `5050b79d`, and merged as PR #45 at `48caed2b5b8501cc8a7cce41aa9d88e775456540`.
 
-Felix task `task_1790971893615_dult4y03` was previously recorded in review. Felix writes and CI monitoring are skipped at the user's request; no new Felix state or synchronization success is claimed. SC-609 remains In Review because the requested delivery targets are both Fedora and Windows, and native Windows recovery qualification is outstanding.
+Felix task `task_1790971893615_dult4y03` was previously recorded in review. Felix writes and CI monitoring are skipped at the user's request; no new Felix state or synchronization success is claimed. The user revised the acceptance target to Fedora only. A passing Fedora live capture/recovery and browser check is sufficient for SC-609 completion; Windows qualification is outside this delivery scope. SC-609 remains In Review until that Fedora check is recorded.
 
 ## Acceptance results
 
@@ -16,7 +16,7 @@ Felix task `task_1790971893615_dult4y03` was previously recorded in review. Feli
 - Two added WebSocket regressions verify exactly one durable ACK, retention of the original wire document, and preservation of the committed ACK when legacy projection fails.
 - Current development-schema convergence includes six migrations and inherited V6 mappings for main's entities, columns and integrity constraints; no released legacy migration was edited in this reconciliation.
 - Catalog pagination, authoritative recording identity, video-only access, cursor loading, safe settings text and null/empty behavior: passed backend and Node/JSDOM tests.
-- Windows-specific locking, ACLs, atomic replacement, process restart and power-loss qualification: unrun. Fedora automated tests establish shared behavior, not native Windows or physical power-loss behavior. Real browser acceptance and a live client/server capture remain unrun.
+- Fedora live capture/recovery and browser acceptance: awaiting the user-run check below. Windows qualification is outside the revised acceptance scope. Automated tests do not claim physical power-loss certification.
 
 ## Tests
 
@@ -40,7 +40,7 @@ The successful final runs follow integration fixes for schema mappings, catalog 
 
 ## Risks
 
-Native Windows qualification, real browser acceptance and live coordinated recovery remain outstanding. Current producer origin/script-intent/transition telemetry remains UNKNOWN or unsupported where not observed, keeping incomplete evidence training-ineligible. Scoped tests do not claim the full backend test tree passes. Existing disposable development databases may require an explicitly authorized reset to adopt changed development migration history; no such user database operation was performed.
+Fedora real browser acceptance and live coordinated recovery remain outstanding. Windows qualification is outside the revised delivery scope. Current producer origin/script-intent/transition telemetry remains UNKNOWN or unsupported where not observed, keeping incomplete evidence training-ineligible. Scoped tests do not claim the full backend test tree passes. Existing disposable development databases may require an explicitly authorized reset to adopt changed development migration history; no such user database operation was performed.
 
 ## Rollback
 
@@ -48,7 +48,20 @@ Revert the coordinated merge commits with the correct mainline while preserving 
 
 ## Remaining work
 
-Qualify recovery on native Windows and complete the unrun live/browser acceptance checks required by the delivery plan, then reconcile acceptance evidence before marking SC-609 Done. The Fedora automated checks above are complete. Downstream telemetry adapters must supply observed completeness before canonical training can be enabled. Felix remains untouched at the user's request.
+Complete the Fedora checklist below and record its results before marking SC-609 Done. A passing Fedora result satisfies the revised platform acceptance; no Windows test is required for this delivery. The Fedora automated checks above are complete. Downstream telemetry adapters must supply observed completeness before canonical training can be enabled. Felix remains untouched at the user's request.
+
+## Fedora manual acceptance
+
+Use the merged `main` revisions of ChromaScape and Micro6 on Fedora, your normal authorized client setup and a test recording. Keep the retained outbox intact. Run the checks against a known task/settings selection; an unbound legacy session cannot establish v3 recovery acceptance.
+
+1. Start ChromaScape and the Micro6 client on Fedora through their existing runbooks. Open `http://127.0.0.1:8090/debugger` and the replay/recording view.
+2. Start a profile-bound capture with a known task and settings. Confirm negotiation selects tick version 3 and ACK version 1. Record the recording ID, session/run ID, task, settings and settings hash.
+3. Let frames arrive. Confirm the recording appears under the correct account/task, shows the selected settings/hash, and loads additional catalog pages. Verify video-only recordings remain visible when present.
+4. Interrupt only this test capture's connection. Reconnect, then restart only its test client to exercise retained-outbox recovery. Confirm pending frames drain under the original run/session identity; sequence numbers never reset, duplicate replay does not create duplicate frames, and no extra video capture starts.
+5. Stop the capture. Confirm it finalizes. After the interruption, quality remains incomplete and training-ineligible; missing telemetry stays unknown. Recovery must not turn the interrupted recording into complete training evidence.
+6. Inspect `GET /api/recordings/v1/sessions/{recordingId}/provenance` and `GET /api/recordings/v1/sessions/{recordingId}/frames?afterSequence=0&limit=200` using your normal authenticated access. Confirm immutable task/settings/context and ordered frame sequences agree with the UI. Save relevant logs and any failure codes.
+
+Report PASS/FAIL for each step, both main commit IDs, the Fedora version, recording/session IDs and log references. If all applicable steps pass, Fedora acceptance is complete and SC-609 can be marked Done. If a step fails or is untested, retain In Review and report that step. This is a controlled connection/process-restart check; it does not require a machine power cut.
 
 ## Changed files
 

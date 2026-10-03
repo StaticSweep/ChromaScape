@@ -1,6 +1,6 @@
 # SC-609 capture provenance and canonical frames
 
-The complete authoritative scope and acceptance plan is [SC-609-DELIVERY-PLAN.md](SC-609-DELIVERY-PLAN.md). Felix task: `task_1790971893615_dult4y03`, source [SC-609](https://app.shortcut.com/leeuwbot/story/609). ChromaScape changes stack on SC-641; Micro6 changes belong to a coordinated producer branch. Neither branch is a deployment.
+The complete authoritative scope and acceptance plan is [SC-609-DELIVERY-PLAN.md](SC-609-DELIVERY-PLAN.md). Felix task: `task_1790971893615_dult4y03`, source [SC-609](https://app.shortcut.com/leeuwbot/story/609). ChromaScape PR #45 and coordinated Micro6 PR #160 are merged into main. Deployment is a separate operation.
 
 ## Capture identity
 
@@ -51,4 +51,4 @@ Rollback the coordinated application/producer commits and retain additive eviden
 
 ## Verification boundary
 
-Actual verification results and remaining checks are recorded in SC-609-VERIFICATION.md and Felix evidence. Micro6 compile/tests and Windows process-restart/power-loss runtime checks are unrun. Micro6 AGENTS.md explicitly says: “Do not compile or test this project unless the user explicitly requests that exact action in the current request.” Static review and authored native fixtures do not constitute a native test pass. No client/application was launched and no shared/user database was reset.
+Actual verification results and the Fedora manual checklist are recorded in [SC-609-VERIFICATION.md](SC-609-VERIFICATION.md). The user selected Fedora-only delivery acceptance: a passing Fedora live capture/recovery and browser check is sufficient for completion. Windows qualification is outside this scope. Fedora backend/UI automated suites passed; the user supplied passing Micro6 compilation and full client test evidence. No application/client launch or shared database reset was performed by this verification session. CI monitoring and Felix remain skipped as requested.

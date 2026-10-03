@@ -108,3 +108,7 @@ Stable invalid provenance/context/contract/alignment/quality codes; audited acto
 - [ ] UI: Node/JSDOM cursor pagination, account/task grouping, null/empty args, XSS and video-only visibility; scoped Java compile/style/whitespace regression checks.
 ## Delivery and rollback
 Evidence notes must enumerate changed files, actual tests, remaining work; verification must enumerate acceptance results, tests, risks, rollback. Keep task and Shortcut truthful if producer integration or unauthorized checks remain. Feature rollback disables new provenance consumers/UI; additive nullable columns retained to preserve recordings. No merge/deploy/database reset.
+
+## Acceptance scope revision — 2026-10-03
+
+User instruction: Fedora is the delivery target; successful Fedora verification is sufficient. Windows qualification is outside SC-609 completion scope. This supersedes the earlier both-platform requirement. Retain all data integrity, provenance, eligibility and recovery acceptance criteria. Use the Fedora manual acceptance checklist in [SC-609-VERIFICATION.md](SC-609-VERIFICATION.md); record the live capture, reconnect/client-restart and browser results before Done. Automated Fedora suites already passed; user-provided Micro6 compile/full-suite evidence is recorded there. CI monitoring and Felix remain skipped by user instruction. Both coordinated PRs are merged; no deployment or shared database reset is implied.
