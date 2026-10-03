@@ -36,7 +36,6 @@ public class ReplayPlaybackController {
   }
 
   /** Lists a keyset page of linked recordings and their observed-evidence aggregates. */
-  @GetMapping("/v1/recordings")
   public ResponseEntity<ReplayPlaybackCatalogResponse> catalog(
       Principal principal,
       @RequestParam(required = false) String accountName,
@@ -44,6 +43,17 @@ public class ReplayPlaybackController {
       @RequestParam(required = false) String cursor) {
     principalService.requirePrincipal(principal);
     return ResponseEntity.ok(playbackService.catalog(accountName, limit, cursor));
+  }
+
+  @GetMapping("/v1/recordings")
+  public ResponseEntity<ReplayPlaybackCatalogResponse> catalogFiltered(
+      Principal principal,
+      @RequestParam(required = false) String accountName,
+      @RequestParam(required = false) String taskKey,
+      @RequestParam(required = false, defaultValue = "50") int limit,
+      @RequestParam(required = false) String cursor) {
+    principalService.requirePrincipal(principal);
+    return ResponseEntity.ok(playbackService.catalog(accountName, taskKey, limit, cursor, 0));
   }
 
   /**

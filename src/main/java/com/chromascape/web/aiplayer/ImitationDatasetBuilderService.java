@@ -264,6 +264,9 @@ public class ImitationDatasetBuilderService {
       int sourceRecordCount,
       int excludedRecordCount) {
     Map<String, Object> manifest = new LinkedHashMap<>();
+    manifest.put("training_eligible", false);
+    manifest.put("eligibility_code", "LEGACY_UNBOUND_EVIDENCE");
+    manifest.put("data_origin", "UNKNOWN");
     manifest.put("dataset_id", datasetId);
     manifest.put("dataset_kind", datasetKind);
     manifest.put("generated_at", formatTimestamp(LocalDateTime.now()));

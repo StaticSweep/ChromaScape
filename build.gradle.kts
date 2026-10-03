@@ -593,6 +593,29 @@ tasks.register<Test>("aiPlayerCatalogTest") {
     useJUnitPlatform()
 }
 
+// SC-609 isolated capture contract/cursor verification; unrelated legacy tests stay excluded.
+sourceSets.create("recordingProvenanceTest") {
+    java.srcDir("src/test/java/com/chromascape/web/recording/provenance")
+    java.srcDir("src/test/java/com/chromascape/web/replay/playback")
+    java.srcDir("src/test/java")
+    java.include("*.java", "com/chromascape/web/debug/tickdebugger/service/DebugSessionServiceTest.java",
+        "com/chromascape/web/debug/tickdebugger/dto/SessionStartRequestTest.java",
+        "com/chromascape/web/debug/tickdebugger/websocket/TickStreamWebSocketHandlerTest.java",
+        "com/chromascape/web/recording/service/TaskDetectionServiceTest.java")
+    java.exclude("*IntegrationTest.java")
+    resources.srcDir("src/test/resources")
+    compileClasspath += sourceSets.main.get().output
+    runtimeClasspath += sourceSets.main.get().output
+}
+configurations.named("recordingProvenanceTestImplementation") { extendsFrom(configurations.testImplementation.get()) }
+configurations.named("recordingProvenanceTestRuntimeOnly") { extendsFrom(configurations.testRuntimeOnly.get()) }
+tasks.register<Test>("recordingProvenanceTest") {
+    group = "verification"
+    testClassesDirs = sourceSets["recordingProvenanceTest"].output.classesDirs
+    classpath = sourceSets["recordingProvenanceTest"].runtimeClasspath
+    useJUnitPlatform()
+}
+
 // ---------------------------------------------------------------------------
 // SC-1662 - Linux RemoteInput native build, staging and verification.
 //

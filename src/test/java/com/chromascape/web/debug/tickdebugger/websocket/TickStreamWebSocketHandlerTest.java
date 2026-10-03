@@ -113,10 +113,61 @@ class TickStreamWebSocketHandlerTest {
                 "sha256:0000000000000000000000000000000000000000000000000000000000000000",
                 "PERSISTED"));
     wsSession = mock(WebSocketSession.class);
+    when(wsSession.getAttributes()).thenReturn(new java.util.HashMap<>());
     when(wsSession.getId()).thenReturn(wsId);
     handler =
         new TickStreamWebSocketHandler(
             objectMapper, sessionService, ingestionService, debuggerHandler, shadowDecisionService);
+  }
+
+  private JsonNode bindCanonicalFrame() throws Exception {
+    setup("ws-canonical");
+    bind("debug_1");
+    wsSession.getAttributes().put("selectedTickBatchVersion", 3);
+    var wire = (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(tickBatchJson());
+    wire.put("schemaVersion", 3).put("sequence", 1).put("contentHash", "a".repeat(64));
+    wire.put("originalWireOnly", "preserved");
+    var redacted = wire.deepCopy();
+    redacted.remove("originalWireOnly");
+    var store = mock(com.chromascape.web.recording.provenance.CanonicalFrameStore.class);
+    when(store.accept(eq("rec_1"), any()))
+        .thenReturn(new com.chromascape.web.recording.provenance.CanonicalFrameStore.Receipt(
+            "1", true, redacted));
+    var frame = mock(com.chromascape.web.recording.provenance.CanonicalTickFrame.class);
+    when(frame.payload()).thenReturn(redacted);
+    when(frame.digest()).thenReturn("a".repeat(64));
+    when(store.page(eq("rec_1"), any(), eq(1))).thenReturn(java.util.List.of(frame));
+    ReflectionTestUtils.setField(handler, "canonicalFrames", store);
+    var storedSession = mock(com.chromascape.web.debug.tickdebugger.entity.DebugSession.class);
+    when(storedSession.getRecordingId()).thenReturn("rec_1");
+    when(storedSession.isActive()).thenReturn(true);
+    when(sessionService.getSession("debug_1")).thenReturn(java.util.Optional.of(storedSession));
+    return wire;
+  }
+
+  @Test
+  void canonicalFrameUsesOneDurableAckAndPreservesOriginalWireForProjection() throws Exception {
+    JsonNode wire = bindCanonicalFrame();
+    handler.handleTextMessage(wsSession, new TextMessage(wire.toString()));
+    verify(ingestionService).processTickBatch(
+        argThat(batch -> batch.getCanonicalFrame() != null), eq(wire));
+    verify(wsSession, times(1)).sendMessage(argThat((TextMessage message) ->
+        message.getPayload().contains("TICK_BATCH_ACK")
+            && message.getPayload().contains("acceptedSequence")));
+    verify(wsSession, never()).sendMessage(argThat((TextMessage message) ->
+        message.getPayload().contains("tick-batch-ack/v1")));
+  }
+
+  @Test
+  void canonicalProjectionFailureDoesNotRevokeCommittedAck() throws Exception {
+    JsonNode wire = bindCanonicalFrame();
+    doThrow(new IllegalStateException("legacy projection unavailable"))
+        .when(ingestionService).processTickBatch(any(), any());
+    handler.handleTextMessage(wsSession, new TextMessage(wire.toString()));
+    verify(wsSession, times(1)).sendMessage(argThat((TextMessage message) ->
+        message.getPayload().contains("TICK_BATCH_ACK")));
+    verify(wsSession, never()).sendMessage(argThat((TextMessage message) ->
+        message.getPayload().contains("BATCH_PERSISTENCE_FAILED")));
   }
 
   private void stubStartSession(String sessionId) {
@@ -467,6 +518,7 @@ class TickStreamWebSocketHandlerTest {
     bind("debug_1");
 
     WebSocketSession other = mock(WebSocketSession.class);
+    when(other.getAttributes()).thenReturn(new java.util.HashMap<>());
     when(other.getId()).thenReturn("ws-two");
     TickStreamWebSocketHandler otherHandler =
         new TickStreamWebSocketHandler(
@@ -566,6 +618,7 @@ class TickStreamWebSocketHandlerTest {
     handler.afterConnectionClosed(wsSession, CloseStatus.NORMAL);
 
     WebSocketSession replacement = mock(WebSocketSession.class);
+    when(replacement.getAttributes()).thenReturn(new java.util.HashMap<>());
     when(replacement.getId()).thenReturn("ws-replacement");
     handler.handleTextMessage(replacement, new TextMessage(startJson()));
 
@@ -812,6 +865,7 @@ class TickStreamWebSocketHandlerTest {
     bind("debug_1");
 
     WebSocketSession other = mock(WebSocketSession.class);
+    when(other.getAttributes()).thenReturn(new java.util.HashMap<>());
     when(other.getId()).thenReturn("ws-two");
     String startJson2 =
         "{\"type\":\"SESSION_START\",\"accountName\":\"a\",\"scriptName\":\"s\","
@@ -846,6 +900,7 @@ class TickStreamWebSocketHandlerTest {
     assertThat(owners).doesNotContainKey("debug_1");
     // The released session can be rebound by another socket without an ownership conflict.
     WebSocketSession other = mock(WebSocketSession.class);
+    when(other.getAttributes()).thenReturn(new java.util.HashMap<>());
     when(other.getId()).thenReturn("ws-new");
     stubStartSession("debug_1");
     handler.handleTextMessage(

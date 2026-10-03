@@ -102,11 +102,7 @@ public class CaptureRecordingGateway {
     try {
       SessionStartResponse response =
           debugSessions.startCaptureSession(
-              "AI_ROUTINE_CAPTURE",
-              taskKey,
-              true,
-              RecordingTriggerSource.MANUAL,
-              preparation.debugSessionId());
+              null, taskKey, true, RecordingTriggerSource.MANUAL, preparation.debugSessionId());
       if (response.getSessionId() == null
           || response.getRecordingId() == null
           || response.getRecordingId().isBlank()) {

@@ -67,6 +67,12 @@ class ReplayPlaybackServiceTest {
   }
 
   @Test
+  void versionedCatalogPreservesExactAccountAndTaskFilters() {
+    service.catalog("  account-a  ", "FISHING", 1, null, 0);
+    verify(catalogRepository).findCatalogRows("  account-a  ", "FISHING", null, null, 2, 0);
+  }
+
+  @Test
   void catalogReportsObservedCoverageWithoutSimulatorDependencies() {
     LocalDateTime start = LocalDateTime.of(2026, 1, 1, 0, 0);
     when(catalogRepository.findCatalogRows(null, null, null, 51, 0))

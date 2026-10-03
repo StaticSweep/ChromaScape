@@ -82,6 +82,10 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
 
   private final ObjectMapper objectMapper;
   private final DebugSessionService sessionService;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private com.chromascape.web.recording.provenance.CanonicalFrameStore canonicalFrames;
+
   private final TickStreamIngestionService ingestionService;
   private final DebuggerTickWebSocketHandler debuggerWebSocketHandler;
   private final FishingShadowDecisionService shadowDecisionService;
@@ -351,6 +355,9 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
             log.warn("Unknown message type: {}", type);
         }
       } catch (Exception e) {
+        var bound = sessionBindings.get(session.getId());
+        if (canonicalFrames != null && bound != null)
+          canonicalFrames.reject(bound.sessionId(), "MALFORMED_STREAM_MESSAGE");
         log.error("Error processing tick stream message: {}", e.getMessage(), e);
       }
     }
@@ -466,16 +473,48 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
         return;
       }
 
+      int selectedVersion =
+          request.getRunContext() == null || request.getRunContext().isNull() ? 2 : 3;
+      if ((selectedVersion == 3 || request.getSupportedTickBatchVersions() != null)
+          && (request.getSupportedTickBatchVersions() == null
+              || !request.getSupportedTickBatchVersions().contains(selectedVersion)
+              || request.getSupportedAckVersions() == null
+              || !request.getSupportedAckVersions().contains(1))) {
+        releasePreferredReservation(preferred, wsId);
+        sendErrorResponse(
+            wsSession,
+            "UNSUPPORTED_TICK_NEGOTIATION",
+            "Unsupported tick/ack negotiation",
+            clientRequestId);
+        return;
+      }
+      wsSession.getAttributes().put("selectedTickBatchVersion", selectedVersion);
       // Call the authoritative service outside the ownership lock.
       SessionStartOutcome outcome;
       try {
         outcome =
-            sessionService.startSessionWithOutcome(
-                request.getAccountName(),
-                request.getScriptName(),
-                recordingEnabled,
-                request.getTriggerSource(),
-                preferred);
+            request.getTaskKey() == null
+                    && request.getTaskArgs() == null
+                    && request.getRunContext() == null
+                ? sessionService.startSessionWithOutcome(
+                    request.getAccountName(),
+                    request.getScriptName(),
+                    recordingEnabled,
+                    request.getTriggerSource(),
+                    preferred)
+                : sessionService.startSessionWithOutcome(
+                    request.getAccountName(),
+                    request.getScriptName(),
+                    recordingEnabled,
+                    request.getTriggerSource(),
+                    preferred,
+                    request.getTaskKey(),
+                    request.getTaskArgs(),
+                    request.getRunContext());
+      } catch (com.chromascape.web.recording.provenance.ProvenanceException e) {
+        releasePreferredReservation(preferred, wsId);
+        sendErrorResponse(wsSession, e.getCode(), "Invalid recording provenance", clientRequestId);
+        return;
       } catch (Exception e) {
         log.error("Error starting debug session: {}", e.getMessage(), e);
         releasePreferredReservation(preferred, wsId);
@@ -906,7 +945,57 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     }
     try {
       JsonNode exactWireDocument = root;
-      TickBatchMessage batch = objectMapper.treeToValue(exactWireDocument, TickBatchMessage.class);
+      int negotiated =
+          (Integer) session.getAttributes().getOrDefault("selectedTickBatchVersion", 2);
+      if (root.path("schemaVersion").asInt() != negotiated) {
+        throw new com.chromascape.web.recording.provenance.ProvenanceException(
+            "TICK_VERSION_CHANGED");
+      }
+      if (root.path("schemaVersion").asInt() != 2 && root.path("schemaVersion").asInt() != 3) {
+        throw new com.chromascape.web.recording.provenance.ProvenanceException(
+            "UNSUPPORTED_TICK_VERSION");
+      }
+      if (root.path("schemaVersion").asInt() == 3) {
+        if (canonicalFrames == null)
+          throw new com.chromascape.web.recording.provenance.ProvenanceException(
+              "FRAME_STORE_UNAVAILABLE");
+        var recording = sessionService.getSession(binding.sessionId()).orElseThrow();
+        var receipt = canonicalFrames.accept(recording.getRecordingId(), root);
+        // This ACK proves the canonical frame is committed, not that legacy async projections
+        // completed.
+        session.sendMessage(
+            new TextMessage(
+                objectMapper
+                    .createObjectNode()
+                    .put("type", "TICK_BATCH_ACK")
+                    .put("schemaVersion", 1)
+                    .put("sessionId", binding.sessionId())
+                    .put("acceptedSequence", receipt.acceptedSequence())
+                    .put("contentHash", root.path("contentHash").asText())
+                    .put("batchId", root.path("batchId").asText())
+                    .put("payloadChecksum", root.path("payloadChecksum").asText())
+                    .put("tick", root.path("tick").asLong())
+                    .put("status", "PERSISTED")
+                    .toString()));
+        if (!receipt.newFrame() || !recording.isActive()) return;
+        root = receipt.frame();
+      }
+      TickBatchMessage batch = objectMapper.treeToValue(root, TickBatchMessage.class);
+      if (root.path("schemaVersion").asInt() == 3) {
+        batch.setCanonicalFrame(root);
+        var storedSession = sessionService.getSession(binding.sessionId()).orElseThrow();
+        batch.setCanonicalObservation(
+            com.chromascape.web.recording.provenance.CanonicalObservation.from(
+                    canonicalFrames
+                        .page(
+                            storedSession.getRecordingId(),
+                            root.path("sequence")
+                                .bigIntegerValue()
+                                .subtract(java.math.BigInteger.ONE),
+                            1)
+                        .get(0))
+                .payload());
+      }
 
       if (!"TICK_BATCH".equals(batch.getType())) {
         log.warn("Received non-batch message in TICK_BATCH handler: {}", batch.getType());
@@ -936,11 +1025,22 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
 
       // Persistence is synchronous and transactional. The ACK is emitted only after the service
       // returns successfully; a failure therefore leaves the exact client batch eligible for retry.
-      TickBatchAcknowledgment acknowledgment = ingestionService.processTickBatch(batch, root);
-      if (acknowledgment == null) {
-        throw new IllegalStateException("Tick ingestion returned no acknowledgment");
+      if (batch.getCanonicalFrame() != null) {
+        // CanonicalFrameStore supplied the durable ACK above. Legacy UI projection is
+        // observational: failure cannot revoke that receipt or authorize a second ACK.
+        try {
+          ingestionService.processTickBatch(batch, exactWireDocument);
+        } catch (RuntimeException projectionFailure) {
+          log.warn("Canonical frame committed but legacy projection failed", projectionFailure);
+        }
+      } else {
+        TickBatchAcknowledgment acknowledgment =
+            ingestionService.processTickBatch(batch, exactWireDocument);
+        if (acknowledgment == null) {
+          throw new IllegalStateException("Tick ingestion returned no acknowledgment");
+        }
+        sendBatchAcknowledgment(session, acknowledgment);
       }
-      sendBatchAcknowledgment(session, acknowledgment);
 
       // Shadow evaluation is observational and must never be used as persistence evidence.
       try {
@@ -953,6 +1053,9 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
             shadowFailure.getMessage());
       }
 
+    } catch (com.chromascape.web.recording.provenance.ProvenanceException e) {
+      if (canonicalFrames != null) canonicalFrames.reject(binding.sessionId(), e.getCode());
+      sendErrorResponse(session, e.getCode(), "Invalid canonical tick frame", null);
     } catch (Exception e) {
       log.error("Error handling TICK_BATCH: {}", e.getMessage(), e);
       String errorCode = mapTickBatchError(e);

@@ -222,8 +222,12 @@ public class TickStreamIngestionService {
   public TickBatchAcknowledgment processTickBatch(
       TickBatchMessage batch, JsonNode originalWireDocument) {
     try {
+      // Canonical v3 frames already committed through CanonicalFrameStore. Their legacy
+      // projection must not create a second receipt or validate a redacted payload as v2.
+      boolean canonicalProjection =
+          Integer.valueOf(3).equals(batch.getSchemaVersion()) && batch.getCanonicalFrame() != null;
       java.util.UUID batchId = null;
-      if (batchReceiptRepository != null) {
+      if (batchReceiptRepository != null && !canonicalProjection) {
         // Verify immutable wire identity before normalization changes the in-memory DTO.
         batchId = requireBatchIdentity(batch);
         validatePayloadChecksum(batch, originalWireDocument);
@@ -252,7 +256,7 @@ public class TickStreamIngestionService {
       // envelope fails the transaction with a stable permanent code and no partial rows.
       validatePackets(batch);
 
-      if (batchReceiptRepository != null) {
+      if (batchReceiptRepository != null && !canonicalProjection) {
         Optional<com.chromascape.web.debug.tickdebugger.entity.ReplayTickBatchReceipt> existing =
             batchReceiptRepository.findBySessionIdAndBatchId(sessionId, batchId);
         if (existing.isPresent()) {
@@ -576,6 +580,11 @@ public class TickStreamIngestionService {
   }
 
   private void validateStrictV2(TickBatchMessage batch) {
+    // V3 was already validated and durably accepted by the handler. Its redacted projection
+    // intentionally lacks raw sections required by legacy v2; never fabricate those sections.
+    if (Integer.valueOf(3).equals(batch.getSchemaVersion()) && batch.getCanonicalFrame() != null)
+      return;
+
     if (batch.getSchemaVersion() == null
         || (batch.getSchemaVersion() != 2 && batch.getSchemaVersion() != 3)) {
       throw new IllegalArgumentException("Unsupported schemaVersion; expected 2 or 3");

@@ -11,8 +11,8 @@ const templatePath = path.resolve(
 const template = fs.readFileSync(templatePath, 'utf8');
 
 test('standalone replay page loads playable recording sessions, not only tick catalog entries', () => {
-  assert.match(template, /const RECORDING_SESSIONS_API = '\/api\/recordings\/sessions';/);
-  assert.match(template, /const REPLAY_TICK_CATALOG_API = '\/api\/replay\/playback\/recordings';/);
+  assert.match(template, /const RECORDING_SESSIONS_API = '\/api\/recordings\/v1\/sessions';/);
+  assert.match(template, /const REPLAY_TICK_CATALOG_API = '\/api\/replay\/playback\/v1\/recordings';/);
   assert.match(template, /const playable = session\.playable === true;/);
 });
 

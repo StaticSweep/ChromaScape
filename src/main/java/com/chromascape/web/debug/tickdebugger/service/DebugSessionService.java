@@ -53,6 +53,12 @@ public class DebugSessionService {
   private final RecordingConfig recordingConfig;
   private final ObjectMapper objectMapper;
 
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private com.chromascape.web.recording.provenance.BehaviorRunContextService contexts;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private com.chromascape.web.recording.provenance.CanonicalFrameStore canonicalFrames;
+
   public DebugSessionService(
       DebugSessionRepository sessionRepository,
       TickSnapshotRepository snapshotRepository,
@@ -144,15 +150,94 @@ public class DebugSessionService {
       RecordingTriggerSource triggerSource,
       String preferredSessionId) {
 
+    return startSessionWithOutcome(
+        accountName,
+        scriptName,
+        recordingEnabled,
+        triggerSource,
+        preferredSessionId,
+        null,
+        null,
+        null);
+  }
+
+  @Transactional
+  public SessionStartOutcome startSessionWithOutcome(
+      String accountName,
+      String scriptName,
+      Boolean recordingEnabled,
+      RecordingTriggerSource triggerSource,
+      String preferredSessionId,
+      String taskKey,
+      com.fasterxml.jackson.databind.JsonNode taskArgs,
+      com.fasterxml.jackson.databind.JsonNode runContext) {
+    var provenance =
+        com.chromascape.web.recording.provenance.RecordingProvenance.capture(taskKey, taskArgs);
+    com.fasterxml.jackson.databind.node.ObjectNode contextSnapshot = null;
+    if (runContext != null && !runContext.isNull()) {
+      if (contexts == null)
+        throw new com.chromascape.web.recording.provenance.ProvenanceException(
+            "CONTEXT_SERVICE_UNAVAILABLE");
+      contextSnapshot = contexts.snapshot(runContext, provenance, accountName);
+    }
+    // Reconnect/restart may drain the original durable outbox after disconnect finalization.
+    // Reuse only the exact immutable capture; do not restart video or reopen its quality gate.
+    if (contextSnapshot != null && preferredSessionId != null) {
+      var previous = sessionRepository.findBySessionId(preferredSessionId);
+      if (previous.isPresent() && previous.get().getRecordingId() != null) {
+        var row = contexts.recording(previous.get().getRecordingId());
+        var expected = contexts.bind(contextSnapshot, row.getRecordingId(), preferredSessionId);
+        if (!expected.equals(row.getRunContext()))
+          throw new com.chromascape.web.recording.provenance.ProvenanceException(
+              "IMMUTABLE_PROVENANCE");
+        if (!previous.get().isActive()) {
+          var response =
+              new SessionStartResponse(
+                  preferredSessionId,
+                  false,
+                  row.getRecordingId(),
+                  previous.get().getStartTick(),
+                  null);
+          response.setSelectedTickBatchVersion(3);
+          response.setSelectedAckVersion(1);
+          response.setRunContext(row.getRunContext());
+          return new SessionStartOutcome(
+              response,
+              new SessionStartRollbackToken(
+                  preferredSessionId,
+                  false,
+                  null,
+                  row.getRecordingId(),
+                  previous.get().getStartTime(),
+                  previous.get().getLifecycleState()),
+              false,
+              true,
+              false);
+        }
+      }
+    }
     ResolveResult resolved = resolveOrCreateSession(accountName, scriptName, preferredSessionId);
     DebugSession session = resolved.session();
     boolean createdNewSession = resolved.createdNewSession();
     boolean reusedPreferredSession = resolved.reusedPreferredSession();
+    if (contextSnapshot != null && createdNewSession)
+      session.setSessionId(UUID.randomUUID().toString());
     String sessionId = session.getSessionId();
     Long startTick = session.getStartTick() != null ? session.getStartTick() : 0L;
 
     // Capture the pre-mutation recording/lifecycle state so a reused session can be restored on
     // rollback.
+    if (reusedPreferredSession && session.getRecordingId() != null) {
+      var existing = recordingSessionRepository.findByRecordingId(session.getRecordingId());
+      if (existing.isPresent()
+          && taskKey != null
+          && (!java.util.Objects.equals(existing.get().getTaskKey(), taskKey)
+              || taskArgs != null
+                  && !java.util.Objects.equals(
+                      existing.get().getSettingsHash(), provenance.settingsHash())))
+        throw new com.chromascape.web.recording.provenance.ProvenanceException(
+            "IMMUTABLE_PROVENANCE");
+    }
     String previousRecordingId = session.getRecordingId();
     LocalDateTime previousStartTime = session.getStartTime();
     DebugSessionLifecycleState previousLifecycleState = session.getLifecycleState();
@@ -194,11 +279,15 @@ public class DebugSessionService {
           RecordingSession recordingSession =
               new RecordingSession(
                   recordingId,
-                  accountName,
-                  scriptName,
+                  session.getAccountName(),
+                  session.getScriptName(),
                   sessionStartTime,
                   toSessionTrigger(triggerSource),
                   null);
+          recordingSession.captureProvenance(provenance);
+          if (contextSnapshot != null)
+            recordingSession.bindRunContext(
+                contexts.bind(contextSnapshot, recordingId, sessionId), "CAPTURED");
           recordingSessionRepository.save(recordingSession);
 
           log.info("Started recording {} for debug session {}", recordingId, sessionId);
@@ -234,6 +323,24 @@ public class DebugSessionService {
       recordingEnabled = false;
     }
 
+    if (contextSnapshot != null && recordingId == null) {
+      // A canonical capture may have tick evidence without a video recorder. Persist its
+      // identity regardless; the video catalog explicitly shows the absent video.
+      recordingId = "capture_" + UUID.randomUUID().toString();
+      var row =
+          new RecordingSession(
+              recordingId,
+              session.getAccountName(),
+              session.getScriptName(),
+              session.getStartTime(),
+              toSessionTrigger(triggerSource),
+              null);
+      row.captureProvenance(provenance);
+      row.bindRunContext(contexts.bind(contextSnapshot, recordingId, sessionId), "CAPTURED");
+      recordingSessionRepository.save(row);
+      session.setRecordingId(recordingId);
+      recordingEnabled = false;
+    }
     // Transition to RECORDING state on success
     session.transitionTo(DebugSessionLifecycleState.RECORDING);
     try {
@@ -262,6 +369,10 @@ public class DebugSessionService {
     SessionStartResponse response =
         new SessionStartResponse(
             sessionId, recordingEnabled, recordingId, startTick, recordingFailureReason);
+    response.setSelectedTickBatchVersion(contextSnapshot == null ? 2 : 3);
+    response.setSelectedAckVersion(1);
+    if (contextSnapshot != null && recordingId != null)
+      response.setRunContext(contexts.context(recordingId));
     return new SessionStartOutcome(
         response, token, createdNewSession, reusedPreferredSession, recordingStartedByOperation);
   }
@@ -438,8 +549,16 @@ public class DebugSessionService {
       Boolean recordingEnabled,
       RecordingTriggerSource triggerSource,
       String preferredSessionId) {
-    return startSession(
-        accountName, scriptName, recordingEnabled, triggerSource, preferredSessionId);
+    return startSessionWithOutcome(
+            accountName,
+            scriptName,
+            recordingEnabled,
+            triggerSource,
+            preferredSessionId,
+            scriptName != null && scriptName.matches("[A-Z][A-Z0-9_]{0,159}") ? scriptName : null,
+            null,
+            null)
+        .response();
   }
 
   /**
@@ -462,6 +581,7 @@ public class DebugSessionService {
    */
   @Transactional
   public void stopSession(String sessionId, Long endTick, boolean stopRecording) {
+    if (canonicalFrames != null) canonicalFrames.close(sessionId, "EXPLICIT_STOP");
     Optional<DebugSession> sessionOpt = sessionRepository.findBySessionId(sessionId);
 
     if (sessionOpt.isEmpty()) {
@@ -514,7 +634,9 @@ public class DebugSessionService {
     }
 
     // Stop video recording if active and requested
-    if (stopRecording && session.getRecordingId() != null) {
+    if (stopRecording
+        && session.getRecordingId() != null
+        && !session.getRecordingId().startsWith("capture_")) {
       try {
         RecordingMetadata metadata = recordingService.stopRecording();
         if (metadata != null) {
@@ -618,6 +740,7 @@ public class DebugSessionService {
    */
   @Transactional
   public void finalizeSessionOnDisconnect(String sessionId, String cause) {
+    if (canonicalFrames != null) canonicalFrames.close(sessionId, "DISCONNECT");
     Optional<DebugSession> sessionOpt = sessionRepository.findBySessionId(sessionId);
 
     if (sessionOpt.isEmpty()) {
@@ -652,7 +775,7 @@ public class DebugSessionService {
       snapshotRepository.findMaxTickBySessionId(sessionId).ifPresent(session::setEndTick);
 
       // Stop recording if active
-      if (session.getRecordingId() != null) {
+      if (session.getRecordingId() != null && !session.getRecordingId().startsWith("capture_")) {
         try {
           RecordingMetadata metadata = recordingService.stopRecording();
           if (metadata != null) {

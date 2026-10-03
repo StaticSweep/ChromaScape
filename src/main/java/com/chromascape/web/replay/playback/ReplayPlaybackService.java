@@ -106,7 +106,16 @@ public class ReplayPlaybackService {
    */
   public ReplayPlaybackCatalogResponse catalog(
       String accountName, int limit, String cursorValue, int offset) {
-    String normalizedAccountName = normalizeOptional(accountName);
+    return catalog(normalizeOptional(accountName), null, limit, cursorValue, offset);
+  }
+
+  public ReplayPlaybackCatalogResponse catalog(
+      String accountName, String taskKey, int limit, String cursorValue, int offset) {
+    if (accountName != null && accountName.length() > 100
+        || taskKey != null && taskKey.length() > 160)
+      throw new com.chromascape.web.recording.provenance.ProvenanceException(
+          "INVALID_CATALOG_FILTER");
+    String normalizedAccountName = accountName;
     int safeLimit = clamp(limit, 1, CATALOG_MAX_LIMIT);
     int safeOffset = Math.max(0, offset);
     Cursor cursor = cursorCodec.decode(cursorValue);
@@ -115,12 +124,20 @@ public class ReplayPlaybackService {
     }
 
     List<Object[]> rawRows =
-        catalogRepository.findCatalogRows(
-            normalizedAccountName,
-            cursor != null ? cursor.startTime() : null,
-            cursor != null ? cursor.id() : null,
-            safeLimit + 1,
-            safeOffset);
+        taskKey == null
+            ? catalogRepository.findCatalogRows(
+                normalizedAccountName,
+                cursor != null ? cursor.startTime() : null,
+                cursor != null ? cursor.id() : null,
+                safeLimit + 1,
+                safeOffset)
+            : catalogRepository.findCatalogRows(
+                normalizedAccountName,
+                taskKey,
+                cursor != null ? cursor.startTime() : null,
+                cursor != null ? cursor.id() : null,
+                safeLimit + 1,
+                safeOffset);
     List<CatalogRow> rows = new ArrayList<>();
     if (rawRows != null) {
       for (Object[] rawRow : rawRows) {
@@ -132,7 +149,19 @@ public class ReplayPlaybackService {
     int resultSize = Math.min(rows.size(), safeLimit);
     List<ReplayPlaybackCatalogEntry> entries = new ArrayList<>(resultSize);
     for (int index = 0; index < resultSize; index++) {
-      entries.add(toCatalogEntry(rows.get(index)));
+      ReplayPlaybackCatalogEntry entry = toCatalogEntry(rows.get(index));
+      Object[] raw = rawRows.get(index);
+      if (raw.length >= 15) {
+        entry.setTaskKey(raw[12] == null ? null : raw[12].toString());
+        try {
+          entry.setTaskArgs(
+              raw[13] == null ? null : new ObjectMapper().readTree(raw[13].toString()));
+        } catch (java.io.IOException e) {
+          throw new IllegalStateException("Invalid persisted task args", e);
+        }
+        entry.setSettingsHash(raw[14] == null ? null : raw[14].toString());
+      }
+      entries.add(entry);
     }
 
     String nextCursor = null;

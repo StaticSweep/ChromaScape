@@ -32,6 +32,9 @@ public final class FishingStateExtractor {
    * @return the extracted feature state
    */
   public static FishingState extract(TickBatchMessage batch, int initialInventoryTotal) {
+    if (batch.getCanonicalObservation() != null)
+      return com.chromascape.web.recording.provenance.CanonicalObservation.knownFishingState(
+          batch.getCanonicalObservation());
     JsonNode playerState =
         batch.getPlayerState() != null ? OBJECT_MAPPER.valueToTree(batch.getPlayerState()) : null;
     JsonNode inventory =

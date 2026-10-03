@@ -584,7 +584,7 @@ public class TickReplayController {
       Boolean recordingEnabled = request.getRecordingEnabled();
 
       if (accountName == null || accountName.isEmpty()) {
-        accountName = "Unknown";
+        accountName = null;
       }
       if (scriptName == null || scriptName.isEmpty()) {
         scriptName = "Manual Recording";
@@ -594,12 +594,17 @@ public class TickReplayController {
       }
 
       SessionStartResponse response =
-          debugSessionService.startSession(
-              accountName,
-              scriptName,
-              recordingEnabled,
-              RecordingTriggerSource.MANUAL,
-              request.getSessionId());
+          debugSessionService
+              .startSessionWithOutcome(
+                  accountName,
+                  scriptName,
+                  recordingEnabled,
+                  RecordingTriggerSource.MANUAL,
+                  request.getSessionId(),
+                  request.getTaskKey(),
+                  request.getTaskArgs(),
+                  request.getRunContext())
+              .response();
 
       log.info(
           "Started recording via replay page: sessionId={}, recordingId={}",
@@ -701,7 +706,7 @@ public class TickReplayController {
       String scriptName = request.getScriptName();
 
       if (accountName == null || accountName.isEmpty()) {
-        accountName = "Unknown";
+        accountName = null;
       }
       if (scriptName == null || scriptName.isEmpty()) {
         scriptName = "Live Debug Session";
@@ -1622,6 +1627,34 @@ public class TickReplayController {
 
   /** Request DTO for starting a recording. */
   public static class RecordingStartRequest {
+    private String taskKey;
+    private com.fasterxml.jackson.databind.JsonNode taskArgs;
+    private com.fasterxml.jackson.databind.JsonNode runContext;
+
+    public String getTaskKey() {
+      return taskKey;
+    }
+
+    public void setTaskKey(String v) {
+      taskKey = v;
+    }
+
+    public com.fasterxml.jackson.databind.JsonNode getTaskArgs() {
+      return taskArgs;
+    }
+
+    public void setTaskArgs(com.fasterxml.jackson.databind.JsonNode v) {
+      taskArgs = v;
+    }
+
+    public com.fasterxml.jackson.databind.JsonNode getRunContext() {
+      return runContext;
+    }
+
+    public void setRunContext(com.fasterxml.jackson.databind.JsonNode v) {
+      runContext = v;
+    }
+
     private String accountName;
     private String scriptName;
     private Boolean recordingEnabled;

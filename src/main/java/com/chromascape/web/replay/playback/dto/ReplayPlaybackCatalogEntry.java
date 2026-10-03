@@ -5,6 +5,34 @@ import java.time.LocalDateTime;
 /** A recording with captured tick evidence available to the observed playback UI. */
 public class ReplayPlaybackCatalogEntry {
 
+  private String taskKey;
+  private com.fasterxml.jackson.databind.JsonNode taskArgs;
+  private String settingsHash;
+
+  public String getTaskKey() {
+    return taskKey;
+  }
+
+  public void setTaskKey(String v) {
+    taskKey = v;
+  }
+
+  public com.fasterxml.jackson.databind.JsonNode getTaskArgs() {
+    return taskArgs;
+  }
+
+  public void setTaskArgs(com.fasterxml.jackson.databind.JsonNode v) {
+    taskArgs = v;
+  }
+
+  public String getSettingsHash() {
+    return settingsHash;
+  }
+
+  public void setSettingsHash(String v) {
+    settingsHash = v;
+  }
+
   private String recordingId;
   private String sessionId;
   private String accountName;

@@ -23,7 +23,7 @@ public class AiRoutineOperatorWebConfig implements WebMvcConfigurer {
   public void addInterceptors(InterceptorRegistry registry) {
     registry
         .addInterceptor(interceptor)
-        .addPathPatterns("/api/v1/ai-routine/**")
+        .addPathPatterns("/api/v1/ai-routine/**", "/api/recordings/v1/sessions/*/provenance")
         .excludePathPatterns(
             "/api/v1/ai-routine/capture/**",
             // CaptureSessionClient creates its server-owned run with the capture bearer. Applying

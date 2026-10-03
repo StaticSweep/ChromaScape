@@ -192,6 +192,10 @@ public final class Micro6CanonicalHash {
   }
 
   /** Canonical JSON serialization with sorted object keys and Micro6-compatible escaping. */
+  public static String canonicalJson(JsonNode node) {
+    return canonicalize(node);
+  }
+
   private static String canonicalize(JsonNode node) {
     if (node == null || node.isNull()) {
       return "null";
