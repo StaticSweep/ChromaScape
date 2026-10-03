@@ -169,12 +169,20 @@ public class BuilderGoalRunnerController {
       String launcherMachineUuid = textValue(payload.path("launcherMachineUuid"));
       Integer world = intValue(payload.path("world"));
       boolean forceRelaunch = payload.path("forceRelaunch").asBoolean(false);
+      if (payload.has("packetCapture") && !payload.path("packetCapture").isBoolean()) {
+        return ResponseEntity.badRequest().body(Map.of("error", "packetCapture must be a boolean"));
+      }
+      boolean packetCapture = payload.path("packetCapture").asBoolean(false);
       // The launch runs on a dedicated executor with a server-side readiness watchdog. The POST
       // returns HTTP 202 immediately; the browser polls the operation via statusUrl.
       Map<String, Object> launchResponse =
-          forceRelaunch
-              ? builderGoalRunnerService.launchAccount(accountId, launcherMachineUuid, world, true)
-              : builderGoalRunnerService.launchAccount(accountId, launcherMachineUuid, world);
+          packetCapture
+              ? builderGoalRunnerService.launchAccount(
+                  accountId, launcherMachineUuid, world, forceRelaunch, true)
+              : forceRelaunch
+                  ? builderGoalRunnerService.launchAccount(
+                      accountId, launcherMachineUuid, world, true)
+                  : builderGoalRunnerService.launchAccount(accountId, launcherMachineUuid, world);
       return ResponseEntity.accepted().body(launchResponse);
     } catch (BuilderGoalRunnerService.LaunchSubmissionException e) {
       return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
@@ -872,11 +880,16 @@ public class BuilderGoalRunnerController {
     JsonNode inputOrigin = firstPresent(payload, "inputOrigin", "input_origin");
     JsonNode userClicked = firstPresent(payload, "userClicked", "user_clicked");
     JsonNode scriptClicked = firstPresent(payload, "scriptClicked", "script_clicked");
+    JsonNode autoRecord = firstPresent(payload, "autoRecord", "auto_record");
+    if (!autoRecord.isMissingNode() && !autoRecord.isNull() && !autoRecord.isBoolean()) {
+      throw new IllegalArgumentException("autoRecord must be a boolean");
+    }
     if (initiatedBy.isMissingNode()
         && inputOrigin.isMissingNode()
         && userClicked.isMissingNode()
-        && scriptClicked.isMissingNode()) {
-      return null;
+        && scriptClicked.isMissingNode()
+        && autoRecord.isMissingNode()) {
+      return Map.of("auto_record", true);
     }
     Map<String, Object> provenance = new java.util.LinkedHashMap<>();
     if (!initiatedBy.isMissingNode() && !initiatedBy.isNull()) {
@@ -891,7 +904,8 @@ public class BuilderGoalRunnerController {
     if (!scriptClicked.isMissingNode() && !scriptClicked.isNull()) {
       provenance.put("script_clicked", scriptClicked.asBoolean());
     }
-    return provenance.isEmpty() ? null : provenance;
+    provenance.put("auto_record", autoRecord.isMissingNode() || autoRecord.asBoolean());
+    return provenance;
   }
 
   private JsonNode firstPresent(JsonNode payload, String firstField, String secondField) {

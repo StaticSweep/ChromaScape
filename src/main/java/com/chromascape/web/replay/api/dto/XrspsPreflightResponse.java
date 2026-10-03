@@ -10,33 +10,33 @@ import java.util.List;
 
 /** Read-only v2 conversion and runtime eligibility preview. */
 public record XrspsPreflightResponse(
-        String schema,
-        String recordingId,
-        String debugSessionId,
-        String preflightState,
-        boolean playbackEligible,
-        boolean policyReplayEligible,
-        boolean simulationEligible,
-        boolean certificationEligible,
-        ConversionMode conversionMode,
-        ConversionQuality conversionQuality,
-        double actionCoveragePct,
-        int actionCount,
-        int typedActionCount,
-        int legacyLogCount,
-        int gapCount,
-        int approximationCount,
-        List<ReplayGap> gaps,
-        List<ReplayApproximation> approximations,
-        List<ReplayBlockingReason> blockingReasons,
-        CapabilityManifest capability) {
+    String schema,
+    String recordingId,
+    String debugSessionId,
+    String preflightState,
+    boolean playbackEligible,
+    boolean policyReplayEligible,
+    boolean simulationEligible,
+    boolean certificationEligible,
+    ConversionMode conversionMode,
+    ConversionQuality conversionQuality,
+    double actionCoveragePct,
+    int actionCount,
+    int typedActionCount,
+    int legacyLogCount,
+    int gapCount,
+    int approximationCount,
+    List<ReplayGap> gaps,
+    List<ReplayApproximation> approximations,
+    List<ReplayBlockingReason> blockingReasons,
+    CapabilityManifest capability) {
 
-    public static final String SCHEMA = "xrsps-replay-preflight/v2";
+  public static final String SCHEMA = "xrsps-replay-preflight/v2";
 
-    public XrspsPreflightResponse {
-        schema = schema == null ? SCHEMA : schema;
-        gaps = List.copyOf(gaps == null ? List.of() : gaps);
-        approximations = List.copyOf(approximations == null ? List.of() : approximations);
-        blockingReasons = List.copyOf(blockingReasons == null ? List.of() : blockingReasons);
-    }
+  public XrspsPreflightResponse {
+    schema = schema == null ? SCHEMA : schema;
+    gaps = List.copyOf(gaps == null ? List.of() : gaps);
+    approximations = List.copyOf(approximations == null ? List.of() : approximations);
+    blockingReasons = List.copyOf(blockingReasons == null ? List.of() : blockingReasons);
+  }
 }

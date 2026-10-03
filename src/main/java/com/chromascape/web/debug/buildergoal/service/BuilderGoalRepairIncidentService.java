@@ -101,8 +101,7 @@ public class BuilderGoalRepairIncidentService {
 
     long stagnantMillis = now - observation.lastProgressAt;
     if (stagnantMillis >= stallMillis) {
-      String reason =
-          "No meaningful runtime progress for " + (stagnantMillis / 1000L) + " seconds";
+      String reason = "No meaningful runtime progress for " + (stagnantMillis / 1000L) + " seconds";
       recordIncident(
           iteration,
           batch,
@@ -180,9 +179,7 @@ public class BuilderGoalRepairIncidentService {
             ? null
             : firstNonNull(player.get("worldY"), player.get("z"), player.get("y"));
     Object animation =
-        player == null
-            ? null
-            : firstNonNull(player.get("animation"), player.get("animationId"));
+        player == null ? null : firstNonNull(player.get("animation"), player.get("animationId"));
     Object interacting = player == null ? null : player.get("interacting");
     Object skills = player == null ? null : player.get("skills");
     return Integer.toHexString(

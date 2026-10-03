@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.prototype.FishingRecordingLoaderTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:21.708Z" hostname="fedora" time="0.281">
+  <properties/>
+  <testcase name="action queue overflow is detected" classname="com.chromascape.web.aiplayer.prototype.FishingRecordingLoaderTest" time="0.231"/>
+  <testcase name="same-tick actions keep sourceTick and sequence ordering" classname="com.chromascape.web.aiplayer.prototype.FishingRecordingLoaderTest" time="0.008"/>
+  <testcase name="fishing XP unchanged is detected" classname="com.chromascape.web.aiplayer.prototype.FishingRecordingLoaderTest" time="0.006"/>
+  <testcase name="fishing spot NPC telemetry is detected" classname="com.chromascape.web.aiplayer.prototype.FishingRecordingLoaderTest" time="0.006"/>
+  <testcase name="catch delta and fishing XP are derived from snapshots" classname="com.chromascape.web.aiplayer.prototype.FishingRecordingLoaderTest" time="0.007"/>
+  <testcase name="previous-tick fallback uses the snapshot at sourceTick - 1" classname="com.chromascape.web.aiplayer.prototype.FishingRecordingLoaderTest" time="0.005"/>
+  <testcase name="unsupported actions are classified and counted" classname="com.chromascape.web.aiplayer.prototype.FishingRecordingLoaderTest" time="0.005"/>
+  <testcase name="missing NPC telemetry is reported" classname="com.chromascape.web.aiplayer.prototype.FishingRecordingLoaderTest" time="0.004"/>
+  <testcase name="exact-tick alignment uses the snapshot at the authoritative sourceTick" classname="com.chromascape.web.aiplayer.prototype.FishingRecordingLoaderTest" time="0.004"/>
+  <testcase name="a future snapshot is never used for alignment" classname="com.chromascape.web.aiplayer.prototype.FishingRecordingLoaderTest" time="0.004"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.config.StartupConfigurationTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:39:36.815Z" hostname="fedora" time="0.359">
+  <properties/>
+  <testcase name="testStartupConfigurationCanBeInstantiated()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.236"/>
+  <testcase name="testInitializeInfrastructureLogsAppropriateMessages()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.106"/>
+  <testcase name="testCreateSubdirectoriesCreatesAllRequiredSubdirectories()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.002"/>
+  <testcase name="testInitializeInfrastructureHandlesDirectoryCreationFailure()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.001"/>
+  <testcase name="testInitializeInfrastructureCreatesSubdirectories()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.003"/>
+  <testcase name="testInitializeChromascapeDirectoryPrivateMethod()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.002"/>
+  <testcase name="testInitializeInfrastructureCreatesChromascapeDirectory()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.002"/>
+  <testcase name="testCreateSubdirectoriesHandlesExistingSubdirectories()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.002"/>
+  <testcase name="testInitializeInfrastructureHandlesExistingDirectory()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.002"/>
+  <system-out><![CDATA[12:39:37.047 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@76f097ec] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 1320681369]
+12:39:37.052 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@52386242] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 1042481521]
+12:39:37.159 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@4dd08e5b] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 130923524]
+12:39:37.161 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@73e0cc07] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 1498246437]
+12:39:37.163 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@7ab9d59f] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 2012027000]
+12:39:37.166 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@4923c437] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 1824258533]
+12:39:37.168 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@354dbfa3] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 1748170038]
+12:39:37.171 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@59708aaa] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 2071813517]
+12:39:37.173 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@648c8c22] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 1864357825]
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

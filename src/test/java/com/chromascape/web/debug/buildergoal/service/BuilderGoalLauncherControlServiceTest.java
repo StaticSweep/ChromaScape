@@ -154,7 +154,7 @@ class BuilderGoalLauncherControlServiceTest {
     assertThat(service.isBuilderGoalRunnableMachine(local)).isTrue();
     assertThat(service.isBuilderGoalRunnableMachine(remote)).isFalse();
     assertThat(service.getBuilderGoalMachineDisabledReason(remote))
-        .contains("local ChromaScape host");
+        .contains("builder-goal-launch-v2");
   }
 
   @Test

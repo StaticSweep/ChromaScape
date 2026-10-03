@@ -65,6 +65,40 @@ class AccountBuilderOrchestrationEntity {
   long entityVersion;
 }
 
+/** Immutable limits plus atomically advanced usage counters for one orchestration claim. */
+@Entity(name = "AccountBuilderOrchestrationBudgetEntity")
+@Table(name = "ab_orchestration_budget")
+class AccountBuilderOrchestrationBudgetEntity {
+  @Id
+  @Column(name = "orchestration_id", nullable = false, length = 128)
+  String orchestrationId;
+
+  @Column(name = "max_actions", nullable = false)
+  int maxActions;
+
+  @Column(name = "max_attempts", nullable = false)
+  int maxAttempts;
+
+  @Column(name = "max_elapsed_ms", nullable = false)
+  long maxElapsedMs;
+
+  @Column(name = "actions_used", nullable = false)
+  int actionsUsed;
+
+  @Column(name = "attempts_used", nullable = false)
+  int attemptsUsed;
+
+  @Column(name = "started_at")
+  Instant startedAt;
+
+  @Column(name = "expires_at", nullable = false)
+  Instant expiresAt;
+
+  @Version
+  @Column(name = "version", nullable = false)
+  long version;
+}
+
 @Entity(name = "AccountBuilderOrchestrationEventEntity")
 @Table(name = "ab_orchestration_event")
 class AccountBuilderOrchestrationEventEntity {
@@ -134,6 +168,69 @@ class AccountBuilderOrchestrationSnapshotBindingEntity {
 
   @Column(name = "expected_task_revision", nullable = false)
   long expectedTaskRevision;
+
+  @Column(name = "observation_digest", nullable = false, length = 80)
+  String observationDigest;
+
+  @Column(name = "prompt_digest", nullable = true, length = 80)
+  String promptDigest;
+
+  @Column(name = "provider_session_id", nullable = true, length = 128)
+  String providerSessionId;
+
+  @Column(name = "provider_turn_id", nullable = true, length = 128)
+  String providerTurnId;
+}
+
+/** Immutable, non-secret correlation used to address post-reservation gateway calls. */
+@Entity(name = "AccountBuilderGatewayCorrelationEntity")
+@Table(name = "ab_gateway_correlation")
+class AccountBuilderGatewayCorrelationEntity {
+  @Id
+  @Column(name = "orchestration_id", nullable = false, length = 128)
+  String orchestrationId;
+
+  @Column(name = "contract_version", nullable = false, length = 32)
+  String contractVersion;
+
+  @Column(name = "request_id", nullable = false, length = 128)
+  String requestId;
+
+  @Column(name = "idempotency_key", nullable = false, length = 128)
+  String idempotencyKey;
+
+  @Column(name = "envelope_digest", nullable = false, length = 80)
+  String envelopeDigest;
+
+  @Column(name = "mode", nullable = false, length = 32)
+  String mode;
+
+  @Column(name = "source_type", nullable = false, length = 128)
+  String sourceType;
+
+  @Column(name = "task_key", nullable = false, length = 128)
+  String taskKey;
+
+  @Column(name = "authority_id", nullable = false, length = 128)
+  String authorityId;
+
+  @Column(name = "identities_digest", nullable = false, length = 80)
+  String identitiesDigest;
+
+  @Column(name = "settings_digest", nullable = false, length = 80)
+  String settingsDigest;
+
+  @Column(name = "budgets_digest", nullable = false, length = 80)
+  String budgetsDigest;
+
+  @Column(name = "expected_observation_revision", nullable = false)
+  long expectedObservationRevision;
+
+  @Column(name = "expected_task_revision", nullable = false)
+  long expectedTaskRevision;
+
+  @Column(name = "deadline_at", nullable = false)
+  Instant deadline;
 }
 
 /** Durable lease, generation, fence and expiry for one orchestration claim. */

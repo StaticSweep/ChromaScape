@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.screen.window.ProcessManagerFactoryTest" tests="4" skipped="1" failures="0" errors="0" timestamp="2026-09-17T11:58:05.383Z" hostname="fedora" time="0.006">
+  <properties/>
+  <testcase name="windowsPlatformReturnsWindowsProcessManager()" classname="com.chromascape.utils.core.screen.window.ProcessManagerFactoryTest" time="0.001">
+    <skipped/>
+  </testcase>
+  <testcase name="platformMappingCoversWindowsLinuxAndUnsupported()" classname="com.chromascape.utils.core.screen.window.ProcessManagerFactoryTest" time="0.0"/>
+  <testcase name="linuxDiscoveryRunsIsolatedFromWin32AndJnaInitialization()" classname="com.chromascape.utils.core.screen.window.ProcessManagerFactoryTest" time="0.002"/>
+  <testcase name="unsupportedPlatformsFailBoundedInsteadOfThrowing()" classname="com.chromascape.utils.core.screen.window.ProcessManagerFactoryTest" time="0.001"/>
+  <system-out><![CDATA[13:58:05.388 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 0 eligible local target(s) from 0 procfs entries (0 unreadable)
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

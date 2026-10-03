@@ -1,6 +1,9 @@
 package com.chromascape.utils.core.screen;
 
+import com.chromascape.utils.core.screen.capture.CapturedFrame;
+import com.chromascape.utils.core.screen.capture.FrameFreshness;
 import java.awt.image.BufferedImage;
+import java.time.Instant;
 
 /**
  * Immutable container for a captured screen frame with metadata.
@@ -14,6 +17,10 @@ public class FrameEvent {
   private final long captureTimeNanos;
   private final int sourceWidth;
   private final int sourceHeight;
+  private final FrameSourceBinding sourceBinding;
+  private final FrameFreshness freshness;
+  private final Instant observedAt;
+  private final Instant contentChangedAt;
 
   /**
    * Creates a new frame event.
@@ -24,10 +31,41 @@ public class FrameEvent {
    * @param sourceHeight Height of the source window
    */
   public FrameEvent(BufferedImage frame, long captureTimeNanos, int sourceWidth, int sourceHeight) {
+    this(frame, captureTimeNanos, sourceWidth, sourceHeight, null, null, null, null);
+  }
+
+  /** Creates a frame event with an exact source binding and rendered-buffer freshness metadata. */
+  public FrameEvent(
+      BufferedImage frame,
+      long captureTimeNanos,
+      int sourceWidth,
+      int sourceHeight,
+      FrameSourceBinding sourceBinding,
+      FrameFreshness freshness,
+      Instant observedAt,
+      Instant contentChangedAt) {
     this.frame = frame;
     this.captureTimeNanos = captureTimeNanos;
     this.sourceWidth = sourceWidth;
     this.sourceHeight = sourceHeight;
+    this.sourceBinding = sourceBinding;
+    this.freshness = freshness;
+    this.observedAt = observedAt;
+    this.contentChangedAt = contentChangedAt;
+  }
+
+  /** Converts a detached rendered-buffer capture without discarding its source metadata. */
+  public static FrameEvent from(CapturedFrame captured, long captureTimeNanos) {
+    BufferedImage image = captured.image();
+    return new FrameEvent(
+        image,
+        captureTimeNanos,
+        image.getWidth(),
+        image.getHeight(),
+        FrameSourceBinding.from(captured.identity(), captured.selectionGeneration()),
+        captured.freshness(),
+        captured.observedAt(),
+        captured.contentChangedAt());
   }
 
   /**
@@ -68,5 +106,25 @@ public class FrameEvent {
    */
   public int getSourceHeight() {
     return sourceHeight;
+  }
+
+  /** Exact host/process/generation binding, or {@code null} for a legacy producer. */
+  public FrameSourceBinding getSourceBinding() {
+    return sourceBinding;
+  }
+
+  /** Rendered-buffer freshness, or {@code null} for legacy/Windows capture. */
+  public FrameFreshness getFreshness() {
+    return freshness;
+  }
+
+  /** Wall-clock observation time, or {@code null} for a legacy producer. */
+  public Instant getObservedAt() {
+    return observedAt;
+  }
+
+  /** Last content-change time, or {@code null} for a legacy producer. */
+  public Instant getContentChangedAt() {
+    return contentChangedAt;
   }
 }

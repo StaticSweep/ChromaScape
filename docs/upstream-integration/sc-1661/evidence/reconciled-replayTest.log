@@ -1,0 +1,63 @@
+> Task :compileJava UP-TO-DATE
+> Task :copyNativeLibraries SKIPPED
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileReplayTestJava UP-TO-DATE
+> Task :processReplayTestResources UP-TO-DATE
+> Task :replayTestClasses UP-TO-DATE
+
+> Task :replayTest
+
+ReplayMigrationIntegrationTest > v19RejectsConflictingOldAndNewChecksums() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:88
+
+ReplayMigrationIntegrationTest > freshHibernateManagedTablesConvergeAfterFlywayAndRemainStableOnRepeatStartup() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:88
+
+ReplayMigrationIntegrationTest > v31CreatesPlaybackIndexesWhenDebuggerTablesExist() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:88
+
+ReplayMigrationIntegrationTest > v19BackfillsAndDropsWhenBothColumnsHoldEqualValues() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:88
+
+ReplayMigrationIntegrationTest > v19AcceptsNewColumnOnlyState() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:88
+
+ReplayMigrationIntegrationTest > v19ConvergesFromOldColumnOnlyState() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:88
+
+ReplayMigrationIntegrationTest > v30AppliesOnAV20UpgradedDatabase() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:88
+
+ReplayMigrationIntegrationTest > replayChainThroughV31AppliesOnEmptyDatabase() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:88
+
+ReplayMigrationIntegrationTest > v30AllowsNullAttemptIdButKeepsTheForeignKey() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:88
+
+ReplayPostgresIntegrationTest > initializationError FAILED
+    java.lang.IllegalStateException at DockerClientProviderStrategy.java:229
+
+ReplayPlaybackCatalogRepositoryIntegrationTest > initializationError FAILED
+    java.lang.IllegalStateException at DockerClientProviderStrategy.java:229
+
+ReplayPlaybackParityIntegrationTest > initializationError FAILED
+    java.lang.IllegalStateException at DockerClientProviderStrategy.java:229
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :replayTest FAILED
+
+280 tests completed, 12 failed
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':replayTest'.
+> There were failing tests. See the report at: file:///run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation/build/reports/tests/replayTest/index.html
+
+* Try:
+> Run with --scan to get full insights.
+
+BUILD FAILED in 30s
+5 actionable tasks: 1 executed, 4 up-to-date

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.screen.window.LinuxProcessManagerTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:11.952Z" hostname="fedora" time="1.928">
+  <properties/>
+  <testcase name="remoteLauncherAgentIsNeverEligible()" classname="com.chromascape.utils.core.screen.window.LinuxProcessManagerTest" time="0.007"/>
+  <testcase name="runBuilderGoalWithProjectRootIsEligible()" classname="com.chromascape.utils.core.screen.window.LinuxProcessManagerTest" time="0.005"/>
+  <testcase name="unrelatedJavaProcessIsNotEligible()" classname="com.chromascape.utils.core.screen.window.LinuxProcessManagerTest" time="0.004"/>
+  <testcase name="bootIdIsObservedOncePerScanAndSharedByEveryIdentityOfThatScan()" classname="com.chromascape.utils.core.screen.window.LinuxProcessManagerTest" time="0.005"/>
+  <testcase name="findLocalMatchesOnlyTheGivenIdentity()" classname="com.chromascape.utils.core.screen.window.LinuxProcessManagerTest" time="0.006"/>
+  <testcase name="theChromaScapeJvmItselfIsNeverEligible()" classname="com.chromascape.utils.core.screen.window.LinuxProcessManagerTest" time="0.004"/>
+  <testcase name="identityIsStableAcrossRepeatedResolvesOfTheSameProcess()" classname="com.chromascape.utils.core.screen.window.LinuxProcessManagerTest" time="0.005"/>
+  <testcase name="exeSymlinkIsAuthoritativeOverArgv0()" classname="com.chromascape.utils.core.screen.window.LinuxProcessManagerTest" time="0.008"/>
+  <testcase name="bashGradleWrapperCarryingAllMarkersIsExcludedByTheJavaExecutableRule()" classname="com.chromascape.utils.core.screen.window.LinuxProcessManagerTest" time="0.003"/>
+  <testcase name="runBuilderGoalWithRuneLiteMainClassIsEligibleWithoutProjectRoot()" classname="com.chromascape.utils.core.screen.window.LinuxProcessManagerTest" time="0.003"/>
+  <testcase name="discoveryWithNoClientsReturnsDeterministicEmptyList()" classname="com.chromascape.utils.core.screen.window.LinuxProcessManagerTest" time="0.003"/>
+  <testcase name="discoverySortsDeterministicallyByStartTimeThenPid()" classname="com.chromascape.utils.core.screen.window.LinuxProcessManagerTest" time="0.007"/>
+  <testcase name="bootIdIsEmptyWhenTheHostDoesNotExposeIt()" classname="com.chromascape.utils.core.screen.window.LinuxProcessManagerTest" time="0.002"/>
+  <testcase name="listingTruncationBeyondThePidCapIsReportedAsAScanDiagnostic()" classname="com.chromascape.utils.core.screen.window.LinuxProcessManagerTest" time="1.843"/>
+  <testcase name="runBuilderGoalWithoutProjectRootOrMainClassIsNotEligible()" classname="com.chromascape.utils.core.screen.window.LinuxProcessManagerTest" time="0.004"/>
+  <testcase name="singleEligibleClientIsReportedWithNeutralIdentity()" classname="com.chromascape.utils.core.screen.window.LinuxProcessManagerTest" time="0.004"/>
+  <testcase name="unreadableEntriesAreSkippedAndCountedWithoutAbortingTheScan()" classname="com.chromascape.utils.core.screen.window.LinuxProcessManagerTest" time="0.004"/>
+  <testcase name="gradleDaemonAndWorkerCommandLinesAreNeverEligible()" classname="com.chromascape.utils.core.screen.window.LinuxProcessManagerTest" time="0.003"/>
+  <testcase name="resolveLocalIsEmptyForGoneProcesses()" classname="com.chromascape.utils.core.screen.window.LinuxProcessManagerTest" time="0.001"/>
+  <system-out><![CDATA[19:27:11.958 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 0 eligible local target(s) from 1 procfs entries (0 unreadable)
+19:27:11.964 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 1 eligible local target(s) from 1 procfs entries (0 unreadable)
+19:27:11.967 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 0 eligible local target(s) from 1 procfs entries (0 unreadable)
+19:27:11.972 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 2 eligible local target(s) from 2 procfs entries (0 unreadable)
+19:27:11.976 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 1 eligible local target(s) from 1 procfs entries (0 unreadable)
+19:27:11.977 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 1 eligible local target(s) from 1 procfs entries (0 unreadable)
+19:27:11.979 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 1 eligible local target(s) from 1 procfs entries (0 unreadable)
+19:27:11.982 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 0 eligible local target(s) from 1 procfs entries (0 unreadable)
+19:27:11.986 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 1 eligible local target(s) from 1 procfs entries (0 unreadable)
+19:27:11.988 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 1 eligible local target(s) from 1 procfs entries (0 unreadable)
+19:27:11.992 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 1 eligible local target(s) from 2 procfs entries (0 unreadable)
+19:27:11.999 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 0 eligible local target(s) from 1 procfs entries (0 unreadable)
+19:27:12.003 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 1 eligible local target(s) from 1 procfs entries (0 unreadable)
+19:27:12.006 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 0 eligible local target(s) from 0 procfs entries (0 unreadable)
+19:27:12.007 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 0 eligible local target(s) from 0 procfs entries (0 unreadable)
+19:27:12.011 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 2 eligible local target(s) from 2 procfs entries (0 unreadable)
+19:27:12.012 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 2 eligible local target(s) from 2 procfs entries (0 unreadable)
+19:27:12.017 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 1 eligible local target(s) from 1 procfs entries (0 unreadable)
+19:27:12.718 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 0 eligible local target(s) from 16384 procfs entries (16384 unreadable) [truncated]
+19:27:13.865 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 0 eligible local target(s) from 1 procfs entries (0 unreadable)
+19:27:13.870 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 1 eligible local target(s) from 1 procfs entries (0 unreadable)
+19:27:13.874 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 1 eligible local target(s) from 4 procfs entries (3 unreadable)
+19:27:13.878 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 0 eligible local target(s) from 2 procfs entries (0 unreadable)
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

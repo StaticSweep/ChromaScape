@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.playback.LegacySimulatorProfileContractTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:48:03.633Z" hostname="fedora" time="0.013">
+  <properties/>
+  <testcase name="everyLegacyBeanRequiresExplicitLegacyProfile()" classname="com.chromascape.web.replay.playback.LegacySimulatorProfileContractTest" time="0.013"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

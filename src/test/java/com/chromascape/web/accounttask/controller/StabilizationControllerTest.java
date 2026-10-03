@@ -6,7 +6,6 @@ import static org.mockito.Mockito.when;
 
 import com.chromascape.web.accounttask.entity.ScriptFailureTriage;
 import com.chromascape.web.accounttask.entity.ScriptStabilizationRun;
-import com.chromascape.web.accounttask.entity.ScriptStabilizationSnapshot;
 import com.chromascape.web.accounttask.service.StabilizationArtifactStore;
 import com.chromascape.web.accounttask.service.StabilizationIngestionService;
 import com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogService;
@@ -102,13 +101,13 @@ class StabilizationControllerTest {
 
     ResponseEntity<Object> response =
         controller.ingestHarnessManifest(
-            objectMapper.readTree("""
+            objectMapper.readTree(
+                """
                 {"schema_version":"harness-run-manifest/v1","run_id":"run-1"}
                 """));
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(response.getBody())
-        .isEqualTo(Map.of("runId", "run-1", "saved", true));
+    assertThat(response.getBody()).isEqualTo(Map.of("runId", "run-1", "saved", true));
   }
 
   @Test
@@ -118,8 +117,7 @@ class StabilizationControllerTest {
         .thenThrow(new IllegalArgumentException("unsupported harness manifest schema_version 'x'"));
 
     ResponseEntity<Object> response =
-        controller.ingestHarnessManifest(
-            objectMapper.readTree("{\"schema_version\":\"x\"}"));
+        controller.ingestHarnessManifest(objectMapper.readTree("{\"schema_version\":\"x\"}"));
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
   }
@@ -132,13 +130,13 @@ class StabilizationControllerTest {
 
     ResponseEntity<Object> response =
         controller.ingestReliabilityMatrix(
-            objectMapper.readTree("""
+            objectMapper.readTree(
+                """
                 {"schema_version":"reliability-matrix/v1","groups":[]}
                 """));
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(response.getBody())
-        .isEqualTo(Map.of("matrixHash", "sha256:matrix", "snapshots", 1));
+    assertThat(response.getBody()).isEqualTo(Map.of("matrixHash", "sha256:matrix", "snapshots", 1));
   }
 
   @Test
@@ -209,7 +207,8 @@ class StabilizationControllerTest {
   @Test
   @DisplayName("getRunAttempts returns the attempt list")
   void getRunAttempts_returnsList() {
-    when(ingestionService.getRunAttempts("run-1")).thenReturn(List.of(new ScriptStabilizationRun()));
+    when(ingestionService.getRunAttempts("run-1"))
+        .thenReturn(List.of(new ScriptStabilizationRun()));
 
     ResponseEntity<Object> response = controller.getRunAttempts("run-1");
 

@@ -10,12 +10,18 @@ public class CurrentSliceContractException extends RuntimeException {
     this(code, message, Map.of());
   }
 
-  public CurrentSliceContractException(CurrentSliceFailureCode code, String message, Map<String, Object> details) {
+  public CurrentSliceContractException(
+      CurrentSliceFailureCode code, String message, Map<String, Object> details) {
     super(message);
     this.code = code;
     this.details = details == null ? Map.of() : Map.copyOf(details);
   }
 
-  public CurrentSliceFailureCode code() { return code; }
-  public Map<String, Object> details() { return details; }
+  public CurrentSliceFailureCode code() {
+    return code;
+  }
+
+  public Map<String, Object> details() {
+    return details;
+  }
 }

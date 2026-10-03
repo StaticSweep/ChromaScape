@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.accounttask.service.TaskPlanExecutionServiceTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:19.690Z" hostname="fedora" time="0.012">
+  <properties/>
+  <testcase name="markItemCompleted marks item terminal and completes plan when all items are completed" classname="com.chromascape.web.accounttask.service.TaskPlanExecutionServiceTest" time="0.006"/>
+  <testcase name="markItemExecuting links iteration and moves approved plan to EXECUTING" classname="com.chromascape.web.accounttask.service.TaskPlanExecutionServiceTest" time="0.003"/>
+  <testcase name="markItemFailed marks item terminal and fails the plan" classname="com.chromascape.web.accounttask.service.TaskPlanExecutionServiceTest" time="0.003"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

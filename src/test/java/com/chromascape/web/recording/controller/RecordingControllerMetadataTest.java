@@ -308,4 +308,55 @@ class RecordingControllerMetadataTest {
     assertEquals(false, body.get("playable"));
     assertEquals("MISSING_VIDEO", body.get("status"));
   }
+
+  @Test
+  void listRecordingSessions_flagsLowCoverageFinalizedRecordingAsDegraded() {
+    RecordingSession session = createSession("rec-degraded");
+    session.setEndTime(LocalDateTime.of(2025, 6, 15, 13, 0));
+    Path video = tempDir.resolve("rec-degraded.mp4");
+    assertDoesNotThrow(() -> Files.writeString(video, "video"));
+    session.setVideoPath(video.toString());
+    session.setDurationMs(117_336L);
+    session.setFrameCount(3L);
+    session.setFps(30);
+
+    when(repository.findAllByOrderByStartTimeDesc()).thenReturn(List.of(session));
+    when(recordingConfig.getOutputDirectory()).thenReturn(tempDir.toString());
+
+    ResponseEntity<List<Map<String, Object>>> response = controller.listRecordingSessions();
+
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    Map<String, Object> item = response.getBody().get(0);
+    assertEquals(true, item.get("degraded"));
+    assertNotNull(item.get("videoWarning"));
+    assertEquals(3L, item.get("frameCount"));
+    assertEquals(30, item.get("fps"));
+    assertEquals(117_336L, item.get("durationMs"));
+    double coverage = ((Number) item.get("contentCoverage")).doubleValue();
+    assertTrue(coverage < 0.01, "expected near-zero coverage, got " + coverage);
+  }
+
+  @Test
+  void getRecording_healthyCoverageIsNotDegraded() {
+    RecordingSession session = createSession("rec-healthy");
+    session.setEndTime(LocalDateTime.of(2025, 6, 15, 13, 0));
+    Path video = tempDir.resolve("rec-healthy.mp4");
+    assertDoesNotThrow(() -> Files.writeString(video, "video"));
+    session.setVideoPath(video.toString());
+    session.setDurationMs(117_336L);
+    session.setFrameCount(3_500L);
+    session.setFps(30);
+
+    when(repository.findByRecordingId("rec-healthy")).thenReturn(Optional.of(session));
+    when(recordingConfig.getOutputDirectory()).thenReturn(tempDir.toString());
+
+    ResponseEntity<Map<String, Object>> response = controller.getRecording("rec-healthy");
+
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    Map<String, Object> body = response.getBody();
+    assertNotNull(body);
+    assertEquals(false, body.get("degraded"));
+    assertNull(body.get("videoWarning"));
+    assertEquals(3_500L, body.get("frameCount"));
+  }
 }

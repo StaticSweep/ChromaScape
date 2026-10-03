@@ -1,0 +1,56 @@
+{
+  "recordedAt": "2026-09-26T03:11:05.102Z",
+  "sessionId": "debug_c17212ca00084855849cad7fe977693d",
+  "frames": 30,
+  "distinctImages": 30,
+  "imageSize": [
+    960,
+    813
+  ],
+  "firstImageSha256": "8209b75c3c2260498a64f79fc13d7d58c8aa1f8f3e7baad8c7c7d3313d4857d4",
+  "lastImageSha256": "2989f44bd36354ed1d935eae5c39a5f68cfc38d233f37c94b052c4f504bf1266",
+  "startTick": 49,
+  "endTick": 75,
+  "feedControlCounts": {
+    "active": 6,
+    "paused": 0,
+    "resumed": 8
+  },
+  "pauseState": "DISABLED",
+  "resumeState": "ACTIVE",
+  "stop": {
+    "oldClientExited": true,
+    "before": {
+      "ageMillis": 1158,
+      "droppedDesktopWatch": 0,
+      "droppedInvalid": 1,
+      "forwarded": 60,
+      "source": "client",
+      "sessionId": "debug_c17212ca00084855849cad7fe977693d",
+      "state": "WAITING_FOR_SESSION",
+      "lastForwardedAtMillis": 1790392332557,
+      "received": 238,
+      "droppedAttached": 0,
+      "lastRejection": "FRAME_RATE_LIMITED"
+    },
+    "after": {
+      "ageMillis": 4163,
+      "droppedDesktopWatch": 0,
+      "droppedInvalid": 1,
+      "forwarded": 60,
+      "source": "client",
+      "sessionId": "debug_c17212ca00084855849cad7fe977693d",
+      "state": "WAITING_FOR_SESSION",
+      "lastForwardedAtMillis": 1790392332557,
+      "received": 238,
+      "droppedAttached": 0,
+      "lastRejection": "FRAME_RATE_LIMITED"
+    },
+    "finalSessionState": "FINALIZED",
+    "finalTick": 187,
+    "failureCode": null
+  },
+  "requestedWorld": 380,
+  "currentWorld": 380,
+  "sourceMode": "disabled"
+}

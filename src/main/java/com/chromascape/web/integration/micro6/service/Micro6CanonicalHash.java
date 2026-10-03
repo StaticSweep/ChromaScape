@@ -32,6 +32,9 @@ import java.util.TreeMap;
 final class Micro6CanonicalHash {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String SHA_256 = "SHA-256";
+  private static final String DEFAULT_CAPABILITY_VERSION = "micro6-executor/v1";
+  private static final Set<String> DEFAULT_EXCLUSIONS =
+      Set.of("generated_at", "source_timestamp", "ingest_timestamp", "run_id", "attempt_id");
   private static final String SCHEMA_STATE_AVAILABLE = "AVAILABLE";
   private static final String SCHEMA_STATE_NOT_APPLICABLE = "NOT_APPLICABLE";
   private static final String SCHEMA_STATE_ERROR = "ERROR";
@@ -55,9 +58,9 @@ final class Micro6CanonicalHash {
   }
 
   /**
-   * Canonical task summary fields used by {@link #catalogHash}. Must match the Micro6 {@code
-   * CatalogV2Publication.CATALOG_HASH_TASK_FIELDS} exactly: schema-bearing fields are excluded so
-   * lightweight and full catalogs hash identically for the same build.
+   * Canonical task summary fields used by {@link #catalogHash}. These match Micro6's stable catalog
+   * identity projection: schema-bearing fields are excluded so lightweight, full, and health
+   * attestations retain one catalog hash while schema changes move the bundle hash.
    */
   static final Set<String> CATALOG_HASH_TASK_FIELDS =
       Set.of(
@@ -89,7 +92,10 @@ final class Micro6CanonicalHash {
     String catalogVersion =
         firstNonBlank(text(payload.get("catalog_version")), text(payload.get("version")), "2");
     String capabilityVersion =
-        firstNonBlank(text(payload.get("capability_version")), defaultCapabilityVersion, "");
+        firstNonBlank(
+            text(payload.get("capability_version")),
+            defaultCapabilityVersion,
+            DEFAULT_CAPABILITY_VERSION);
 
     List<JsonNode> tasks = new ArrayList<>();
     JsonNode tasksNode = payload.get("tasks");
@@ -132,21 +138,9 @@ final class Micro6CanonicalHash {
   }
 
   /**
-   * Recomputes the schema bundle hash over a full catalog using the SC-584A degraded-bundle
-   * contract. Includes the summary {@code catalogHash} plus, per canonical task sorted by {@code
-   * task_key}, the attested schema state. This mirrors the Micro6 producer exactly:
-   *
-   * <ul>
-   *   <li>{@code AVAILABLE}: {@code settings_schema_version}, {@code settings_schema_hash}, and
-   *       {@code args_schema} are required.</li>
-   *   <li>{@code NOT_REQUESTED}: no schema-bearing or reason field is present.</li>
-   *   <li>{@code NOT_APPLICABLE}: {@code schema_not_applicable_reason} is present.</li>
-   *   <li>{@code ERROR}: {@code schema_error_reason} is present and {@code
-   *       schema_validation_errors} is a lexicographically sorted array.</li>
-   * </ul>
-   *
-   * <p>Both {@code READY} and {@code DEGRADED} full catalogs carry a bundle; only a failed or
-   * unavailable generation has none.
+   * Recomputes the schema bundle exactly as {@code CatalogV2Publication.schemaBundleHash}: only
+   * tasks with an object {@code args_schema} participate, and their published schema fields are
+   * hashed without adding lifecycle state or diagnostic fields.
    */
   static String schemaBundleHash(JsonNode payload, String catalogHash) {
     if (catalogHash == null) {
@@ -161,28 +155,17 @@ final class Micro6CanonicalHash {
       if (task == null || task.isNull()) {
         continue;
       }
+      JsonNode argsSchema = task.get("args_schema");
+      if (argsSchema == null || !argsSchema.isObject()) {
+        continue;
+      }
       Map<String, Object> entry = new LinkedHashMap<>();
       entry.put("task_key", nodeValue(task.get("task_key")));
-      String state = sortableValue(task.get("settings_schema_state"));
-      entry.put("settings_schema_state", state);
-      if (SCHEMA_STATE_AVAILABLE.equals(state)) {
-        entry.put("settings_schema_version", nodeValue(task.get("settings_schema_version")));
-        entry.put("settings_schema_hash", nodeValue(task.get("settings_schema_hash")));
-        // Micro6 publishes the already-canonicalized schema in the payload, so recomputation must
-        // apply the same schema canonicalization before embedding it in the bundle.
-        entry.put("args_schema", nodeValue(canonicalizeSchema(task.get("args_schema"))));
-      } else if (SCHEMA_STATE_NOT_APPLICABLE.equals(state)) {
-        entry.put("schema_not_applicable_reason", nodeValue(task.get("schema_not_applicable_reason")));
-      } else if (SCHEMA_STATE_ERROR.equals(state)) {
-        entry.put("schema_error_reason", nodeValue(task.get("schema_error_reason")));
-        List<String> errors = new ArrayList<>();
-        JsonNode validationErrors = task.get("schema_validation_errors");
-        if (validationErrors != null && validationErrors.isArray()) {
-          validationErrors.forEach(item -> errors.add(sortableValue(item)));
-        }
-        errors.sort(String::compareTo);
-        entry.put("schema_validation_errors", errors);
-      }
+      entry.put("settings_schema_version", nodeValue(task.get("settings_schema_version")));
+      entry.put("settings_schema_hash", nodeValue(task.get("settings_schema_hash")));
+      // Micro6 publishes a canonical schema already; applying the same canonicalization again is
+      // idempotent and also keeps verification deterministic for equivalent JSON field ordering.
+      entry.put("args_schema", nodeValue(canonicalizeSchema(argsSchema)));
       schemaTasks.add(entry);
     }
     if (schemaTasks.isEmpty()) {
@@ -219,7 +202,7 @@ final class Micro6CanonicalHash {
       while (fields.hasNext()) {
         Map.Entry<String, JsonNode> entry = fields.next();
         String key = normalize(entry.getKey());
-        if (key == null) {
+        if (key == null || DEFAULT_EXCLUSIONS.contains(key)) {
           continue;
         }
         sorted.put(key, entry.getValue());

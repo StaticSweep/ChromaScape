@@ -127,6 +127,9 @@ public class ReplayFramePageResponse {
     private JsonNode projectiles;
     private JsonNode cooldowns;
     private JsonNode quest;
+    private JsonNode dialogue;
+    private JsonNode spells;
+    private JsonNode vars;
     private JsonNode npcs;
     private JsonNode gameObjects;
     private JsonNode groundObjects;
@@ -207,6 +210,30 @@ public class ReplayFramePageResponse {
 
     public void setQuest(JsonNode quest) {
       this.quest = quest;
+    }
+
+    public JsonNode getDialogue() {
+      return dialogue;
+    }
+
+    public void setDialogue(JsonNode dialogue) {
+      this.dialogue = dialogue;
+    }
+
+    public JsonNode getSpells() {
+      return spells;
+    }
+
+    public void setSpells(JsonNode spells) {
+      this.spells = spells;
+    }
+
+    public JsonNode getVars() {
+      return vars;
+    }
+
+    public void setVars(JsonNode vars) {
+      this.vars = vars;
     }
 
     public JsonNode getNpcs() {

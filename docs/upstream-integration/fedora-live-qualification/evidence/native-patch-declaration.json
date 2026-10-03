@@ -1,0 +1,9 @@
+{
+  "patchIdentity": "sha256:7af654074906652c1bff730071978e56f1e0c6846f217962eedf7196bc9661e6",
+  "reason": "Select the RuneLite client frame deterministically when several target-owned windows share the recognised WM_CLASS (a splash window and the real frame), add opt-in bounded attachment stage diagnostics emitted only from the detached constructor thread, and release the JNI local reference of every rejected window candidate before the next retry so the 20 s reflection probe cannot leak references across its per-candidate retries.",
+  "changedPaths": [
+    "third-party/RemoteInput/RemoteInput/Platform/Platform_Linux.cxx"
+  ],
+  "addedPaths": [],
+  "removedPaths": []
+}

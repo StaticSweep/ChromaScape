@@ -15,6 +15,7 @@
         "SOURCE_GENERATED_ONLY",
         "SOURCE_BUILD_MISMATCH",
         "SOURCE_MANIFEST_INVALID",
+        "SOURCE_SIGNATURE_INVALID",
         "SOURCE_CONTENT_HASH_MISMATCH",
         "SOURCE_ACCESS_DENIED",
         "SOURCE_INDEX_PARTIAL",
@@ -22,7 +23,12 @@
         "SOURCE_FILE_NOT_FOUND",
         "SOURCE_SYMBOL_NOT_FOUND",
         "SOURCE_NETWORK_UNAVAILABLE",
-        "SOURCE_RATE_LIMITED"
+        "SOURCE_RATE_LIMITED",
+        "SOURCE_UNSAFE_PATH",
+        "SOURCE_DIRTY_TREE",
+        "SOURCE_PARSER_FAILURE",
+        "SOURCE_PROMOTION_FAILURE",
+        "SOURCE_AUDIT_CONTEXT_INVALID"
       ]
     },
     "message": {"type": "string", "minLength": 1, "maxLength": 240},

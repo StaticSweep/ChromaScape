@@ -137,8 +137,7 @@ public class BuilderGoalAccountCatalogService {
   }
 
   private boolean isSelectedAccountEligible(
-      AccountDefinition account,
-      Micro6OnlineClientRegistryService.TargetClient client) {
+      AccountDefinition account, Micro6OnlineClientRegistryService.TargetClient client) {
     if (account == null || client == null) {
       return false;
     }
@@ -158,7 +157,8 @@ public class BuilderGoalAccountCatalogService {
       return "No matching executor identity is online";
     }
     if (!AccountIdentityContract.hasRequiredScheme(account.accountHashScheme())) {
-      return "Selected account did not report account hash scheme " + AccountIdentityContract.HASH_SCHEME;
+      return "Selected account did not report account hash scheme "
+          + AccountIdentityContract.HASH_SCHEME;
     }
     if (!AccountIdentityContract.isCanonicalHash(account.accountHash())) {
       return "Selected account did not report a canonical 16-hex game-account hash";
@@ -169,10 +169,12 @@ public class BuilderGoalAccountCatalogService {
     if (!AccountIdentityContract.hasRequiredScheme(client.accountHashScheme())) {
       return "Executor did not report account hash scheme " + AccountIdentityContract.HASH_SCHEME;
     }
-    if (!AccountIdentityContract.matchesCanonicalHash(client.accountHash(), account.accountHash())) {
+    if (!AccountIdentityContract.matchesCanonicalHash(
+        client.accountHash(), account.accountHash())) {
       return "Executor actual account hash does not match the selected account";
     }
-    if (client.requestedWorld() == null || client.currentWorld() == null
+    if (client.requestedWorld() == null
+        || client.currentWorld() == null
         || !client.requestedWorld().equals(client.currentWorld())) {
       return "Executor world identity is not confirmed";
     }
@@ -267,8 +269,37 @@ public class BuilderGoalAccountCatalogService {
       return email() != null && !email().isBlank();
     }
 
+    /**
+     * Launcher control strips every secret from the account list payload and reports only the
+     * boolean {@code secret_fields} map, so a stored password is never visible as a plaintext field
+     * here. The declared flag is authoritative whenever launcher control supplies it; the plaintext
+     * fallback only serves fixtures and producers that still inline the value.
+     */
     public boolean hasPassword() {
-      return password() != null && !password().isBlank();
+      Boolean declared = declaredSecretField("password");
+      if (declared != null) {
+        return declared;
+      }
+      return password() != null;
+    }
+
+    /**
+     * Reads one entry of the launcher {@code secret_fields} map, returning {@code null} when
+     * launcher control did not declare the field so callers can fall back rather than treating an
+     * absent map as a missing secret.
+     */
+    private Boolean declaredSecretField(String field) {
+      if (!(metadata.get("secret_fields") instanceof Map<?, ?> secretFields)) {
+        return null;
+      }
+      Object value = secretFields.get(field);
+      if (value instanceof Boolean declared) {
+        return declared;
+      }
+      if (value instanceof String text && !text.isBlank()) {
+        return Boolean.parseBoolean(text.trim());
+      }
+      return null;
     }
 
     public boolean isLaunchReady() {

@@ -76,17 +76,14 @@ class ReplayWorkerLifecycleTest {
               }
             },
             "replay-worker-lifecycle-poll");
-    Thread closing =
-        new Thread(worker::close, "replay-worker-lifecycle-close");
+    Thread closing = new Thread(worker::close, "replay-worker-lifecycle-close");
 
     try {
       polling.start();
       assertTrue(pollEntered.await(5, TimeUnit.SECONDS));
       closing.start();
       closing.join(100);
-      assertTrue(
-          closing.isAlive(),
-          "close must wait for a poll holding the lifecycle monitor");
+      assertTrue(closing.isAlive(), "close must wait for a poll holding the lifecycle monitor");
     } finally {
       releasePoll.countDown();
       polling.join(5000);
@@ -126,7 +123,8 @@ class ReplayWorkerLifecycleTest {
     properties.getWorker().setEnabled(true);
     properties.getXrsps().setShutdownTimeoutMs(2000);
     ReplayWorker worker = worker(runs, attempts, recovery, properties);
-    Thread recovering = new Thread(worker::recoverExpiredLeases, "replay-worker-lifecycle-recovery");
+    Thread recovering =
+        new Thread(worker::recoverExpiredLeases, "replay-worker-lifecycle-recovery");
     Thread closing = new Thread(worker::close, "replay-worker-lifecycle-close-recovery");
 
     try {
@@ -135,8 +133,7 @@ class ReplayWorkerLifecycleTest {
       closing.start();
       closing.join(100);
       assertTrue(
-          closing.isAlive(),
-          "close must wait for a recovery pass holding the lifecycle monitor");
+          closing.isAlive(), "close must wait for a recovery pass holding the lifecycle monitor");
     } finally {
       releaseRecovery.countDown();
       recovering.join(5000);
@@ -161,7 +158,11 @@ class ReplayWorkerLifecycleTest {
   }
 
   private static ReplayWorker worker(ReplayRunRepository runs, ReplayProperties properties) {
-    return worker(runs, mock(ReplayAttemptRepository.class), mock(ReplayExpiredAttemptRecoveryService.class), properties);
+    return worker(
+        runs,
+        mock(ReplayAttemptRepository.class),
+        mock(ReplayExpiredAttemptRecoveryService.class),
+        properties);
   }
 
   private static ReplayWorker worker(

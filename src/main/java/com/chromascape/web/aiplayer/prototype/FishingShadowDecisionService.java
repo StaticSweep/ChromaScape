@@ -99,10 +99,13 @@ public class FishingShadowDecisionService {
     int initialInventoryTotal;
     long latestTick = -1;
     FishingShadowDecision latest;
+
     /** Tick of the first finalized decision for this run generation; -1 until set. */
     long firstTick = -1;
+
     /** Observed timestamp of the first finalized decision; never overwritten for the generation. */
     String firstObservedAt;
+
     int processed;
     int predicted;
     int abstained;
@@ -601,8 +604,8 @@ public class FishingShadowDecisionService {
   }
 
   /**
-   * Parses one run file into tick/time/count stats. Follows the same corruption rules as history:
-   * a lone incomplete trailing line (e.g. from a crash mid-append) is tolerated, while a malformed
+   * Parses one run file into tick/time/count stats. Follows the same corruption rules as history: a
+   * lone incomplete trailing line (e.g. from a crash mid-append) is tolerated, while a malformed
    * completed/middle line is treated as corruption and fails the read instead of being silently
    * ignored.
    */
@@ -612,6 +615,12 @@ public class FishingShadowDecisionService {
     String firstObservedAt = null;
     String lastObservedAt = null;
     int count = 0;
+    // A run is registered in memory before its first decision is persisted.  Its JSONL file is
+    // therefore legitimately absent during discovery; report an empty run until the writer
+    // creates it instead of turning a normal startup race into HISTORY_READ_FAILED.
+    if (!Files.exists(file)) {
+      return null;
+    }
     ReentrantReadWriteLock.ReadLock readLock = writer.readLock();
     readLock.lock();
     try {

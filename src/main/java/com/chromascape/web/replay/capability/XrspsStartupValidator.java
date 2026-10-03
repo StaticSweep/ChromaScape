@@ -279,13 +279,21 @@ public class XrspsStartupValidator {
       requireModesBool(problems, modes, "causalSimulation", true);
     }
 
-    requireExactIntVersionArray(problems, node, "scenarioSchemaVersions");
-    requireExactIntVersionArray(problems, node, "semanticActionVersions");
-    requireExactIntVersionArray(problems, node, "snapshotVersions");
-    requireExactIntVersionArray(problems, node, "projectionVersions");
+    requireExactIntVersionArray(
+        problems,
+        node,
+        "scenarioSchemaVersions",
+        CapabilityManifest.SUPPORTED_SCENARIO_SCHEMA_VERSIONS);
+    requireExactIntVersionArray(
+        problems, node, "semanticActionVersions", CapabilityManifest.SUPPORTED_SINGLE_VERSION);
+    requireExactIntVersionArray(
+        problems, node, "snapshotVersions", CapabilityManifest.SUPPORTED_SINGLE_VERSION);
+    requireExactIntVersionArray(
+        problems, node, "projectionVersions", CapabilityManifest.SUPPORTED_SINGLE_VERSION);
     requireExactHashVersionArray(problems, node);
     requireFidelity(problems, node);
-    requireExactSupportedActions(problems, node);
+    requireSupportedActionSubset(problems, node);
+    requireViewerTraceSchema(problems, node);
 
     JsonNode xrsps = node.get("xrsps");
     if (xrsps == null || !xrsps.isObject()) {
@@ -323,8 +331,10 @@ public class XrspsStartupValidator {
     }
   }
 
-  /** The current worker's declared action surface is an exact, duplicate-free closed set. */
-  private void requireExactSupportedActions(List<String> problems, JsonNode node) {
+  /**
+   * A worker may attest only a non-empty, duplicate-free subset of the closed action vocabulary.
+   */
+  private void requireSupportedActionSubset(List<String> problems, JsonNode node) {
     JsonNode array = node.get("supportedActions");
     if (array == null || array.isNull()) {
       problems.add("supportedActions is missing");
@@ -334,17 +344,31 @@ public class XrspsStartupValidator {
       problems.add("supportedActions must be an array");
       return;
     }
-    if (array.size() != CapabilityManifest.V1_SUPPORTED_ACTIONS.size()) {
-      problems.add("supportedActions must be exactly " + CapabilityManifest.V1_SUPPORTED_ACTIONS);
+    if (array.isEmpty()) {
+      problems.add("supportedActions must contain at least one action");
       return;
     }
-    for (int i = 0; i < array.size(); i++) {
-      JsonNode action = array.get(i);
-      if (!action.isTextual()
-          || !CapabilityManifest.V1_SUPPORTED_ACTIONS.get(i).equals(action.asText())) {
-        problems.add("supportedActions must be exactly " + CapabilityManifest.V1_SUPPORTED_ACTIONS);
-        return;
+    java.util.Set<String> seen = new java.util.HashSet<>();
+    for (JsonNode action : array) {
+      if (!action.isTextual() || !CapabilityManifest.isSupportedAction(action.asText())) {
+        problems.add("supportedActions contains an unknown action: " + action);
+        continue;
       }
+      if (!seen.add(action.asText())) {
+        problems.add("supportedActions contains a duplicate action: " + action.asText());
+      }
+    }
+  }
+
+  /** The authoritative worker must expose the immutable trace contract used by the observer. */
+  private void requireViewerTraceSchema(List<String> problems, JsonNode node) {
+    JsonNode field = node.get("viewerTraceSchema");
+    if (field == null || field.isNull()) {
+      problems.add("viewerTraceSchema is missing");
+      return;
+    }
+    if (!field.isTextual() || !"xrsps-replay-trace/v1".equals(field.asText())) {
+      problems.add("viewerTraceSchema must be exactly xrsps-replay-trace/v1");
     }
   }
 
@@ -385,8 +409,9 @@ public class XrspsStartupValidator {
     }
   }
 
-  /** Version arrays must exist and contain EXACTLY the single supported version [1]. */
-  private void requireExactIntVersionArray(List<String> problems, JsonNode node, String name) {
+  /** Version arrays must exist and contain exactly the versions supported by this boundary. */
+  private void requireExactIntVersionArray(
+      List<String> problems, JsonNode node, String name, List<Integer> expected) {
     JsonNode array = node.get(name);
     if (array == null || array.isNull()) {
       problems.add(name + " is missing");
@@ -396,12 +421,16 @@ public class XrspsStartupValidator {
       problems.add(name + " must be an array");
       return;
     }
-    if (array.size() != 1 || !array.get(0).isInt() || array.get(0).asInt() != 1) {
+    boolean exact =
+        array.size() == expected.size()
+            && java.util.stream.IntStream.range(0, expected.size())
+                .allMatch(i -> array.get(i).isInt() && array.get(i).asInt() == expected.get(i));
+    if (!exact) {
       StringBuilder actual = new StringBuilder("[");
       for (JsonNode v : array) {
         actual.append(v.isInt() ? v.asInt() : v.toString()).append(',');
       }
-      problems.add(name + " must be exactly [1] but was " + actual.append(']'));
+      problems.add(name + " must be exactly " + expected + " but was " + actual.append(']'));
     }
   }
 
@@ -478,7 +507,10 @@ public class XrspsStartupValidator {
         node.path("openRuneAvailable").asBoolean(false),
         node.path("certifiable").asBoolean(false),
         parseFidelity(node.path("fidelity")),
-        stringList(node.path("supportedActions")));
+        stringList(node.path("supportedActions")),
+        node.path("viewerTraceSchema").isMissingNode()
+            ? null
+            : node.path("viewerTraceSchema").asText(null));
   }
 
   private static CapabilityManifest.Fidelity parseFidelity(JsonNode field) {
@@ -519,8 +551,13 @@ public class XrspsStartupValidator {
     if (manifest.fidelity() == null) {
       problems.add("fidelity is missing or unsupported");
     }
-    if (!CapabilityManifest.V1_SUPPORTED_ACTIONS.equals(manifest.supportedActions())) {
-      problems.add("supportedActions must be exactly " + CapabilityManifest.V1_SUPPORTED_ACTIONS);
+    if (!CapabilityManifest.isValidSupportedActionSubset(manifest.supportedActions())) {
+      problems.add(
+          "supportedActions must be a non-empty duplicate-free subset of "
+              + CapabilityManifest.V1_SUPPORTED_ACTIONS);
+    }
+    if (!"xrsps-replay-trace/v1".equals(manifest.viewerTraceSchema())) {
+      problems.add("viewerTraceSchema must be exactly xrsps-replay-trace/v1");
     }
     requireNonPlaceholder(problems, "adapterVersion", manifest.xrsps().adapterVersion(), false);
     requireNonPlaceholder(problems, "buildCommit", manifest.xrsps().buildCommit(), false);

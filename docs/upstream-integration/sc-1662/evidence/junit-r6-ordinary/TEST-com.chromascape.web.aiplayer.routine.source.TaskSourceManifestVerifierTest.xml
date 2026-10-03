@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:39:36.291Z" hostname="fedora" time="0.177">
+  <properties/>
+  <testcase name="preservesGeneratedMappingsBoundToAuthoredSource()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.016"/>
+  <testcase name="verifiesGeneratedMappingReferentialIntegrity()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.007"/>
+  <testcase name="requiresEveryExpectedLaunchIdentityToMatch()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.018"/>
+  <testcase name="rejectsMissingAndDuplicateGeneratedMappings()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.014"/>
+  <testcase name="rejectsChangedManifestBytesAndWrongSigningKey()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.011"/>
+  <testcase name="rejectsUnknownSchemaBeforeCompatibilityParsing()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.001"/>
+  <testcase name="rejectsUnsafePathsAndInvalidRanges()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.017"/>
+  <testcase name="verifiesACompleteSignedV1Manifest()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.009"/>
+  <testcase name="sharedCanonicalVectorsAreByteIdentical()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.02"/>
+  <testcase name="rejectsInvalidMappingReferencesAndMetadata()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.06"/>
+  <testcase name="rejectsUnsignedV1EvenWhenItsCanonicalHashIsValid()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

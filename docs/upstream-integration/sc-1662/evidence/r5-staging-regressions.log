@@ -1,0 +1,128 @@
+# command: scripts/native/staging-regressions.sh (isolated stageRemoteInputLinuxRegression; production output untouched)
+# utc: 2026-09-16T00:42:21Z
+# revision: be4230c0198e065748ff5b49a76f434a581fee4d
+# worktree_status_sha256: 4a8acee11127562d70219a4472b560ade014a8186228bfd8b73a6bd7a9beb845
+# run_sequence: 5 (fourth-review fixes; runs 1-4 retained unmodified apart from redaction)
+
+# SC-1662 staging regressions
+# revision: be4230c0198e065748ff5b49a76f434a581fee4d
+
+== case 1: publish pair (manifest v1) ==
+   
+   > Task :stageRemoteInputLinuxRegression
+   MANIFEST_OK manifest=<repo>/build/sc1662/staging-regressions/native/linux-x86_64/remoteinput-manifest.json artifact=<repo>/build/sc1662/staging-regressions/native/linux-x86_64/libRemoteInput.so sha256=f7916bd5810806d67adf59d984d1138d235f02e9d93900c1aec61d5b59c5d46f size=576 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+   MANIFEST_OK manifest=<repo>/build/sc1662/staging-regressions/dist/.sc1662-stage.1852016523856158957/remoteinput-manifest.json artifact=<repo>/build/sc1662/staging-regressions/dist/.sc1662-stage.1852016523856158957/libRemoteInput.so sha256=f7916bd5810806d67adf59d984d1138d235f02e9d93900c1aec61d5b59c5d46f size=576 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+   Staged validated artifact pair 285f4cbdf7dfb2b09c05533f39d91698f6f1418e8eee9f0fd6285c9dc7c2c106 at <repo>/build/sc1662/staging-regressions/dist/linux-x86_64 -> .versions/285f4cbdf7dfb2b09c05533f39d91698f6f1418e8eee9f0fd6285c9dc7c2c106
+   
+   BUILD SUCCESSFUL in 1s
+   1 actionable task: 1 executed
+   exit=0
+   payload=285f4cbdf7dfb2b09c05533f39d91698f6f1418e8eee9f0fd6285c9dc7c2c106
+== case 1: same artifact, different manifest (v2) ==
+   
+   > Task :stageRemoteInputLinuxRegression
+   MANIFEST_OK manifest=<repo>/build/sc1662/staging-regressions/native/linux-x86_64/remoteinput-manifest.json artifact=<repo>/build/sc1662/staging-regressions/native/linux-x86_64/libRemoteInput.so sha256=f7916bd5810806d67adf59d984d1138d235f02e9d93900c1aec61d5b59c5d46f size=576 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+   MANIFEST_OK manifest=<repo>/build/sc1662/staging-regressions/dist/.sc1662-stage.5950933902774994655/remoteinput-manifest.json artifact=<repo>/build/sc1662/staging-regressions/dist/.sc1662-stage.5950933902774994655/libRemoteInput.so sha256=f7916bd5810806d67adf59d984d1138d235f02e9d93900c1aec61d5b59c5d46f size=576 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+   Staged validated artifact pair 69a8138eea5e55c45910aa6c9e3448c7227fe8e6e0e9b8bc7f92da4d73446b24 at <repo>/build/sc1662/staging-regressions/dist/linux-x86_64 -> .versions/69a8138eea5e55c45910aa6c9e3448c7227fe8e6e0e9b8bc7f92da4d73446b24
+   
+   BUILD SUCCESSFUL in 1s
+   1 actionable task: 1 executed
+   exit=0
+   payload=69a8138eea5e55c45910aa6c9e3448c7227fe8e6e0e9b8bc7f92da4d73446b24
+   artifact-sha256=f7916bd5810806d67adf59d984d1138d235f02e9d93900c1aec61d5b59c5d46f
+PASS: case 1: a manifest-only change produces a distinct payload identity
+PASS: case 1: the payload identity is the pair, not the artifact hash
+== case 2: publish pair X ==
+   
+   > Task :stageRemoteInputLinuxRegression
+   MANIFEST_OK manifest=<repo>/build/sc1662/staging-regressions/native/linux-x86_64/remoteinput-manifest.json artifact=<repo>/build/sc1662/staging-regressions/native/linux-x86_64/libRemoteInput.so sha256=60d877a6fbbcba7eefb627adbbe699bf9b44000c9eda0051a73b3480db2bd10f size=576 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+   MANIFEST_OK manifest=<repo>/build/sc1662/staging-regressions/dist/.sc1662-stage.17099769878866365753/remoteinput-manifest.json artifact=<repo>/build/sc1662/staging-regressions/dist/.sc1662-stage.17099769878866365753/libRemoteInput.so sha256=60d877a6fbbcba7eefb627adbbe699bf9b44000c9eda0051a73b3480db2bd10f size=576 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+   Staged validated artifact pair 53884e7e2d6ff6b5681c53f0ede3c5a1630b446f33857cf9dea0132df5632430 at <repo>/build/sc1662/staging-regressions/dist/linux-x86_64 -> .versions/53884e7e2d6ff6b5681c53f0ede3c5a1630b446f33857cf9dea0132df5632430
+   
+   BUILD SUCCESSFUL in 1s
+   1 actionable task: 1 executed
+   exit=0
+PASS: case 2: setup publish succeeded
+PASS: case 2: publish point names the pair identity
+== case 2: re-stage X while .versions/X holds a different valid pair ==
+   
+   > Task :stageRemoteInputLinuxRegression FAILED
+   MANIFEST_OK manifest=<repo>/build/sc1662/staging-regressions/native/linux-x86_64/remoteinput-manifest.json artifact=<repo>/build/sc1662/staging-regressions/native/linux-x86_64/libRemoteInput.so sha256=60d877a6fbbcba7eefb627adbbe699bf9b44000c9eda0051a73b3480db2bd10f size=576 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+   MANIFEST_OK manifest=<repo>/build/sc1662/staging-regressions/dist/.versions/53884e7e2d6ff6b5681c53f0ede3c5a1630b446f33857cf9dea0132df5632430/remoteinput-manifest.json artifact=<repo>/build/sc1662/staging-regressions/dist/.versions/53884e7e2d6ff6b5681c53f0ede3c5a1630b446f33857cf9dea0132df5632430/libRemoteInput.so sha256=8616451d8d8a69de399bb5a8a038cde642d95e4424aa3f13abe448d6e21c5a89 size=576 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+   
+   FAILURE: Build failed with an exception.
+   
+   * What went wrong:
+   Execution failed for task ':stageRemoteInputLinuxRegression'.
+   > Refusing to stage: the existing payload <repo>/build/sc1662/staging-regressions/dist/.versions/53884e7e2d6ff6b5681c53f0ede3c5a1630b446f33857cf9dea0132df5632430 validates against its own manifest but is not the expected pair 53884e7e2d6ff6b5681c53f0ede3c5a1630b446f33857cf9dea0132df5632430. It is deliberately not overwritten; remove it explicitly and re-run.
+   
+   * Try:
+   > Run with --stacktrace option to get the stack trace.
+   > Run with --info or --debug option to get more log output.
+   > Run with --scan to get full insights.
+   > Get more help at https://help.gradle.org.
+   
+   BUILD FAILED in 1s
+   1 actionable task: 1 executed
+   exit=1
+PASS: case 2: the mismatched existing payload was refused by identity
+== case 3: publish pair A ==
+   
+   > Task :stageRemoteInputLinuxRegression
+   MANIFEST_OK manifest=<repo>/build/sc1662/staging-regressions/native/linux-x86_64/remoteinput-manifest.json artifact=<repo>/build/sc1662/staging-regressions/native/linux-x86_64/libRemoteInput.so sha256=08d00493b3695ed82c93c50e6299941aafcd0844a33e5f068eccf50a993dd27e size=576 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+   MANIFEST_OK manifest=<repo>/build/sc1662/staging-regressions/dist/.sc1662-stage.16130406978208364290/remoteinput-manifest.json artifact=<repo>/build/sc1662/staging-regressions/dist/.sc1662-stage.16130406978208364290/libRemoteInput.so sha256=08d00493b3695ed82c93c50e6299941aafcd0844a33e5f068eccf50a993dd27e size=576 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+   Staged validated artifact pair 148e45b2e8179c5d08633ade4b85fe8ab25a54ea75102741943003cde2dce5eb at <repo>/build/sc1662/staging-regressions/dist/linux-x86_64 -> .versions/148e45b2e8179c5d08633ade4b85fe8ab25a54ea75102741943003cde2dce5eb
+   
+   BUILD SUCCESSFUL in 1s
+   1 actionable task: 1 executed
+   exit=0
+== case 3: publish pair B ==
+   
+   > Task :stageRemoteInputLinuxRegression
+   MANIFEST_OK manifest=<repo>/build/sc1662/staging-regressions/native/linux-x86_64/remoteinput-manifest.json artifact=<repo>/build/sc1662/staging-regressions/native/linux-x86_64/libRemoteInput.so sha256=769faf31b935e883562fc0eb4aae6373650ad5b1bac2ffed6df2cbb826ccb9d8 size=576 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+   MANIFEST_OK manifest=<repo>/build/sc1662/staging-regressions/dist/.sc1662-stage.7521478867245594296/remoteinput-manifest.json artifact=<repo>/build/sc1662/staging-regressions/dist/.sc1662-stage.7521478867245594296/libRemoteInput.so sha256=769faf31b935e883562fc0eb4aae6373650ad5b1bac2ffed6df2cbb826ccb9d8 size=576 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+   Staged validated artifact pair af6de0cfe933afef4627d51d0ed42bc50bb9596917cb6f6828471e5cb2ef7bae at <repo>/build/sc1662/staging-regressions/dist/linux-x86_64 -> .versions/af6de0cfe933afef4627d51d0ed42bc50bb9596917cb6f6828471e5cb2ef7bae
+   
+   BUILD SUCCESSFUL in 1s
+   1 actionable task: 1 executed
+   exit=0
+== case 3: republish pair A (predecessor B must survive) ==
+   
+   > Task :stageRemoteInputLinuxRegression
+   MANIFEST_OK manifest=<repo>/build/sc1662/staging-regressions/native/linux-x86_64/remoteinput-manifest.json artifact=<repo>/build/sc1662/staging-regressions/native/linux-x86_64/libRemoteInput.so sha256=08d00493b3695ed82c93c50e6299941aafcd0844a33e5f068eccf50a993dd27e size=576 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+   MANIFEST_OK manifest=<repo>/build/sc1662/staging-regressions/dist/.versions/148e45b2e8179c5d08633ade4b85fe8ab25a54ea75102741943003cde2dce5eb/remoteinput-manifest.json artifact=<repo>/build/sc1662/staging-regressions/dist/.versions/148e45b2e8179c5d08633ade4b85fe8ab25a54ea75102741943003cde2dce5eb/libRemoteInput.so sha256=08d00493b3695ed82c93c50e6299941aafcd0844a33e5f068eccf50a993dd27e size=576 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+   Staged validated artifact pair 148e45b2e8179c5d08633ade4b85fe8ab25a54ea75102741943003cde2dce5eb at <repo>/build/sc1662/staging-regressions/dist/linux-x86_64 -> .versions/148e45b2e8179c5d08633ade4b85fe8ab25a54ea75102741943003cde2dce5eb
+   
+   BUILD SUCCESSFUL in 1s
+   1 actionable task: 1 executed
+   exit=0
+PASS: case 3: publish point returned to pair A
+PASS: case 3: displaced predecessor B retained
+== case 4: stage with a real directory at the publish point ==
+   
+   > Task :stageRemoteInputLinuxRegression FAILED
+   MANIFEST_OK manifest=<repo>/build/sc1662/staging-regressions/native/linux-x86_64/remoteinput-manifest.json artifact=<repo>/build/sc1662/staging-regressions/native/linux-x86_64/libRemoteInput.so sha256=9109975cf20289c1ec64d3556c43665d3320d1716bfd36fe9e86ff55787b2778 size=576 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+   MANIFEST_OK manifest=<repo>/build/sc1662/staging-regressions/dist/.sc1662-stage.7625619408249088092/remoteinput-manifest.json artifact=<repo>/build/sc1662/staging-regressions/dist/.sc1662-stage.7625619408249088092/libRemoteInput.so sha256=9109975cf20289c1ec64d3556c43665d3320d1716bfd36fe9e86ff55787b2778 size=576 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+   
+   FAILURE: Build failed with an exception.
+   
+   * What went wrong:
+   Execution failed for task ':stageRemoteInputLinuxRegression'.
+   > Refusing to publish: <repo>/build/sc1662/staging-regressions/dist/linux-x86_64 is a real directory, not the versioned publish symlink. It is deliberately not removed automatically, because an interruption would then leave no publish point at all. Remove it explicitly (rm -rf '<repo>/build/sc1662/staging-regressions/dist/linux-x86_64', or run `gradlew clean`) and re-run.
+   
+   * Try:
+   > Run with --stacktrace option to get the stack trace.
+   > Run with --info or --debug option to get more log output.
+   > Run with --scan to get full insights.
+   > Get more help at https://help.gradle.org.
+   
+   BUILD FAILED in 1s
+   1 actionable task: 1 executed
+   exit=1
+PASS: case 4: the real-directory publish point was refused
+PASS: case 4: the real directory survives (no publish point was removed)
+
+# result: PASS (all staging regressions)
+
+# exit: 0
+# elapsed_seconds: 11

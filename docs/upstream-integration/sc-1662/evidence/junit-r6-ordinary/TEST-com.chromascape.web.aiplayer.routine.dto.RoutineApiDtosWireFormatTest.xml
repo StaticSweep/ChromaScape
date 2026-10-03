@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.dto.RoutineApiDtosWireFormatTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:39:32.349Z" hostname="fedora" time="0.023">
+  <properties/>
+  <testcase name="shadowRunBodyBinds()" classname="com.chromascape.web.aiplayer.routine.dto.RoutineApiDtosWireFormatTest" time="0.002"/>
+  <testcase name="runCreationBodyBinds()" classname="com.chromascape.web.aiplayer.routine.dto.RoutineApiDtosWireFormatTest" time="0.009"/>
+  <testcase name="tickAndActionBatchBodiesBind()" classname="com.chromascape.web.aiplayer.routine.dto.RoutineApiDtosWireFormatTest" time="0.003"/>
+  <testcase name="captureSessionBodyBinds()" classname="com.chromascape.web.aiplayer.routine.dto.RoutineApiDtosWireFormatTest" time="0.007"/>
+  <testcase name="captureCompleteBodyBinds()" classname="com.chromascape.web.aiplayer.routine.dto.RoutineApiDtosWireFormatTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

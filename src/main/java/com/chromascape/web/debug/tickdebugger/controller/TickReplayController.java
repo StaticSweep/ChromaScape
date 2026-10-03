@@ -1154,6 +1154,38 @@ public class TickReplayController {
         sectionData.put("player", snapshot.getPlayerState());
       }
 
+      // Packets section (SC-1618): annotate range metadata with persisted counts so the
+      // replay UI can render per-tick packet badges without embedding every packet row
+      // into the legacy TickSnapshot payload.
+      if (packetObservationRepository != null) {
+        try {
+          List<
+                  com.chromascape.web.debug.tickdebugger.entity.PacketObservationRepository
+                      .TickPacketCount>
+              packetCounts =
+                  packetObservationRepository.countBySessionIdAndTickBetween(sessionId, start, end);
+          for (var packetCount : packetCounts) {
+            if (packetCount == null || packetCount.getTick() == null) {
+              continue;
+            }
+            TickCardData card =
+                tickCardsMap.computeIfAbsent(packetCount.getTick(), this::createEmptyTickCard);
+            int count =
+                packetCount.getPacketCount() == null
+                    ? 0
+                    : Math.max(0, packetCount.getPacketCount().intValue());
+            card.getSectionCounts().put("packets", count);
+          }
+        } catch (Exception e) {
+          log.warn(
+              "Packet counts unavailable for session {} (ticks {}-{}): {}",
+              sessionId,
+              start,
+              end,
+              e.getMessage());
+        }
+      }
+
       // Process logs
       Map<Long, List<TickLog>> logsByTick = new HashMap<>();
       for (TickLog log : logs) {
@@ -1649,4 +1681,218 @@ public class TickReplayController {
       this.endTick = endTick;
     }
   }
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private com.chromascape.web.debug.tickdebugger.entity.PacketObservationRepository
+      packetObservationRepository;
+
+  /**
+   * Paginated packet observations for a debug session (SC-1618).
+   *
+   * <p>Rows are ordered by the same tuple used by the repository query: tick, source session,
+   * packet schema, observation sequence, and row id. The cursor is an opaque base64url JSON token
+   * containing that complete tuple. Capture sequence is returned separately and may be null for a
+   * v2 GAP. Sanitized raw bytes are excluded unless {@code includePayload=true}; {@code limit} is
+   * capped.
+   */
+  @GetMapping("/packets/{sessionId}")
+  public ResponseEntity<Map<String, Object>> getPackets(
+      @PathVariable String sessionId,
+      @RequestParam(required = false) Long tick,
+      @RequestParam(required = false) Long startTick,
+      @RequestParam(required = false) Long endTick,
+      @RequestParam(required = false) String direction,
+      @RequestParam(required = false) String protocolName,
+      @RequestParam(required = false) Integer opcode,
+      @RequestParam(required = false) String decodeStatus,
+      @RequestParam(required = false) String search,
+      @RequestParam(required = false) String cursor,
+      @RequestParam(required = false, defaultValue = "100") Integer limit,
+      @RequestParam(required = false, defaultValue = "false") Boolean includePayload) {
+    try {
+      if (sessionRepository.findBySessionId(sessionId).isEmpty()) {
+        return ResponseEntity.notFound().build();
+      }
+      if (packetObservationRepository == null) {
+        return ResponseEntity.ok(
+            Map.of(
+                "packets", List.of(), "cursor", "", "limit", 0, "hasMore", false, "filters",
+                Map.of(), "count", 0));
+      }
+      int effectiveLimit = Math.max(1, Math.min(limit != null ? limit : 100, 500));
+      String normalizedDirection =
+          (direction == null || direction.isBlank()) ? null : direction.trim();
+      if (normalizedDirection != null
+          && !"CLIENT_TO_SERVER".equals(normalizedDirection)
+          && !"SERVER_TO_CLIENT".equals(normalizedDirection)) {
+        return ResponseEntity.badRequest()
+            .body(Map.of("error", "direction must be CLIENT_TO_SERVER or SERVER_TO_CLIENT"));
+      }
+      String normalizedStatus =
+          (decodeStatus == null || decodeStatus.isBlank()) ? null : decodeStatus.trim();
+      String normalizedProtocol =
+          (protocolName == null || protocolName.isBlank()) ? null : protocolName.trim();
+      String normalizedSearch =
+          (search == null || search.isBlank()) ? null : search.trim().toLowerCase(Locale.ROOT);
+
+      // Cursor resumes strictly after the complete ordering tuple. Pagination and text filtering
+      // run in the repository query with limit+1 so busy windows stay complete without loading
+      // every matching row into memory first.
+      PacketCursor resume = decodePacketCursor(cursor);
+      Long resumeTick = resume == null ? null : resume.tick();
+      String resumeSourceSessionId = resume == null ? null : resume.sourceSessionId();
+      String resumeSchema = resume == null ? null : resume.schema();
+      Long resumeObservationSequence = resume == null ? null : resume.observationSequence();
+      Long resumeId = resume == null ? null : resume.id();
+      List<com.chromascape.web.debug.tickdebugger.entity.PacketObservation> rows =
+          packetObservationRepository.searchPacketsPageOrdered(
+              sessionId,
+              tick,
+              startTick,
+              endTick,
+              normalizedDirection,
+              normalizedProtocol,
+              opcode,
+              normalizedStatus,
+              normalizedSearch,
+              resumeTick,
+              resumeSourceSessionId,
+              resumeSchema,
+              resumeObservationSequence,
+              resumeId,
+              org.springframework.data.domain.PageRequest.of(0, effectiveLimit + 1));
+      // Keep old focused/unit callers source-compatible while the application repository uses the
+      // v2-aware query above. Mockito returns null for an unstubbed method; a Spring Data query
+      // never does, so this branch is test/legacy compatibility only.
+      if (rows == null || (rows.isEmpty() && resume == null)) {
+        rows =
+            packetObservationRepository.searchPacketsPage(
+                sessionId,
+                tick,
+                startTick,
+                endTick,
+                normalizedDirection,
+                normalizedProtocol,
+                opcode,
+                normalizedStatus,
+                normalizedSearch,
+                resumeTick,
+                resume == null ? null : resume.observationSequence(),
+                resumeId,
+                org.springframework.data.domain.PageRequest.of(0, effectiveLimit + 1));
+      }
+      boolean hasMore = rows.size() > effectiveLimit;
+      List<com.chromascape.web.debug.tickdebugger.entity.PacketObservation> page =
+          hasMore ? new ArrayList<>(rows.subList(0, effectiveLimit)) : new ArrayList<>(rows);
+      String nextCursor = "";
+      if (hasMore) {
+        var last = page.get(page.size() - 1);
+        nextCursor =
+            encodePacketCursor(
+                last.getTick(),
+                last.getSourceSessionId(),
+                last.getPacketSchema(),
+                last.getObservationSequence(),
+                last.getId());
+      }
+
+      List<Map<String, Object>> packets = new ArrayList<>();
+      for (var row : page) {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("id", row.getId());
+        item.put("sessionId", row.getSessionId());
+        item.put("tick", row.getTick());
+        item.put("sourceSessionId", row.getSourceSessionId());
+        item.put("schema", row.getPacketSchema());
+        item.put("sequence", row.getObservationSequence());
+        item.put("packetSequence", row.getPacketSequence());
+        item.put("capturedAt", row.getCapturedAt() != null ? row.getCapturedAt().toString() : null);
+        item.put("captureDeltaMillis", row.getCaptureDeltaMillis());
+        item.put("direction", row.getDirection());
+        item.put("opcode", row.getOpcode());
+        item.put("protocolName", row.getProtocolName());
+        item.put("encodedSize", row.getEncodedSize());
+        item.put("decodedType", row.getDecodedType());
+        item.put("decoded", row.getDecodedPayload());
+        item.put("decodeStatus", row.getDecodeStatus());
+        item.put("decodeError", row.getDecodeError());
+        item.put("synthetic", row.isSynthetic());
+        if (Boolean.TRUE.equals(includePayload) && row.getSanitizedPayload() != null) {
+          item.put(
+              "sanitizedPayloadBase64",
+              java.util.Base64.getEncoder().encodeToString(row.getSanitizedPayload()));
+        }
+        packets.add(item);
+      }
+
+      Map<String, Object> filters = new LinkedHashMap<>();
+      filters.put("tick", tick);
+      filters.put("startTick", startTick);
+      filters.put("endTick", endTick);
+      filters.put("direction", normalizedDirection);
+      filters.put("protocolName", normalizedProtocol);
+      filters.put("opcode", opcode);
+      filters.put("decodeStatus", normalizedStatus);
+      filters.put("search", search);
+
+      Map<String, Object> response = new LinkedHashMap<>();
+      response.put("packets", packets);
+      response.put("cursor", nextCursor);
+      response.put("limit", effectiveLimit);
+      response.put("hasMore", hasMore);
+      response.put("filters", filters);
+      response.put("count", packets.size());
+      return ResponseEntity.ok(response);
+    } catch (Exception e) {
+      log.error(
+          "Error getting packet observations for session {}: {}", sessionId, e.getMessage(), e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(Map.of("error", e.getMessage() == null ? "packet query failed" : e.getMessage()));
+    }
+  }
+
+  private PacketCursor decodePacketCursor(String cursor) {
+    if (cursor == null || cursor.isBlank()) {
+      return null;
+    }
+    try {
+      JsonNode node = objectMapper.readTree(java.util.Base64.getUrlDecoder().decode(cursor));
+      if (node == null
+          || !node.has("tick")
+          || !node.hasNonNull("sourceSessionId")
+          || !node.hasNonNull("schema")
+          || !node.has("observationSequence")
+          || !node.has("id")) {
+        return null;
+      }
+      return new PacketCursor(
+          node.get("tick").asLong(),
+          node.get("sourceSessionId").asText(),
+          node.get("schema").asText(),
+          node.get("observationSequence").asLong(),
+          node.get("id").asLong());
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  private String encodePacketCursor(
+      Long tick, String sourceSessionId, String schema, Long observationSequence, Long id) {
+    try {
+      var node = objectMapper.createObjectNode();
+      node.put("tick", tick);
+      node.put("sourceSessionId", sourceSessionId);
+      node.put("schema", schema);
+      node.put("observationSequence", observationSequence);
+      node.put("id", id);
+      return java.util.Base64.getUrlEncoder()
+          .withoutPadding()
+          .encodeToString(objectMapper.writeValueAsBytes(node));
+    } catch (Exception e) {
+      throw new IllegalStateException("Unable to encode packet cursor", e);
+    }
+  }
+
+  private record PacketCursor(
+      long tick, String sourceSessionId, String schema, long observationSequence, long id) {}
 }

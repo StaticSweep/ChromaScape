@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.source.SourceContractSchemaEqualityTest" tests="3" skipped="0" failures="1" errors="0" timestamp="2026-09-16T10:39:07.286Z" hostname="fedora" time="0.049">
+  <properties/>
+  <testcase name="canonicalSchemaIsByteIdenticalAcrossRepositories()" classname="com.chromascape.web.aiplayer.routine.source.SourceContractSchemaEqualityTest" time="0.007">
+    <failure message="org.opentest4j.AssertionFailedError: Micro6 canonical schema is missing at C:\Dev\IdeaProjects\micro6/runelite-client/src/main/resources/micro6-contracts/task-source-manifest-v1.schema.json; SC-810 requires both repositories to share one byte-identical task-source-manifest/v1 contract ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: Micro6 canonical schema is missing at C:\Dev\IdeaProjects\micro6/runelite-client/src/main/resources/micro6-contracts/task-source-manifest-v1.schema.json; SC-810 requires both repositories to share one byte-identical task-source-manifest/v1 contract ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at app//org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+	at app//org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+	at app//org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:214)
+	at app//com.chromascape.web.aiplayer.routine.source.SourceContractSchemaEqualityTest.canonicalSchemaIsByteIdenticalAcrossRepositories(SourceContractSchemaEqualityTest.java:92)
+	at java.base@17.0.20.1/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <testcase name="sharedCanonicalVectorsArePinned()" classname="com.chromascape.web.aiplayer.routine.source.SourceContractSchemaEqualityTest" time="0.016"/>
+  <testcase name="publicSourceFailureCodesHaveSchemaAndHttpMappings()" classname="com.chromascape.web.aiplayer.routine.source.SourceContractSchemaEqualityTest" time="0.025"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

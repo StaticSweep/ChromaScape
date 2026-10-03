@@ -145,10 +145,13 @@ public class WindowSelectionService {
    * as the precondition for its one-attachment lifecycle.
    *
    * @param processManager the discovery implementation for this platform
-   * @param expectedGeneration the generation the caller observed; an older generation is stale
+   * @param expectedGeneration the generation the caller observed; any value other than the current
+   *     selection generation is stale, so a caller that observed a future or replaced generation
+   *     can never validate
    * @return the validation outcome
    */
-  public SelectionValidation validateSelected(ProcessManager processManager, long expectedGeneration) {
+  public SelectionValidation validateSelected(
+      ProcessManager processManager, long expectedGeneration) {
     if (processManager == null) {
       return SelectionValidation.UNSUPPORTED_PLATFORM;
     }
@@ -159,7 +162,7 @@ public class WindowSelectionService {
     if (current == null) {
       return SelectionValidation.NONE;
     }
-    if (expectedGeneration < current.generation()) {
+    if (expectedGeneration != current.generation()) {
       return SelectionValidation.STALE_GENERATION;
     }
     ProcessIdentity identity = current.identity();

@@ -6,7 +6,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface SourceManifestReferenceRepository extends JpaRepository<SourceManifestReference, UUID> {
+public interface SourceManifestReferenceRepository
+    extends JpaRepository<SourceManifestReference, UUID> {
   Optional<SourceManifestReference> findByManifestHash(String manifestHash);
+
   Optional<SourceManifestReference> findBySnapshotId(String snapshotId);
 }

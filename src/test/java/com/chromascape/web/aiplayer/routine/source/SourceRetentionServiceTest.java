@@ -22,11 +22,11 @@ class SourceRetentionServiceTest {
     SourceContentObjectRepository content = mock(SourceContentObjectRepository.class);
     SourceReadAuditService audit = mock(SourceReadAuditService.class);
     SourceManifestReference reference = new SourceManifestReference();
-    reference.setManifestHash(SourceManifestTestFixtures.manifest()
-        .path("source_manifest_hash").asText());
+    reference.setManifestHash(
+        SourceManifestTestFixtures.manifest().path("source_manifest_hash").asText());
     reference.setTaskKey("EXAMPLE_TASK");
-    reference.setSnapshotId(SourceManifestTestFixtures.manifest()
-        .path("source_snapshot_id").asText());
+    reference.setSnapshotId(
+        SourceManifestTestFixtures.manifest().path("source_snapshot_id").asText());
     when(manifests.findByManifestHash(reference.getManifestHash()))
         .thenReturn(Optional.of(reference));
     when(manifests.save(any(SourceManifestReference.class)))
@@ -47,16 +47,27 @@ class SourceRetentionServiceTest {
     assertNotNull(firstPruned);
     assertNotNull(reference.getPrunedAt());
     assertNotNull(object.getRedactedAt());
-    verify(audit).record("operator", "retention_prune", null, null,
-        "EXAMPLE_TASK", reference.getSnapshotId(), null, "SOURCE_PRUNED");
-    verify(audit).recordContent("operator", "retention_redact_content", contentHash,
-        "SOURCE_REDACTED");
+    verify(audit)
+        .record(
+            "operator",
+            "retention_prune",
+            null,
+            null,
+            "EXAMPLE_TASK",
+            reference.getSnapshotId(),
+            null,
+            "SOURCE_PRUNED");
+    verify(audit)
+        .recordContent("operator", "retention_redact_content", contentHash, "SOURCE_REDACTED");
   }
 
   @Test
   void rejectsMalformedRetentionIdentities() {
-    SourceRetentionService service = new SourceRetentionService(
-        mock(SourceManifestReferenceRepository.class));
+    SourceRetentionService service =
+        new SourceRetentionService(
+            mock(SourceManifestReferenceRepository.class),
+            mock(SourceContentObjectRepository.class),
+            mock(SourceReadAuditService.class));
     assertThrows(SourceManifestException.class, () -> service.prune("not-a-hash"));
     assertThrows(SourceManifestException.class, () -> service.pruneContent("not-a-hash"));
   }

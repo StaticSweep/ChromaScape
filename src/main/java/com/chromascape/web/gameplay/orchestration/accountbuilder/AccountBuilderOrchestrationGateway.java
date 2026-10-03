@@ -1,6 +1,7 @@
 package com.chromascape.web.gameplay.orchestration.accountbuilder;
 
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayCorrelation;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayReceipt;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Lease;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
@@ -9,16 +10,30 @@ import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderO
  * Sole SC-1431 delivery boundary. Implementations may expose semantic AccountBuilder calls only.
  */
 public interface AccountBuilderOrchestrationGateway {
-  CapabilitySnapshot capabilities();
+  /**
+   * Read-only capability acquisition bound to the validated request identity. Implementations must
+   * consult both the catalog and the client observation evidence for the request's client, and must
+   * never reserve, dispatch or mutate state here.
+   */
+  CapabilitySnapshot capabilities(OrchestrationRequest request);
 
   GatewayReceipt reserve(OrchestrationRequest request, String envelopeDigest);
 
   GatewayReceipt dispatch(OrchestrationRequest request, String envelopeDigest, Lease lease);
 
-  GatewayReceipt status(OrchestrationRequest request, String envelopeDigest, Lease lease);
+  GatewayReceipt status(GatewayCorrelation correlation, Lease lease);
 
+  /**
+   * Requests a bounded stop. The kill-switch flag carries the operator's requested stop mode all
+   * the way to the transport; implementations must never substitute a default.
+   */
   GatewayReceipt stop(
-      OrchestrationRequest request, String envelopeDigest, Lease lease, String reason);
+      GatewayCorrelation correlation, Lease lease, String reason, boolean killSwitch);
 
-  GatewayReceipt reconcile(OrchestrationRequest request, String envelopeDigest, Lease lease);
+  GatewayReceipt reconcile(GatewayCorrelation correlation, Lease lease);
+
+  /**
+   * Lookup-only reservation reconciliation for an authority-consumed orchestration without lease.
+   */
+  GatewayReceipt reconcileReservation(GatewayCorrelation correlation);
 }

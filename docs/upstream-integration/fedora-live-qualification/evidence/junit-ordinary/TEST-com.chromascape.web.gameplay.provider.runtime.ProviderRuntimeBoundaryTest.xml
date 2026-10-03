@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeBoundaryTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:29:47.205Z" hostname="fedora" time="0.488">
+  <properties/>
+  <testcase name="transcriptsAreContentAddressedAndSecretsAreRedacted()" classname="com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeBoundaryTest" time="0.005"/>
+  <testcase name="facadeRejectsUnknownToolsAndChangedArguments()" classname="com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeBoundaryTest" time="0.008"/>
+  <testcase name="enabledRuntimeRequiresLongOperatorKey()" classname="com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeBoundaryTest" time="0.001"/>
+  <testcase name="runtimeIsDefaultOffAndModelPatternsAreClosed()" classname="com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeBoundaryTest" time="0.001"/>
+  <testcase name="proposalSchemaIsValidJson()" classname="com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeBoundaryTest" time="0.003"/>
+  <testcase name="processRunnerBoundsOutputAndClassifiesTimeoutAsUncertain()" classname="com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeBoundaryTest" time="0.468"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

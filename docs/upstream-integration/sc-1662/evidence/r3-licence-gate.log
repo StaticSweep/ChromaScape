@@ -1,0 +1,25 @@
+# command: ./gradlew --offline verifyRemoteInputDistributionLicence --console=plain -Psc967VectorsPath=<redacted> (expected to fail closed)
+# utc: 2026-09-15T11:03:25Z
+# revision: be4230c0198e065748ff5b49a76f434a581fee4d
+# worktree_status_sha256: 21117c54488d0ccb0ecbfa2827d15b5069f1e80458afde5458463a71dcf6bc29
+# run_sequence: 3 (second-review fixes; runs 1-2 retained unmodified apart from redaction)
+
+> Task :verifyRemoteInputDistributionLicence FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':verifyRemoteInputDistributionLicence'.
+> Distribution gate unresolved: third-party/RemoteInput/PROVENANCE.md records no top-level RemoteInput licence. Land the resolved licence at third-party/RemoteInput/LICENSE (and update PROVENANCE.md) before assembling.
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 1s
+1 actionable task: 1 executed
+
+# exit: 1
+# elapsed_seconds: 2

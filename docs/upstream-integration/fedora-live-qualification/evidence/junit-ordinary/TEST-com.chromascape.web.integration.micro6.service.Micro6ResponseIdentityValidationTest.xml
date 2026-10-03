@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.integration.micro6.service.Micro6ResponseIdentityValidationTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:07.647Z" hostname="fedora" time="0.009">
+  <properties/>
+  <testcase name="observedAtRejectsInvalidTtlAndNullArguments()" classname="com.chromascape.web.integration.micro6.service.Micro6ResponseIdentityValidationTest" time="0.001"/>
+  <testcase name="fullIdentityRequiresCatalogVersionCatalogHashAndObservedAt()" classname="com.chromascape.web.integration.micro6.service.Micro6ResponseIdentityValidationTest" time="0.0"/>
+  <testcase name="observedAtMustBeFreshAndWithinSkew()" classname="com.chromascape.web.integration.micro6.service.Micro6ResponseIdentityValidationTest" time="0.001"/>
+  <testcase name="observedAtHonorsTheThirtySecondFutureSkewBoundary()" classname="com.chromascape.web.integration.micro6.service.Micro6ResponseIdentityValidationTest" time="0.0"/>
+  <testcase name="observedAtHonorsTheInclusiveTtlBoundary()" classname="com.chromascape.web.integration.micro6.service.Micro6ResponseIdentityValidationTest" time="0.001"/>
+  <testcase name="rejectedLifecycleMatrix()" classname="com.chromascape.web.integration.micro6.service.Micro6ResponseIdentityValidationTest" time="0.001"/>
+  <testcase name="acceptedLifecycleMatrix()" classname="com.chromascape.web.integration.micro6.service.Micro6ResponseIdentityValidationTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

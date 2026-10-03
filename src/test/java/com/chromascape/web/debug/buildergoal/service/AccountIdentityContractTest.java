@@ -25,8 +25,7 @@ class AccountIdentityContractTest {
 
   @Test
   void namesAreNotUsedToOverrideAHashMismatch() {
-    assertThat(AccountIdentityContract.matchesHash("profile-name", "b01c7f006bace664"))
-        .isFalse();
+    assertThat(AccountIdentityContract.matchesHash("profile-name", "b01c7f006bace664")).isFalse();
   }
 
   @Test
@@ -48,9 +47,7 @@ class AccountIdentityContractTest {
     assertThat(AccountIdentityContract.matchesHash("hash-1", "hash-1")).isTrue();
     assertThat(AccountIdentityContract.matchesCanonicalHash("hash-1", "hash-1")).isFalse();
     assertThat(AccountIdentityContract.matchesCanonicalHash("abc123", "abc123")).isFalse();
-    assertThat(
-            AccountIdentityContract.matchesCanonicalHash(
-                "B01C7F006BACE664", "b01c7f006bace664"))
+    assertThat(AccountIdentityContract.matchesCanonicalHash("B01C7F006BACE664", "b01c7f006bace664"))
         .isTrue();
   }
 }

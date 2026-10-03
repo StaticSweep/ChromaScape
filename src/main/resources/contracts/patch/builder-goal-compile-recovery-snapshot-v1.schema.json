@@ -1,0 +1,110 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://chromascape.local/contracts/patch/builder-goal-compile-recovery-snapshot-v1.schema.json",
+  "title": "Builder Goal compile recovery snapshot",
+  "type": "object",
+  "required": ["schemaVersion", "iterationId", "eligible", "failureCode", "artifacts", "allowedActions"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": "builder-goal-compile-recovery/v1" },
+    "iterationId": { "type": "string", "maxLength": 100 },
+    "eligible": { "type": "boolean" },
+    "failureCode": { "type": ["string", "null"], "maxLength": 100 },
+    "incident": {
+      "type": ["object", "null"],
+      "required": ["incidentId", "type", "state"],
+      "properties": {
+        "incidentId": { "type": "string", "maxLength": 80 },
+        "type": { "enum": ["COMPILE_PREFLIGHT", "RUN_EVIDENCE"] },
+        "state": { "type": "string", "maxLength": 40 },
+        "evidenceManifestHash": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" },
+        "correlationId": { "type": ["string", "null"], "maxLength": 160 },
+        "createdAt": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "diagnosticSummary": {
+      "type": ["object", "null"],
+      "properties": {
+        "errorCount": { "type": "integer", "minimum": 0 },
+        "warningCount": { "type": "integer", "minimum": 0 },
+        "gradleCommandKey": { "type": "string", "maxLength": 80 },
+        "exitCode": { "type": ["integer", "null"] },
+        "truncated": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["artifactId", "kind", "sha256"],
+        "properties": {
+          "artifactId": { "type": "string", "maxLength": 80 },
+          "kind": {
+            "enum": [
+              "ORIGINAL_COMPILE_LOG", "COMPILER_DIAGNOSTICS", "AI_PROMPT", "PROPOSAL",
+              "POLICY_REPORT", "PATCH_APPLY_LOG", "COMPILE_LOG", "STATIC_LOG", "TEST_LOG",
+              "PACKAGE_LOG", "SBOM", "CANDIDATE_MANIFEST", "CLEANUP_REPORT"
+            ]
+          },
+          "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+          "byteCount": { "type": "integer", "minimum": 0 },
+          "lineCount": { "type": "integer", "minimum": 0 },
+          "truncated": { "type": "boolean" },
+          "sanitizationVersion": { "type": "string", "maxLength": 30 },
+          "createdAt": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "proposal": {
+      "type": ["object", "null"],
+      "required": ["proposalId", "status", "proposalHash"],
+      "properties": {
+        "proposalId": { "type": "string", "maxLength": 80 },
+        "version": { "type": "integer", "minimum": 1 },
+        "status": { "type": "string", "maxLength": 40 },
+        "proposalHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "patchHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "baseCommit": { "type": ["string", "null"], "maxLength": 64 },
+        "expiresAt": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "validationJob": {
+      "type": ["object", "null"],
+      "required": ["jobId", "state"],
+      "properties": {
+        "jobId": { "type": "string", "maxLength": 80 },
+        "state": { "type": "string", "maxLength": 40 },
+        "currentStage": { "type": ["string", "null"], "maxLength": 60 },
+        "failureCode": { "type": ["string", "null"], "maxLength": 100 },
+        "candidateId": { "type": ["string", "null"], "maxLength": 80 },
+        "cancelRequested": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "candidate": {
+      "type": ["object", "null"],
+      "required": ["candidateId", "candidateDigest", "eligibilityState"],
+      "properties": {
+        "candidateId": { "type": "string", "maxLength": 80 },
+        "candidateDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "resultingTreeHash": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" },
+        "eligibilityState": { "const": "BUILD_VALIDATED" }
+      },
+      "additionalProperties": false
+    },
+    "allowedActions": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "COPY", "DOWNLOAD", "START_ANALYSIS", "VIEW_PROPOSAL", "APPROVE", "REJECT",
+          "REQUEST_CHANGES", "CANCEL_VALIDATION", "RERUN_CANDIDATE"
+        ]
+      },
+      "uniqueItems": true
+    }
+  }
+}

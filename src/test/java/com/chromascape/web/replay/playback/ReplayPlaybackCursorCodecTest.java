@@ -13,8 +13,7 @@ import org.junit.jupiter.api.Test;
 
 class ReplayPlaybackCursorCodecTest {
 
-  private final ReplayPlaybackCursorCodec codec =
-      new ReplayPlaybackCursorCodec(new ObjectMapper());
+  private final ReplayPlaybackCursorCodec codec = new ReplayPlaybackCursorCodec(new ObjectMapper());
 
   @Test
   void roundTripsUrlSafeUnpaddedCursor() {
@@ -57,7 +56,8 @@ class ReplayPlaybackCursorCodecTest {
 
   @Test
   void nonPositiveIdsAndInvalidStartTimesAreRejected() {
-    assertValidationError(encoded("{\"version\":1,\"startTime\":\"2026-08-28T03:12:13\",\"id\":0}"));
+    assertValidationError(
+        encoded("{\"version\":1,\"startTime\":\"2026-08-28T03:12:13\",\"id\":0}"));
     assertValidationError(encoded("{\"version\":1,\"startTime\":\"not-a-time\",\"id\":42}"));
     assertValidationError(
         encoded("{\"version\":1,\"startTime\":\"2026-08-28T03:12:13\",\"id\":42}{}"));

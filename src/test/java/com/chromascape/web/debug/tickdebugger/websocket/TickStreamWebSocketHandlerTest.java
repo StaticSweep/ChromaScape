@@ -25,6 +25,7 @@ import com.chromascape.web.debug.tickdebugger.service.DebugSessionService.Sessio
 import com.chromascape.web.debug.tickdebugger.service.DebugSessionService.SessionStartRollbackToken;
 import com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -103,6 +104,14 @@ class TickStreamWebSocketHandlerTest {
     debuggerHandler = mock(DebuggerTickWebSocketHandler.class);
     shadowDecisionService = mock(FishingShadowDecisionService.class);
     when(shadowDecisionService.openSession(any(), any())).thenReturn(true);
+    when(ingestionService.processTickBatch(any(), any()))
+        .thenReturn(
+            new TickStreamIngestionService.TickBatchAcknowledgment(
+                "00000000-0000-4000-8000-000000000119",
+                "debug_1",
+                12345L,
+                "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                "PERSISTED"));
     wsSession = mock(WebSocketSession.class);
     when(wsSession.getId()).thenReturn(wsId);
     handler =
@@ -114,8 +123,7 @@ class TickStreamWebSocketHandlerTest {
     SessionStartResponse response = new SessionStartResponse(sessionId, true, "rec_1", 0L, null);
     SessionStartRollbackToken token =
         new SessionStartRollbackToken(sessionId, true, "rec_1", null, null, null);
-    SessionStartOutcome outcome =
-        new SessionStartOutcome(response, token, true, false, true);
+    SessionStartOutcome outcome = new SessionStartOutcome(response, token, true, false, true);
     when(sessionService.startSessionWithOutcome(any(), any(), any(), any(), any()))
         .thenReturn(outcome);
   }
@@ -123,6 +131,16 @@ class TickStreamWebSocketHandlerTest {
   private void bind(String sessionId) throws Exception {
     stubStartSession(sessionId);
     handler.handleTextMessage(wsSession, new TextMessage(startJson()));
+  }
+
+  private void expireReconnectGrace(String sessionId) {
+    @SuppressWarnings("unchecked")
+    Map<String, Object> pending =
+        (Map<String, Object>) ReflectionTestUtils.getField(handler, "pendingReconnects");
+    Object reconnect = pending.get(sessionId);
+    assertThat(reconnect).isNotNull();
+    String token = (String) ReflectionTestUtils.getField(reconnect, "token");
+    ReflectionTestUtils.invokeMethod(handler, "expireReconnectGrace", sessionId, token);
   }
 
   private FishingShadowDecision decision() {
@@ -172,7 +190,7 @@ class TickStreamWebSocketHandlerTest {
     handler.handleTextMessage(wsSession, new TextMessage(tickBatchJson()));
 
     verify(shadowDecisionService, never()).evaluateAndPublish(any(), any(), any());
-    verify(ingestionService, never()).processTickBatch(any());
+    verify(ingestionService, never()).processTickBatch(any(), any());
     verify(debuggerHandler, never()).broadcast(any());
   }
 
@@ -182,7 +200,7 @@ class TickStreamWebSocketHandlerTest {
     setup("ws-unbound");
     handler.handleTextMessage(wsSession, new TextMessage(tickBatchJson()));
 
-    verify(ingestionService, never()).processTickBatch(any());
+    verify(ingestionService, never()).processTickBatch(any(), any());
   }
 
   @Test
@@ -194,7 +212,7 @@ class TickStreamWebSocketHandlerTest {
     handler.handleTextMessage(wsSession, new TextMessage(tickBatchJson("debug_other")));
 
     verify(shadowDecisionService, never()).evaluateAndPublish(any(), any(), any());
-    verify(ingestionService, never()).processTickBatch(any());
+    verify(ingestionService, never()).processTickBatch(any(), any());
     verifyNoShadowDecisionBroadcast();
   }
 
@@ -216,7 +234,129 @@ class TickStreamWebSocketHandlerTest {
             .findFirst()
             .orElseThrow(() -> new AssertionError("no shadow decision broadcast"));
     assertThat(shadowMessage.getPayload()).contains("\"status\":\"PREDICTED\"");
-    verify(ingestionService).processTickBatch(any());
+    verify(ingestionService).processTickBatch(any(), any());
+  }
+
+  @Test
+  @DisplayName("a successful persistence result sends a PERSISTED batch acknowledgment")
+  void successfulPersistenceSendsBatchAcknowledgment() throws Exception {
+    setup("ws-ack");
+    bind("debug_1");
+
+    handler.handleTextMessage(wsSession, new TextMessage(tickBatchJson()));
+
+    verify(wsSession)
+        .sendMessage(
+            argThat(
+                (TextMessage message) ->
+                    message.getPayload().contains("TICK_BATCH_ACK")
+                        && message.getPayload().contains("\"status\":\"PERSISTED\"")));
+  }
+
+  @Test
+  @DisplayName("persistence failure sends an error and never sends a batch acknowledgment")
+  void persistenceFailureSuppressesBatchAcknowledgment() throws Exception {
+    setup("ws-ack-failure");
+    bind("debug_1");
+    doThrow(new IllegalStateException("database unavailable"))
+        .when(ingestionService)
+        .processTickBatch(any(), any());
+
+    handler.handleTextMessage(wsSession, new TextMessage(tickBatchJson()));
+
+    verify(wsSession)
+        .sendMessage(
+            argThat(
+                (TextMessage message) ->
+                    message.getPayload().contains("BATCH_PERSISTENCE_FAILED")));
+    verify(wsSession, never())
+        .sendMessage(
+            argThat((TextMessage message) -> message.getPayload().contains("TICK_BATCH_ACK")));
+  }
+
+  @Test
+  @DisplayName("batch persistence errors identify the batch without a session-start request ID")
+  void persistenceFailureCarriesBatchId() throws Exception {
+    setup("ws-batch-error-id");
+    bind("debug_1");
+    doThrow(new IllegalStateException("database unavailable"))
+        .when(ingestionService)
+        .processTickBatch(any(), any());
+    String wire =
+        tickBatchJson()
+            .replace(
+                "\"type\": \"TICK_BATCH\",",
+                "\"type\": \"TICK_BATCH\", \"batchId\": \"00000000-0000-4000-8000-000000000119\",");
+
+    handler.handleTextMessage(wsSession, new TextMessage(wire));
+
+    String response = lastSentPayload();
+    assertErrorPayload(response, "BATCH_PERSISTENCE_FAILED");
+    assertThat(response).contains("\"batchId\":\"00000000-0000-4000-8000-000000000119\"");
+    assertThat(response).doesNotContain("clientRequestId");
+  }
+
+  @Test
+  @DisplayName("invalid strict replay sections are a permanent batch input error")
+  void invalidReplaySectionsAreNotReportedAsPersistenceFailure() throws Exception {
+    setup("ws-invalid-replay");
+    bind("debug_1");
+    doThrow(new IllegalArgumentException("Missing required player position"))
+        .when(ingestionService)
+        .processTickBatch(any(), any());
+
+    handler.handleTextMessage(wsSession, new TextMessage(tickBatchJson()));
+
+    assertErrorPayload(lastSentPayload(), "BATCH_INPUT_INVALID");
+  }
+
+  @Test
+  @DisplayName("a packet validation failure maps to BATCH_PACKET_INVALID, never a retry")
+  void packetValidationFailureMapsToPacketInvalid() throws Exception {
+    setup("ws-packet-invalid");
+    bind("debug_1");
+    doThrow(new IllegalArgumentException("PACKET_SEQUENCE_NOT_MONOTONIC"))
+        .when(ingestionService)
+        .processTickBatch(any(), any());
+
+    handler.handleTextMessage(wsSession, new TextMessage(tickBatchJson()));
+
+    verify(wsSession)
+        .sendMessage(
+            argThat(
+                (TextMessage message) -> message.getPayload().contains("BATCH_PACKET_INVALID")));
+    verify(wsSession, never())
+        .sendMessage(
+            argThat((TextMessage message) -> message.getPayload().contains("TICK_BATCH_ACK")));
+  }
+
+  @Test
+  @DisplayName("a data-integrity failure from the service sends no acknowledgment")
+  void dataIntegrityFailureFromServiceSendsNoAcknowledgment() throws Exception {
+    // Verifies handler behavior with a mocked service exception only: the mock throws the same
+    // DataIntegrityViolationException a real commit/flush failure would surface, the handler
+    // must emit BATCH_PERSISTENCE_FAILED, and no TICK_BATCH_ACK frame may be emitted. This is
+    // not a real end-to-end commit test; TickBatchDurabilityIntegrationTest proves the real
+    // PostgreSQL commit-time rollback through the Spring-proxied service.
+    setup("ws-commit-failure");
+    bind("debug_1");
+    doThrow(
+            new org.springframework.dao.DataIntegrityViolationException(
+                "tick_logs.message NOT NULL"))
+        .when(ingestionService)
+        .processTickBatch(any(), any());
+
+    handler.handleTextMessage(wsSession, new TextMessage(tickBatchJson()));
+
+    verify(ingestionService).processTickBatch(any(), any());
+    verify(wsSession)
+        .sendMessage(
+            argThat(
+                (TextMessage message) ->
+                    message.getPayload().contains("BATCH_PERSISTENCE_FAILED")));
+    verify(wsSession, never())
+        .sendMessage(
+            argThat((TextMessage message) -> message.getPayload().contains("TICK_BATCH_ACK")));
   }
 
   @Test
@@ -280,7 +420,7 @@ class TickStreamWebSocketHandlerTest {
     handler.handleTextMessage(wsSession, new TextMessage(tickBatchJson()));
 
     verify(shadowDecisionService, never()).evaluateAndPublish(any(), any(), any());
-    verify(ingestionService, never()).processTickBatch(any());
+    verify(ingestionService, never()).processTickBatch(any(), any());
   }
 
   @Test
@@ -317,7 +457,7 @@ class TickStreamWebSocketHandlerTest {
     publishOnEvaluate(decision());
     handler.handleTextMessage(wsSession, new TextMessage(tickBatchJson("debug_1")));
     verify(shadowDecisionService).evaluateAndPublish(any(), any(), any());
-    verify(ingestionService).processTickBatch(any());
+    verify(ingestionService).processTickBatch(any(), any());
   }
 
   @Test
@@ -371,20 +511,22 @@ class TickStreamWebSocketHandlerTest {
   }
 
   @Test
-  @DisplayName("a successful transport-error finalization prevents close retry")
-  void successfulTransportErrorFinalizationPreventsCloseRetry() throws Exception {
+  @DisplayName("a transport error defers finalization until reconnect grace expires")
+  void transportErrorDefersFinalizationUntilGraceExpires() throws Exception {
     setup("ws-transport-ok");
     bind("debug_1");
 
     handler.handleTransportError(wsSession, new RuntimeException("boom"));
     handler.afterConnectionClosed(wsSession, CloseStatus.NORMAL);
 
+    verify(sessionService, never()).finalizeSessionOnDisconnect(eq("debug_1"), anyString());
+    expireReconnectGrace("debug_1");
     verify(sessionService, times(1)).finalizeSessionOnDisconnect(eq("debug_1"), anyString());
   }
 
   @Test
-  @DisplayName("a failed transport-error finalization receives exactly one close retry")
-  void failedTransportErrorFinalizationGetsOneCloseRetry() throws Exception {
+  @DisplayName("a failed grace-expiry finalization is attempted only once")
+  void failedGraceExpiryFinalizationIsAttemptedOnlyOnce() throws Exception {
     setup("ws-transport-fail");
     bind("debug_1");
     doThrow(new RuntimeException("finalize boom"))
@@ -393,8 +535,9 @@ class TickStreamWebSocketHandlerTest {
 
     handler.handleTransportError(wsSession, new RuntimeException("boom"));
     handler.afterConnectionClosed(wsSession, CloseStatus.NORMAL);
+    expireReconnectGrace("debug_1");
 
-    verify(sessionService, times(2)).finalizeSessionOnDisconnect(eq("debug_1"), anyString());
+    verify(sessionService, times(1)).finalizeSessionOnDisconnect(eq("debug_1"), anyString());
   }
 
   @Test
@@ -409,7 +552,40 @@ class TickStreamWebSocketHandlerTest {
     handler.afterConnectionClosed(wsSession, CloseStatus.NORMAL);
     handler.afterConnectionClosed(wsSession, CloseStatus.NORMAL);
 
+    verify(sessionService, never()).finalizeSessionOnDisconnect(eq("debug_1"), anyString());
+    expireReconnectGrace("debug_1");
     verify(sessionService, times(1)).finalizeSessionOnDisconnect(eq("debug_1"), anyString());
+  }
+
+  @Test
+  @DisplayName("a reconnect with the preferred session preserves the active recording")
+  void reconnectRebindsExistingSessionWithoutStartingAnotherRecording() throws Exception {
+    setup("ws-original");
+    bind("debug_1");
+    handler.handleTransportError(wsSession, new RuntimeException("boom"));
+    handler.afterConnectionClosed(wsSession, CloseStatus.NORMAL);
+
+    WebSocketSession replacement = mock(WebSocketSession.class);
+    when(replacement.getId()).thenReturn("ws-replacement");
+    handler.handleTextMessage(replacement, new TextMessage(startJson()));
+
+    verify(sessionService, times(1)).startSessionWithOutcome(any(), any(), any(), any(), any());
+    verify(sessionService, never()).finalizeSessionOnDisconnect(any(), anyString());
+    verify(shadowDecisionService, times(1)).openSession(eq("debug_1"), any());
+    verify(shadowDecisionService, never()).cleanupSession(eq("debug_1"), any());
+    ArgumentCaptor<TextMessage> response = ArgumentCaptor.forClass(TextMessage.class);
+    verify(replacement).sendMessage(response.capture());
+    assertThat(response.getValue().getPayload()).contains("\"sessionId\":\"debug_1\"");
+    assertThat(response.getValue().getPayload()).contains("\"recordingId\":\"rec_1\"");
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> pending =
+        (Map<String, Object>) ReflectionTestUtils.getField(handler, "pendingReconnects");
+    @SuppressWarnings("unchecked")
+    Map<String, String> owners =
+        (Map<String, String>) ReflectionTestUtils.getField(handler, "sessionOwners");
+    assertThat(pending).doesNotContainKey("debug_1");
+    assertThat(owners).containsEntry("debug_1", "ws-replacement");
   }
 
   @Test
@@ -422,7 +598,7 @@ class TickStreamWebSocketHandlerTest {
     handler.handleTextMessage(wsSession, new TextMessage(tickBatchJson()));
 
     verify(shadowDecisionService, never()).evaluateAndPublish(any(), any(), any());
-    verify(ingestionService, never()).processTickBatch(any());
+    verify(ingestionService, never()).processTickBatch(any(), any());
     verify(shadowDecisionService, times(1)).cleanupSession(eq("debug_1"), any());
   }
 
@@ -436,7 +612,7 @@ class TickStreamWebSocketHandlerTest {
     handler.handleTextMessage(wsSession, new TextMessage(tickBatchJson()));
 
     verify(shadowDecisionService).evaluateAndPublish(any(), any(), any());
-    verify(ingestionService).processTickBatch(any());
+    verify(ingestionService).processTickBatch(any(), any());
     verifyNoShadowDecisionBroadcast();
   }
 
@@ -460,7 +636,7 @@ class TickStreamWebSocketHandlerTest {
 
     // One SESSION_CREATED broadcast from the bind, plus one failed shadow-decision broadcast.
     verify(debuggerHandler, times(2)).broadcast(any());
-    verify(ingestionService).processTickBatch(any());
+    verify(ingestionService).processTickBatch(any(), any());
   }
 
   @Test
@@ -473,7 +649,7 @@ class TickStreamWebSocketHandlerTest {
 
     verify(shadowDecisionService).evaluateAndPublish(any(), any(), any());
     verifyNoShadowDecisionBroadcast();
-    verify(ingestionService).processTickBatch(any());
+    verify(ingestionService).processTickBatch(any(), any());
   }
 
   /** Returns the payload of the last message sent to the mocked WebSocket session. */
@@ -497,7 +673,67 @@ class TickStreamWebSocketHandlerTest {
 
     assertErrorPayload(lastSentPayload(), "SESSION_NOT_BOUND");
     verify(shadowDecisionService, never()).evaluateAndPublish(any(), any(), any());
-    verify(ingestionService, never()).processTickBatch(any());
+    verify(ingestionService, never()).processTickBatch(any(), any());
+  }
+
+  @Test
+  @DisplayName("handler passes the precision-safe original JsonNode to ingestion")
+  void handlerPassesOriginalWireDocument() throws Exception {
+    setup("ws-wire-identity");
+    bind("debug_1");
+
+    handler.handleTextMessage(wsSession, new TextMessage(tickBatchJson()));
+
+    ArgumentCaptor<JsonNode> wireCaptor = ArgumentCaptor.forClass(JsonNode.class);
+    verify(ingestionService).processTickBatch(any(), wireCaptor.capture());
+    JsonNode wire = wireCaptor.getValue();
+    assertThat(wire).isNotNull();
+    assertThat(wire.get("type").asText()).isEqualTo("TICK_BATCH");
+    assertThat(wire.get("sessionId").asText()).isEqualTo("debug_1");
+    assertThat(wire.get("tick").asLong()).isEqualTo(12345L);
+  }
+
+  @Test
+  @DisplayName("the PERSISTED acknowledgment carries the exact tick-batch-ack/v1 schema")
+  void ackCarriesExactSchema() throws Exception {
+    setup("ws-ack-schema");
+    bind("debug_1");
+
+    handler.handleTextMessage(wsSession, new TextMessage(tickBatchJson()));
+
+    String payload = lastSentPayload();
+    assertThat(payload).contains("\"type\":\"TICK_BATCH_ACK\"");
+    assertThat(payload).contains("\"schema\":\"tick-batch-ack/v1\"");
+    assertThat(payload).contains("\"batchId\":\"00000000-0000-4000-8000-000000000119\"");
+    assertThat(payload).contains("\"sessionId\":\"debug_1\"");
+    assertThat(payload).contains("\"tick\":12345");
+    assertThat(payload).contains("\"status\":\"PERSISTED\"");
+  }
+
+  @Test
+  @DisplayName("every permanent rejection maps to its stable protocol code")
+  void permanentRejectionsMapToStableCodes() throws Exception {
+    String[] codes = {
+      "BATCH_CHECKSUM_CONFLICT",
+      "BATCH_WIRE_IDENTITY_MISMATCH",
+      "BATCH_SESSION_MISMATCH",
+      "BATCH_ORDER_INVALID",
+      "ACTION_CHECKSUM_CONFLICT"
+    };
+    for (String code : codes) {
+      setup("ws-" + code);
+      bind("debug_1");
+      doThrow(new IllegalArgumentException(code))
+          .when(ingestionService)
+          .processTickBatch(any(), any());
+
+      handler.handleTextMessage(wsSession, new TextMessage(tickBatchJson()));
+
+      assertErrorPayload(lastSentPayload(), code);
+      verify(wsSession, never())
+          .sendMessage(
+              argThat((TextMessage message) -> message.getPayload().contains("TICK_BATCH_ACK")));
+    }
   }
 
   @Test
@@ -514,7 +750,7 @@ class TickStreamWebSocketHandlerTest {
 
     assertErrorPayload(lastSentPayload(), "SESSION_STOPPING");
     verify(shadowDecisionService, never()).evaluateAndPublish(any(), any(), any());
-    verify(ingestionService, never()).processTickBatch(any());
+    verify(ingestionService, never()).processTickBatch(any(), any());
   }
 
   @Test
@@ -527,7 +763,7 @@ class TickStreamWebSocketHandlerTest {
 
     assertErrorPayload(lastSentPayload(), "SESSION_ID_MISMATCH");
     verify(shadowDecisionService, never()).evaluateAndPublish(any(), any(), any());
-    verify(ingestionService, never()).processTickBatch(any());
+    verify(ingestionService, never()).processTickBatch(any(), any());
   }
 
   @Test
@@ -656,6 +892,8 @@ class TickStreamWebSocketHandlerTest {
     handler.handleTransportError(wsSession, new RuntimeException("boom"));
     handler.handleTransportError(wsSession, new RuntimeException("boom"));
 
+    verify(sessionService, never()).finalizeSessionOnDisconnect(eq("debug_1"), anyString());
+    expireReconnectGrace("debug_1");
     verify(sessionService, times(1)).finalizeSessionOnDisconnect(eq("debug_1"), anyString());
   }
 
@@ -692,7 +930,7 @@ class TickStreamWebSocketHandlerTest {
     handler.handleTextMessage(wsSession, new TextMessage(tickBatchJson()));
 
     verify(shadowDecisionService, never()).evaluateAndPublish(any(), any(), any());
-    verify(ingestionService, never()).processTickBatch(any());
+    verify(ingestionService, never()).processTickBatch(any(), any());
     verify(shadowDecisionService, times(1)).cleanupSession(eq("debug_1"), any());
   }
 }

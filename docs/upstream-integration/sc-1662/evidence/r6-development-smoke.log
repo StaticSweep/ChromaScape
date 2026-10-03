@@ -1,0 +1,17 @@
+> Task :compileJava UP-TO-DATE
+> Task :copyNativeLibraries SKIPPED
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :buildRemoteInputLinux SKIPPED
+
+> Task :stageRemoteInputLinux
+MANIFEST_OK manifest=<repo>/build/native/remoteinput/linux-x86_64/remoteinput-manifest.json artifact=<repo>/build/native/remoteinput/linux-x86_64/libRemoteInput.so sha256=114bf72d2dc6d5b7000d24026188665cf56de7a069be947661a6c3786f3d0787 size=836336 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+MANIFEST_OK manifest=<repo>/build/dist/native/.versions/d56f0f704fb1f1e2e5eb01352573689e9fd6f719c0e5c425c83e247a2cdcd60a/remoteinput-manifest.json artifact=<repo>/build/dist/native/.versions/d56f0f704fb1f1e2e5eb01352573689e9fd6f719c0e5c425c83e247a2cdcd60a/libRemoteInput.so sha256=114bf72d2dc6d5b7000d24026188665cf56de7a069be947661a6c3786f3d0787 size=836336 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+Staged validated artifact pair d56f0f704fb1f1e2e5eb01352573689e9fd6f719c0e5c425c83e247a2cdcd60a at <repo>/build/dist/native/linux-x86_64 -> .versions/d56f0f704fb1f1e2e5eb01352573689e9fd6f719c0e5c425c83e247a2cdcd60a
+
+> Task :verifyRemoteInputLinux
+RemoteInput development verification OK: canonical=<repo>/build/dist/native/.versions/d56f0f704fb1f1e2e5eb01352573689e9fd6f719c0e5c425c83e247a2cdcd60a/libRemoteInput.so sha256=114bf72d2dc6d5b7000d24026188665cf56de7a069be947661a6c3786f3d0787 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none symbols=23
+
+BUILD SUCCESSFUL in 10s
+4 actionable tasks: 2 executed, 2 up-to-date
+EXIT=0

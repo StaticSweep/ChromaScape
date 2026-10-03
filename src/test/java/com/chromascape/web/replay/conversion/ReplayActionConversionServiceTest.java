@@ -53,12 +53,10 @@ class ReplayActionConversionServiceTest {
                 // This dispatch has no typed counterpart and must downgrade the stream.
                 menuLog(1, 1, "Talk-to")));
 
-    ReplayActionConversionResult result =
-        service.convert("session-1", 0, 1, ConversionMode.AUTO);
+    ReplayActionConversionResult result = service.convert("session-1", 0, 1, ConversionMode.AUTO);
 
     assertThat(result.quality()).isEqualTo(ConversionQuality.BEST_EFFORT);
-    assertThat(result.gaps())
-        .anyMatch(gap -> "TYPED_ACTION_STREAM_INCOMPLETE".equals(gap.code()));
+    assertThat(result.gaps()).anyMatch(gap -> "TYPED_ACTION_STREAM_INCOMPLETE".equals(gap.code()));
   }
 
   @Test
@@ -69,8 +67,7 @@ class ReplayActionConversionServiceTest {
     when(logRepository.findBySessionIdAndTickBetweenOrderByTickAsc("session-1", 0L, 1L))
         .thenReturn(List.of(menuLog(0, 0, "Net")));
 
-    ReplayActionConversionResult result =
-        service.convert("session-1", 0, 1, ConversionMode.AUTO);
+    ReplayActionConversionResult result = service.convert("session-1", 0, 1, ConversionMode.AUTO);
 
     assertThat(result.quality()).isEqualTo(ConversionQuality.CERTIFIED);
     assertThat(result.gaps()).isEmpty();
@@ -92,6 +89,7 @@ class ReplayActionConversionServiceTest {
     arguments.put("option", "net");
     action.setArgumentsJson(arguments);
     action.setSource(RecordingAction.SOURCE_MICRO6_SEMANTIC_DISPATCH);
+    action.setProvenance(RecordingAction.PROVENANCE_CAPTURED);
     action.setConfidence(BigDecimal.ONE);
     action.setCapturedAt(LocalDateTime.of(2026, 8, 31, 22, 0));
     return action;

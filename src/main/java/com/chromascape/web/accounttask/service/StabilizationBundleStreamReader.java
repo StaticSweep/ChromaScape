@@ -24,10 +24,9 @@ import java.util.Set;
  * and malformed boundaries are rejected.
  *
  * <p>Exactly one part each of {@code plan}, {@code manifest}, {@code matrix}, {@code transitions},
- * {@code evidence}, {@code checksums} and {@code completeMarker} is permitted; optional
- * {@code artifacts} parts are permitted only with original filenames matching
- * {@code sha256_<64 hex>.<extension>}. The original artifact filename is preserved separately from
- * its staging path.
+ * {@code evidence}, {@code checksums} and {@code completeMarker} is permitted; optional {@code
+ * artifacts} parts are permitted only with original filenames matching {@code sha256_<64
+ * hex>.<extension>}. The original artifact filename is preserved separately from its staging path.
  */
 public final class StabilizationBundleStreamReader {
 
@@ -35,17 +34,25 @@ public final class StabilizationBundleStreamReader {
   public static final long MAX_PART_BYTES = 64L * 1024L * 1024L;
   public static final long MAX_JSON_PART_BYTES = 5L * 1024L * 1024L;
   public static final long MAX_TOTAL_BYTES = 512L * 1024L * 1024L;
+
   /** Maximum number of header lines per part, in addition to the per-line length limit. */
   public static final int MAX_HEADERS_PER_PART = 32;
 
   private static final Set<String> REQUIRED_PARTS =
-      Set.of("plan", "manifest", "matrix", "transitions", "evidence", "checksums", "completeMarker");
+      Set.of(
+          "plan", "manifest", "matrix", "transitions", "evidence", "checksums", "completeMarker");
   private static final Set<String> JSON_PARTS =
       Set.of("plan", "manifest", "matrix", "transitions", "evidence", "checksums");
+
   /** Supported media types for optional recorder artifact parts. */
-  private static final Set<String> ARTIFACT_MEDIA_TYPES = Set.of(
-      "application/x-ndjson", "application/json", "text/csv", "text/plain",
-      "application/octet-stream");
+  private static final Set<String> ARTIFACT_MEDIA_TYPES =
+      Set.of(
+          "application/x-ndjson",
+          "application/json",
+          "text/csv",
+          "text/plain",
+          "application/octet-stream");
+
   private static final int HEADER_LINE_LIMIT = 16 * 1024;
 
   private final Path tempDir;
@@ -58,9 +65,11 @@ public final class StabilizationBundleStreamReader {
     this.tempDir = tempDir;
   }
 
-  /** One staged artifact part: original checksum-addressed filename, its normalized media type and
-   *  its staging path. The media type is the allowlisted base Content-Type carried by the uploaded
-   *  part so evidence media-type claims can be compared against the actual upload. */
+  /**
+   * One staged artifact part: original checksum-addressed filename, its normalized media type and
+   * its staging path. The media type is the allowlisted base Content-Type carried by the uploaded
+   * part so evidence media-type claims can be compared against the actual upload.
+   */
   public record StagedArtifact(String filename, String mediaType, Path path) {}
 
   /** Parsed bundle: staged part paths by part name, and the artifact parts. */
@@ -83,12 +92,13 @@ public final class StabilizationBundleStreamReader {
     if (input == null) {
       throw new IOException("missing multipart request body");
     }
-    if (contentType == null
-        || !"multipart/form-data".equals(normalizedBaseType(contentType))) {
+    if (contentType == null || !"multipart/form-data".equals(normalizedBaseType(contentType))) {
       throw new IOException("report bundle must be multipart/form-data");
     }
     String boundary = extractBoundary(contentType);
-    if (boundary == null || boundary.isBlank() || boundary.length() > 200
+    if (boundary == null
+        || boundary.isBlank()
+        || boundary.length() > 200
         || !boundary.matches("[A-Za-z0-9'()+_,./:=?\\- ]+")) {
       throw new IOException("malformed multipart boundary");
     }
@@ -99,8 +109,7 @@ public final class StabilizationBundleStreamReader {
       throw new IOException("bundle staging directory must not be a symbolic link");
     }
     Files.createDirectories(tempDir);
-    if (Files.isSymbolicLink(tempDir)
-        || !Files.isDirectory(tempDir, LinkOption.NOFOLLOW_LINKS)) {
+    if (Files.isSymbolicLink(tempDir) || !Files.isDirectory(tempDir, LinkOption.NOFOLLOW_LINKS)) {
       throw new IOException("bundle staging directory must be a real directory");
     }
     StabilizationBundleStreamReader reader =
@@ -167,7 +176,8 @@ public final class StabilizationBundleStreamReader {
       String lower = current.toLowerCase(Locale.ENGLISH);
       if (lower.startsWith("content-disposition:")) {
         if (dispositionSeen) {
-          throw new IOException("report bundle part contains duplicate Content-Disposition headers");
+          throw new IOException(
+              "report bundle part contains duplicate Content-Disposition headers");
         }
         dispositionSeen = true;
         Map<String, String> parameters = parseContentDisposition(current);
@@ -188,8 +198,12 @@ public final class StabilizationBundleStreamReader {
     return new PartHeaders(name, filename, contentType);
   }
 
-  private PartBodyResult readPartBody(PartHeaders headers, java.io.PushbackInputStream input,
-      String boundary, CountingInputStream counting) throws IOException {
+  private PartBodyResult readPartBody(
+      PartHeaders headers,
+      java.io.PushbackInputStream input,
+      String boundary,
+      CountingInputStream counting)
+      throws IOException {
     String name = headers.name();
     boolean requiredPart = REQUIRED_PARTS.contains(name);
     boolean artifactPart = "artifacts".equals(name);
@@ -202,8 +216,7 @@ public final class StabilizationBundleStreamReader {
     // Media types are normalized to their base type so substring tricks and unsupported
     // parameters/encodings can never bypass the checks.
     String mediaType = normalizedBaseType(headers.contentType());
-    if (requiredPart && JSON_PARTS.contains(name)
-        && !"application/json".equals(mediaType)) {
+    if (requiredPart && JSON_PARTS.contains(name) && !"application/json".equals(mediaType)) {
       throw new IOException("report bundle part '" + name + "' must be application/json");
     }
     if ("completeMarker".equals(name) && !"text/plain".equals(mediaType)) {
@@ -212,19 +225,26 @@ public final class StabilizationBundleStreamReader {
     if (artifactPart) {
       if (!isChecksumAddressedFilename(headers.filename())) {
         throw new IOException(
-            "artifact part filename must be checksum-addressed sha256_<64>.<ext>: " + headers.filename());
+            "artifact part filename must be checksum-addressed sha256_<64>.<ext>: "
+                + headers.filename());
       }
       if (!seenUniqueNames.add(headers.filename())) {
         throw new IOException("duplicate artifact filename '" + headers.filename() + "'");
       }
       if (!ARTIFACT_MEDIA_TYPES.contains(mediaType)) {
-        throw new IOException("unsupported artifact media type '" + headers.contentType()
-            + "'; allowed types are " + ARTIFACT_MEDIA_TYPES);
+        throw new IOException(
+            "unsupported artifact media type '"
+                + headers.contentType()
+                + "'; allowed types are "
+                + ARTIFACT_MEDIA_TYPES);
       }
     }
-    long limit = artifactPart ? MAX_PART_BYTES
-        : ("completeMarker".equals(name) || JSON_PARTS.contains(name) ? MAX_JSON_PART_BYTES
-            : MAX_PART_BYTES);
+    long limit =
+        artifactPart
+            ? MAX_PART_BYTES
+            : ("completeMarker".equals(name) || JSON_PARTS.contains(name)
+                ? MAX_JSON_PART_BYTES
+                : MAX_PART_BYTES);
     Path target = uniqueTarget(name, headers.filename());
     CopyOutcome outcome = copyBody(input, target, boundary, limit, counting);
     partCount++;
@@ -236,16 +256,21 @@ public final class StabilizationBundleStreamReader {
   }
 
   /**
-   * Copies a part body to {@code target} until a REAL multipart delimiter. A candidate
-   * {@code \r\n--boundary} is recognized as a delimiter only when it is followed by either
-   * {@code \r\n} (interior boundary) or {@code --} (closing boundary). A body containing a prefix
-   * such as {@code \r\n--boundary-not-a-delimiter} remains body data and does NOT terminate the
-   * part. A rolling candidate buffer matches the delimiter across byte boundaries; anything not
-   * part of a genuine delimiter is written to the target. The per-part and total-size bounds are
-   * enforced while bytes are read, including chunked requests.
+   * Copies a part body to {@code target} until a REAL multipart delimiter. A candidate {@code
+   * \r\n--boundary} is recognized as a delimiter only when it is followed by either {@code \r\n}
+   * (interior boundary) or {@code --} (closing boundary). A body containing a prefix such as {@code
+   * \r\n--boundary-not-a-delimiter} remains body data and does NOT terminate the part. A rolling
+   * candidate buffer matches the delimiter across byte boundaries; anything not part of a genuine
+   * delimiter is written to the target. The per-part and total-size bounds are enforced while bytes
+   * are read, including chunked requests.
    */
-  private CopyOutcome copyBody(java.io.PushbackInputStream input, Path target, String boundary,
-      long limit, CountingInputStream counting) throws IOException {
+  private CopyOutcome copyBody(
+      java.io.PushbackInputStream input,
+      Path target,
+      String boundary,
+      long limit,
+      CountingInputStream counting)
+      throws IOException {
     byte[] delimiter = ("\r\n--" + boundary).getBytes(StandardCharsets.UTF_8);
     int len = delimiter.length;
     int[] window = new int[len];
@@ -254,8 +279,12 @@ public final class StabilizationBundleStreamReader {
     boolean closed = false;
     int value = -1;
     boolean created = false;
-    try (java.io.OutputStream out = Files.newOutputStream(target,
-        StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+    try (java.io.OutputStream out =
+        Files.newOutputStream(
+            target,
+            StandardOpenOption.CREATE_NEW,
+            StandardOpenOption.WRITE,
+            LinkOption.NOFOLLOW_LINKS)) {
       created = true;
       while ((value = input.read()) != -1) {
         if (counting != null && counting.count() > MAX_TOTAL_BYTES) {
@@ -319,8 +348,10 @@ public final class StabilizationBundleStreamReader {
             count++;
           }
           // Restore the two peeked bytes in their ORIGINAL order: a single unread(byte[]) with
-          // [peek1, peek2] pushes peek1 back first so the next read returns peek1 then peek2. Pushing
-          // them back with two separate calls (peek1 then peek2) would reverse the order and corrupt
+          // [peek1, peek2] pushes peek1 back first so the next read returns peek1 then peek2.
+          // Pushing
+          // them back with two separate calls (peek1 then peek2) would reverse the order and
+          // corrupt
           // the body (e.g. -not- becoming n-ot-), so a single call is required (SC-572).
           if (peek1 != -1) {
             if (peek2 != -1) {
@@ -346,8 +377,8 @@ public final class StabilizationBundleStreamReader {
       throw e;
     }
     if (value == -1 && !closed) {
-      throw new IOException("malformed multipart: part '" + target.getFileName()
-          + "' ended without a boundary");
+      throw new IOException(
+          "malformed multipart: part '" + target.getFileName() + "' ended without a boundary");
     }
     return new CopyOutcome(count, closed);
   }
@@ -396,7 +427,9 @@ public final class StabilizationBundleStreamReader {
     if (value == null) {
       return "part";
     }
-    if (value.contains("/") || value.contains("\\") || value.contains("..")
+    if (value.contains("/")
+        || value.contains("\\")
+        || value.contains("..")
         || value.indexOf('\0') >= 0) {
       throw new IllegalArgumentException("unsafe report bundle part filename: " + value);
     }
@@ -422,8 +455,7 @@ public final class StabilizationBundleStreamReader {
       return false;
     }
     String extension = filename.substring(dot + 1);
-    return extension.length() >= 1 && extension.length() <= 16
-        && extension.matches("[A-Za-z0-9]+");
+    return extension.length() >= 1 && extension.length() <= 16 && extension.matches("[A-Za-z0-9]+");
   }
 
   private static String extractBoundary(String contentType) {
@@ -494,7 +526,8 @@ public final class StabilizationBundleStreamReader {
         value = decoded.toString();
       } else {
         int valueStart = pos;
-        while (pos < parameters.length() && parameters.charAt(pos) != ';'
+        while (pos < parameters.length()
+            && parameters.charAt(pos) != ';'
             && !isHorizontalWhitespace(parameters.charAt(pos))) {
           if (!isTokenCharacter(parameters.charAt(pos))) {
             return null;
@@ -525,9 +558,9 @@ public final class StabilizationBundleStreamReader {
   }
 
   /**
-   * Normalizes a Content-Type value to its lowercased base type (the media type before any {@code ;}
-   * parameter). Substring tricks such as {@code application/jsonX} or
-   * {@code multipart/form-data-evil} can never match the exact base type.
+   * Normalizes a Content-Type value to its lowercased base type (the media type before any {@code
+   * ;} parameter). Substring tricks such as {@code application/jsonX} or {@code
+   * multipart/form-data-evil} can never match the exact base type.
    */
   private static String normalizedBaseType(String contentType) {
     if (contentType == null) {
@@ -659,7 +692,8 @@ public final class StabilizationBundleStreamReader {
         parameterValue = decoded.toString();
       } else {
         int valueStart = pos;
-        while (pos < value.length() && value.charAt(pos) != ';'
+        while (pos < value.length()
+            && value.charAt(pos) != ';'
             && !isHorizontalWhitespace(value.charAt(pos))) {
           if (!isTokenCharacter(value.charAt(pos))) {
             throw new IOException("malformed unquoted Content-Disposition parameter");
@@ -689,8 +723,10 @@ public final class StabilizationBundleStreamReader {
   }
 
   private static boolean isTokenCharacter(char value) {
-    return (value >= 'A' && value <= 'Z') || (value >= 'a' && value <= 'z')
-        || (value >= '0' && value <= '9') || "!#$%&'*+-.^_`|~".indexOf(value) >= 0;
+    return (value >= 'A' && value <= 'Z')
+        || (value >= 'a' && value <= 'z')
+        || (value >= '0' && value <= '9')
+        || "!#$%&'*+-.^_`|~".indexOf(value) >= 0;
   }
 
   private record PartHeaders(String name, String filename, String contentType) {}

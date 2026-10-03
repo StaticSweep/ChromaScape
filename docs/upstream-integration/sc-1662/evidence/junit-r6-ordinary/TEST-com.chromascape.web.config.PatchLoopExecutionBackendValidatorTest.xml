@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.config.PatchLoopExecutionBackendValidatorTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:39:36.520Z" hostname="fedora" time="0.004">
+  <properties/>
+  <testcase name="validate accepts local_instance" classname="com.chromascape.web.config.PatchLoopExecutionBackendValidatorTest" time="0.002"/>
+  <testcase name="validate rejects unknown backend" classname="com.chromascape.web.config.PatchLoopExecutionBackendValidatorTest" time="0.0"/>
+  <testcase name="validate accepts micro6_local_executor" classname="com.chromascape.web.config.PatchLoopExecutionBackendValidatorTest" time="0.0"/>
+  <system-out><![CDATA[12:39:36.522 [Test worker] INFO  com.chromascape.web.config.PatchLoopExecutionBackendValidator - Patch-loop execution backend validated: local_instance
+12:39:36.523 [Test worker] ERROR com.chromascape.web.config.PatchLoopExecutionBackendValidator - Invalid chromascape.patchloop.execution-backend='osbot'. Valid values: [local_instance, micro6_local_executor]
+12:39:36.524 [Test worker] INFO  com.chromascape.web.config.PatchLoopExecutionBackendValidator - Patch-loop execution backend validated: micro6_local_executor
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

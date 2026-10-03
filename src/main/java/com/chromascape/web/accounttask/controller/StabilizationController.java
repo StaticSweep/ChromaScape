@@ -43,7 +43,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class StabilizationController {
 
   private static final Set<String> REQUIRED_PARTS =
-      Set.of("plan", "manifest", "matrix", "transitions", "evidence", "checksums", "completeMarker");
+      Set.of(
+          "plan", "manifest", "matrix", "transitions", "evidence", "checksums", "completeMarker");
   private static final long MAX_PART_BYTES = 64L * 1024L * 1024L;
   private static final long MAX_TOTAL_BYTES = 512L * 1024L * 1024L;
   private static final int MAX_PARTS = 200;
@@ -94,7 +95,8 @@ public class StabilizationController {
 
       for (String required : REQUIRED_PARTS) {
         if (!bundle.names().contains(required)) {
-          throw new IllegalArgumentException("report bundle is missing required part '" + required + "'");
+          throw new IllegalArgumentException(
+              "report bundle is missing required part '" + required + "'");
         }
       }
 
@@ -109,8 +111,10 @@ public class StabilizationController {
       // Multipart size limits and malformed boundaries surface as IOException; an oversized body is
       // a 413, everything else is a malformed 400.
       String message = e.getMessage() == null ? "" : e.getMessage().toLowerCase();
-      if (message.contains("size exceeds") || message.contains("total size")
-          || message.contains("exceeds its size limit") || message.contains("too large")) {
+      if (message.contains("size exceeds")
+          || message.contains("total size")
+          || message.contains("exceeds its size limit")
+          || message.contains("too large")) {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
             .body(Map.of("error", "report bundle exceeds the size limit"));
       }
@@ -119,13 +123,16 @@ public class StabilizationController {
     } finally {
       if (tempDir != null) {
         try {
-          Files.walk(tempDir).sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
-            try {
-              Files.deleteIfExists(p);
-            } catch (IOException ignored) {
-              // best-effort temp cleanup
-            }
-          });
+          Files.walk(tempDir)
+              .sorted(java.util.Comparator.reverseOrder())
+              .forEach(
+                  p -> {
+                    try {
+                      Files.deleteIfExists(p);
+                    } catch (IOException ignored) {
+                      // best-effort temp cleanup
+                    }
+                  });
         } catch (IOException ignored) {
           // best-effort temp cleanup
         }
@@ -134,7 +141,8 @@ public class StabilizationController {
   }
 
   /** BundleSource backed by the streamed staging files; artifact filenames are preserved. */
-  private static final class StagedBundleSource implements StabilizationIngestionService.BundleSource {
+  private static final class StagedBundleSource
+      implements StabilizationIngestionService.BundleSource {
     private final StabilizationBundleStreamReader.StagedBundle bundle;
 
     StagedBundleSource(StabilizationBundleStreamReader.StagedBundle bundle) {
@@ -159,10 +167,12 @@ public class StabilizationController {
         try {
           sizeBytes = Files.size(artifact.path());
         } catch (java.io.IOException e) {
-          throw new IllegalStateException("cannot read staged artifact size for " + artifact.filename(), e);
+          throw new IllegalStateException(
+              "cannot read staged artifact size for " + artifact.filename(), e);
         }
-        parts.add(new StabilizationIngestionService.ArtifactPart(
-            artifact.filename(), artifact.mediaType(), artifact.path(), sizeBytes));
+        parts.add(
+            new StabilizationIngestionService.ArtifactPart(
+                artifact.filename(), artifact.mediaType(), artifact.path(), sizeBytes));
       }
       return parts;
     }
@@ -211,18 +221,19 @@ public class StabilizationController {
   public ResponseEntity<Object> getRunEvidence(@PathVariable("runId") String runId) {
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("run_id", runId);
-    body.put("attempt_ids", ingestionService.getRunAttempts(runId).stream()
-        .map(com.chromascape.web.accounttask.entity.ScriptStabilizationRun::getAttemptId)
-        .toList());
+    body.put(
+        "attempt_ids",
+        ingestionService.getRunAttempts(runId).stream()
+            .map(com.chromascape.web.accounttask.entity.ScriptStabilizationRun::getAttemptId)
+            .toList());
     body.put("artifacts", ingestionService.getRunArtifacts(runId));
-    ingestionService
-        .getRunEvidence(runId)
-        .ifPresent(evidence -> body.put("evidence", evidence));
+    ingestionService.getRunEvidence(runId).ifPresent(evidence -> body.put("evidence", evidence));
     return ResponseEntity.ok(body);
   }
 
   @GetMapping("/matrices/{matrixHash}")
-  public ResponseEntity<Object> getMatrixByMatrixHash(@PathVariable("matrixHash") String matrixHash) {
+  public ResponseEntity<Object> getMatrixByMatrixHash(
+      @PathVariable("matrixHash") String matrixHash) {
     return ingestionService
         .getMatrixDocumentByHash(matrixHash)
         .map(matrix -> ResponseEntity.ok((Object) matrix))
@@ -249,16 +260,22 @@ public class StabilizationController {
     }
     try {
       java.nio.file.Path path = resolved.get();
-      MediaType mediaType = MediaType.parseMediaType(
-          artifact.get().getMediaType() == null ? "application/octet-stream" : artifact.get().getMediaType());
+      MediaType mediaType =
+          MediaType.parseMediaType(
+              artifact.get().getMediaType() == null
+                  ? "application/octet-stream"
+                  : artifact.get().getMediaType());
       HttpHeaders headers = new HttpHeaders();
       headers.setContentType(mediaType);
       headers.setContentLength(Files.size(path));
       headers.set("X-Artifact-Checksum", artifact.get().getSha256());
-      headers.setContentDispositionFormData("attachment", artifact.get().getArtifactId() + "." + extensionOf(mediaType));
+      headers.setContentDispositionFormData(
+          "attachment", artifact.get().getArtifactId() + "." + extensionOf(mediaType));
       return new ResponseEntity<>(
-          new InputStreamResource(Files.newInputStream(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)),
-          headers, HttpStatus.OK);
+          new InputStreamResource(
+              Files.newInputStream(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)),
+          headers,
+          HttpStatus.OK);
     } catch (IOException e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(Map.of("error", "artifact read failed"));

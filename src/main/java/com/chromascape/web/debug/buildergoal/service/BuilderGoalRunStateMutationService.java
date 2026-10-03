@@ -47,12 +47,59 @@ public class BuilderGoalRunStateMutationService {
   private final int maxConsecutiveStatusFailures;
   private final long statusFailureGraceMs;
 
+  /**
+   * Binds a confirmed run to its verified source snapshot. Optional: null in the convenience
+   * constructor used by focused unit tests, and the run is then recorded as unbound rather than
+   * silently proceeding as if no binding were expected.
+   */
+  private final BuilderGoalSourceBindingService sourceBindingService;
+
   /** Convenience constructor retained for focused unit tests and callers that use defaults. */
   public BuilderGoalRunStateMutationService(
       PatchLoopIterationRepository iterationRepository,
       PatchLoopPersistenceService persistenceService,
       ObjectMapper objectMapper) {
-    this(iterationRepository, persistenceService, objectMapper, null, 300_000L, 3, 15_000L);
+    this(iterationRepository, persistenceService, objectMapper, null, 300_000L, 3, 15_000L, null);
+  }
+
+  /** Compatibility for callers using configured timeouts before timeline recording. */
+  public BuilderGoalRunStateMutationService(
+      PatchLoopIterationRepository iterationRepository,
+      PatchLoopPersistenceService persistenceService,
+      ObjectMapper objectMapper,
+      long runTimeoutMs,
+      int maxConsecutiveStatusFailures,
+      long statusFailureGraceMs,
+      BuilderGoalSourceBindingService sourceBindingService) {
+    this(
+        iterationRepository,
+        persistenceService,
+        objectMapper,
+        null,
+        runTimeoutMs,
+        maxConsecutiveStatusFailures,
+        statusFailureGraceMs,
+        sourceBindingService);
+  }
+
+  /** Compatibility for focused timeline tests without source binding. */
+  public BuilderGoalRunStateMutationService(
+      PatchLoopIterationRepository iterationRepository,
+      PatchLoopPersistenceService persistenceService,
+      ObjectMapper objectMapper,
+      BuilderGoalRunEventService runEventService,
+      long runTimeoutMs,
+      int maxConsecutiveStatusFailures,
+      long statusFailureGraceMs) {
+    this(
+        iterationRepository,
+        persistenceService,
+        objectMapper,
+        runEventService,
+        runTimeoutMs,
+        maxConsecutiveStatusFailures,
+        statusFailureGraceMs,
+        null);
   }
 
   @Autowired
@@ -64,7 +111,8 @@ public class BuilderGoalRunStateMutationService {
       @Value("${builder-goal.run-timeout-ms:300000}") long runTimeoutMs,
       @Value("${builder-goal.status-sync-max-consecutive-failures:3}")
           int maxConsecutiveStatusFailures,
-      @Value("${builder-goal.status-sync-failure-grace-ms:15000}") long statusFailureGraceMs) {
+      @Value("${builder-goal.status-sync-failure-grace-ms:15000}") long statusFailureGraceMs,
+      @Autowired(required = false) BuilderGoalSourceBindingService sourceBindingService) {
     this.iterationRepository = iterationRepository;
     this.persistenceService = persistenceService;
     this.objectMapper = objectMapper;
@@ -72,6 +120,7 @@ public class BuilderGoalRunStateMutationService {
     this.runTimeoutMs = Math.max(1L, runTimeoutMs);
     this.maxConsecutiveStatusFailures = Math.max(1, maxConsecutiveStatusFailures);
     this.statusFailureGraceMs = Math.max(1_000L, statusFailureGraceMs);
+    this.sourceBindingService = sourceBindingService;
   }
 
   // ------------------------------------------------------------------
@@ -567,7 +616,9 @@ public class BuilderGoalRunStateMutationService {
     Map<String, Object> targetPreparation = readTargetPreparationMetadata(taskMetadata);
     String preparationState = stringValue(targetPreparation.get("state"));
     if (!Micro6TargetRelaunchService.PHASE_PROCESS_EXITED.equalsIgnoreCase(preparationState)
-        && !Micro6TargetRelaunchService.PHASE_BUILD_FAILED.equalsIgnoreCase(preparationState)) {
+        && !Micro6TargetRelaunchService.PHASE_BUILD_FAILED.equalsIgnoreCase(preparationState)
+        && !Micro6TargetRelaunchService.PHASE_EXECUTOR_STARTUP_REJECTED.equalsIgnoreCase(
+            preparationState)) {
       return false;
     }
 
@@ -667,6 +718,22 @@ public class BuilderGoalRunStateMutationService {
       }
       taskMetadata.put("micro6_publish", publishMetadata);
 
+      // A successful stop request may remove the executor entry before the follow-up status read.
+      // Once the normal lost-target threshold and grace period have elapsed, disappearance while
+      // STOPPING is confirmation of cancellation, not a reason to leave the row stuck forever.
+      if (stopRequested && shouldFailForLostTarget(iteration, publishMetadata, observed)) {
+        publishMetadata.put("status", "CANCELLED");
+        publishMetadata.put("activation_state", "CANCELLED");
+        publishMetadata.put("last_status_at", observed.toString());
+        taskMetadata.put("micro6_publish", publishMetadata);
+        iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+        return finalizeAsCancelled(
+            iteration,
+            entryId,
+            observed,
+            firstNonBlank(error, "Micro6 entry disappeared after stop was delivered"));
+      }
+
       if (!stopRequested && error != null && "SETTINGS_RECEIPT_MISMATCH".equalsIgnoreCase(error)) {
         publishMetadata.put("status", "SETTINGS_RECEIPT_MISMATCH");
         publishMetadata.put("last_status_at", observed.toString());
@@ -753,12 +820,24 @@ public class BuilderGoalRunStateMutationService {
       publishMetadata.put("settings_receipt", toSettingsReceiptMap(statusResult.settingsReceipt()));
     }
     boolean metadataChanged = recordSuccessfulPoll(publishMetadata, observed);
+    // Risk evidence can arrive in the same observation as failure/cancellation, or while
+    // STOPPING. Record it before those branches return so the trigger is never omitted.
+    recordRiskTimelineEvent(iteration, entryId, statusResult);
     // SC-260: capture whether the run had already confirmed its task start BEFORE
     // applyTaskStartFields mutates the flag, so the start event can fire on the confirmation
     // flip even when the executor publish status does not change (RUNNING -> RUNNING).
     boolean taskStartPreviouslyConfirmed =
         Boolean.TRUE.equals(taskMetadata.get("task_start_confirmed"));
     metadataChanged |= applyTaskStartFields(iteration, taskMetadata, publishMetadata, statusResult);
+    // Stamp the run start the first time the executor confirms the task is live. Builder-goal runs
+    // otherwise never record a start, which leaves the evidence window anchored before the run and
+    // clips away the very logs the recovery workspace needs. Preserve any existing value.
+    if (iteration.getRunStartTime() == null && isTaskStarted(statusResult)) {
+      LocalDateTime startedAt =
+          parseLocalDateTime(stringValue(taskMetadata.get("task_started_at")));
+      iteration.setRunStartTime(startedAt != null ? startedAt : observed);
+      metadataChanged = true;
+    }
 
     if (stopRequested) {
       if ("COMPLETED".equalsIgnoreCase(executorStatus)) {
@@ -861,6 +940,12 @@ public class BuilderGoalRunStateMutationService {
       iteration.transitionTo(PatchLoopStatus.RUNNING_SCRIPT);
       metadataChanged = true;
     }
+    // Bind the run to its verified source exactly once, at the moment execution is first
+    // confirmed. Before this point there is no run to bind; after it, the executor may stop and
+    // take its in-memory identity with it, which is precisely how the binding used to be lost.
+    if (taskStartConfirmed && bindSourceIfNeeded(iteration, taskMetadata)) {
+      metadataChanged = true;
+    }
 
     // SC-260 unified run timeline: durable pause/resume/start events on publish-status
     // transitions, plus risk-trigger inspection of the executor status payload.
@@ -894,6 +979,62 @@ public class BuilderGoalRunStateMutationService {
         iteration.getRunSuccess(),
         null,
         iteration);
+  }
+
+  /**
+   * Binds a confirmed run to its verified source snapshot, exactly once.
+   *
+   * <p>Idempotent by construction: a non-null {@code sourceBindingState} means the decision was
+   * already taken for this run, so a later status poll never rebinds or overwrites it. Returns true
+   * when the iteration was modified and therefore needs saving.
+   *
+   * <p>A binding failure deliberately does <em>not</em> fail the run. The run is already executing
+   * on the client at this point; aborting it would turn a provenance-recording problem into lost
+   * work, and would make ChromaScape's control path depend on the source endpoints being reachable.
+   * The failure is instead recorded durably as {@code FAILED}, which is queryable and cannot be
+   * mistaken for a bound run.
+   */
+  private boolean bindSourceIfNeeded(
+      PatchLoopIteration iteration, Map<String, Object> taskMetadata) {
+    if (iteration == null || iteration.getSourceBindingState() != null) {
+      return false;
+    }
+    if (sourceBindingService == null) {
+      iteration.setSourceBindingState(BuilderGoalSourceBindingService.STATE_NOT_CONFIGURED);
+      return true;
+    }
+    Map<String, Object> publishMetadata = readPublishMetadata(taskMetadata);
+    String taskKey =
+        firstNonBlank(
+            stringValue(publishMetadata.get("task_key")),
+            stringValue(taskMetadata.get("task_key")));
+    if (taskKey == null || taskKey.isBlank()) {
+      logger.warn(
+          "[SC-810] run {} confirmed without a task key; source binding cannot be attempted",
+          iteration.getIterationId());
+      iteration.setSourceBindingState(BuilderGoalSourceBindingService.STATE_FAILED);
+      return true;
+    }
+    // Read the executor's attested artifact identity if the heartbeat carried it. It does not
+    // today; these stay null and binding proceeds unpinned. Reading them here rather than assuming
+    // absence means a heartbeat that starts reporting them is used immediately, with no further
+    // change at this call site.
+    Map<String, Object> target = readTargetMetadata(taskMetadata);
+    BuilderGoalSourceBindingService.BindingOutcome outcome =
+        sourceBindingService.bindRun(
+            iteration.getIterationId(),
+            iteration.getRunRecordingId(),
+            taskKey,
+            stringValue(target.get("build_id")),
+            stringValue(target.get("artifact_digest")));
+    iteration.setSourceBindingState(outcome.state());
+    return true;
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> readTargetMetadata(Map<String, Object> taskMetadata) {
+    Object value = taskMetadata == null ? null : taskMetadata.get("micro6_target");
+    return value instanceof Map ? (Map<String, Object>) value : Map.of();
   }
 
   private StatusApplyResult finalizeAsCompleted(
@@ -1096,10 +1237,10 @@ public class BuilderGoalRunStateMutationService {
 
   private boolean isTaskStartConfirmed(ScriptExecutionService.Micro6RunStatusResult statusResult) {
     JsonNode raw = statusResult != null ? statusResult.rawResponse() : null;
-    return raw != null
-        && !raw.isNull()
-        && raw.path("task_started").asBoolean(false)
-        && textValue(raw.path("debug_session_id")) != null;
+    // Gameplay activation and evidence binding are independent lifecycles. A recorder may be
+    // disabled, degraded, or still awaiting session confirmation; none of those states means the
+    // executor failed to start the task.
+    return raw != null && !raw.isNull() && raw.path("task_started").asBoolean(false);
   }
 
   private boolean hasTimedOut(
@@ -1629,7 +1770,6 @@ public class BuilderGoalRunStateMutationService {
           "Micro6 task confirmed running",
           "INFO");
     }
-    recordRiskTimelineEvent(iteration, entryId, statusResult);
   }
 
   /**

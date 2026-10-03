@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Upstream 4xx/5xx" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:48.841Z" hostname="fedora" time="0.021">
+  <properties/>
+  <testcase name="throws on upstream 401 with upstream status" classname="com.chromascape.web.simulator.SimulatorReplayControlServiceTest$UpstreamHttpError" time="0.009"/>
+  <testcase name="throws on upstream 404 with upstream status" classname="com.chromascape.web.simulator.SimulatorReplayControlServiceTest$UpstreamHttpError" time="0.006"/>
+  <testcase name="throws on upstream 500 with upstream status" classname="com.chromascape.web.simulator.SimulatorReplayControlServiceTest$UpstreamHttpError" time="0.005"/>
+  <system-out><![CDATA[19:30:48.843 [Test worker] INFO  com.chromascape.web.simulator.SimulatorReplayControlService - SimulatorReplayControlService initialized - enabled: false, url: http://127.0.0.1:8095
+19:30:48.843 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'httpClient' of type [null] on target object [com.chromascape.web.simulator.SimulatorReplayControlService@4373b028] or target class [class com.chromascape.web.simulator.SimulatorReplayControlService] to value [httpClient]
+19:30:48.854 [Test worker] INFO  com.chromascape.web.simulator.SimulatorReplayControlService - SimulatorReplayControlService initialized - enabled: false, url: http://127.0.0.1:8095
+19:30:48.854 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'httpClient' of type [null] on target object [com.chromascape.web.simulator.SimulatorReplayControlService@1d55170c] or target class [class com.chromascape.web.simulator.SimulatorReplayControlService] to value [httpClient]
+19:30:48.859 [Test worker] INFO  com.chromascape.web.simulator.SimulatorReplayControlService - SimulatorReplayControlService initialized - enabled: false, url: http://127.0.0.1:8095
+19:30:48.859 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'httpClient' of type [null] on target object [com.chromascape.web.simulator.SimulatorReplayControlService@97edd47] or target class [class com.chromascape.web.simulator.SimulatorReplayControlService] to value [httpClient]
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

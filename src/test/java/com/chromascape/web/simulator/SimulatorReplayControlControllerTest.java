@@ -427,7 +427,8 @@ class SimulatorReplayControlControllerTest {
     ReplayFramePageResponse.FrameData frame = new ReplayFramePageResponse.FrameData();
     frame.setTick(tick);
     frame.setSchemaVersion(2);
-    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+    com.fasterxml.jackson.databind.ObjectMapper mapper =
+        new com.fasterxml.jackson.databind.ObjectMapper();
     frame.setPlayerState(mapper.createObjectNode().put("x", 3087).put("z", 3228));
     return frame;
   }

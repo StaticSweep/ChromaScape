@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.recording.controller.RecordingControllerMetadataTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:41:22.629Z" hostname="fedora" time="0.163">
+  <properties/>
+  <testcase name="getRecording_doesNotAttemptOrphanRepairWhenVideoFileMissing()" classname="com.chromascape.web.recording.controller.RecordingControllerMetadataTest" time="0.126"/>
+  <testcase name="updateMetadata_clearTags_returns200()" classname="com.chromascape.web.recording.controller.RecordingControllerMetadataTest" time="0.005"/>
+  <testcase name="updateMetadata_nameOnly_returns200()" classname="com.chromascape.web.recording.controller.RecordingControllerMetadataTest" time="0.002"/>
+  <testcase name="updateMetadata_clearName_returns200()" classname="com.chromascape.web.recording.controller.RecordingControllerMetadataTest" time="0.002"/>
+  <testcase name="updateMetadata_nameTooLong_returns400()" classname="com.chromascape.web.recording.controller.RecordingControllerMetadataTest" time="0.001"/>
+  <testcase name="updateMetadata_tagsOnly_returns200()" classname="com.chromascape.web.recording.controller.RecordingControllerMetadataTest" time="0.002"/>
+  <testcase name="updateMetadata_notFound_returns404()" classname="com.chromascape.web.recording.controller.RecordingControllerMetadataTest" time="0.001"/>
+  <testcase name="updateMetadata_omittedFields_keepsExisting()" classname="com.chromascape.web.recording.controller.RecordingControllerMetadataTest" time="0.002"/>
+  <testcase name="listRecordingSessions_marksMissingVideoAsNotPlayable()" classname="com.chromascape.web.recording.controller.RecordingControllerMetadataTest" time="0.003"/>
+  <testcase name="listRecordingSessions_marksUnfinishedRecordingsAsNotPlayable()" classname="com.chromascape.web.recording.controller.RecordingControllerMetadataTest" time="0.007"/>
+  <testcase name="listSessions_includesMetadataFields()" classname="com.chromascape.web.recording.controller.RecordingControllerMetadataTest" time="0.002"/>
+  <testcase name="listSessions_nullMetadata_fallsBack()" classname="com.chromascape.web.recording.controller.RecordingControllerMetadataTest" time="0.002"/>
+  <testcase name="getRecording_attemptsOrphanRepairWhenVideoMissing()" classname="com.chromascape.web.recording.controller.RecordingControllerMetadataTest" time="0.003"/>
+  <testcase name="updateMetadata_bothNameAndTags_returns200()" classname="com.chromascape.web.recording.controller.RecordingControllerMetadataTest" time="0.002"/>
+  <system-out><![CDATA[12:41:22.753 [Test worker] WARN  com.chromascape.web.recording.controller.RecordingController - Video path is null for recording: rec-missing
+12:41:22.775 [Test worker] INFO  com.chromascape.web.recording.controller.RecordingController - Returned 1 recording sessions
+12:41:22.782 [Test worker] INFO  com.chromascape.web.recording.controller.RecordingController - Returned 2 recording sessions
+12:41:22.784 [Test worker] INFO  com.chromascape.web.recording.controller.RecordingController - Returned 1 recording sessions
+12:41:22.786 [Test worker] INFO  com.chromascape.web.recording.controller.RecordingController - Returned 1 recording sessions
+12:41:22.789 [Test worker] WARN  com.chromascape.web.recording.controller.RecordingController - Video path is null for recording: rec-orphan
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

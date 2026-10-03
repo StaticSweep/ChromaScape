@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.playback.ReplayPlaybackControllerTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:38.463Z" hostname="fedora" time="0.297">
+  <properties/>
+  <testcase name="playbackEndpointsRequireIdentityAndDelegateToReplayService()" classname="com.chromascape.web.replay.playback.ReplayPlaybackControllerTest" time="0.278"/>
+  <testcase name="playbackEndpointsRejectMissingIdentityAndBlankRecordingIds()" classname="com.chromascape.web.replay.playback.ReplayPlaybackControllerTest" time="0.006"/>
+  <testcase name="deprecatedAliasesReturnV1PayloadsAndMigrationHeaders()" classname="com.chromascape.web.replay.playback.ReplayPlaybackControllerTest" time="0.003"/>
+  <testcase name="canonicalAndDeprecatedFrameAliasesShareTheSameV1PayloadShape()" classname="com.chromascape.web.replay.playback.ReplayPlaybackControllerTest" time="0.007"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

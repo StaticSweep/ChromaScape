@@ -1,0 +1,8 @@
+# SC-1662 run-6 — application-jar RemoteInput payload scan
+
+Command: unzip -l build/libs/chromascape-*.jar | awk '{print $4}' | grep -E 'libRemoteInput|remoteinput-manifest|third-party/RemoteInput|RemoteInput-LICENSE'
+Expected: no matches (empty output). The jar is scanned after the distribution regression, which
+pre-seeds stale RemoteInput payload into the SAME output root before assembly.
+
+
+RESULT: no matches — application jar contains no RemoteInput payload

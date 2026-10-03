@@ -88,14 +88,11 @@ public class ReplayActionConversionService {
         typedRepository.findBySessionIdAndTickBetweenOrderByTickAscSequenceAsc(
             sessionId, startTick, endTick);
     List<TickSnapshot> snapshots =
-        snapshotRepository.findBySessionIdAndTickBetweenOrderByTick(
-            sessionId, startTick, endTick);
+        snapshotRepository.findBySessionIdAndTickBetweenOrderByTick(sessionId, startTick, endTick);
     List<TickLog> logs =
-        logRepository.findBySessionIdAndTickBetweenOrderByTickAsc(
-            sessionId, startTick, endTick);
+        logRepository.findBySessionIdAndTickBetweenOrderByTickAsc(sessionId, startTick, endTick);
 
-    boolean completeTypedStream =
-        isCompleteTypedStream(typed, logs, sessionId, startTick, endTick);
+    boolean completeTypedStream = isCompleteTypedStream(typed, logs, sessionId, startTick, endTick);
     if (mode == ConversionMode.CAPTURED_ONLY && !completeTypedStream) {
       return result(
           sessionId,
@@ -167,11 +164,7 @@ public class ReplayActionConversionService {
       RecordingAction action = fromEntity(entity);
       actions.add(
           new ConvertedReplayAction(
-              action,
-              ActionProvenance.CAPTURED,
-              "typed dispatch",
-              null,
-              null));
+              action, toActionProvenance(entity), "typed dispatch", null, null));
     }
 
     ConversionQuality quality =
@@ -193,9 +186,9 @@ public class ReplayActionConversionService {
   }
 
   /**
-   * A typed row is certification evidence only when it came from the Micro6 semantic dispatch
-   * hook and still belongs to the requested immutable session/range. Rows written by a converter
-   * or operator are useful evidence, but cannot upgrade a manifest to CERTIFIED.
+   * A typed row is certification evidence only when it came from the Micro6 semantic dispatch hook
+   * and still belongs to the requested immutable session/range. Rows written by a converter or
+   * operator are useful evidence, but cannot upgrade a manifest to CERTIFIED.
    */
   private static boolean isCompleteTypedStream(
       List<ReplayRecordingAction> typed,
@@ -212,6 +205,7 @@ public class ReplayActionConversionService {
           || action.getTick() < startTick
           || action.getTick() > endTick
           || !RecordingAction.SOURCE_MICRO6_SEMANTIC_DISPATCH.equals(action.getSource())
+          || !RecordingAction.PROVENANCE_CAPTURED.equals(action.getProvenance())
           || !RecordingAction.SCHEMA.equals(action.getSchema())
           || action.getSequence() < 0
           || action.getActionType() == null
@@ -237,8 +231,7 @@ public class ReplayActionConversionService {
       }
       String subsystem = log.getSubsystem() == null ? "" : log.getSubsystem().trim();
       String event = log.getEventType() == null ? "" : log.getEventType().trim();
-      if (!"PLAYER_ACTION".equalsIgnoreCase(subsystem)
-          || !"MENU_CLICK".equalsIgnoreCase(event)) {
+      if (!"PLAYER_ACTION".equalsIgnoreCase(subsystem) || !"MENU_CLICK".equalsIgnoreCase(event)) {
         if ("PLAYER_ACTION".equalsIgnoreCase(subsystem)
             && "ACTION_QUEUE_OVERFLOW".equalsIgnoreCase(event)) {
           return false;
@@ -246,7 +239,8 @@ public class ReplayActionConversionService {
         continue;
       }
       Map<String, Object> details = jsonMap(log.getDetails());
-      long sourceTick = number(details.get("sourceTick"), log.getTick() == null ? -1 : log.getTick());
+      long sourceTick =
+          number(details.get("sourceTick"), log.getTick() == null ? -1 : log.getTick());
       int sequence = intValue(details.get("sequence"), -1);
       if (sourceTick < startTick || sourceTick > endTick || sequence < 0) {
         return false;
@@ -276,7 +270,8 @@ public class ReplayActionConversionService {
       }
       String legacyOption = text(details, "option", "optionText", "action");
       String typedOption = text(jsonMap(action.getArgumentsJson()), "option");
-      if (legacyOption != null && typedOption != null
+      if (legacyOption != null
+          && typedOption != null
           && !normalizeOption(legacyOption).equals(normalizeOption(typedOption))) {
         return false;
       }
@@ -303,9 +298,11 @@ public class ReplayActionConversionService {
       int typedCount) {
     List<TickLog> logs = new ArrayList<>(sourceLogs == null ? List.of() : sourceLogs);
     logs.sort(
-        Comparator.comparingLong((TickLog log) -> log.getTick() == null ? Long.MAX_VALUE : log.getTick())
+        Comparator.comparingLong(
+                (TickLog log) -> log.getTick() == null ? Long.MAX_VALUE : log.getTick())
             .thenComparingLong(log -> log.getId() == null ? Long.MAX_VALUE : log.getId()));
-    List<TickSnapshot> orderedSnapshots = new ArrayList<>(snapshots == null ? List.of() : snapshots);
+    List<TickSnapshot> orderedSnapshots =
+        new ArrayList<>(snapshots == null ? List.of() : snapshots);
     orderedSnapshots.sort(
         Comparator.<TickSnapshot>comparingLong(
                 s -> s.getTick() == null ? Long.MAX_VALUE : s.getTick())
@@ -365,7 +362,9 @@ public class ReplayActionConversionService {
     ConversionQuality quality =
         actions.isEmpty() ? ConversionQuality.UNSUPPORTED : ConversionQuality.BEST_EFFORT;
     double coverage =
-        logs.isEmpty() ? (actions.isEmpty() ? 0.0 : 100.0) : (100.0 * convertibleLogs / logs.size());
+        logs.isEmpty()
+            ? (actions.isEmpty() ? 0.0 : 100.0)
+            : (100.0 * convertibleLogs / logs.size());
     return result(
         sessionId,
         startTick,
@@ -473,7 +472,8 @@ public class ReplayActionConversionService {
         target.put("kind", "TILE");
         target.put("stableId", "tile:" + current.x() + ":" + current.y() + ":" + current.plane());
         Map<String, Object> arguments = new LinkedHashMap<>();
-        arguments.put("destination", Map.of("x", current.x(), "y", current.y(), "plane", current.plane()));
+        arguments.put(
+            "destination", Map.of("x", current.x(), "y", current.y(), "plane", current.plane()));
         RecordingAction action = new RecordingAction();
         action.setSchema(RecordingAction.SCHEMA);
         action.setSessionId(sessionId);
@@ -499,7 +499,8 @@ public class ReplayActionConversionService {
                 "WALK_TO was inferred from a snapshot delta; intermediate route and dispatch are unknown",
                 ActionProvenance.INFERRED,
                 snapshot.getId()));
-        if (Math.max(Math.abs(current.x() - previous.x()), Math.abs(current.y() - previous.y())) > 1) {
+        if (Math.max(Math.abs(current.x() - previous.x()), Math.abs(current.y() - previous.y()))
+            > 1) {
           gaps.add(
               new ReplayGap(
                   snapshot.getTick(),
@@ -570,7 +571,8 @@ public class ReplayActionConversionService {
         entry.put("sourceSnapshotId", approximation.sourceSnapshotId());
       }
     }
-    String checksum = canonicalProjection.sha256Hex(canonicalProjection.canonicalJsonBytes(document));
+    String checksum =
+        canonicalProjection.sha256Hex(canonicalProjection.canonicalJsonBytes(document));
     return new ReplayActionConversionResult(
         sessionId,
         startTick,
@@ -589,17 +591,48 @@ public class ReplayActionConversionService {
   private RecordingAction fromEntity(ReplayRecordingAction entity) {
     RecordingAction action = new RecordingAction();
     action.setSchema(entity.getSchema());
+    action.setRecordingId(entity.getRecordingId());
     action.setSessionId(entity.getSessionId());
     action.setTick(entity.getTick());
     action.setSequence(entity.getSequence());
     action.setActionType(entity.getActionType());
-    action.setTarget(entity.getTargetJson() == null ? new LinkedHashMap<>() : jsonMap(entity.getTargetJson()));
+    action.setTarget(
+        entity.getTargetJson() == null ? new LinkedHashMap<>() : jsonMap(entity.getTargetJson()));
     action.setArguments(
-        entity.getArgumentsJson() == null ? new LinkedHashMap<>() : jsonMap(entity.getArgumentsJson()));
+        entity.getArgumentsJson() == null
+            ? new LinkedHashMap<>()
+            : jsonMap(entity.getArgumentsJson()));
     action.setSource(entity.getSource());
+    action.setProvenance(
+        entity.getProvenance() == null
+            ? provenanceForSource(entity.getSource()).name()
+            : entity.getProvenance());
+    action.setContentChecksum(entity.getContentChecksum());
     action.setConfidence(entity.getConfidence());
     action.setCapturedAt(entity.getCapturedAt().toInstant(ZoneOffset.UTC).toString());
     return action;
+  }
+
+  private static ActionProvenance toActionProvenance(ReplayRecordingAction entity) {
+    String provenance = entity.getProvenance();
+    if (provenance == null || provenance.isBlank()) {
+      return provenanceForSource(entity.getSource());
+    }
+    try {
+      return ActionProvenance.valueOf(provenance);
+    } catch (IllegalArgumentException ignored) {
+      return ActionProvenance.DEFAULTED;
+    }
+  }
+
+  private static ActionProvenance provenanceForSource(String source) {
+    return switch (source == null ? "" : source) {
+      case RecordingAction.SOURCE_MICRO6_SEMANTIC_DISPATCH -> ActionProvenance.CAPTURED;
+      case "MICRO6_LEGACY_CONVERSION" -> ActionProvenance.INFERRED;
+      case "OPERATOR_SUPPLIED" -> ActionProvenance.OPERATOR_SUPPLIED;
+      case "DEFAULTED" -> ActionProvenance.DEFAULTED;
+      default -> ActionProvenance.DEFAULTED;
+    };
   }
 
   private static int allocateSequence(Map<Long, Set<Integer>> used, long tick, int requested) {
@@ -643,7 +676,9 @@ public class ReplayActionConversionService {
         || "SELECT_DIALOGUE_OPTION".equals(actionType)
         || "CAST_SPELL".equals(actionType)) return "WIDGET";
     if ("WALK_TO".equals(actionType)) return "TILE";
-    return text(details, "targetKind", "kind") == null ? "TILE" : text(details, "targetKind", "kind");
+    return text(details, "targetKind", "kind") == null
+        ? "TILE"
+        : text(details, "targetKind", "kind");
   }
 
   private static String stableTarget(Map<String, Object> details) {
@@ -675,7 +710,8 @@ public class ReplayActionConversionService {
     return match;
   }
 
-  private static boolean copyNumericIfPresent(Map<String, Object> target, String key, Object value) {
+  private static boolean copyNumericIfPresent(
+      Map<String, Object> target, String key, Object value) {
     if (value instanceof Number number) {
       target.put(key, number.intValue());
       return true;
@@ -724,8 +760,7 @@ public class ReplayActionConversionService {
   private static Map<String, Object> jsonMap(JsonNode node) {
     if (node == null || !node.isObject()) return new LinkedHashMap<>();
     Map<String, Object> map = new LinkedHashMap<>();
-    node.fields()
-        .forEachRemaining(entry -> map.put(entry.getKey(), jsonValue(entry.getValue())));
+    node.fields().forEachRemaining(entry -> map.put(entry.getKey(), jsonValue(entry.getValue())));
     return map;
   }
 
@@ -750,7 +785,8 @@ public class ReplayActionConversionService {
   private static String normalizeOption(String value) {
     return value == null
         ? ""
-        : value.replaceAll("(?i)<[^>]+>", "")
+        : value
+            .replaceAll("(?i)<[^>]+>", "")
             .replace('\u00a0', ' ')
             .trim()
             .replaceAll("\\s+", " ")
@@ -775,7 +811,10 @@ public class ReplayActionConversionService {
     if (playerState == null || !playerState.isObject()) return null;
     JsonNode p = playerState.has("position") ? playerState.get("position") : playerState;
     if (p == null || !p.isObject() || !p.has("x") || !(p.has("y") || p.has("z"))) return null;
-    return new Position(p.path("x").asInt(), p.has("y") ? p.path("y").asInt() : p.path("z").asInt(), p.path("plane").asInt(0));
+    return new Position(
+        p.path("x").asInt(),
+        p.has("y") ? p.path("y").asInt() : p.path("z").asInt(),
+        p.path("plane").asInt(0));
   }
 
   private static double roundCoverage(double value) {

@@ -1,5 +1,10 @@
 # SC-810 source provenance and immutable snapshots
 
+> Decision (2026-09-02): `SC-810-GREENFIELD-IMPLEMENTATION-SPEC.md` is authoritative. Micro6's
+> embedded Fishing manifest and source objects are deleted, and there is no authoritative or
+> compatibility fallback to embedded resources. Only a signed `task-source-manifest/v1` bundle
+> can provide runtime source.
+
 SC-810 treats the Micro6 source manifest as an attested, read-only build artifact. A
 BehaviorGraph explains a decision, but it is not executable source and cannot replace the
 manifest or its snapshot.
@@ -9,8 +14,8 @@ manifest or its snapshot.
 Micro6 publishes a versioned task-source manifest and serves only file IDs allowlisted by that
 manifest. ChromaScape accepts the response only after validating the task, schema, canonical
 manifest hash, snapshot ID, repository commit/tree, build ID, launched artifact digest, file
-metadata, symbol ranges, and (when present) the configured Ed25519 signature. No developer
-checkout, branch, tag, host path, or caller-provided URL is used as a source fallback.
+metadata, symbol ranges, and the configured Ed25519 signature. No developer checkout, branch,
+tag, host path, embedded resource, or caller-provided URL is used as a source fallback.
 
 The ChromaScape source read model stores the verified manifest reference and content-addressed
 source objects. The in-memory cache is only an acceleration layer. A cache miss fetches the exact
@@ -37,8 +42,10 @@ explicit manifest classifications; a provider must not silently present them as 
 
 Failures use the `source-error/v1` contract. In particular, `SOURCE_BUILD_MISMATCH`,
 `SOURCE_CONTENT_HASH_MISMATCH`, `SOURCE_REDACTED`, and `SOURCE_PRUNED` are not converted into a
-current-source response. Legacy manifests may be retained for graph/replay display as
-`sourceProvenance=UNKNOWN`, but they are not eligible for the patch loop.
+current-source response. Historical ChromaScape records may retain a legacy manifest as
+`sourceProvenance=UNKNOWN` for display only; that historical representation is not a Micro6
+runtime resource, cannot be served as authoritative source, and is not eligible for the patch
+loop. A missing or invalid promoted bundle remains unavailable.
 
 Retention marks are monotonic. Pruning or redaction preserves the manifest/content hash and
 historical binding while preventing later content reads. Database triggers protect immutable
@@ -71,9 +78,10 @@ Startup validation (`SourceConfigurationValidator`) fails closed on:
 - `micro6.source-manifest.auth-required=true` without `micro6.source-manifest.auth-token`;
 - `chromascape.source.require-auth=true` without both metadata and content tokens.
 
-Development defaults keep signature verification off, legacy compatibility on, upstream
-authentication off unless explicitly enabled, and debugger authentication off unless explicitly
-enabled. Production must explicitly enable signature verification and authentication.
+There is no Micro6 embedded-resource or unsigned-manifest fallback. A runtime that serves
+authoritative source must have a valid promoted bundle, trusted Ed25519 key and key ID, safe
+environment, and separate metadata/content credentials. Historical legacy records, when retained
+by ChromaScape, remain explicitly non-authoritative and cannot weaken v1 verification.
 
 ## Transaction boundary (SC-810 completion)
 

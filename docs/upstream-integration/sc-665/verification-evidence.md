@@ -32,3 +32,12 @@
 ## Rollback
 
 Revert the isolated SC-665 commit and stop using ai-player-development to roll back code. Existing default profiles and legacy migrations are unchanged. The dedicated disposable schema is intentionally reset/reseeded, not migrated or recovered. Remove only the newly created test container used by this run after verification. No production rollback is in scope.
+
+
+## Current-main integration — 2026-10-03
+
+Reconciled the SC-665 branch with SC-260 head ca06f97d (now merged through ChromaScape PR44). Resolved the build script by retaining both task groups and preserved SC-665 nullable source manifest fields with current formatting. The initial 21-test schema run exposed missing current-main entity tables/columns; added development-only V6__current_main_entities.sql from the existing canonical released DDL, including its gate, budget, packet identity, recovery and immutable-correlation constraints. Released db/migration files are unchanged. Historical development source-binding identity columns remain nullable rather than inventing provenance. V4/V5 remain reserved for stacked SC-641/SC-609 additions.
+
+Updated the schema migration count and drift-test assertions to share MIGRATION_COUNT, and pinned the measured four-migration fingerprint sha256:35325297209c9888eab18752a5488e3e7fe7c9f32125c6747fb6043aae07d1a0. Existing development schemas fail closed and require the documented explicit disposable reset; no shared/user database was changed.
+
+Fedora JDK17: compileJava and compileAiPlayerSchemaTestJava passed. Final aiPlayerSchemaTest passed 21/21, zero failures/errors/skips (BUILD SUCCESSFUL in 2m4s), using an agent-owned PostgreSQL16 container. Earlier failures are retained in the work log: missing table/column validation, then two old three-migration count expectations, all corrected before the final pass. Source diff checks passed. This verifies schema/transactional invariants, not physical power-loss durability. CI monitoring and Felix updates were skipped at the user's request. Native Windows qualification remains unrun.

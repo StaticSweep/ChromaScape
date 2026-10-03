@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.integration.micro6.Micro6IntegrationControllerTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:29:48.553Z" hostname="fedora" time="0.461">
+  <properties/>
+  <testcase name="ingestionStillClassifiesAndPersistsPlainLogs()" classname="com.chromascape.web.integration.micro6.Micro6IntegrationControllerTest" time="0.434"/>
+  <testcase name="entryLevelCorrelationOverridesBatchCorrelation()" classname="com.chromascape.web.integration.micro6.Micro6IntegrationControllerTest" time="0.005"/>
+  <testcase name="singleLogEndpointPassesCorrelationThrough()" classname="com.chromascape.web.integration.micro6.Micro6IntegrationControllerTest" time="0.005"/>
+  <testcase name="emptyBatchReturnsBadRequest()" classname="com.chromascape.web.integration.micro6.Micro6IntegrationControllerTest" time="0.0"/>
+  <testcase name="batchLevelCorrelationIsPersistedOnEveryEntry()" classname="com.chromascape.web.integration.micro6.Micro6IntegrationControllerTest" time="0.002"/>
+  <testcase name="blankCorrelationValuesAreTreatedAsNull()" classname="com.chromascape.web.integration.micro6.Micro6IntegrationControllerTest" time="0.002"/>
+  <testcase name="missingCorrelationRemainsBackwardCompatible()" classname="com.chromascape.web.integration.micro6.Micro6IntegrationControllerTest" time="0.001"/>
+  <testcase name="webSocketBroadcastIncludesCorrelationFields()" classname="com.chromascape.web.integration.micro6.Micro6IntegrationControllerTest" time="0.002"/>
+  <system-out><![CDATA[19:29:48.981 [Test worker] INFO  com.chromascape.web.integration.micro6.Micro6IntegrationController - Received and saved 1 logs from micro6 instance: null
+19:29:48.995 [Test worker] INFO  com.chromascape.web.integration.micro6.Micro6IntegrationController - Received and saved 2 logs from micro6 instance: null
+19:29:49.002 [Test worker] INFO  com.chromascape.web.integration.micro6.Micro6IntegrationController - Received and saved 1 logs from micro6 instance: null
+19:29:49.007 [Test worker] INFO  com.chromascape.web.integration.micro6.Micro6IntegrationController - Received and saved 2 logs from micro6 instance: null
+19:29:49.009 [Test worker] INFO  com.chromascape.web.integration.micro6.Micro6IntegrationController - Received and saved 1 logs from micro6 instance: null
+19:29:49.011 [Test worker] INFO  com.chromascape.web.integration.micro6.Micro6IntegrationController - Received and saved 1 logs from micro6 instance: null
+19:29:49.014 [Test worker] INFO  com.chromascape.web.integration.micro6.Micro6IntegrationController - Received and saved 1 logs from micro6 instance: null
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

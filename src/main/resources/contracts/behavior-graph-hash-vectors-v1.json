@@ -1,0 +1,532 @@
+{
+  "$comment": "SC-728 cross-runtime golden vectors. Canonical source: ChromaScape/src/main/resources/contracts/behavior-graph-hash-vectors-v1.json. Both the ChromaScape (Java) and osrs-goal-tracker (TypeScript) copies must stay byte-identical; each suite recomputes every digest from the embedded document.",
+  "schema": "behavior-graph-hash-vectors/v1",
+  "version": 1,
+  "vectors": [
+    {
+      "name": "graph_baseline",
+      "kind": "graph",
+      "note": "Integral numbers, ASCII keys, sorted nodes and edges.",
+      "expected_hash": "sha256:18abd7a56c361da96e9b8c1fa8377023978cdbab979c2252354bddf289566225",
+      "document": {
+        "schema": "behavior-graph-definition/v2",
+        "schema_version": "behavior-graph-definition/v2",
+        "graph_id": "vector_graph",
+        "graph_hash": "sha256:18abd7a56c361da96e9b8c1fa8377023978cdbab979c2252354bddf289566225",
+        "task": {
+          "task_key": "FISHING_TRAINING"
+        },
+        "profile": {
+          "profile_id": "fishing-default",
+          "profile_version": "v1"
+        },
+        "nodes": [
+          {
+            "id": "start",
+            "type": "START",
+            "label": "Start",
+            "configuration": {}
+          },
+          {
+            "id": "do_work",
+            "type": "SEMANTIC_ACTION",
+            "label": "Do work",
+            "semantic_key": "begin_fishing",
+            "configuration": {
+              "spot": "net_bank"
+            },
+            "timeout_ticks": 50,
+            "maximum_attempts": 3
+          },
+          {
+            "id": "done",
+            "type": "SUCCESS",
+            "label": "Done",
+            "configuration": {}
+          }
+        ],
+        "edges": [
+          {
+            "id": "e_start_work",
+            "from": "start",
+            "to": "do_work",
+            "priority": 100,
+            "source_order": 0
+          },
+          {
+            "id": "e_work_done",
+            "from": "do_work",
+            "to": "done",
+            "priority": 100,
+            "source_order": 0,
+            "guard": {
+              "type": "FISHING_OBJECTIVE_COMPLETE",
+              "parameters": {}
+            }
+          }
+        ],
+        "authority": {
+          "can_write_source": false,
+          "can_approve_patch": false,
+          "can_publish_graph": false,
+          "can_activate_model": false,
+          "can_dispatch_input": false
+        },
+        "control_allowed": false
+      }
+    },
+    {
+      "name": "graph_root_arrays_unsorted",
+      "kind": "graph",
+      "note": "Root nodes and edges are sorted by the canonicalizer; must hash identically to graph_baseline.",
+      "expected_hash": "sha256:18abd7a56c361da96e9b8c1fa8377023978cdbab979c2252354bddf289566225",
+      "document": {
+        "schema": "behavior-graph-definition/v2",
+        "schema_version": "behavior-graph-definition/v2",
+        "graph_id": "vector_graph",
+        "graph_hash": "sha256:18abd7a56c361da96e9b8c1fa8377023978cdbab979c2252354bddf289566225",
+        "task": {
+          "task_key": "FISHING_TRAINING"
+        },
+        "profile": {
+          "profile_id": "fishing-default",
+          "profile_version": "v1"
+        },
+        "nodes": [
+          {
+            "id": "done",
+            "type": "SUCCESS",
+            "label": "Done",
+            "configuration": {}
+          },
+          {
+            "id": "do_work",
+            "type": "SEMANTIC_ACTION",
+            "label": "Do work",
+            "semantic_key": "begin_fishing",
+            "configuration": {
+              "spot": "net_bank"
+            },
+            "timeout_ticks": 50,
+            "maximum_attempts": 3
+          },
+          {
+            "id": "start",
+            "type": "START",
+            "label": "Start",
+            "configuration": {}
+          }
+        ],
+        "edges": [
+          {
+            "id": "e_work_done",
+            "from": "do_work",
+            "to": "done",
+            "priority": 100,
+            "source_order": 0,
+            "guard": {
+              "type": "FISHING_OBJECTIVE_COMPLETE",
+              "parameters": {}
+            }
+          },
+          {
+            "id": "e_start_work",
+            "from": "start",
+            "to": "do_work",
+            "priority": 100,
+            "source_order": 0
+          }
+        ],
+        "authority": {
+          "can_write_source": false,
+          "can_approve_patch": false,
+          "can_publish_graph": false,
+          "can_activate_model": false,
+          "can_dispatch_input": false
+        },
+        "control_allowed": false
+      }
+    },
+    {
+      "name": "graph_nested_container_arrays",
+      "kind": "graph",
+      "note": "Nested nodes/edges/groups arrays inside configuration keep their declared order; only root arrays are sorted.",
+      "expected_hash": "sha256:94d828e9455a9b1127527650515445cb24aa075680d34e89f1578b1628026f49",
+      "document": {
+        "schema": "behavior-graph-definition/v2",
+        "schema_version": "behavior-graph-definition/v2",
+        "graph_id": "vector_graph",
+        "graph_hash": "sha256:94d828e9455a9b1127527650515445cb24aa075680d34e89f1578b1628026f49",
+        "task": {
+          "task_key": "FISHING_TRAINING"
+        },
+        "profile": {
+          "profile_id": "fishing-default",
+          "profile_version": "v1"
+        },
+        "nodes": [
+          {
+            "id": "start",
+            "type": "START",
+            "label": "Start",
+            "configuration": {
+              "nodes": [
+                {
+                  "id": "zeta"
+                },
+                {
+                  "id": "alpha"
+                }
+              ],
+              "edges": [
+                {
+                  "id": "zeta",
+                  "priority": 1
+                },
+                {
+                  "id": "alpha",
+                  "priority": 9
+                }
+              ],
+              "groups": [
+                {
+                  "id": "zeta"
+                },
+                {
+                  "id": "alpha"
+                }
+              ],
+              "nested": {
+                "nodes": [
+                  {
+                    "id": "z2"
+                  },
+                  {
+                    "id": "a2"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "done",
+            "type": "SUCCESS",
+            "label": "Done",
+            "configuration": {}
+          }
+        ],
+        "edges": [
+          {
+            "id": "e_nested",
+            "from": "start",
+            "to": "done",
+            "priority": 0,
+            "source_order": 0
+          }
+        ],
+        "authority": {
+          "can_write_source": false,
+          "can_approve_patch": false,
+          "can_publish_graph": false,
+          "can_activate_model": false,
+          "can_dispatch_input": false
+        },
+        "control_allowed": false
+      }
+    },
+    {
+      "name": "graph_crlf_label",
+      "kind": "graph",
+      "note": "CRLF label normalizes to LF.",
+      "expected_hash": "sha256:c7cbf8564f4f85e364f345b3f623ac57306a68c1e537172f0c279fcf89772924",
+      "document": {
+        "schema": "behavior-graph-definition/v2",
+        "schema_version": "behavior-graph-definition/v2",
+        "graph_id": "vector_graph",
+        "graph_hash": "sha256:c7cbf8564f4f85e364f345b3f623ac57306a68c1e537172f0c279fcf89772924",
+        "task": {
+          "task_key": "FISHING_TRAINING"
+        },
+        "profile": {
+          "profile_id": "fishing-default",
+          "profile_version": "v1"
+        },
+        "nodes": [
+          {
+            "id": "start",
+            "type": "START",
+            "label": "Start\r\nsecond line",
+            "configuration": {}
+          },
+          {
+            "id": "done",
+            "type": "SUCCESS",
+            "label": "Done",
+            "configuration": {}
+          }
+        ],
+        "edges": [
+          {
+            "id": "e_nested",
+            "from": "start",
+            "to": "done",
+            "priority": 0,
+            "source_order": 0
+          }
+        ],
+        "authority": {
+          "can_write_source": false,
+          "can_approve_patch": false,
+          "can_publish_graph": false,
+          "can_activate_model": false,
+          "can_dispatch_input": false
+        },
+        "control_allowed": false
+      }
+    },
+    {
+      "name": "graph_lf_label",
+      "kind": "graph",
+      "note": "LF label; must hash identically to graph_crlf_label.",
+      "expected_hash": "sha256:c7cbf8564f4f85e364f345b3f623ac57306a68c1e537172f0c279fcf89772924",
+      "document": {
+        "schema": "behavior-graph-definition/v2",
+        "schema_version": "behavior-graph-definition/v2",
+        "graph_id": "vector_graph",
+        "graph_hash": "sha256:c7cbf8564f4f85e364f345b3f623ac57306a68c1e537172f0c279fcf89772924",
+        "task": {
+          "task_key": "FISHING_TRAINING"
+        },
+        "profile": {
+          "profile_id": "fishing-default",
+          "profile_version": "v1"
+        },
+        "nodes": [
+          {
+            "id": "start",
+            "type": "START",
+            "label": "Start\nsecond line",
+            "configuration": {}
+          },
+          {
+            "id": "done",
+            "type": "SUCCESS",
+            "label": "Done",
+            "configuration": {}
+          }
+        ],
+        "edges": [
+          {
+            "id": "e_nested",
+            "from": "start",
+            "to": "done",
+            "priority": 0,
+            "source_order": 0
+          }
+        ],
+        "authority": {
+          "can_write_source": false,
+          "can_approve_patch": false,
+          "can_publish_graph": false,
+          "can_activate_model": false,
+          "can_dispatch_input": false
+        },
+        "control_allowed": false
+      }
+    },
+    {
+      "name": "graph_astral_configuration_keys",
+      "kind": "graph",
+      "note": "Object keys sort by UTF-16 code unit, matching Array.prototype.sort().",
+      "expected_hash": "sha256:87702306d6a62333b25cfa3f6fea6aa1d7185f13432f7741ea4ef569fccd489d",
+      "document": {
+        "schema": "behavior-graph-definition/v2",
+        "schema_version": "behavior-graph-definition/v2",
+        "graph_id": "vector_graph",
+        "graph_hash": "sha256:87702306d6a62333b25cfa3f6fea6aa1d7185f13432f7741ea4ef569fccd489d",
+        "task": {
+          "task_key": "FISHING_TRAINING"
+        },
+        "profile": {
+          "profile_id": "fishing-default",
+          "profile_version": "v1"
+        },
+        "nodes": [
+          {
+            "id": "start",
+            "type": "START",
+            "label": "Start",
+            "configuration": {
+              "𐀀": "astral first in utf16",
+              "": "bmp first in utf8"
+            }
+          },
+          {
+            "id": "done",
+            "type": "SUCCESS",
+            "label": "Done",
+            "configuration": {}
+          }
+        ],
+        "edges": [
+          {
+            "id": "e_nested",
+            "from": "start",
+            "to": "done",
+            "priority": 0,
+            "source_order": 0
+          }
+        ],
+        "authority": {
+          "can_write_source": false,
+          "can_approve_patch": false,
+          "can_publish_graph": false,
+          "can_activate_model": false,
+          "can_dispatch_input": false
+        },
+        "control_allowed": false
+      }
+    },
+    {
+      "name": "layout_baseline",
+      "kind": "layout",
+      "note": "Integral coordinates with explicit groups.",
+      "expected_hash": "sha256:c6c6858b5a4a324808cae8ed57d4b5f5c4fd08c104ea33fdfcac045bd21aa5e9",
+      "document": {
+        "schema": "behavior-graph-layout/v1",
+        "schema_version": "behavior-graph-layout/v1",
+        "graph_id": "vector_graph",
+        "layout_hash": "sha256:c6c6858b5a4a324808cae8ed57d4b5f5c4fd08c104ea33fdfcac045bd21aa5e9",
+        "nodes": [
+          {
+            "node_id": "do_work",
+            "x": 240,
+            "y": 340
+          },
+          {
+            "node_id": "done",
+            "x": 480,
+            "y": 340
+          },
+          {
+            "node_id": "start",
+            "x": 0,
+            "y": 340
+          }
+        ],
+        "viewport": {
+          "x": 40,
+          "y": 20,
+          "zoom": 1
+        },
+        "groups": [
+          {
+            "id": "group_loop",
+            "label": "Loop",
+            "node_ids": ["do_work"]
+          },
+          {
+            "id": "group_setup",
+            "label": "Setup",
+            "node_ids": ["start"]
+          }
+        ]
+      }
+    },
+    {
+      "name": "layout_fractional_coordinates",
+      "kind": "layout",
+      "note": "Fractional coordinates and zoom, plus integer-valued floats that must serialize without a trailing .0.",
+      "expected_hash": "sha256:dc72eb5e4305961b8e111e9f269e97132f8eb14b561fc1b576175ba415712cd3",
+      "document": {
+        "schema": "behavior-graph-layout/v1",
+        "schema_version": "behavior-graph-layout/v1",
+        "graph_id": "vector_graph",
+        "layout_hash": "sha256:dc72eb5e4305961b8e111e9f269e97132f8eb14b561fc1b576175ba415712cd3",
+        "nodes": [
+          {
+            "node_id": "do_work",
+            "x": 10.5,
+            "y": -20.25,
+            "width": 12.5
+          },
+          {
+            "node_id": "done",
+            "x": 10,
+            "y": 0.62
+          },
+          {
+            "node_id": "start",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "viewport": {
+          "x": 1.5,
+          "y": -0.5,
+          "zoom": 0.62
+        },
+        "groups": []
+      }
+    },
+    {
+      "name": "layout_without_groups",
+      "kind": "layout",
+      "note": "Missing groups is materialized as an empty array before hashing.",
+      "expected_hash": "sha256:c14a31c39773978bfe30ce9b5047866248d0cdf6e37035dfc47969840ea8de10",
+      "document": {
+        "schema": "behavior-graph-layout/v1",
+        "schema_version": "behavior-graph-layout/v1",
+        "graph_id": "vector_graph",
+        "layout_hash": "sha256:c14a31c39773978bfe30ce9b5047866248d0cdf6e37035dfc47969840ea8de10",
+        "nodes": [
+          {
+            "node_id": "done",
+            "x": 480,
+            "y": 340
+          },
+          {
+            "node_id": "start",
+            "x": 0,
+            "y": 340
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      }
+    },
+    {
+      "name": "layout_empty_groups",
+      "kind": "layout",
+      "note": "Explicit empty groups must hash identically to layout_without_groups.",
+      "expected_hash": "sha256:c14a31c39773978bfe30ce9b5047866248d0cdf6e37035dfc47969840ea8de10",
+      "document": {
+        "schema": "behavior-graph-layout/v1",
+        "schema_version": "behavior-graph-layout/v1",
+        "graph_id": "vector_graph",
+        "layout_hash": "sha256:c14a31c39773978bfe30ce9b5047866248d0cdf6e37035dfc47969840ea8de10",
+        "nodes": [
+          {
+            "node_id": "done",
+            "x": 480,
+            "y": 340
+          },
+          {
+            "node_id": "start",
+            "x": 0,
+            "y": 340
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        },
+        "groups": []
+      }
+    }
+  ]
+}
