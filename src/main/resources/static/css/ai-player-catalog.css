@@ -1,0 +1,29 @@
+body:not([data-workspace="ai-player"]) #aiPlayerCatalogPanel { display: none; }
+body[data-workspace="ai-player"] .debugger-container,
+body[data-workspace="ai-player"] #ai-routine-panel,
+body[data-workspace="ai-player"] #windowSelectorDropdown,
+body[data-workspace="ai-player"] .tick-readout,
+body[data-workspace="ai-player"] .tick-jump { display: none !important; }
+.ai-player-catalog { padding: 20px; max-width: 1600px; margin: auto; }
+.ai-player-toolbar { display: flex; gap: 18px; align-items: end; flex-wrap: wrap; }
+.ai-player-toolbar label { min-width: 260px; flex: 1; }
+.ai-player-layout { display: grid; grid-template-columns: minmax(230px, 310px) minmax(0, 1fr); gap: 28px; }
+.ai-player-layout aside, .ai-player-layout main { padding: 20px; border: 1px solid var(--debugger-line, #a8b5c9); border-radius: 12px; background: var(--debugger-surface, #fff); }
+.ai-player-catalog label { display: block; margin-bottom: 12px; }
+.ai-player-catalog h2 { font-size: 1.4rem; }
+.ai-player-catalog h3 { font-size: 1.05rem; margin-top: 20px; }
+.ai-player-catalog dl { display: grid; grid-template-columns: minmax(140px, 200px) 1fr; gap: 4px 12px; }
+.ai-player-catalog dd { overflow-wrap: anywhere; }
+.ai-player-task-list { display: grid; gap: 8px; margin: 18px 0; max-height: 420px; overflow: auto; }
+.ai-player-task-list button { text-align: left; padding: 12px; border: 1px solid var(--debugger-line, #a8b5c9); border-radius: 7px; background: transparent; color: inherit; }
+.ai-player-task-list button[aria-pressed="true"] { border: 2px solid #377fd0; }
+.ai-player-task-list small { display: block; opacity: .8; }
+.ai-player-catalog fieldset { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 20px; border: 0; padding: 12px 0; }
+.ai-player-catalog .player-field[hidden] { display: none; }
+.ai-player-catalog .player-field-error { color: #d13c4c; min-height: 1em; font-size: .875rem; }
+.ai-player-save { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; }
+.ai-player-save label { flex: 1; min-width: 200px; }
+.ai-player-catalog [data-player-notice]:not(:empty) { padding: 12px; border-left: 4px solid #db9c30; background: rgba(219, 156, 48, .1); }
+.ai-player-catalog [data-player-save-status] { display: block; padding-top: 12px; }
+.ai-player-catalog pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media(max-width: 850px) { .ai-player-layout { grid-template-columns: 1fr; } .ai-player-catalog fieldset { grid-template-columns: 1fr; } }

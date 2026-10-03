@@ -5,6 +5,10 @@ The full scope, exclusions, diagrams, acceptance criteria and implementation/tes
 are in [the delivery plan](SC-665-DELIVERY-PLAN.md). Felix task `task_1790961222622_ae65zsk9`
 is the authoritative tracker record.
 
+SC-641 extends this foundation with V4 catalog/profile snapshots and identity
+`sc641-current-v1`. See [the current catalog/profile runbook](SC-641-CATALOG-PROFILES.md)
+for the reviewed reset and migration requirements. SC-665 evidence remains historical.
+
 ## Storage ownership
 
 Opt into the **single** `ai-player-development` Spring profile. Its entire database must be

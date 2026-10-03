@@ -107,6 +107,9 @@ output/*
 # recordings
 recordings/
 
+# Node DOM test dependencies
+/node_modules/
+
 # SC-1661 baseline-validation evidence is deliberately tracked: each file below was
 # reviewed for credentials/account identifiers before being retained. Scoped negation
 # only -- this must not unignore *.log anywhere else in the repository.

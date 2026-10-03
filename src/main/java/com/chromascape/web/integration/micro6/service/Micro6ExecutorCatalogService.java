@@ -257,8 +257,15 @@ public class Micro6ExecutorCatalogService {
         // were already rejected by runtimeLifecycleAttestation.
         state = "STALE";
       }
-      return catalogResponse(
-          normalizedRef, normalizedMode, state, cached.payload().deepCopy(), List.of());
+      ObjectNode response =
+          (ObjectNode)
+              catalogResponse(
+                  normalizedRef, normalizedMode, state, cached.payload().deepCopy(), List.of());
+      response.put("captured_at", cached.fetchedAt().toString());
+      if ("STALE".equals(state)) {
+        response.put("reason_code", "CATALOG_NOT_READY");
+      }
+      return response;
     }
 
     return awaitOrFetch(runtime, normalizedRef, normalizedMode);
@@ -550,7 +557,12 @@ public class Micro6ExecutorCatalogService {
             Instant.now(),
             stateName);
     executorCache.put(cacheKey(runtimeAfter, normalizedMode), entry);
-    return catalogResponse(normalizedRef, normalizedMode, stateName, payload.deepCopy(), List.of());
+    ObjectNode response =
+        (ObjectNode)
+            catalogResponse(
+                normalizedRef, normalizedMode, stateName, payload.deepCopy(), List.of());
+    response.put("captured_at", entry.fetchedAt().toString());
+    return response;
   }
 
   /** Re-resolves the runtime after a catalog fetch, or {@code null} when the registry fails. */
@@ -1036,10 +1048,19 @@ public class Micro6ExecutorCatalogService {
           runtime.endpointRef(),
           mode,
           reasonCode);
-      return catalogResponse(
-          runtime.endpointRef(), mode, "STALE", cached.payload().deepCopy(), reasons);
+      ObjectNode response =
+          (ObjectNode)
+              catalogResponse(
+                  runtime.endpointRef(), mode, "STALE", cached.payload().deepCopy(), reasons);
+      response.put("reason_code", reasonCode);
+      response.put("detailed_reason_code", stateHint);
+      response.put("captured_at", cached.fetchedAt().toString());
+      return response;
     }
-    return unavailablePayload(runtime.endpointRef(), mode, reasonCode, reasons);
+    ObjectNode response =
+        (ObjectNode) unavailablePayload(runtime.endpointRef(), mode, reasonCode, reasons);
+    response.put("detailed_reason_code", stateHint);
+    return response;
   }
 
   /** Reports a hard failure that must never be satisfied by last-known-good data. */

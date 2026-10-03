@@ -1,0 +1,16 @@
+{"version":1,"type":"object","fields":[
+{"key":"targetFish","type":"select","default":"Best Available","options":["Best Available","Shrimp","Trout"]},
+{"key":"locationName","type":"select","default":"Lumbridge Swamp","depends_on":"targetFish","options_by_dependency":{"Best Available":["Lumbridge Swamp"],"Shrimp":["Lumbridge Swamp","Draynor Village"],"Trout":["Barbarian Village"]}},
+{"key":"bankingMode","type":"select","default":"AUTO","options":["AUTO","DROP","BANK_RAW","COOK_THEN_BANK","COOK_THEN_DROP","DEPOSIT_BOX"]},
+{"key":"slotPolicy","type":"select","default":"CLUE_SAFE","options":["CLUE_SAFE","MINIMAL","CONSERVATIVE"]},
+{"key":"useBank","type":"boolean","default":false},
+{"key":"useDepositBox","type":"boolean","default":false},
+{"key":"bankClueBottles","type":"boolean","default":true},
+{"key":"bankCaskets","type":"boolean","default":true},
+{"key":"useEchoHarpoon","type":"boolean","default":false},
+{"key":"stopCondition","type":"select","default":"Level Target","options":["Level Target","Resource Target","Duration","Budget Limit","Unlimited"]},
+{"key":"stopConditionValue","type":"integer","default":20,"min":1,"max":1000000,"depends_on":"stopCondition","options_by_dependency":{"Level Target":["visible"],"Resource Target":["visible"],"Duration":["visible"],"Budget Limit":["visible"],"Unlimited":[]}},
+{"key":"supplyBudget","type":"integer","default":20000,"min":1000,"max":10000000},
+{"key":"supplyThreshold","type":"integer","default":50,"min":1,"max":500},
+{"key":"supplyBatchSize","type":"integer","default":500,"min":10,"max":5000}
+]}

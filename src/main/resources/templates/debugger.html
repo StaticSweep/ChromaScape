@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="/css/debugger.css?v=19" />
   <link rel="stylesheet" href="/css/ai-routine.css?v=1" />
   <link rel="stylesheet" href="/css/ai-training.css?v=1" />
+  <link rel="stylesheet" href="/css/ai-player-catalog.css?v=1" />
   <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
     integrity="sha384-ndDqU0Gzau9qJ1lfW4pNLlhNTkCfHzAVBReH9diLvGRem5+R9g2FzA8ZGN954O5Q"
     crossorigin="anonymous"></script>
@@ -169,6 +170,9 @@
         </button>
         <button class="workspace-tab" type="button" role="tab" aria-selected="false" data-workspace="recovery">
           <i class="bi bi-tools"></i><span>Recovery</span>
+        </button>
+        <button class="workspace-tab" type="button" role="tab" aria-selected="false" data-workspace="ai-player">
+          <i class="bi bi-collection"></i> AI Player
         </button>
         <button class="workspace-tab" type="button" role="tab" aria-selected="false" data-workspace="ai-training">
           <i class="bi bi-diagram-3"></i><span>AI Training</span>
@@ -1289,6 +1293,49 @@
 
   <script src="/js/fishing-shadow-core.js?v=1"></script>
   <script src="/js/debugger-session-sync-core.js?v=1"></script>
+  <section id="aiPlayerCatalogPanel" class="ai-player-catalog" aria-label="AI Player catalog and behavior profiles">
+    <header class="ai-player-toolbar">
+      <label>Catalog source <select data-player-endpoint class="form-select"><option value="">Choose a catalog source</option></select></label>
+      <button data-player-refresh type="button" class="btn btn-outline-primary">Refresh catalog</button>
+      <output data-player-state role="status" aria-live="polite">Choose a catalog source</output>
+    </header>
+    <p class="text-muted">Browse tasks and save behavior profiles. Live client and account eligibility is checked separately.</p>
+    <p data-player-notice role="status" aria-live="polite"></p>
+    <div class="ai-player-layout">
+      <aside aria-label="Browse canonical tasks">
+        <label>Category <select data-player-category class="form-select"><option value="">All categories</option></select></label>
+        <label>Skill / family <select data-player-family class="form-select"><option value="">All families</option></select></label>
+        <label>Search tasks and aliases <input data-player-search type="search" class="form-control" /></label>
+        <div data-player-tasks class="ai-player-task-list" aria-label="Canonical tasks"></div>
+        <h3>Saved profile versions</h3>
+        <label>Profile <select data-player-profiles class="form-select"><option value="">Select a saved version</option></select></label>
+        <button data-player-edit type="button" class="btn btn-outline-primary" disabled>Edit as a new version</button>
+        <button data-player-new type="button" class="btn btn-outline-secondary">New profile</button>
+      </aside>
+      <main aria-label="Task settings and profile">
+        <h2 data-player-title>Select a canonical task</h2>
+        <p data-player-description>Inspect its settings, requirements and exact source metadata.</p>
+        <dl data-player-metadata></dl>
+        <section aria-label="Executable and source provenance">
+          <h3>What does this task run?</h3><dl data-player-source></dl>
+          <a data-player-code hidden>Open authorized Code workspace</a>
+          <p data-player-code-reason class="text-muted"></p>
+        </section>
+        <details><summary>Method planning facts</summary><p data-player-facts></p><pre data-player-facts-json hidden></pre></details>
+        <form data-player-form novalidate>
+          <p data-player-schema-state role="status" aria-live="polite">Settings not loaded</p>
+          <fieldset data-player-settings disabled></fieldset>
+          <div class="ai-player-save">
+            <label>Profile name <input data-player-name class="form-control" maxlength="120" required /></label>
+            <label>Operator token <input data-player-token class="form-control" type="password" autocomplete="off" /></label>
+            <button data-player-save class="btn btn-primary" type="submit" disabled>Save new profile</button>
+          </div>
+          <output data-player-save-status role="status" aria-live="polite"></output>
+        </form>
+      </main>
+    </div>
+  </section>
+
   <script src="/js/debugger-replay-core.js?v=2"></script>
   <section id="aiTrainingPanel" class="ai-training-panel" aria-label="AI training catalog">
     <div class="ai-training-toolbar">
@@ -1395,6 +1442,7 @@
   </section>
   <script src="/js/debugger.js?v=27"></script>
   <script src="/js/ai-training.js?v=1"></script>
+  <script src="/js/ai-player-catalog.js?v=1"></script>
   <script src="/js/replay-debugger.js?v=3"></script>
   <script src="/js/ai-routine-state.js?v=1"></script>
   <script src="/js/ai-routine.js?v=3"></script>

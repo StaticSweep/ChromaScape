@@ -29,7 +29,7 @@ import java.util.TreeMap;
  * schema_bundle_hash} and compare them against values attested by the executor. A single byte of
  * divergence is a permanent contract error and the payload must never enter the cache.
  */
-final class Micro6CanonicalHash {
+public final class Micro6CanonicalHash {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String SHA_256 = "SHA-256";
   private static final String DEFAULT_CAPABILITY_VERSION = "micro6-executor/v1";
@@ -45,7 +45,7 @@ final class Micro6CanonicalHash {
     return sha256(canonicalize(node));
   }
 
-  static String sha256WithPrefix(JsonNode node) {
+  public static String sha256WithPrefix(JsonNode node) {
     return "sha256:" + sha256(node);
   }
 
@@ -184,7 +184,7 @@ final class Micro6CanonicalHash {
    * schema is already canonical; canonicalizing again is idempotent, so this must match the
    * executor's {@code settings_schema_hash}.
    */
-  static String settingsSchemaHash(JsonNode argsSchema) {
+  public static String settingsSchemaHash(JsonNode argsSchema) {
     if (argsSchema == null || argsSchema.isNull()) {
       return null;
     }

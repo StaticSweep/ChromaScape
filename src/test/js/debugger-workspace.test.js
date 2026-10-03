@@ -19,7 +19,7 @@ test('debugger script parses before workspace handlers are registered', () => {
 test('debugger exposes the operator workspaces in workflow order', () => {
   const names = [...template.matchAll(/class="workspace-tab[^\"]*"[^>]*data-workspace="([^"]+)"/g)]
     .map(match => match[1]);
-  assert.deepEqual(names, ['runs', 'live', 'replays', 'recovery', 'ai-training', 'developer']);
+  assert.deepEqual(names, ['runs', 'live', 'replays', 'recovery', 'ai-player', 'ai-training', 'developer']);
 });
 
 test('debugger workspace template keeps element ids unique', () => {

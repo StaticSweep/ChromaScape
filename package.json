@@ -3,5 +3,8 @@
   "private": true,
   "scripts": {
     "test": "node --test src/test/js/*.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0"
   }
 }

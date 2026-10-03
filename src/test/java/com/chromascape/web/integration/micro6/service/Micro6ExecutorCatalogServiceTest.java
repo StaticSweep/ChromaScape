@@ -1,7 +1,11 @@
 package com.chromascape.web.integration.micro6.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.chromascape.web.aiplayer.catalog.AiPlayerCatalogService;
+import com.chromascape.web.aiplayer.catalog.CatalogStore;
 import com.chromascape.web.integration.micro6.config.Micro6Config;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -111,6 +115,8 @@ class Micro6ExecutorCatalogServiceTest {
     assertThat(stale.path("catalog_state").asText()).isEqualTo("STALE");
     assertThat(stale.path("catalog").isObject()).isTrue();
     assertThat(stale.path("last_known_good").asBoolean()).isTrue();
+    assertThat(stale.path("reason_code").asText()).isEqualTo("EXECUTOR_ERROR");
+    assertThat(stale.path("detailed_reason_code").asText()).isEqualTo("CATALOG_HTTP_502");
   }
 
   @Test
@@ -138,6 +144,8 @@ class Micro6ExecutorCatalogServiceTest {
     JsonNode after503 = service.getCatalogForExecutor(ref, "lightweight", true);
     assertThat(after503.path("catalog_state").asText()).isEqualTo("STALE");
     assertThat(after503.path("catalog").isObject()).isTrue();
+    assertThat(after503.path("reason_code").asText()).isEqualTo("EXECUTOR_UNAVAILABLE");
+    assertThat(after503.path("detailed_reason_code").asText()).isEqualTo("CATALOG_503");
 
     executor.lightweightStatus = 200;
     JsonNode restored = service.getCatalogForExecutor(ref, "lightweight", false);
@@ -426,5 +434,26 @@ class Micro6ExecutorCatalogServiceTest {
                     String, java.util.concurrent.CompletableFuture<JsonNode>>)
                 field.get(service);
     return map.size();
+  }
+
+  @Test
+  void cachedIntegrityFailureRetainsStructuredReasonAndAiPlayerRejectsIt() throws Exception {
+    String ref = "dev-micro6:FENCE";
+    start(ref, "executor-fence");
+    executor.lightweightBody = TestMicro6Catalog.json(TestMicro6Catalog.lightweight());
+    assertThat(
+            service.getCatalogForExecutor(ref, "lightweight", false).path("catalog_state").asText())
+        .isEqualTo("READY");
+    ObjectNode changed = TestMicro6Catalog.lightweight();
+    ((ObjectNode) changed.path("tasks").get(0)).put("display_name", "Changed without rehashing");
+    executor.lightweightBody = TestMicro6Catalog.json(changed);
+    JsonNode stale = service.getCatalogForExecutor(ref, "lightweight", true);
+    assertThat(stale.path("catalog_state").asText()).isEqualTo("STALE");
+    assertThat(stale.path("reason_code").asText()).isEqualTo("CONTRACT_INVALID");
+    assertThat(stale.path("detailed_reason_code").asText()).isEqualTo("CONTRACT_INVALID");
+    CatalogStore storage = mock(CatalogStore.class);
+    AiPlayerCatalogService player = new AiPlayerCatalogService(service, storage, mapper);
+    assertThat(player.catalog(ref, true).path("state").asText()).isEqualTo("UNAVAILABLE");
+    verifyNoInteractions(storage);
   }
 }

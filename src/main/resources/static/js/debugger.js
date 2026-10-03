@@ -98,6 +98,11 @@ const DEBUGGER_WORKSPACES = Object.freeze({
     title: 'Recovery',
     description: 'Annotate run evidence, generate a patch plan, and approve a controlled relaunch.'
   },
+  'ai-player': {
+    eyebrow: 'Catalog and profiles',
+    title: 'AI Player',
+    description: 'Browse canonical tasks, inspect typed settings and preserve immutable behavior profiles.'
+  },
   'ai-training': {
     eyebrow: 'Evidence and operations',
     title: 'AI Training',
