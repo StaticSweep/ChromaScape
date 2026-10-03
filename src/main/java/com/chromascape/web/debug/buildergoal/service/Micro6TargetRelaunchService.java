@@ -320,27 +320,61 @@ public class Micro6TargetRelaunchService {
       BuilderGoalLaunchCancellation cancellation,
       boolean forceRelaunch)
       throws Exception {
-    return restartTarget(accountName, accountHash, accountEmail, accountPassword, world,
-        targetBaseUrl, progressListener, cancellation, forceRelaunch, false);
+    return restartTarget(
+        accountName,
+        accountHash,
+        accountEmail,
+        accountPassword,
+        world,
+        targetBaseUrl,
+        progressListener,
+        cancellation,
+        forceRelaunch,
+        false);
   }
 
-  public RelaunchResult restartTarget(String accountName, String accountHash, String accountEmail,
-      String accountPassword, Integer world, String targetBaseUrl,
-      Consumer<RelaunchProgress> progressListener, BuilderGoalLaunchCancellation cancellation,
-      boolean forceRelaunch, boolean packetCapture) throws Exception {
+  public RelaunchResult restartTarget(
+      String accountName,
+      String accountHash,
+      String accountEmail,
+      String accountPassword,
+      Integer world,
+      String targetBaseUrl,
+      Consumer<RelaunchProgress> progressListener,
+      BuilderGoalLaunchCancellation cancellation,
+      boolean forceRelaunch,
+      boolean packetCapture)
+      throws Exception {
     try (RsproxLaunchSession capture = packetCapture ? RsproxLaunchSession.connect() : null) {
-      RelaunchResult result = restartTargetWithCapture(accountName, accountHash, accountEmail,
-          accountPassword, world, targetBaseUrl, progressListener, cancellation,
-          forceRelaunch || packetCapture, capture);
+      RelaunchResult result =
+          restartTargetWithCapture(
+              accountName,
+              accountHash,
+              accountEmail,
+              accountPassword,
+              world,
+              targetBaseUrl,
+              progressListener,
+              cancellation,
+              forceRelaunch || packetCapture,
+              capture);
       if (capture != null) capture.retain();
       return result;
     }
   }
 
-  private RelaunchResult restartTargetWithCapture(String accountName, String accountHash,
-      String accountEmail, String accountPassword, Integer world, String targetBaseUrl,
-      Consumer<RelaunchProgress> progressListener, BuilderGoalLaunchCancellation cancellation,
-      boolean forceRelaunch, RsproxLaunchSession capture) throws Exception {
+  private RelaunchResult restartTargetWithCapture(
+      String accountName,
+      String accountHash,
+      String accountEmail,
+      String accountPassword,
+      Integer world,
+      String targetBaseUrl,
+      Consumer<RelaunchProgress> progressListener,
+      BuilderGoalLaunchCancellation cancellation,
+      boolean forceRelaunch,
+      RsproxLaunchSession capture)
+      throws Exception {
     if (accountName == null || accountName.isBlank()) {
       throw new IllegalArgumentException("Target account name is required for Micro6 relaunch");
     }
@@ -541,7 +575,8 @@ public class Micro6TargetRelaunchService {
     }
 
     if (capture != null) {
-      if (!isWindows()) throw new IllegalStateException("Packet Capture requires the Windows structured launcher");
+      if (!isWindows())
+        throw new IllegalStateException("Packet Capture requires the Windows structured launcher");
       capture.prepare(projectDir);
       if (cancellation != null) cancellation.throwIfCancelled();
     }
@@ -642,17 +677,19 @@ public class Micro6TargetRelaunchService {
         List<String> attemptClientArgs =
             buildClientArgs(
                 accountName, accountHash, accountEmail, accountPassword, world, attemptId);
-        command = capture != null
-            ? buildStructuredWindowsLaunchCommand(attemptClientArgs, projectDir, capture.payload())
-            : buildLaunchCommand(
-                attemptClientArgs,
-                projectDir,
-                accountName,
-                accountEmail,
-                accountPassword,
-                resolveWorld(world),
-                targetPort,
-                localExecutorBaseUrl);
+        command =
+            capture != null
+                ? buildStructuredWindowsLaunchCommand(
+                    attemptClientArgs, projectDir, capture.payload())
+                : buildLaunchCommand(
+                    attemptClientArgs,
+                    projectDir,
+                    accountName,
+                    accountEmail,
+                    accountPassword,
+                    resolveWorld(world),
+                    targetPort,
+                    localExecutorBaseUrl);
         process =
             startTargetProcess(
                 projectDir,
@@ -755,7 +792,10 @@ public class Micro6TargetRelaunchService {
       // throwing so a rejected RuneLite instance cannot outlive the failed attempt.
       terminateOwnedProcessTree(process);
       LaunchFailure failure = attemptResult.failure();
-      if (capture == null && attemptNumber < MAX_LAUNCH_ATTEMPTS && failure != null && failure.retryable()) {
+      if (capture == null
+          && attemptNumber < MAX_LAUNCH_ATTEMPTS
+          && failure != null
+          && failure.retryable()) {
         logger.warn(
             "Retrying local Micro6 Builder Goal launch for account {} after retryable failure {}: {}",
             accountName,
@@ -2068,7 +2108,9 @@ public class Micro6TargetRelaunchService {
                 + ")");
       }
       if (capture && contract.path("packet_capture_version").asInt() != 1) {
-        throw launcherContractException(logFile, "Update Micro6: launcher does not support Packet Capture",
+        throw launcherContractException(
+            logFile,
+            "Update Micro6: launcher does not support Packet Capture",
             "Missing packet_capture_version=1");
       }
       if (!contract.path("validate_only").asBoolean(false)
@@ -2342,8 +2384,8 @@ public class Micro6TargetRelaunchService {
     return buildStructuredWindowsLaunchCommand(clientArgs, projectDir, null);
   }
 
-  private List<String> buildStructuredWindowsLaunchCommand(List<String> clientArgs, Path projectDir,
-      Map<String, Object> capture) throws IOException {
+  private List<String> buildStructuredWindowsLaunchCommand(
+      List<String> clientArgs, Path projectDir, Map<String, Object> capture) throws IOException {
     Path launcherScript =
         projectDir.resolve("launch-buildergoal-client.ps1").toAbsolutePath().normalize();
     if (!Files.isRegularFile(launcherScript)) {

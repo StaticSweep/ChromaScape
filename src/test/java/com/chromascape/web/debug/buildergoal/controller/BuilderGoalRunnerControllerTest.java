@@ -37,6 +37,10 @@ class BuilderGoalRunnerControllerTest {
   @Mock private BuilderGoalLauncherControlService launcherControlService;
   @Mock private Micro6OnlineClientRegistryService clientRegistryService;
 
+  @Mock
+  private com.chromascape.web.debug.buildergoal.service.BuilderGoalRunEventService
+      runTimelineService;
+
   private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
   private BuilderGoalRunnerController controller;
 
@@ -44,17 +48,26 @@ class BuilderGoalRunnerControllerTest {
   void setUp() {
     controller =
         new BuilderGoalRunnerController(
-            builderGoalRunnerService, launcherControlService, clientRegistryService, objectMapper);
+            builderGoalRunnerService,
+            launcherControlService,
+            clientRegistryService,
+            runTimelineService,
+            objectMapper);
   }
 
   @Test
   void launchAccount_packetCaptureMustBeBooleanAndIsForwarded() throws Exception {
-    assertThat(controller.launchAccount(objectMapper.readTree("{\"packetCapture\":\"true\"}"))
-        .getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(
+            controller
+                .launchAccount(objectMapper.readTree("{\"packetCapture\":\"true\"}"))
+                .getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
     when(builderGoalRunnerService.launchAccount("a", "local", 360, false, true))
         .thenReturn(Map.of("operationId", "capture"));
-    var response = controller.launchAccount(objectMapper.readTree(
-        "{\"accountId\":\"a\",\"launcherMachineUuid\":\"local\",\"world\":360,\"packetCapture\":true}"));
+    var response =
+        controller.launchAccount(
+            objectMapper.readTree(
+                "{\"accountId\":\"a\",\"launcherMachineUuid\":\"local\",\"world\":360,\"packetCapture\":true}"));
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
     verify(builderGoalRunnerService).launchAccount("a", "local", 360, false, true);
   }
@@ -103,6 +116,40 @@ class BuilderGoalRunnerControllerTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> body = (Map<String, Object>) response.getBody();
     assertThat(body.get("error")).isEqualTo("Builder goal run not found: missing");
+  }
+
+  @Test
+  void getRunTimelineEvents_returnsChronologicalEvents() {
+    Map<String, Object> run = new LinkedHashMap<>();
+    run.put("iterationId", "buildergoal_123");
+    when(builderGoalRunnerService.getRunSummary("buildergoal_123")).thenReturn(run);
+    Map<String, Object> started = new LinkedHashMap<>();
+    started.put("eventType", "SCRIPT_STARTED");
+    Map<String, Object> failed = new LinkedHashMap<>();
+    failed.put("eventType", "SCRIPT_FAILED");
+    failed.put(
+        "data", Map.of("failure_code", "SCRIPT_EXCEPTION", "failure_reason", "Script crashed"));
+    when(runTimelineService.getTimelineEvents("buildergoal_123"))
+        .thenReturn(List.of(started, failed));
+
+    ResponseEntity<Object> response = controller.getRunTimelineEvents("buildergoal_123");
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> body = (List<Map<String, Object>>) response.getBody();
+    assertThat(body).hasSize(2);
+    assertThat(body.get(0).get("eventType")).isEqualTo("SCRIPT_STARTED");
+    assertThat(body.get(1).get("eventType")).isEqualTo("SCRIPT_FAILED");
+  }
+
+  @Test
+  void getRunTimelineEvents_returnsNotFoundForMissingRun() {
+    when(builderGoalRunnerService.getRunSummary("missing"))
+        .thenThrow(new IllegalArgumentException("Builder goal run not found: missing"));
+
+    ResponseEntity<Object> response = controller.getRunTimelineEvents("missing");
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
   }
 
   @Test

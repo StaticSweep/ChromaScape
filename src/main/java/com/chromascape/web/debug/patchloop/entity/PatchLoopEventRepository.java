@@ -1,6 +1,7 @@
 package com.chromascape.web.debug.patchloop.entity;
 
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -38,4 +39,23 @@ public interface PatchLoopEventRepository extends JpaRepository<PatchLoopEvent, 
    * @return list of matching events
    */
   List<PatchLoopEvent> findByIterationIdAndSeverity(String iterationId, String severity);
+
+  /**
+   * Finds all events for a specific iteration in chronological order, tie-broken by id so events
+   * written within the same timestamp (e.g. during a locked transaction) keep their insertion
+   * order. This is the SC-260 unified run timeline ordering.
+   *
+   * @param iterationId the iteration ID
+   * @return list of events in chronological order
+   */
+  List<PatchLoopEvent> findByIterationIdOrderByTimestampAscIdAsc(String iterationId);
+
+  /**
+   * Finds the most recently inserted event for an iteration. Used for idempotency when the periodic
+   * status sync would otherwise duplicate timeline events.
+   *
+   * @param iterationId the iteration ID
+   * @return the latest event, or empty when the iteration has no events yet
+   */
+  Optional<PatchLoopEvent> findTopByIterationIdOrderByIdDesc(String iterationId);
 }

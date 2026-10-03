@@ -2,6 +2,7 @@ package com.chromascape.web.debug.buildergoal.controller;
 
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlService;
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalRepairPatchExportService;
+import com.chromascape.web.debug.buildergoal.service.BuilderGoalRunEventService;
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerService;
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalSensitiveTextSanitizer;
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalStartException;
@@ -36,6 +37,7 @@ public class BuilderGoalRunnerController {
   private final BuilderGoalRunnerService builderGoalRunnerService;
   private final BuilderGoalLauncherControlService launcherControlService;
   private final Micro6OnlineClientRegistryService clientRegistryService;
+  private final BuilderGoalRunEventService runEventService;
   private final ObjectMapper objectMapper;
 
   @Autowired private BuilderGoalRepairPatchExportService repairPatchExportService;
@@ -44,10 +46,12 @@ public class BuilderGoalRunnerController {
       BuilderGoalRunnerService builderGoalRunnerService,
       BuilderGoalLauncherControlService launcherControlService,
       Micro6OnlineClientRegistryService clientRegistryService,
+      BuilderGoalRunEventService runEventService,
       ObjectMapper objectMapper) {
     this.builderGoalRunnerService = builderGoalRunnerService;
     this.launcherControlService = launcherControlService;
     this.clientRegistryService = clientRegistryService;
+    this.runEventService = runEventService;
     this.objectMapper = objectMapper;
   }
 
@@ -173,10 +177,12 @@ public class BuilderGoalRunnerController {
       // returns HTTP 202 immediately; the browser polls the operation via statusUrl.
       Map<String, Object> launchResponse =
           packetCapture
-              ? builderGoalRunnerService.launchAccount(accountId, launcherMachineUuid, world, forceRelaunch, true)
+              ? builderGoalRunnerService.launchAccount(
+                  accountId, launcherMachineUuid, world, forceRelaunch, true)
               : forceRelaunch
-              ? builderGoalRunnerService.launchAccount(accountId, launcherMachineUuid, world, true)
-              : builderGoalRunnerService.launchAccount(accountId, launcherMachineUuid, world);
+                  ? builderGoalRunnerService.launchAccount(
+                      accountId, launcherMachineUuid, world, true)
+                  : builderGoalRunnerService.launchAccount(accountId, launcherMachineUuid, world);
       return ResponseEntity.accepted().body(launchResponse);
     } catch (BuilderGoalRunnerService.LaunchSubmissionException e) {
       return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
@@ -401,6 +407,30 @@ public class BuilderGoalRunnerController {
               Map.of(
                   "error",
                   "Failed to load builder goal run summary",
+                  "details",
+                  sanitizeFailure(e)));
+    }
+  }
+
+  /**
+   * SC-260 unified run timeline: the durable chronological event stream for a run. Events carry the
+   * owning task/script identity and, for failures, the failure code and reason.
+   */
+  @GetMapping("/runs/{iterationId}/events")
+  public ResponseEntity<Object> getRunTimelineEvents(@PathVariable String iterationId) {
+    try {
+      // Resolves the run first so unknown iterations return 404 like the summary endpoint.
+      builderGoalRunnerService.getRunSummary(iterationId);
+      return ResponseEntity.ok(runEventService.getTimelineEvents(iterationId));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.status(HttpStatus.NOT_FOUND)
+          .body(Map.of("error", sanitizeMessage(e.getMessage())));
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(
+              Map.of(
+                  "error",
+                  "Failed to load builder goal run timeline",
                   "details",
                   sanitizeFailure(e)));
     }

@@ -1,5 +1,6 @@
 package com.chromascape.web.debug.buildergoal.service;
 
+import com.chromascape.web.debug.patchloop.entity.PatchLoopEventType;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopFailureCode;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopIteration;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopIterationRepository;
@@ -20,6 +21,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Transactional mutation service for Builder Goal run state. Every public method acquires a
@@ -39,6 +42,7 @@ public class BuilderGoalRunStateMutationService {
   private final PatchLoopIterationRepository iterationRepository;
   private final PatchLoopPersistenceService persistenceService;
   private final ObjectMapper objectMapper;
+  private final BuilderGoalRunEventService runEventService;
   private final long runTimeoutMs;
   private final int maxConsecutiveStatusFailures;
   private final long statusFailureGraceMs;
@@ -55,7 +59,47 @@ public class BuilderGoalRunStateMutationService {
       PatchLoopIterationRepository iterationRepository,
       PatchLoopPersistenceService persistenceService,
       ObjectMapper objectMapper) {
-    this(iterationRepository, persistenceService, objectMapper, 300_000L, 3, 15_000L, null);
+    this(iterationRepository, persistenceService, objectMapper, null, 300_000L, 3, 15_000L, null);
+  }
+
+  /** Compatibility for callers using configured timeouts before timeline recording. */
+  public BuilderGoalRunStateMutationService(
+      PatchLoopIterationRepository iterationRepository,
+      PatchLoopPersistenceService persistenceService,
+      ObjectMapper objectMapper,
+      long runTimeoutMs,
+      int maxConsecutiveStatusFailures,
+      long statusFailureGraceMs,
+      BuilderGoalSourceBindingService sourceBindingService) {
+    this(
+        iterationRepository,
+        persistenceService,
+        objectMapper,
+        null,
+        runTimeoutMs,
+        maxConsecutiveStatusFailures,
+        statusFailureGraceMs,
+        sourceBindingService);
+  }
+
+  /** Compatibility for focused timeline tests without source binding. */
+  public BuilderGoalRunStateMutationService(
+      PatchLoopIterationRepository iterationRepository,
+      PatchLoopPersistenceService persistenceService,
+      ObjectMapper objectMapper,
+      BuilderGoalRunEventService runEventService,
+      long runTimeoutMs,
+      int maxConsecutiveStatusFailures,
+      long statusFailureGraceMs) {
+    this(
+        iterationRepository,
+        persistenceService,
+        objectMapper,
+        runEventService,
+        runTimeoutMs,
+        maxConsecutiveStatusFailures,
+        statusFailureGraceMs,
+        null);
   }
 
   @Autowired
@@ -63,6 +107,7 @@ public class BuilderGoalRunStateMutationService {
       PatchLoopIterationRepository iterationRepository,
       PatchLoopPersistenceService persistenceService,
       ObjectMapper objectMapper,
+      BuilderGoalRunEventService runEventService,
       @Value("${builder-goal.run-timeout-ms:300000}") long runTimeoutMs,
       @Value("${builder-goal.status-sync-max-consecutive-failures:3}")
           int maxConsecutiveStatusFailures,
@@ -71,6 +116,7 @@ public class BuilderGoalRunStateMutationService {
     this.iterationRepository = iterationRepository;
     this.persistenceService = persistenceService;
     this.objectMapper = objectMapper;
+    this.runEventService = runEventService;
     this.runTimeoutMs = Math.max(1L, runTimeoutMs);
     this.maxConsecutiveStatusFailures = Math.max(1, maxConsecutiveStatusFailures);
     this.statusFailureGraceMs = Math.max(1_000L, statusFailureGraceMs);
@@ -321,6 +367,7 @@ public class BuilderGoalRunStateMutationService {
           PatchLoopFailureCode.INTERNAL_ERROR,
           errorMsg,
           "publishStatus=" + result.publishStatus());
+      recordOutcomeEvent(iteration, entryId, false, PatchLoopFailureCode.INTERNAL_ERROR, errorMsg);
     }
 
     boolean needsCancel = stopRequested && storedEntryId != null && storedEntryId > 0;
@@ -589,6 +636,7 @@ public class BuilderGoalRunStateMutationService {
             + preparationState
             + ", iterationId="
             + firstNonBlank(iteration.getIterationId(), "(unknown)"));
+    recordOutcomeEvent(iteration, -1, false, PatchLoopFailureCode.SCRIPT_START_FAILED, reason);
     iterationRepository.save(iteration);
     return true;
   }
@@ -653,6 +701,14 @@ public class BuilderGoalRunStateMutationService {
               : Math.max(0, intValue(publishMetadata.get("consecutive_poll_failures")));
       publishMetadata.put("consecutive_poll_failures", failures + 1);
       publishMetadata.put("last_poll_at", observed.toString());
+      if (!stopRequested && failures + 1 == maxConsecutiveStatusFailures) {
+        // Durable counterpart of the degraded-polling UI message (SC-260).
+        recordTimelineEvent(
+            iterationId,
+            PatchLoopEventType.RUN_STATUS_DEGRADED,
+            "Executor status polling degraded (" + (failures + 1) + " consecutive failures)",
+            "WARN");
+      }
       String error = statusResult != null ? statusResult.errorMessage() : null;
       if (error != null && !error.isBlank()) {
         publishMetadata.put("last_error", error);
@@ -713,6 +769,12 @@ public class BuilderGoalRunStateMutationService {
             firstNonBlank(error, "Micro6 target became unreachable during published run"));
         iteration.setFailureContext("publishEntryId=" + entryId);
         iteration.transitionTo(PatchLoopStatus.FAILED);
+        recordOutcomeEvent(
+            iteration,
+            entryId,
+            false,
+            PatchLoopFailureCode.TARGET_UNREACHABLE,
+            iteration.getFailureReason());
         iterationRepository.save(iteration);
         return new StatusApplyResult(
             iterationId,
@@ -758,6 +820,14 @@ public class BuilderGoalRunStateMutationService {
       publishMetadata.put("settings_receipt", toSettingsReceiptMap(statusResult.settingsReceipt()));
     }
     boolean metadataChanged = recordSuccessfulPoll(publishMetadata, observed);
+    // Risk evidence can arrive in the same observation as failure/cancellation, or while
+    // STOPPING. Record it before those branches return so the trigger is never omitted.
+    recordRiskTimelineEvent(iteration, entryId, statusResult);
+    // SC-260: capture whether the run had already confirmed its task start BEFORE
+    // applyTaskStartFields mutates the flag, so the start event can fire on the confirmation
+    // flip even when the executor publish status does not change (RUNNING -> RUNNING).
+    boolean taskStartPreviouslyConfirmed =
+        Boolean.TRUE.equals(taskMetadata.get("task_start_confirmed"));
     metadataChanged |= applyTaskStartFields(iteration, taskMetadata, publishMetadata, statusResult);
     // Stamp the run start the first time the executor confirms the task is live. Builder-goal runs
     // otherwise never record a start, which leaves the evidence window anchored before the run and
@@ -818,7 +888,8 @@ public class BuilderGoalRunStateMutationService {
     }
 
     String mappedStatus = mapPublishStatus(executorStatus);
-    if (!mappedStatus.equalsIgnoreCase(stringValue(publishMetadata.get("status")))) {
+    String previousPublishStatus = stringValue(publishMetadata.get("status"));
+    if (!mappedStatus.equalsIgnoreCase(previousPublishStatus)) {
       metadataChanged = true;
     }
     publishMetadata.put("status", mappedStatus);
@@ -875,6 +946,17 @@ public class BuilderGoalRunStateMutationService {
     if (taskStartConfirmed && bindSourceIfNeeded(iteration, taskMetadata)) {
       metadataChanged = true;
     }
+
+    // SC-260 unified run timeline: durable pause/resume/start events on publish-status
+    // transitions, plus risk-trigger inspection of the executor status payload.
+    recordExecutorStatusTransitionEvents(
+        iteration,
+        entryId,
+        previousPublishStatus,
+        mappedStatus,
+        statusResult,
+        executorStatus,
+        taskStartConfirmed && !taskStartPreviouslyConfirmed);
 
     if (waitingForStart && hasTimedOut(iteration, publishMetadata, observed)) {
       StatusApplyResult timeout =
@@ -962,6 +1044,7 @@ public class BuilderGoalRunStateMutationService {
     iteration.setFailureCode(null);
     iteration.setFailureReason(null);
     iteration.transitionTo(PatchLoopStatus.COMPLETED);
+    recordOutcomeEvent(iteration, entryId, true, null, null);
     iterationRepository.save(iteration);
     return new StatusApplyResult(
         iteration.getIterationId(), entryId, true, true, true, false, false, true, null, iteration);
@@ -974,6 +1057,8 @@ public class BuilderGoalRunStateMutationService {
     iteration.setFailureCode(PatchLoopFailureCode.SCRIPT_EXCEPTION);
     iteration.setFailureReason(firstNonBlank(failureReason, "Micro6 task failed"));
     iteration.transitionTo(PatchLoopStatus.FAILED);
+    recordOutcomeEvent(
+        iteration, entryId, false, iteration.getFailureCode(), iteration.getFailureReason());
     iterationRepository.save(iteration);
     return new StatusApplyResult(
         iteration.getIterationId(),
@@ -1006,6 +1091,11 @@ public class BuilderGoalRunStateMutationService {
     iteration.setRunEndTime(observedAt != null ? observedAt : LocalDateTime.now());
     iteration.setRunSuccess(null);
     iteration.transitionTo(PatchLoopStatus.CANCELLED);
+    recordTimelineEvent(
+        iteration.getIterationId(),
+        PatchLoopEventType.RUN_STOPPED,
+        firstNonBlank(reason, "Micro6 task cancelled"),
+        "WARN");
     iterationRepository.save(iteration);
     return new StatusApplyResult(
         iteration.getIterationId(),
@@ -1200,6 +1290,8 @@ public class BuilderGoalRunStateMutationService {
     }
     iteration.setFailureReason(timeoutDetail);
     iteration.transitionTo(PatchLoopStatus.FAILED);
+    recordOutcomeEvent(
+        iteration, entryId, false, PatchLoopFailureCode.SCRIPT_START_FAILED, timeoutDetail);
     iterationRepository.save(iteration);
     return new StatusApplyResult(
         iteration.getIterationId(),
@@ -1629,6 +1721,157 @@ public class BuilderGoalRunStateMutationService {
   // ------------------------------------------------------------------
   // Internal helpers
   // ------------------------------------------------------------------
+
+  /**
+   * Records SC-260 timeline events for a publish-status transition observed during a successful
+   * executor status poll. Terminal outcomes are recorded by the finalize helpers instead, so this
+   * only handles the active transitions (started / paused / resumed).
+   */
+  private void recordExecutorStatusTransitionEvents(
+      PatchLoopIteration iteration,
+      int entryId,
+      String previousPublishStatus,
+      String newPublishStatus,
+      ScriptExecutionService.Micro6RunStatusResult statusResult,
+      String executorStatus,
+      boolean taskStartJustConfirmed) {
+    if (runEventService == null) {
+      return;
+    }
+    String previous = previousPublishStatus == null ? "" : previousPublishStatus.toUpperCase();
+    String next = newPublishStatus == null ? "" : newPublishStatus.toUpperCase();
+    if (!next.equals(previous)) {
+      if ("PAUSED".equalsIgnoreCase(next)) {
+        recordTimelineEvent(
+            iteration.getIterationId(),
+            PatchLoopEventType.RUN_PAUSED,
+            "Micro6 task paused",
+            "INFO");
+      } else if ("PAUSED".equalsIgnoreCase(previous) && isActiveDispatchState(next)) {
+        recordTimelineEvent(
+            iteration.getIterationId(),
+            PatchLoopEventType.RUN_RESUMED,
+            "Micro6 task resumed",
+            "INFO");
+      } else if (isPreActiveDispatchState(previous) && isActiveDispatchState(next)) {
+        recordTimelineEvent(
+            iteration.getIterationId(),
+            PatchLoopEventType.SCRIPT_STARTED,
+            "Micro6 task confirmed running",
+            "INFO");
+      }
+    } else if (taskStartJustConfirmed && isActiveDispatchState(next)) {
+      // SC-260: the publish status did not change, but the task_start confirmation flag just
+      // flipped to true (e.g. RUNNING with task_started=false followed by RUNNING with
+      // task_started=true). The run has now demonstrably started and the timeline must say so.
+      recordTimelineEvent(
+          iteration.getIterationId(),
+          PatchLoopEventType.SCRIPT_STARTED,
+          "Micro6 task confirmed running",
+          "INFO");
+    }
+  }
+
+  /**
+   * Inspects the executor status payload for risk information and records a durable {@code
+   * RUN_RISK_TRIGGERED} timeline event when present.
+   */
+  private void recordRiskTimelineEvent(
+      PatchLoopIteration iteration,
+      int entryId,
+      ScriptExecutionService.Micro6RunStatusResult statusResult) {
+    if (runEventService == null || statusResult == null || statusResult.rawResponse() == null) {
+      return;
+    }
+    com.fasterxml.jackson.databind.JsonNode risk = statusResult.rawResponse().path("risk");
+    if (!risk.isMissingNode() && !risk.isNull()) {
+      String iterationId = iteration.getIterationId();
+      JsonNode durableRisk = risk.deepCopy();
+      recordAfterCommitOrNow(
+          () -> {
+            try {
+              runEventService.recordRiskEvent(iterationId, entryId, durableRisk);
+            } catch (Exception e) {
+              logger.debug("Risk timeline inspection skipped: {}", e.getMessage());
+            }
+          });
+    }
+  }
+
+  /** Thin wrapper so state mutations never fail because of timeline recording. */
+  private void recordTimelineEvent(
+      String iterationId, PatchLoopEventType eventType, String message, String severity) {
+    if (runEventService == null) {
+      return;
+    }
+    recordAfterCommitOrNow(
+        () -> {
+          try {
+            runEventService.recordRunEvent(iterationId, eventType, message, severity, null);
+          } catch (Exception e) {
+            logger.debug("SC-260 timeline event recording skipped: {}", e.getMessage());
+          }
+        });
+  }
+
+  /** Records the durable complete/fail outcome with the SC-260 failure contract fields. */
+  private void recordOutcomeEvent(
+      PatchLoopIteration iteration,
+      int entryId,
+      boolean success,
+      String failureCode,
+      String failureReason) {
+    if (runEventService == null) {
+      return;
+    }
+    String iterationId = iteration.getIterationId();
+    Integer durableEntryId = entryId >= 0 ? entryId : null;
+    recordAfterCommitOrNow(
+        () -> {
+          try {
+            runEventService.recordFailureEvent(
+                iterationId, durableEntryId, success, failureCode, failureReason);
+          } catch (Exception e) {
+            logger.debug("SC-260 outcome event recording skipped: {}", e.getMessage());
+          }
+        });
+  }
+
+  /**
+   * Prevents durable timeline entries for state transitions that later roll back. Focused unit
+   * tests invoke this service without a Spring transaction, so they retain immediate recording.
+   */
+  private void recordAfterCommitOrNow(Runnable recording) {
+    if (TransactionSynchronizationManager.isActualTransactionActive()
+        && TransactionSynchronizationManager.isSynchronizationActive()) {
+      TransactionSynchronizationManager.registerSynchronization(
+          new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+              recording.run();
+            }
+          });
+      return;
+    }
+    recording.run();
+  }
+
+  /** Executor states that represent an active (running or suspended) task. */
+  private static boolean isActiveDispatchState(String publishStatus) {
+    return "RUNNING".equalsIgnoreCase(publishStatus) || "PAUSED".equalsIgnoreCase(publishStatus);
+  }
+
+  /** Dispatch states observed before the executor confirms the task is running. */
+  private static boolean isPreActiveDispatchState(String publishStatus) {
+    return publishStatus == null
+        || publishStatus.isBlank()
+        || "PUBLISHING".equalsIgnoreCase(publishStatus)
+        || "RECEIVED".equalsIgnoreCase(publishStatus)
+        || "PENDING".equalsIgnoreCase(publishStatus)
+        || "ACCEPTED".equalsIgnoreCase(publishStatus)
+        || "QUEUED".equalsIgnoreCase(publishStatus)
+        || "ASSIGNED".equalsIgnoreCase(publishStatus);
+  }
 
   private Map<String, Object> readTaskMetadata(PatchLoopIteration iteration) {
     if (iteration.getTaskMetadataJson() == null || iteration.getTaskMetadataJson().isNull()) {

@@ -2701,7 +2701,9 @@ class Micro6TargetRelaunchServiceTest {
     Path logFile = project.resolve("micro6-recovery-launch.log");
     ControlledPlatformService service = newWindowsService(project.toString(), "", "");
 
-    assertThat(rootCauseOf(catchThrowable(() -> invokeVerifyLauncherContract(service, project, logFile))))
+    assertThat(
+            rootCauseOf(
+                catchThrowable(() -> invokeVerifyLauncherContract(service, project, logFile))))
         .isInstanceOf(Micro6TargetRelaunchService.RelaunchException.class)
         .hasMessageContaining("launcher contract is incompatible");
   }
@@ -2721,7 +2723,9 @@ class Micro6TargetRelaunchServiceTest {
     Path logFile = project.resolve("micro6-recovery-launch.log");
     ControlledPlatformService service = newWindowsService(project.toString(), "", "");
 
-    assertThat(rootCauseOf(catchThrowable(() -> invokeVerifyLauncherContract(service, project, logFile))))
+    assertThat(
+            rootCauseOf(
+                catchThrowable(() -> invokeVerifyLauncherContract(service, project, logFile))))
         .isInstanceOf(Micro6TargetRelaunchService.RelaunchException.class)
         .hasMessageContaining("explicit source mode");
   }

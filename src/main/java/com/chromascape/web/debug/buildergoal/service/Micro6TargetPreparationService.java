@@ -127,7 +127,8 @@ public class Micro6TargetPreparationService {
 
     if (!launcherControlService.isLocalMachine(selectedMachine)) {
       if (request.packetCapture()) {
-        throw new PreparationException(PHASE_PREPARING_TARGET, "Packet Capture requires the local launch host");
+        throw new PreparationException(
+            PHASE_PREPARING_TARGET, "Packet Capture requires the local launch host");
       }
       return remoteLauncher.ensureReady(
           request,
@@ -142,10 +143,6 @@ public class Micro6TargetPreparationService {
       relaunchResult =
           request.packetCapture()
               ? micro6TargetRelaunchService.restartTarget(
-                  accountName, request.accountHash(), request.accountEmail(), request.accountPassword(),
-                  request.world(), request.targetBaseUrl(), progressListener, combinedCancellation, true, true)
-              : request.forceRelaunch()
-              ? micro6TargetRelaunchService.restartTarget(
                   accountName,
                   request.accountHash(),
                   request.accountEmail(),
@@ -154,16 +151,28 @@ public class Micro6TargetPreparationService {
                   request.targetBaseUrl(),
                   progressListener,
                   combinedCancellation,
+                  true,
                   true)
-              : micro6TargetRelaunchService.restartTarget(
-                  accountName,
-                  request.accountHash(),
-                  request.accountEmail(),
-                  request.accountPassword(),
-                  request.world(),
-                  request.targetBaseUrl(),
-                  progressListener,
-                  combinedCancellation);
+              : request.forceRelaunch()
+                  ? micro6TargetRelaunchService.restartTarget(
+                      accountName,
+                      request.accountHash(),
+                      request.accountEmail(),
+                      request.accountPassword(),
+                      request.world(),
+                      request.targetBaseUrl(),
+                      progressListener,
+                      combinedCancellation,
+                      true)
+                  : micro6TargetRelaunchService.restartTarget(
+                      accountName,
+                      request.accountHash(),
+                      request.accountEmail(),
+                      request.accountPassword(),
+                      request.world(),
+                      request.targetBaseUrl(),
+                      progressListener,
+                      combinedCancellation);
     } catch (Micro6TargetRelaunchService.RelaunchException e) {
       throw new PreparationException(
           e.getPhase(),
@@ -239,12 +248,29 @@ public class Micro6TargetPreparationService {
       Integer world,
       String launcherMachineUuid,
       String targetBaseUrl,
-      boolean forceRelaunch, boolean packetCapture) {
-    public PreparationRequest(String accountIdentifier, String accountHash, String accountName,
-        String accountEmail, String accountPassword, Integer world, String launcherMachineUuid,
-        String targetBaseUrl, boolean forceRelaunch) {
-      this(accountIdentifier, accountHash, accountName, accountEmail, accountPassword, world,
-          launcherMachineUuid, targetBaseUrl, forceRelaunch, false);
+      boolean forceRelaunch,
+      boolean packetCapture) {
+    public PreparationRequest(
+        String accountIdentifier,
+        String accountHash,
+        String accountName,
+        String accountEmail,
+        String accountPassword,
+        Integer world,
+        String launcherMachineUuid,
+        String targetBaseUrl,
+        boolean forceRelaunch) {
+      this(
+          accountIdentifier,
+          accountHash,
+          accountName,
+          accountEmail,
+          accountPassword,
+          world,
+          launcherMachineUuid,
+          targetBaseUrl,
+          forceRelaunch,
+          false);
     }
 
     public PreparationRequest(

@@ -19,8 +19,10 @@ class RecoveryStateTransitionsTest {
             RecoveryStates.canTransition(RecoveryStates.ANALYZING, RecoveryStates.AWAITING_REVIEW))
         .isTrue();
     assertThat(
-            RecoveryStates.canTransition(
-                RecoveryStates.AWAITING_REVIEW, RecoveryStates.VALIDATION_QUEUED))
+            RecoveryStates.canTransition(RecoveryStates.AWAITING_REVIEW, RecoveryStates.APPROVED))
+        .isTrue();
+    assertThat(
+            RecoveryStates.canTransition(RecoveryStates.APPROVED, RecoveryStates.VALIDATION_QUEUED))
         .isTrue();
     assertThat(
             RecoveryStates.canTransition(
@@ -33,7 +35,15 @@ class RecoveryStateTransitionsTest {
             RecoveryStates.canTransition(
                 RecoveryStates.BUILD_VALIDATED, RecoveryStates.RERUN_REQUESTED))
         .isTrue();
-    assertThat(RecoveryStates.canTransition(RecoveryStates.RERUN_REQUESTED, RecoveryStates.BOUND))
+    assertThat(
+            RecoveryStates.canTransition(
+                RecoveryStates.RERUN_REQUESTED, RecoveryStates.ACTIVATING_CANDIDATE))
+        .isTrue();
+    assertThat(
+            RecoveryStates.canTransition(
+                RecoveryStates.ACTIVATING_CANDIDATE, RecoveryStates.STARTING_CHILD))
+        .isTrue();
+    assertThat(RecoveryStates.canTransition(RecoveryStates.STARTING_CHILD, RecoveryStates.BOUND))
         .isTrue();
   }
 
@@ -44,7 +54,11 @@ class RecoveryStateTransitionsTest {
                 RecoveryStates.VALIDATION_FAILED, RecoveryStates.ANALYZING))
         .isTrue();
     assertThat(
-            RecoveryStates.canTransition(RecoveryStates.AWAITING_REVIEW, RecoveryStates.ANALYZING))
+            RecoveryStates.canTransition(
+                RecoveryStates.AWAITING_REVIEW, RecoveryStates.ANALYSIS_QUEUED))
+        .isTrue();
+    assertThat(
+            RecoveryStates.canTransition(RecoveryStates.ANALYSIS_QUEUED, RecoveryStates.ANALYZING))
         .isTrue();
     assertThat(RecoveryStates.canTransition(RecoveryStates.ANALYZING, RecoveryStates.REJECTED))
         .isTrue();
@@ -63,6 +77,12 @@ class RecoveryStateTransitionsTest {
     assertThat(RecoveryStates.canTransition(RecoveryStates.BOUND, RecoveryStates.ANALYZING))
         .isFalse();
     assertThat(RecoveryStates.canTransition(null, RecoveryStates.ANALYZING)).isFalse();
+    assertThat(
+            RecoveryStates.canTransition(
+                RecoveryStates.AWAITING_REVIEW, RecoveryStates.VALIDATION_QUEUED))
+        .isFalse();
+    assertThat(RecoveryStates.canTransition(RecoveryStates.RERUN_REQUESTED, RecoveryStates.BOUND))
+        .isFalse();
   }
 
   @Test

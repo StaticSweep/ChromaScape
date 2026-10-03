@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -48,6 +49,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -69,6 +71,7 @@ class BuilderGoalRunnerServiceTest {
   @Mock private Micro6TargetRelaunchService micro6TargetRelaunchService;
   @Mock private Micro6TargetPreparationService targetPreparationService;
   @Mock private BuilderGoalRunStateMutationService mutationService;
+  @Mock private BuilderGoalRunEventService runEventService;
 
   private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
   private final Map<String, PatchLoopIteration> savedIterations = new ConcurrentHashMap<>();
@@ -97,6 +100,7 @@ class BuilderGoalRunnerServiceTest {
         micro6TargetRelaunchService,
         targetPreparationService,
         mutationService,
+        runEventService,
         launchOperations,
         coordinator,
         // Source binding is exercised by BuilderGoalSourceBindingWiringTest; this focused test
@@ -2865,6 +2869,23 @@ class BuilderGoalRunnerServiceTest {
     Map<String, Object> response = service.stopRun("buildergoal_prepublish_1", null);
 
     assertThat(response.get("success")).isEqualTo(true);
+    InOrder timelineOrder = inOrder(runEventService);
+    timelineOrder
+        .verify(runEventService)
+        .recordRunEvent(
+            eq("buildergoal_prepublish_1"),
+            eq(com.chromascape.web.debug.patchloop.entity.PatchLoopEventType.RUN_STOP_REQUESTED),
+            anyString(),
+            anyString(),
+            anyMap());
+    timelineOrder
+        .verify(runEventService)
+        .recordRunEvent(
+            eq("buildergoal_prepublish_1"),
+            eq(com.chromascape.web.debug.patchloop.entity.PatchLoopEventType.RUN_STOPPED),
+            anyString(),
+            anyString(),
+            isNull());
     verify(scriptExecutionService, never()).stopMicro6PublishedRun(anyMap(), any(), anyString());
     verify(persistenceService, times(1))
         .updateIterationStatus(iteration, PatchLoopStatus.CANCELLED);

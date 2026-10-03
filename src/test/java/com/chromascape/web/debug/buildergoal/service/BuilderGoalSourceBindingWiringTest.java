@@ -114,13 +114,13 @@ class BuilderGoalSourceBindingWiringTest {
     when(iterationRepository.findByIterationIdForUpdate("bg_bind_0002"))
         .thenReturn(Optional.of(iteration));
 
-    // task_started true but no debug_session_id: observed, not confirmed.
+    // The executor has not started the task; recorder availability is independent.
     ScriptExecutionService.Micro6RunStatusResult unconfirmed =
         new ScriptExecutionService.Micro6RunStatusResult(
             true,
             "RUNNING",
             null,
-            objectMapper.valueToTree(Map.of("status", "RUNNING", "task_started", true)),
+            objectMapper.valueToTree(Map.of("status", "RUNNING", "task_started", false)),
             "http://127.0.0.1:8098",
             1001);
 
@@ -128,6 +128,39 @@ class BuilderGoalSourceBindingWiringTest {
 
     verify(bindingService, never()).bindRun(anyString(), any(), anyString(), any(), any());
     assertThat(iteration.getSourceBindingState()).isNull();
+  }
+
+  @Test
+  void bindsSourceWithoutWaitingForRecorderSession() {
+    PatchLoopIteration iteration = runningIteration("bg_bind_no_recorder", "FISHING_TRAINING");
+    when(iterationRepository.findByIterationIdForUpdate("bg_bind_no_recorder"))
+        .thenReturn(Optional.of(iteration));
+    when(bindingService.bindRun(anyString(), any(), anyString(), any(), any()))
+        .thenReturn(
+            new BuilderGoalSourceBindingService.BindingOutcome(
+                BuilderGoalSourceBindingService.STATE_BOUND, null, null));
+    serviceWithBinder()
+        .applyExecutorStatus(
+            "bg_bind_no_recorder",
+            1001,
+            new ScriptExecutionService.Micro6RunStatusResult(
+                true,
+                "RUNNING",
+                null,
+                objectMapper.valueToTree(Map.of("task_started", true)),
+                "http://127.0.0.1:8098",
+                1001),
+            LocalDateTime.now());
+    verify(bindingService)
+        .bindRun(
+            eq("bg_bind_no_recorder"),
+            eq("recording_test0001"),
+            eq("FISHING_TRAINING"),
+            any(),
+            any());
+    assertThat(iteration.getSourceBindingState())
+        .isEqualTo(BuilderGoalSourceBindingService.STATE_BOUND);
+    assertThat(iteration.getStatus()).isEqualTo(PatchLoopStatus.RUNNING_SCRIPT);
   }
 
   @Test

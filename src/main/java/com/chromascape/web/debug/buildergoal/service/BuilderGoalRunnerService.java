@@ -9,6 +9,7 @@ import com.chromascape.web.debug.patchloop.dto.AnalysisV2Response;
 import com.chromascape.web.debug.patchloop.dto.AnalysisV2Target;
 import com.chromascape.web.debug.patchloop.dto.EvidenceType;
 import com.chromascape.web.debug.patchloop.dto.PromptType;
+import com.chromascape.web.debug.patchloop.entity.PatchLoopEventType;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopFailureCode;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopIteration;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopIterationRepository;
@@ -138,6 +139,7 @@ public class BuilderGoalRunnerService {
   private final Micro6TargetRelaunchService micro6TargetRelaunchService;
   private final Micro6TargetPreparationService targetPreparationService;
   private final BuilderGoalRunStateMutationService mutationService;
+  private final BuilderGoalRunEventService runEventService;
   private final BuilderGoalLaunchOperationService launchOperationService;
   private final BuilderGoalLocalLaunchCoordinatorService localLaunchCoordinator;
 
@@ -207,6 +209,7 @@ public class BuilderGoalRunnerService {
       Micro6TargetRelaunchService micro6TargetRelaunchService,
       Micro6TargetPreparationService targetPreparationService,
       BuilderGoalRunStateMutationService mutationService,
+      BuilderGoalRunEventService runEventService,
       BuilderGoalLaunchOperationService launchOperationService,
       BuilderGoalLocalLaunchCoordinatorService localLaunchCoordinator,
       @Autowired(required = false) BuilderGoalSourceBindingService sourceBindingService,
@@ -234,6 +237,7 @@ public class BuilderGoalRunnerService {
     this.micro6TargetRelaunchService = micro6TargetRelaunchService;
     this.targetPreparationService = targetPreparationService;
     this.mutationService = mutationService;
+    this.runEventService = runEventService;
     this.launchOperationService = launchOperationService;
     this.localLaunchCoordinator = localLaunchCoordinator;
     this.sourceBindingService = sourceBindingService;
@@ -296,7 +300,10 @@ public class BuilderGoalRunnerService {
   }
 
   public Map<String, Object> launchAccount(
-      String accountId, String launcherMachineUuid, Integer world, boolean forceRelaunch,
+      String accountId,
+      String launcherMachineUuid,
+      Integer world,
+      boolean forceRelaunch,
       boolean packetCapture) {
     if (accountId == null || accountId.isBlank()) {
       throw new IllegalArgumentException("accountId is required");
@@ -310,19 +317,28 @@ public class BuilderGoalRunnerService {
     requireLaunchReadyAccount(selectedAccount);
     requireValidWorld(world);
     requireLaunchableMachine(launcherMachineUuid);
-    if (packetCapture && !launcherControlService.isLocalMachine(resolveSelectedMachine(launcherMachineUuid))) {
-      throw new IllegalArgumentException("Packet Capture is available only on the local launch host");
+    if (packetCapture
+        && !launcherControlService.isLocalMachine(resolveSelectedMachine(launcherMachineUuid))) {
+      throw new IllegalArgumentException(
+          "Packet Capture is available only on the local launch host");
     }
 
     String accountKey = firstNonBlank(selectedAccount.accountHash(), selectedAccount.accountId());
     BuilderGoalLaunchOperationService.CreateResult createResult =
-        packetCapture ? launchOperationService.createOrReuse(
-            selectedAccount.accountId(),
-            selectedAccount.accountHash(),
-            selectedAccount.displayName(),
-            launcherMachineUuid,
-            world, true) : launchOperationService.createOrReuse(selectedAccount.accountId(),
-                selectedAccount.accountHash(), selectedAccount.displayName(), launcherMachineUuid, world);
+        packetCapture
+            ? launchOperationService.createOrReuse(
+                selectedAccount.accountId(),
+                selectedAccount.accountHash(),
+                selectedAccount.displayName(),
+                launcherMachineUuid,
+                world,
+                true)
+            : launchOperationService.createOrReuse(
+                selectedAccount.accountId(),
+                selectedAccount.accountHash(),
+                selectedAccount.displayName(),
+                launcherMachineUuid,
+                world);
     BuilderGoalLaunchOperationService.LaunchOperation operation = createResult.operation();
     if (createResult.deduplicated()) {
       logger.info(
@@ -445,7 +461,8 @@ public class BuilderGoalRunnerService {
                   world,
                   launcherMachineUuid,
                   null,
-                  forceRelaunch, packetCapture),
+                  forceRelaunch,
+                  packetCapture),
               leaseHandle,
               work,
               progress -> launchOperationService.updateProgress(operationId, progress));
@@ -2176,8 +2193,12 @@ public class BuilderGoalRunnerService {
     BuilderGoalRunStateMutationService.StopRequestResult stopResult =
         mutationService.requestStop(iterationId, reason);
     Integer entryId = stopResult.preservedEntryId();
+    recordRunStopRequestedEvent(iterationId, entryId, reason);
 
     if (stopResult.isPrePublish()) {
+      // requestStop has already committed the CANCELLED state. Record the terminal event only
+      // after RUN_STOP_REQUESTED so the durable timeline preserves causal ordering.
+      recordRunStoppedEvent(iterationId, reason);
       // Cancel pre-publish runs transactionally via the mutation service.
       // Flag and interrupt any active launch worker before removing from tracking.
       ActiveLaunchWork work = activeLaunchWork.get(iterationId);
@@ -2221,6 +2242,40 @@ public class BuilderGoalRunnerService {
             ? "Task removed before publish."
             : "Stop requested. Waiting for Micro6 to confirm cancellation.");
     return response;
+  }
+
+  /** Records the durable SC-260 stop-requested timeline event; never blocks run control. */
+  private void recordRunStopRequestedEvent(String iterationId, Integer entryId, String reason) {
+    if (runEventService == null) {
+      return;
+    }
+    try {
+      Map<String, Object> data = new LinkedHashMap<>();
+      if (entryId != null) {
+        data.put("entry_id", entryId);
+      }
+      runEventService.recordRunEvent(
+          iterationId, PatchLoopEventType.RUN_STOP_REQUESTED, reason, "WARN", data);
+    } catch (Exception e) {
+      logger.debug("SC-260 stop-requested event recording skipped: {}", e.getMessage());
+    }
+  }
+
+  /** Records completion of a pre-publish stop after its request event. */
+  private void recordRunStoppedEvent(String iterationId, String reason) {
+    if (runEventService == null) {
+      return;
+    }
+    try {
+      runEventService.recordRunEvent(
+          iterationId,
+          PatchLoopEventType.RUN_STOPPED,
+          firstNonBlank(reason, "Task cancelled before publish"),
+          "WARN",
+          null);
+    } catch (Exception e) {
+      logger.debug("SC-260 stopped event recording skipped: {}", e.getMessage());
+    }
   }
 
   public Map<String, Object> pauseRun(String iterationId) {

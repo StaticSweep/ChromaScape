@@ -38,6 +38,14 @@ public enum PatchLoopEventType {
   // State transition events
   STATE_TRANSITION,
 
+  // Builder Goal run control events (SC-260 unified run timeline)
+  RUN_PAUSED,
+  RUN_RESUMED,
+  RUN_STOP_REQUESTED,
+  RUN_STOPPED,
+  RUN_RISK_TRIGGERED,
+  RUN_STATUS_DEGRADED,
+
   // Error events
   ERROR,
   WARNING
