@@ -535,6 +535,45 @@ tasks.register("cleanAll") {
 	description = "Clean build artifacts and .chromascape directory"
 	dependsOn("clean", "cleanChromascape")
 }
+sourceSets.create("aiPlayerSchemaTest") {
+    java.srcDir("src/test/java/com/chromascape/web/aiplayer/schema")
+    resources.srcDir("src/test/resources")
+    compileClasspath += sourceSets.main.get().output
+    runtimeClasspath += sourceSets.main.get().output
+}
+configurations.named("aiPlayerSchemaTestImplementation") {
+    extendsFrom(configurations.testImplementation.get())
+}
+configurations.named("aiPlayerSchemaTestRuntimeOnly") {
+    extendsFrom(configurations.testRuntimeOnly.get())
+}
+tasks.register<Test>("aiPlayerSchemaTest") {
+    group = "verification"
+    description = "Verifies the current AI Player schema against disposable PostgreSQL"
+    testClassesDirs = sourceSets["aiPlayerSchemaTest"].output.classesDirs
+    classpath = sourceSets["aiPlayerSchemaTest"].runtimeClasspath
+    useJUnitPlatform()
+}
+tasks.register<JavaExec>("aiPlayerSchemaExport") {
+    group = "development"
+    description = "Exports current mapped DDL for review; never connects to a database"
+    classpath = sourceSets["aiPlayerSchemaTest"].runtimeClasspath
+    mainClass.set("com.chromascape.web.aiplayer.schema.CurrentEntityMappings")
+    args(layout.buildDirectory.file("ai-player-schema/entities.sql").get().asFile.absolutePath)
+}
+tasks.register<JavaExec>("aiPlayerSchema") {
+    group = "development"
+    description = "Guarded AI Player development bootstrap/verify/reset (see docs/SC-665-CURRENT-SCHEMA.md)"
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("com.chromascape.web.aiplayer.schema.AiPlayerSchemaCli")
+    args(providers.gradleProperty("schemaAction").getOrElse("verify"))
+}
+tasks.register<JavaExec>("aiPlayerSchemaFingerprintExport") {
+    group = "development"
+    description = "Prints a candidate fingerprint for review on an explicitly disposable test database"
+    classpath = sourceSets["aiPlayerSchemaTest"].runtimeClasspath
+    mainClass.set("com.chromascape.web.aiplayer.schema.SchemaFingerprintExport")
+}
 
 // ---------------------------------------------------------------------------
 // SC-1662 - Linux RemoteInput native build, staging and verification.

@@ -42,19 +42,19 @@ public class SourceManifestReference {
   @Column(name = "snapshot_id", nullable = false, length = 40)
   private String snapshotId;
 
-  @Column(name = "repository_id", nullable = false, length = 200)
+  @Column(name = "repository_id", length = 200)
   private String repositoryId;
 
-  @Column(name = "commit_id", nullable = false, length = 64)
+  @Column(name = "commit_id", length = 64)
   private String commitId;
 
-  @Column(name = "tree_id", nullable = false, length = 64)
+  @Column(name = "tree_id", length = 64)
   private String treeId;
 
-  @Column(name = "build_id", nullable = false, length = 200)
+  @Column(name = "build_id", length = 200)
   private String buildId;
 
-  @Column(name = "artifact_digest", nullable = false, length = 71)
+  @Column(name = "artifact_digest", length = 71)
   private String artifactDigest;
 
   @Column(name = "verification_state", nullable = false, length = 40)
@@ -63,13 +63,13 @@ public class SourceManifestReference {
   @Column(name = "source_provenance", nullable = false, length = 40)
   private String sourceProvenance;
 
-  @Column(name = "retention_class", nullable = false, length = 40)
+  @Column(name = "retention_class", length = 40)
   private String retentionClass;
 
-  @Column(name = "confidentiality", nullable = false, length = 40)
+  @Column(name = "confidentiality", length = 40)
   private String confidentiality;
 
-  @Column(name = "environment", nullable = false, length = 120)
+  @Column(name = "environment", length = 120)
   private String environment;
 
   @Column(name = "created_at", nullable = false)
