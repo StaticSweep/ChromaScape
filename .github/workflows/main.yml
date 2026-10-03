@@ -15,6 +15,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      # The canonical SC-967 vectors live in a separate private repository. Pin the
+      # same committed fixture used by local verification instead of using a host path.
+      - name: Require shared contracts credential
+        env:
+          CONTRACTS_READ_TOKEN: ${{ secrets.CONTRACTS_READ_TOKEN }}
+        run: |
+          if [ -z "$CONTRACTS_READ_TOKEN" ]; then
+            echo "::error::Configure CONTRACTS_READ_TOKEN with read-only Contents access to ikiddoi/contracts."
+            exit 1
+          fi
+
+      - name: Checkout canonical shared contracts
+        uses: actions/checkout@v3
+        with:
+          repository: ikiddoi/contracts
+          ref: 7f4fa47ea3f195ff12ca759a0c556b21fedbfc9f
+          path: shared-contracts
+          token: ${{ secrets.CONTRACTS_READ_TOKEN }}
+          persist-credentials: false
+
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
@@ -25,4 +45,4 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Run Spotless + Checkstyle
-        run: ./gradlew check
+        run: ./gradlew check -Psc967VectorsPath=shared-contracts/sc967/ed25519-vectors.json

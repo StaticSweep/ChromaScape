@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.compiler.ScenarioCompilerJsonbRoundTripTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:41:26.906Z" hostname="fedora" time="0.024">
+  <properties/>
+  <testcase name="concurrentIdenticalCompilesReturnTheCommittedWinner()" classname="com.chromascape.web.replay.compiler.ScenarioCompilerJsonbRoundTripTest" time="0.008"/>
+  <testcase name="recordedEvidenceMissingWorldIdentityBlocksCompilation()" classname="com.chromascape.web.replay.compiler.ScenarioCompilerJsonbRoundTripTest" time="0.002"/>
+  <testcase name="jsonbKeyReorderingRemainsIdempotentInsteadOfColliding()" classname="com.chromascape.web.replay.compiler.ScenarioCompilerJsonbRoundTripTest" time="0.005"/>
+  <testcase name="npcsWithoutExplicitStableIdsBlockCompilation()" classname="com.chromascape.web.replay.compiler.ScenarioCompilerJsonbRoundTripTest" time="0.003"/>
+  <testcase name="syntheticCollisionWithDifferentCanonicalContentFailsClosed()" classname="com.chromascape.web.replay.compiler.ScenarioCompilerJsonbRoundTripTest" time="0.005"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

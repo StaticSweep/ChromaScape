@@ -1,0 +1,167 @@
+> Task :compileJava UP-TO-DATE
+> Task :copyNativeLibraries SKIPPED
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+
+> Task :compileReplayTestJava
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: <host-workspace>/ChromaScape-sc1663-review/src/test/java/com/chromascape/web/debug/tickdebugger/controller/TickReplayControllerTest.java uses unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+
+> Task :processReplayTestResources
+> Task :replayTestClasses
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :replayTest
+
+XrspsStartupValidatorTest > verifyVersionsRejectsForbiddenCapabilitiesInsteadOfMaskingThem() FAILED
+    org.opentest4j.AssertionFailedError at XrspsStartupValidatorTest.java:35
+
+XrspsStartupValidatorTest > parseManifestPreservesSecurityAndCapabilityFields() FAILED
+    org.opentest4j.AssertionFailedError at XrspsStartupValidatorTest.java:23
+
+ReplayMigrationIntegrationTest > v19RejectsConflictingOldAndNewChecksums() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:86
+
+ReplayMigrationIntegrationTest > freshHibernateManagedTablesConvergeAfterFlywayAndRemainStableOnRepeatStartup() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:86
+
+ReplayMigrationIntegrationTest > v21AllowsNullAttemptIdButKeepsTheForeignKey() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:86
+
+ReplayMigrationIntegrationTest > v31CreatesPlaybackIndexesWhenDebuggerTablesExist() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:86
+
+ReplayMigrationIntegrationTest > v19BackfillsAndDropsWhenBothColumnsHoldEqualValues() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:86
+
+ReplayMigrationIntegrationTest > v19AcceptsNewColumnOnlyState() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:86
+
+ReplayMigrationIntegrationTest > v21AppliesOnAV20UpgradedDatabase() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:86
+
+ReplayMigrationIntegrationTest > v19ConvergesFromOldColumnOnlyState() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:86
+
+ReplayMigrationIntegrationTest > replayChainThroughV31AppliesOnEmptyDatabase() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:86
+
+ReplayPostgresIntegrationTest > initializationError FAILED
+    java.lang.IllegalStateException at DockerClientProviderStrategy.java:229
+
+XrspsProcessLaunchDiagnosticsTest > resolvedNodeProcessBuilderAndKernelLaunchesShareTheSameWindowsPaths() FAILED
+    java.io.IOException at XrspsProcessLaunchDiagnosticsTest.java:232
+        Caused by: java.io.IOException at XrspsProcessLaunchDiagnosticsTest.java:232
+
+ReplayPlaybackCatalogRepositoryIntegrationTest > initializationError FAILED
+    java.lang.IllegalStateException at DockerClientProviderStrategy.java:229
+
+ReplayPlaybackParityIntegrationTest > initializationError FAILED
+    java.lang.IllegalStateException at DockerClientProviderStrategy.java:229
+
+270 tests completed, 15 failed
+
+> Task :replayTest FAILED
+
+[Incubating] Problems report is available at: file://<host-workspace>/ChromaScape-sc1663-review/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':replayTest'.
+> There were failing tests. See the report at: file://<host-workspace>/ChromaScape-sc1663-review/build/reports/tests/replayTest/index.html
+
+* Try:
+> Run with --scan to get full insights.
+
+BUILD FAILED in 29s
+5 actionable tasks: 3 executed, 2 up-to-date
+REPLAY_HEAD_EXIT=1
+
+> Task :compileJava
+Note: Processing Log4j annotations
+Note: Annotations processed
+Note: Processing Log4j annotations
+Note: No elements to process
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+
+> Task :copyNativeLibraries SKIPPED
+> Task :processResources UP-TO-DATE
+> Task :classes
+> Task :compileReplayTestJava UP-TO-DATE
+> Task :processReplayTestResources UP-TO-DATE
+> Task :replayTestClasses UP-TO-DATE
+
+> Task :replayTest
+
+XrspsStartupValidatorTest > verifyVersionsRejectsForbiddenCapabilitiesInsteadOfMaskingThem() FAILED
+    org.opentest4j.AssertionFailedError at XrspsStartupValidatorTest.java:35
+
+XrspsStartupValidatorTest > parseManifestPreservesSecurityAndCapabilityFields() FAILED
+    org.opentest4j.AssertionFailedError at XrspsStartupValidatorTest.java:23
+
+ReplayMigrationIntegrationTest > v19RejectsConflictingOldAndNewChecksums() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:86
+
+ReplayMigrationIntegrationTest > freshHibernateManagedTablesConvergeAfterFlywayAndRemainStableOnRepeatStartup() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:86
+
+ReplayMigrationIntegrationTest > v21AllowsNullAttemptIdButKeepsTheForeignKey() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:86
+
+ReplayMigrationIntegrationTest > v31CreatesPlaybackIndexesWhenDebuggerTablesExist() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:86
+
+ReplayMigrationIntegrationTest > v19BackfillsAndDropsWhenBothColumnsHoldEqualValues() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:86
+
+ReplayMigrationIntegrationTest > v19AcceptsNewColumnOnlyState() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:86
+
+ReplayMigrationIntegrationTest > v21AppliesOnAV20UpgradedDatabase() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:86
+
+ReplayMigrationIntegrationTest > v19ConvergesFromOldColumnOnlyState() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:86
+
+ReplayMigrationIntegrationTest > replayChainThroughV31AppliesOnEmptyDatabase() FAILED
+    java.lang.IllegalStateException at ReplayMigrationIntegrationTest.java:86
+
+ReplayPostgresIntegrationTest > initializationError FAILED
+    java.lang.IllegalStateException at DockerClientProviderStrategy.java:229
+
+XrspsProcessLaunchDiagnosticsTest > resolvedNodeProcessBuilderAndKernelLaunchesShareTheSameWindowsPaths() FAILED
+    java.io.IOException at XrspsProcessLaunchDiagnosticsTest.java:232
+        Caused by: java.io.IOException at XrspsProcessLaunchDiagnosticsTest.java:232
+
+ReplayPlaybackCatalogRepositoryIntegrationTest > initializationError FAILED
+    java.lang.IllegalStateException at DockerClientProviderStrategy.java:229
+
+ReplayPlaybackParityIntegrationTest > initializationError FAILED
+    java.lang.IllegalStateException at DockerClientProviderStrategy.java:229
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :replayTest FAILED
+
+270 tests completed, 15 failed
+
+[Incubating] Problems report is available at: file://<host-workspace>/ChromaScape-sc1663-review/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':replayTest'.
+> There were failing tests. See the report at: file://<host-workspace>/ChromaScape-sc1663-review/build/reports/tests/replayTest/index.html
+
+* Try:
+> Run with --scan to get full insights.
+
+BUILD FAILED in 37s
+5 actionable tasks: 2 executed, 3 up-to-date
+REPLAY_BASE_EXIT=1

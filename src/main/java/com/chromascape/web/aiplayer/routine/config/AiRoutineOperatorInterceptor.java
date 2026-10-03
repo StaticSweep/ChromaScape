@@ -1,14 +1,13 @@
 package com.chromascape.web.aiplayer.routine.config;
 
 import com.chromascape.web.aiplayer.routine.AiRoutineOperatorContext;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
-
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Requires a constant-time-verified {@code Authorization: Bearer <token>} on the candidate workflow
@@ -31,7 +30,8 @@ public class AiRoutineOperatorInterceptor implements HandlerInterceptor {
     // require the operator token. Capture endpoints are excluded at registration and keep their
     // separate capture token.
     String method = request.getMethod();
-    if ("GET".equalsIgnoreCase(method) || "HEAD".equalsIgnoreCase(method)
+    if ("GET".equalsIgnoreCase(method)
+        || "HEAD".equalsIgnoreCase(method)
         || "OPTIONS".equalsIgnoreCase(method)) {
       return true;
     }
@@ -39,7 +39,10 @@ public class AiRoutineOperatorInterceptor implements HandlerInterceptor {
     if (expected == null || expected.isBlank()) {
       response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
       response.setContentType("application/json");
-      response.getWriter().write("{\"code\":\"OPERATOR_AUTH_NOT_CONFIGURED\",\"message\":\"ai-routine.operator-token is not configured\"}");
+      response
+          .getWriter()
+          .write(
+              "{\"code\":\"OPERATOR_AUTH_NOT_CONFIGURED\",\"message\":\"ai-routine.operator-token is not configured\"}");
       return false;
     }
     String authorization = request.getHeader("Authorization");
@@ -59,7 +62,9 @@ public class AiRoutineOperatorInterceptor implements HandlerInterceptor {
   private static void reject(HttpServletResponse response) throws Exception {
     response.setStatus(HttpStatus.UNAUTHORIZED.value());
     response.setContentType("application/json");
-    response.getWriter().write("{\"code\":\"UNAUTHORIZED\",\"message\":\"operator bearer token is invalid\"}");
+    response
+        .getWriter()
+        .write("{\"code\":\"UNAUTHORIZED\",\"message\":\"operator bearer token is invalid\"}");
   }
 
   private static boolean constantTimeEquals(String expected, String supplied) {

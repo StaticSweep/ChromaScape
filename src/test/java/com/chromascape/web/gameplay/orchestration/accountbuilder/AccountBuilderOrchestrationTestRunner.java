@@ -9,6 +9,7 @@ public final class AccountBuilderOrchestrationTestRunner {
     run(test, "heldAndShadowAreIdempotentAndNeverCallGateway");
     run(test, "exactDeliveryConsumesAuthorityAndDispatchesOnce");
     run(test, "authorityOwnershipIsCommittedBeforeReserveAndPreventsRedispatchAfterFailure");
+    run(test, "noLeaseReservationUncertaintyUsesLookupOnlyReconciliation");
     run(test, "duplicateReceiptIsIdempotentAndLeaseTupleCannotBeReplaced");
     run(test, "conflictingIdentityFailsBeforeASecondGatewayCall");
     run(test, "acknowledgedNonTerminalDeliveryFailsClosedAsNeedsReconciliation");
@@ -21,7 +22,7 @@ public final class AccountBuilderOrchestrationTestRunner {
         new AccountBuilderOrchestrationConcurrencyTest();
     run(concurrency, "identicalClaimsHaveOneFingerprintBoundOwner");
     run(concurrency, "conflictingAuthorityClaimsHaveOneDurableOwner");
-    System.out.println("SC-1431 focused tests: 13/13 PASS");
+    System.out.println("SC-1431 focused tests: 14/14 PASS");
   }
 
   private static void run(AccountBuilderOrchestrationServiceTest test, String method)

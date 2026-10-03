@@ -233,13 +233,28 @@ public class PatchLoopIteration {
   @Column(name = "parent_iteration_id", length = 100)
   private String parentIterationId;
 
-  /** Latest Micro6 task source revision applied to this run family. */
+  /**
+   * Latest Micro6 task source revision applied to this run family.
+   *
+   * <p>This is <em>patch lineage</em>, not source binding: it is written only when a patch is
+   * applied or imported, so an ordinary dispatch run that never patched source leaves it null. The
+   * run's source binding lives in {@code source_run_bindings}; see {@link #sourceBindingState}.
+   */
   @Column(name = "micro6_revision_id", length = 100)
   private String micro6RevisionId;
 
   /** Timestamp of the last Micro6 source patch apply. */
   @Column(name = "micro6_patched_at")
   private LocalDateTime micro6PatchedAt;
+
+  /**
+   * Outcome of binding this run to a verified source snapshot: {@code BOUND}, {@code
+   * NOT_CONFIGURED}, {@code FAILED}, or null for runs predating the column. The binding itself is
+   * the {@code source_run_bindings} row; this records the outcome so an unbound run is explicit
+   * rather than indistinguishable from one never checked.
+   */
+  @Column(name = "source_binding_state", length = 40)
+  private String sourceBindingState;
 
   public PatchLoopIteration() {
     this.createdAt = LocalDateTime.now();
@@ -730,6 +745,14 @@ public class PatchLoopIteration {
 
   public void setMicro6PatchedAt(LocalDateTime micro6PatchedAt) {
     this.micro6PatchedAt = micro6PatchedAt;
+  }
+
+  public String getSourceBindingState() {
+    return sourceBindingState;
+  }
+
+  public void setSourceBindingState(String sourceBindingState) {
+    this.sourceBindingState = sourceBindingState;
   }
 
   /** Increments the current attempt counter. */

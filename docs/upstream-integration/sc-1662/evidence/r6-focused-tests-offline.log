@@ -1,0 +1,15 @@
+> Task :cleanTest
+> Task :compileJava UP-TO-DATE
+> Task :copyNativeLibraries SKIPPED
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileTestJava UP-TO-DATE
+> Task :processTestResources UP-TO-DATE
+> Task :testClasses UP-TO-DATE
+
+> Task :test
+SC-967 vectors: <contracts>/ed25519-vectors.json
+
+BUILD SUCCESSFUL in 8s
+6 actionable tasks: 2 executed, 4 up-to-date
+EXIT=0

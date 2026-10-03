@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.screen.window.RenderedBufferIsolationTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:16.311Z" hostname="fedora" time="0.009">
+  <properties/>
+  <testcase name="runtimeBridgeHasNoPlatformNativeReference()" classname="com.chromascape.utils.core.screen.window.RenderedBufferIsolationTest" time="0.001"/>
+  <testcase name="platformNeutralFacadeHasNoWin32AbiReference()" classname="com.chromascape.utils.core.screen.window.RenderedBufferIsolationTest" time="0.001"/>
+  <testcase name="windowsCaptureHasNoRemoteInputAbiReference()" classname="com.chromascape.utils.core.screen.window.RenderedBufferIsolationTest" time="0.007"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

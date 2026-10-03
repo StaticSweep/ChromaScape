@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.accounttask.service.StabilizationIngestionServiceTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:39:14.245Z" hostname="fedora" time="0.06">
+  <properties/>
+  <testcase name="direct bundle sources require an exact checksum-addressed extension" classname="com.chromascape.web.accounttask.service.StabilizationIngestionServiceTest" time="0.004"/>
+  <testcase name="getRunByRunId returns the stored run" classname="com.chromascape.web.accounttask.service.StabilizationIngestionServiceTest" time="0.004"/>
+  <testcase name="listOpenTriage returns unresolved rows from the repository" classname="com.chromascape.web.accounttask.service.StabilizationIngestionServiceTest" time="0.004"/>
+  <testcase name="ingestReliabilityMatrix rejects unknown schema versions" classname="com.chromascape.web.accounttask.service.StabilizationIngestionServiceTest" time="0.004"/>
+  <testcase name="computeKpis reports pass rate and open triage count" classname="com.chromascape.web.accounttask.service.StabilizationIngestionServiceTest" time="0.005"/>
+  <testcase name="ingestHarnessManifest stores a versioned run with all identities" classname="com.chromascape.web.accounttask.service.StabilizationIngestionServiceTest" time="0.009"/>
+  <testcase name="ingestReport stores runs and creates triage rows for failures" classname="com.chromascape.web.accounttask.service.StabilizationIngestionServiceTest" time="0.008"/>
+  <testcase name="ingestReliabilityMatrix stores snapshots for each group" classname="com.chromascape.web.accounttask.service.StabilizationIngestionServiceTest" time="0.009"/>
+  <testcase name="ingestHarnessManifest rejects unknown schema versions" classname="com.chromascape.web.accounttask.service.StabilizationIngestionServiceTest" time="0.004"/>
+  <testcase name="resolveTriage marks the row as resolved" classname="com.chromascape.web.accounttask.service.StabilizationIngestionServiceTest" time="0.004"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

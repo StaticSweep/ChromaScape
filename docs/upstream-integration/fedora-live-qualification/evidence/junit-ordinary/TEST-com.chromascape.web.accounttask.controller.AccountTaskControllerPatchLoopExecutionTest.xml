@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.accounttask.controller.AccountTaskControllerPatchLoopExecutionTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:17.620Z" hostname="fedora" time="0.666">
+  <properties/>
+  <testcase name="executePatchLoop returns 400 when LOG evidence is missing" classname="com.chromascape.web.accounttask.controller.AccountTaskControllerPatchLoopExecutionTest" time="0.607"/>
+  <testcase name="executePatchLoop returns updated item with EXECUTING status and iterationId" classname="com.chromascape.web.accounttask.controller.AccountTaskControllerPatchLoopExecutionTest" time="0.009"/>
+  <testcase name="quickTestItem does not require approval or evidence triplet" classname="com.chromascape.web.accounttask.controller.AccountTaskControllerPatchLoopExecutionTest" time="0.007"/>
+  <testcase name="executePatchLoop returns 200 and marks executing when valid request" classname="com.chromascape.web.accounttask.controller.AccountTaskControllerPatchLoopExecutionTest" time="0.004"/>
+  <testcase name="executePatchLoop uses override scriptName and prompt when provided" classname="com.chromascape.web.accounttask.controller.AccountTaskControllerPatchLoopExecutionTest" time="0.006"/>
+  <testcase name="executePatchLoop normalizes taskMetadata task_key from legacy task_name" classname="com.chromascape.web.accounttask.controller.AccountTaskControllerPatchLoopExecutionTest" time="0.006"/>
+  <testcase name="executePatchLoop returns 400 when evidence triplet missing" classname="com.chromascape.web.accounttask.controller.AccountTaskControllerPatchLoopExecutionTest" time="0.005"/>
+  <testcase name="executePatchLoop returns 400 when RECORDING_SESSION evidence is missing" classname="com.chromascape.web.accounttask.controller.AccountTaskControllerPatchLoopExecutionTest" time="0.005"/>
+  <testcase name="executePatchLoop returns 400 when item not approved" classname="com.chromascape.web.accounttask.controller.AccountTaskControllerPatchLoopExecutionTest" time="0.005"/>
+  <testcase name="executePatchLoop returns 400 when TICK_LOG evidence is missing" classname="com.chromascape.web.accounttask.controller.AccountTaskControllerPatchLoopExecutionTest" time="0.004"/>
+  <testcase name="executePatchLoop returns 400 when item not found" classname="com.chromascape.web.accounttask.controller.AccountTaskControllerPatchLoopExecutionTest" time="0.005"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

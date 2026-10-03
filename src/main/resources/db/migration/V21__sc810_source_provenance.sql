@@ -6,21 +6,26 @@ CREATE TABLE IF NOT EXISTS source_manifest_references (
     schema_version VARCHAR(80) NOT NULL,
     manifest_hash VARCHAR(71) NOT NULL,
     snapshot_id VARCHAR(40) NOT NULL,
-    repository_id VARCHAR(200),
-    commit_id VARCHAR(64),
-    tree_id VARCHAR(64),
-    build_id VARCHAR(200),
-    artifact_digest VARCHAR(71),
+    repository_id VARCHAR(200) NOT NULL,
+    commit_id VARCHAR(64) NOT NULL,
+    tree_id VARCHAR(64) NOT NULL,
+    build_id VARCHAR(200) NOT NULL,
+    artifact_digest VARCHAR(71) NOT NULL,
     verification_state VARCHAR(40) NOT NULL,
     source_provenance VARCHAR(40) NOT NULL,
-    retention_class VARCHAR(40),
-    confidentiality VARCHAR(40),
-    environment VARCHAR(120),
+    retention_class VARCHAR(40) NOT NULL,
+    confidentiality VARCHAR(40) NOT NULL,
+    environment VARCHAR(120) NOT NULL,
     created_at TIMESTAMP NOT NULL,
     pruned_at TIMESTAMP,
     redacted_at TIMESTAMP,
     manifest_json TEXT NOT NULL
 );
+ALTER TABLE source_manifest_references
+    ADD CONSTRAINT ck_source_manifest_references_verification_state
+        CHECK (verification_state = 'VERIFIED'),
+    ADD CONSTRAINT ck_source_manifest_references_source_provenance
+        CHECK (source_provenance = 'VERIFIED');
 CREATE UNIQUE INDEX IF NOT EXISTS uk_source_manifest_references_manifest_hash
     ON source_manifest_references (manifest_hash);
 CREATE UNIQUE INDEX IF NOT EXISTS uk_source_manifest_references_snapshot_id
@@ -33,16 +38,24 @@ CREATE TABLE IF NOT EXISTS source_run_bindings (
     task_key VARCHAR(160) NOT NULL,
     manifest_hash VARCHAR(71) NOT NULL,
     snapshot_id VARCHAR(40) NOT NULL,
-    artifact_digest VARCHAR(71),
-    environment VARCHAR(120),
+    repository_id VARCHAR(200) NOT NULL,
+    commit_id VARCHAR(64) NOT NULL,
+    tree_id VARCHAR(64) NOT NULL,
+    build_id VARCHAR(200) NOT NULL,
+    artifact_digest VARCHAR(71) NOT NULL,
+    environment VARCHAR(120) NOT NULL,
     verification_state VARCHAR(40) NOT NULL,
     source_provenance VARCHAR(40) NOT NULL,
     created_at TIMESTAMP NOT NULL
 );
+ALTER TABLE source_run_bindings
+    ADD CONSTRAINT ck_source_run_bindings_verification_state
+        CHECK (verification_state = 'VERIFIED'),
+    ADD CONSTRAINT ck_source_run_bindings_source_provenance
+        CHECK (source_provenance = 'VERIFIED');
 CREATE UNIQUE INDEX IF NOT EXISTS uk_source_run_bindings_run_id ON source_run_bindings (run_id);
 CREATE UNIQUE INDEX IF NOT EXISTS uk_source_run_bindings_recording_id
     ON source_run_bindings (recording_id) WHERE recording_id IS NOT NULL;
-ALTER TABLE source_run_bindings ADD COLUMN IF NOT EXISTS environment VARCHAR(120);
 
 -- Content-addressed bytes are immutable.  Retention markers are the only mutable fields, and
 -- they may move only from NULL to a timestamp.  A content object can be shared by several
@@ -153,6 +166,10 @@ BEGIN
        OR NEW.task_key IS DISTINCT FROM OLD.task_key
        OR NEW.manifest_hash IS DISTINCT FROM OLD.manifest_hash
        OR NEW.snapshot_id IS DISTINCT FROM OLD.snapshot_id
+       OR NEW.repository_id IS DISTINCT FROM OLD.repository_id
+       OR NEW.commit_id IS DISTINCT FROM OLD.commit_id
+       OR NEW.tree_id IS DISTINCT FROM OLD.tree_id
+       OR NEW.build_id IS DISTINCT FROM OLD.build_id
        OR NEW.artifact_digest IS DISTINCT FROM OLD.artifact_digest
        OR NEW.environment IS DISTINCT FROM OLD.environment
        OR NEW.verification_state IS DISTINCT FROM OLD.verification_state
@@ -199,4 +216,3 @@ CREATE INDEX IF NOT EXISTS idx_source_read_audit_run_created
 CREATE INDEX IF NOT EXISTS idx_source_read_audit_snapshot_created
     ON source_read_audit_events (snapshot_id, created_at);
 ALTER TABLE source_read_audit_events ADD COLUMN IF NOT EXISTS content_hash VARCHAR(71);
-

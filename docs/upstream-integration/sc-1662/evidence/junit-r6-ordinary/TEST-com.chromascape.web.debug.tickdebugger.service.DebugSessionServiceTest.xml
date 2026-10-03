@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.tickdebugger.service.DebugSessionServiceTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:40:59.434Z" hostname="fedora" time="0.342">
+  <properties/>
+  <testcase name="rollback_newSessionStopsRecordingAndFinalizes()" classname="com.chromascape.web.debug.tickdebugger.service.DebugSessionServiceTest" time="0.289"/>
+  <testcase name="rollback_reusedSessionRestoresPriorFields()" classname="com.chromascape.web.debug.tickdebugger.service.DebugSessionServiceTest" time="0.003"/>
+  <testcase name="startWithOutcome_missingPreferredCreatesNewSession()" classname="com.chromascape.web.debug.tickdebugger.service.DebugSessionServiceTest" time="0.002"/>
+  <testcase name="startWithOutcome_noPreferredCreatesNewSession()" classname="com.chromascape.web.debug.tickdebugger.service.DebugSessionServiceTest" time="0.001"/>
+  <testcase name="startWithOutcome_reusedSessionWithoutRecordingStartsOwnedRecording()" classname="com.chromascape.web.debug.tickdebugger.service.DebugSessionServiceTest" time="0.002"/>
+  <testcase name="startWithOutcome_reusesActivePreferredSession()" classname="com.chromascape.web.debug.tickdebugger.service.DebugSessionServiceTest" time="0.001"/>
+  <testcase name="startWithOutcome_recordingFailureDegradesWithoutClaimingOwnership()" classname="com.chromascape.web.debug.tickdebugger.service.DebugSessionServiceTest" time="0.002"/>
+  <testcase name="rollback_reusedSessionRefusesToOverwriteNewerRecording()" classname="com.chromascape.web.debug.tickdebugger.service.DebugSessionServiceTest" time="0.002"/>
+  <testcase name="toSummaries_emptyList_returnsEmpty()" classname="com.chromascape.web.debug.tickdebugger.service.DebugSessionServiceTest" time="0.001"/>
+  <testcase name="toSummaries_usesGroupedCountQueriesAndMergesCounts()" classname="com.chromascape.web.debug.tickdebugger.service.DebugSessionServiceTest" time="0.032"/>
+  <testcase name="startWithOutcome_reusesExistingRecordingWithoutRestart()" classname="com.chromascape.web.debug.tickdebugger.service.DebugSessionServiceTest" time="0.002"/>
+  <testcase name="startWithOutcome_inactivePreferredCreatesNewSession()" classname="com.chromascape.web.debug.tickdebugger.service.DebugSessionServiceTest" time="0.001"/>
+  <testcase name="rollback_repeatedIsHarmless()" classname="com.chromascape.web.debug.tickdebugger.service.DebugSessionServiceTest" time="0.002"/>
+  <system-out><![CDATA[12:40:59.720 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Created debug session in STARTING state: sessionId=debug_21859ebf638d4791b8ff5a1fded436b5, account=acct, script=script
+12:40:59.721 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Started recording rec_new for debug session debug_21859ebf638d4791b8ff5a1fded436b5
+12:40:59.721 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Debug session transitioned to RECORDING: sessionId=debug_21859ebf638d4791b8ff5a1fded436b5, state=RECORDING, recording=rec_new
+12:40:59.722 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Start rollback finalized newly created session: reason=test rollback
+12:40:59.725 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Binding recording to preferred active session debug_pref
+12:40:59.725 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Started recording rec_new for debug session debug_pref
+12:40:59.725 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Debug session transitioned to RECORDING: sessionId=debug_pref, state=RECORDING, recording=rec_new
+12:40:59.726 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Start rollback restored reused session recording/lifecycle state: reason=test rollback
+12:40:59.727 [Test worker] WARN  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Preferred session missing not active/found, falling back
+12:40:59.727 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Created debug session in STARTING state: sessionId=debug_126b974f48f047e98a4c0f760bc1d6ef, account=acct, script=script
+12:40:59.727 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Debug session transitioned to RECORDING: sessionId=debug_126b974f48f047e98a4c0f760bc1d6ef, state=RECORDING, recording=null
+12:40:59.729 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Created debug session in STARTING state: sessionId=debug_5360c89e51234d7c9964997d96b51d52, account=acct, script=script
+12:40:59.729 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Debug session transitioned to RECORDING: sessionId=debug_5360c89e51234d7c9964997d96b51d52, state=RECORDING, recording=null
+12:40:59.730 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Binding recording to preferred active session debug_pref
+12:40:59.730 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Started recording rec_new for debug session debug_pref
+12:40:59.730 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Debug session transitioned to RECORDING: sessionId=debug_pref, state=RECORDING, recording=rec_new
+12:40:59.732 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Binding recording to preferred active session debug_pref
+12:40:59.732 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Started recording rec_new for debug session debug_pref
+12:40:59.732 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Debug session transitioned to RECORDING: sessionId=debug_pref, state=RECORDING, recording=rec_new
+12:40:59.734 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Created debug session in STARTING state: sessionId=debug_ecec1e00d76d4b868580f7669928820e, account=acct, script=script
+12:40:59.735 [Test worker] WARN  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Recording unavailable for debug session debug_ecec1e00d76d4b868580f7669928820e; continuing tick-only: no frame
+12:40:59.735 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Debug session transitioned to RECORDING: sessionId=debug_ecec1e00d76d4b868580f7669928820e, state=RECORDING, recording=null
+12:40:59.736 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Binding recording to preferred active session debug_pref
+12:40:59.736 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Started recording rec_new for debug session debug_pref
+12:40:59.736 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Debug session transitioned to RECORDING: sessionId=debug_pref, state=RECORDING, recording=rec_new
+12:40:59.771 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Binding recording to preferred active session debug_pref
+12:40:59.771 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Reusing existing recording rec_existing for debug session debug_pref
+12:40:59.772 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Debug session transitioned to RECORDING: sessionId=debug_pref, state=RECORDING, recording=rec_existing
+12:40:59.773 [Test worker] WARN  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Preferred session debug_pref not active/found, falling back
+12:40:59.773 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Created debug session in STARTING state: sessionId=debug_0c1d6d80917b47388fed2424ab228284, account=acct, script=script
+12:40:59.773 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Debug session transitioned to RECORDING: sessionId=debug_0c1d6d80917b47388fed2424ab228284, state=RECORDING, recording=null
+12:40:59.775 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Binding recording to preferred active session debug_pref
+12:40:59.775 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Started recording rec_new for debug session debug_pref
+12:40:59.775 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Debug session transitioned to RECORDING: sessionId=debug_pref, state=RECORDING, recording=rec_new
+12:40:59.775 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Start rollback restored reused session recording/lifecycle state: reason=first
+12:40:59.775 [Test worker] DEBUG com.chromascape.web.debug.tickdebugger.service.DebugSessionService - Start rollback already applied for reused session; nothing to do
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

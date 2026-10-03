@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" tests="96" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:55.666Z" hostname="fedora" time="1.481">
+  <properties/>
+  <testcase name="importPayload_legacyRawSettingsStripReservedTransportFields()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.727"/>
+  <testcase name="launchAccount_rejectsOfflineMachineBeforePreparation()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.008"/>
+  <testcase name="launchAccount_marksFailedWhenPreparationThrows()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.009"/>
+  <testcase name="importPayload_nestedTaskMetadataSettingsIsUsed()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="syncPublishedRuns_recoversLateAcceptedPublishFromPublishFailed()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.01"/>
+  <testcase name="publishOnly_publishesWhenMicro6HealthIsPublishReady()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.019"/>
+  <testcase name="publishOnly_usesMatchingHeartbeatClientAsTarget()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.011"/>
+  <testcase name="listRuns_enablesFixWhenAnalysisProducedPatch()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="launchAccount_acceptsWorldBounds300And700()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.007"/>
+  <testcase name="publishOnly_publishesWithoutLaunchCredentialsToExistingExecutor()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.01"/>
+  <testcase name="importPayload_rejectsNonObjectSettingsEnvelope()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.004"/>
+  <testcase name="launchAccount_cancellationAfterWatchdogTerminalizationLeavesOperationUnchanged()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="openRecoveryWorkspace_restoresPersistedActiveRangeAndSelectedEvidence()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.016"/>
+  <testcase name="importPayload_nonEmptySettingsEnvelopeIsPreserved()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="startRun_rejectsBeforePersistenceWhenLaunchCredentialsAreMissing()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="pendingLaunchCancellationWithAlreadyTerminalIterationPerformsNoTransition()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.008"/>
+  <testcase name="syncPublishedRuns_handlesAssignedStatus()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="publishOnly_neverInvokesPreparationValidationOrLaunch()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.012"/>
+  <testcase name="launchAccount_rejectsRemoteMachineBeforePreparation()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="startRun_emptySettingsRoundTripIsConsistent()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.009"/>
+  <testcase name="startRun_skipsLiveTargetCatalogFetchAndPublishesWithNoCache()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.007"/>
+  <testcase name="launchAccount_rejectsMissingHashSchemeBeforePreparation()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="statusMapping_handlesPublishingState()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.004"/>
+  <testcase name="publishOnly_rejectsLaunchFallbackWhenLaunchCredentialsAreMissing()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="syncPublishedRuns_doesNotRecoverUnreachableExecutorButRotatesAttemptTimestamp()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="launchAccount_hashMismatchOverridesMatchingName()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="runSummary_pausedStatusSurvivesSummaryGenerationAndRemainsStoppable()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="pendingLaunch_leaseConflictPersistsWaitingForLeaseAndDoesNotFail()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="launchAccount_rejectsUnknownMachineUuid()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="statusMapping_includesAssigned()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="launchAccount_acceptsValidLocalMachineAndPrepares()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="startRun_rejectsRemoteMachineBeforePersistence()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="getRecoveryState_includesChildRunSummary()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="launchAccount_passesRealCancellationToPreparation()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="importPayload_acceptsMicro6CatalogKeyAlias()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.008"/>
+  <testcase name="publishOnly_requiresRunnableLocalMachineWhenLaunchFallbackIsEnabled()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="startRun_allowsNewRunWhenOlderActiveIterationOnlyHasStaleProcessExitedDisplayState()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.008"/>
+  <testcase name="launchAccount_reusesReadyExecutorWhenHealthConfirmsDispatch()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="saveRecoveryAnnotations_persistsAnnotationsAndSelectedEvidence()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.007"/>
+  <testcase name="rerun_reusesStoredAccountTaskAndSettings()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.008"/>
+  <testcase name="recovery_conflictBeforePatchDoesNotApplyOrChangePhase()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.023"/>
+  <testcase name="syncPublishedRuns_handlesReceivedStatusInPreStartBranch()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="importPayload_nestedLegacyTaskMetadataStripReservedFields()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="publishOnly_withoutFallbackStillWorksWithoutMachine()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.009"/>
+  <testcase name="publishOnly_allowsRetryWhenOlderDeferredPublishOnlyRunExists()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.01"/>
+  <testcase name="runSummary_exposesNewAccountReadinessFields()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.004"/>
+  <testcase name="stopRun_sendsStopToMicro6AfterPublish()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.007"/>
+  <testcase name="launchAccount_acceptsAsynchronouslyAndReachesReadyWithoutPublishingTask()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="launchAccount_deduplicatesConcurrentRequestsForSameAccount()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="publishOnly_defersWhenExecutorIsNotReachable()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.01"/>
+  <testcase name="importPayload_emptySettingsEnvelopeRemainsEmpty()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="launchAccount_rejectsMalformedAccountHashBeforePreparation()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.004"/>
+  <testcase name="publishOnly_rejectsMalformedAccountHashBeforeDispatch()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.004"/>
+  <testcase name="getLatestConfig_returnsNewestMatchingRun()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="getRunSummaryByRecordingId_rejectsMissingRecording()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="analyzeFailure_usesEditedPromptAndSelectedEvidence()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.021"/>
+  <testcase name="importPayload_legacyRawSettingsStripControlMetadataFields()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="stopRun_rejectsAlreadyTerminal()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="launchAccount_nonReadyExecutorCallsSharedPreparationAndReplaces()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="publishOnly_defersWhenExecutorAccountIsMismatched()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.009"/>
+  <testcase name="buildAnalysisDraft_returnsEditablePromptAndSelectedEvidence()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="launchOperationService_mapsRelaunchProgressPhases()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.004"/>
+  <testcase name="publishOnly_acceptsCredentiallessAccountWhenFallbackIsFalse()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.009"/>
+  <testcase name="stopRun_cancelsQueuedRunBeforePublish()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="recovery_holdsLeaseAcrossPatchRelaunchAndRepublish()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.017"/>
+  <testcase name="statusMapping_reconcilingShowsAwaitingExecutorConfirmation()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="syncPublishedRuns_handlesCancelledExecutorStatus()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="listRuns_exposesBlockedReasonsForFailedUnanalyzedRun()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="syncPendingLaunches_doesNotQueueProcessExitedRunAfterLockedReconciliation()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="publishOnly_rejectsDisabledAccountEvenWithExistingExecutor()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.004"/>
+  <testcase name="startRun_persistsComputedAccountReadinessNotRawLauncherMetadata()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.007"/>
+  <testcase name="syncPublishedRuns_marksLostTargetRunFailedAfterGraceThreshold()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="getRunSummaryByRecordingId_resolvesBuilderGoalRun()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.004"/>
+  <testcase name="openRecoveryWorkspace_entersRecoveryModeAndPersistsWorkspaceMetadata()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.007"/>
+  <testcase name="getRecoveryState_returnsPhaseAndChildLinkage()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="importPayload_resolvesCatalogAliasToCanonicalTaskKey()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.004"/>
+  <testcase name="pendingLaunchCancellationLeaseLossMarksNonTerminalIterationFailed()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="startRun_rejectsWhenAnActiveRunAlreadyExistsForSameAccountAndTask()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="launchAccount_rejectsMissingWorldBeforePreparation()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="startRun_persistsExecutorOnlineTrueWhenMatchingClientExists()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.007"/>
+  <testcase name="publishOnly_succeedsWithoutLauncherMachineWhenExecutorIsAvailable()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.009"/>
+  <testcase name="launchAccount_cancellationEscapingPreparationMarksOperationFailed()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="fixAndRelaunch_requiresAnalysisFirst()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="startRun_rejectsDisabledMachineBeforePersistence()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="startRun_acceptsCredentialedLaunchAccount()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.007"/>
+  <testcase name="launchAccount_progressIsFedIntoTheOperationEvenOnFailure()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="launchAccount_rejectsWorldAboveRangeBeforePreparation()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.004"/>
+  <testcase name="importPayload_settingsEnvelopeIsAuthoritativeEvenWhenEmpty()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="syncPendingLaunches_skipsDeferredPublishOnlyRunWhenFallbackIsDisabled()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="startRun_rejectsOfflineMachineBeforePersistence()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="launchAccount_rejectsWorldBelowRangeBeforePreparation()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.004"/>
+  <testcase name="syncPublishedRuns_reconcilePersistsAttemptTimestampBeforePolling()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.007"/>
+  <testcase name="launchAccount_rejectsBeforePreparationWhenLaunchCredentialsAreMissing()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.005"/>
+  <testcase name="publishOnly_requiresLauncherMachineWhenLaunchFallbackIsEnabled()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.004"/>
+  <testcase name="pendingLaunchDoesNotConvertCancellationRaceIntoFailure()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.006"/>
+  <testcase name="startRun_rejectsImportedPersistedSettingsMismatch()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest" time="0.009"/>
+  <system-out><![CDATA[19:27:56.410 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=1111111111111111 owner=c3b8ee26-ebc0-4876-b4ff-56a982a09c31
+19:27:56.414 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Released local launch lease for resource machine-1:8098 account=1111111111111111 owner=c3b8ee26-ebc0-4876-b4ff-56a982a09c31
+19:27:56.432 [Test worker] INFO  com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerService - Late executor acceptance recovered for Builder Goal run buildergoal_publishfailed0001 (entry 1001): reason=revived_queued
+19:27:56.477 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=1111111111111111 owner=be522acc-b714-444f-a8d5-e9fb3ef3c23b
+19:27:56.478 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Released local launch lease for resource machine-1:8098 account=1111111111111111 owner=be522acc-b714-444f-a8d5-e9fb3ef3c23b
+19:27:56.479 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=1111111111111111 owner=0f5ebc2e-c712-453b-a6b1-219e785329f3
+19:27:56.479 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Released local launch lease for resource machine-1:8098 account=1111111111111111 owner=0f5ebc2e-c712-453b-a6b1-219e785329f3
+19:27:56.501 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=1111111111111111 owner=348399b7-5794-4619-b09d-d94e842669be
+19:27:56.502 [Test worker] INFO  com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerService - Launch operation 348399b7-5794-4619-b09d-d94e842669be already terminal; skipping cancellation transition
+19:27:56.502 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Released local launch lease for resource machine-1:8098 account=1111111111111111 owner=348399b7-5794-4619-b09d-d94e842669be
+19:27:56.540 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=1111111111111111 owner=buildergoal_cancel_terminal
+19:27:56.541 [Test worker] INFO  com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerService - Pending launch buildergoal_cancel_terminal already terminal after cancellation; leaving it unchanged
+19:27:56.541 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Released local launch lease for resource machine-1:8098 account=1111111111111111 owner=buildergoal_cancel_terminal
+19:27:56.616 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=1111111111111111 owner=ad3e2f5f-cd12-4846-aa61-6a6715ab93a4
+19:27:56.617 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Released local launch lease for resource machine-1:8098 account=1111111111111111 owner=ad3e2f5f-cd12-4846-aa61-6a6715ab93a4
+19:27:56.618 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=1111111111111111 owner=after-launch
+19:27:56.630 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=other-account owner=op-other
+19:27:56.630 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Local launch lease conflict for resource machine-1:8098: requested account=1111111111111111 owner=buildergoal_lease_wait, held by account=other-account owner=op-other
+19:27:56.649 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=1111111111111111 owner=ff7374bd-5965-484e-8334-a1561344fb77
+19:27:56.650 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Released local launch lease for resource machine-1:8098 account=1111111111111111 owner=ff7374bd-5965-484e-8334-a1561344fb77
+19:27:56.670 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=1111111111111111 owner=db1e84e1-f5d0-4657-9d40-1cd0819ab536
+19:27:56.671 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Released local launch lease for resource machine-1:8098 account=1111111111111111 owner=db1e84e1-f5d0-4657-9d40-1cd0819ab536
+19:27:56.700 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=1111111111111111 owner=d74f3a69-52e0-4534-b45b-47ea287a3e58
+19:27:56.701 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Released local launch lease for resource machine-1:8098 account=1111111111111111 owner=d74f3a69-52e0-4534-b45b-47ea287a3e58
+19:27:56.724 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=other-account owner=op-other
+19:27:56.741 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Local launch lease conflict for resource machine-1:8098: requested account=1111111111111111 owner=recovery:buildergoal_recovery_conflict, held by account=other-account owner=op-other
+19:27:56.797 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=1111111111111111 owner=80e79766-0041-4d2e-b6bd-2b38477f5348
+19:27:56.797 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Released local launch lease for resource machine-1:8098 account=1111111111111111 owner=80e79766-0041-4d2e-b6bd-2b38477f5348
+19:27:56.803 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=1111111111111111 owner=50c22ce3-e227-4c43-9907-24a49f4116c8
+19:27:56.804 [Test worker] INFO  com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerService - Deduplicating Builder Goal launch for account 1111111111111111 onto active operation 50c22ce3-e227-4c43-9907-24a49f4116c8
+19:27:56.883 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=1111111111111111 owner=a0932a54-2a84-40ac-bb13-647217efdb21
+19:27:56.884 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Released local launch lease for resource machine-1:8098 account=1111111111111111 owner=a0932a54-2a84-40ac-bb13-647217efdb21
+19:27:56.935 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=1111111111111111 owner=recovery:buildergoal_recovery_lease
+19:27:56.940 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Released local launch lease for resource machine-1:8098 account=1111111111111111 owner=recovery:buildergoal_recovery_lease
+19:27:56.940 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=1111111111111111 owner=after-recovery
+19:27:57.017 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=1111111111111111 owner=buildergoal_cancel_lease_loss
+19:27:57.018 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Released local launch lease for resource machine-1:8098 account=1111111111111111 owner=buildergoal_cancel_lease_loss
+19:27:57.053 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=1111111111111111 owner=0112767d-9987-4492-8cfb-db2c8c904809
+19:27:57.054 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Released local launch lease for resource machine-1:8098 account=1111111111111111 owner=0112767d-9987-4492-8cfb-db2c8c904809
+19:27:57.081 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=1111111111111111 owner=672092d8-9355-462b-9cbb-e50a52eda102
+19:27:57.083 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Released local launch lease for resource machine-1:8098 account=1111111111111111 owner=672092d8-9355-462b-9cbb-e50a52eda102
+19:27:57.119 [Test worker] INFO  com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerService - Late executor acceptance recovered for Builder Goal run buildergoal_fair0001 (entry 1001): reason=revived_queued
+19:27:57.137 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=1111111111111111 owner=buildergoal_cancel_race
+19:27:57.137 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Released local launch lease for resource machine-1:8098 account=1111111111111111 owner=buildergoal_cancel_race
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

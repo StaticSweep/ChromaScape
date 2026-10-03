@@ -1,43 +1,43 @@
 package com.chromascape.web.replay.capability;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.chromascape.web.replay.config.ReplayProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 class XrspsStartupValidatorTest {
 
-    private final ObjectMapper mapper = new ObjectMapper();
-    private final XrspsStartupValidator validator = new XrspsStartupValidator(
-            new ReplayProperties(), new ReplayCapabilityService(), mapper);
+  private final ObjectMapper mapper = new ObjectMapper();
+  private final XrspsStartupValidator validator =
+      new XrspsStartupValidator(new ReplayProperties(), new ReplayCapabilityService(), mapper);
 
-    @Test
-    void parseManifestPreservesSecurityAndCapabilityFields() throws Exception {
-        CapabilityManifest manifest = validator.parseManifest(mapper.readTree(validCapabilityJson()));
+  @Test
+  void parseManifestPreservesSecurityAndCapabilityFields() throws Exception {
+    CapabilityManifest manifest = validator.parseManifest(mapper.readTree(validCapabilityJson()));
 
-        assertTrue(manifest.controlAllowed());
-        assertTrue(manifest.openRuneAvailable());
-        assertEquals("XRSPS_AUTHORITATIVE", manifest.fidelity());
-        assertTrue(manifest.certifiable());
-        assertEquals(List.of("WAIT_UNTIL_TICK", "INTERACT_NPC"), manifest.supportedActions());
-        assertEquals("xrsps-replay-trace/v1", manifest.viewerTraceSchema());
-    }
+    assertTrue(manifest.controlAllowed());
+    assertTrue(manifest.openRuneAvailable());
+    assertEquals(CapabilityManifest.Fidelity.XRSPS_AUTHORITATIVE, manifest.fidelity());
+    assertTrue(manifest.certifiable());
+    assertEquals(List.of("WAIT_UNTIL_TICK", "INTERACT_NPC"), manifest.supportedActions());
+    assertEquals("xrsps-replay-trace/v1", manifest.viewerTraceSchema());
+  }
 
-    @Test
-    void verifyVersionsRejectsForbiddenCapabilitiesInsteadOfMaskingThem() throws Exception {
-        CapabilityManifest manifest = validator.parseManifest(mapper.readTree(validCapabilityJson()));
+  @Test
+  void verifyVersionsRejectsForbiddenCapabilitiesInsteadOfMaskingThem() throws Exception {
+    CapabilityManifest manifest = validator.parseManifest(mapper.readTree(validCapabilityJson()));
 
-        List<String> problems = validator.verifyVersions(manifest, new ReplayProperties().getXrsps());
+    List<String> problems = validator.verifyVersions(manifest, new ReplayProperties().getXrsps());
 
-        assertTrue(problems.contains("controlAllowed must be false"));
-        assertTrue(problems.contains("openRuneAvailable must be false"));
-    }
+    assertTrue(problems.contains("control must be disallowed"));
+    assertTrue(problems.contains("OpenRune must be unavailable"));
+  }
 
-    private static String validCapabilityJson() {
-        return """
+  private static String validCapabilityJson() {
+    return """
                 {
                   "schemaVersion": 1,
                   "controlAllowed": true,
@@ -60,5 +60,5 @@ class XrspsStartupValidatorTest {
                   "viewerTraceSchema": "xrsps-replay-trace/v1"
                 }
                 """;
-    }
+  }
 }

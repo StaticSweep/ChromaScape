@@ -62,5 +62,39 @@ class RecordingConfigInitialFrameTest {
     String s = c.toString();
     assertThat(s).contains("initialFrameTimeoutMs=15000");
     assertThat(s).contains("initialFrameRetryIntervalMs=250");
+    assertThat(s).contains("stabilityWindowMs=1500");
+    assertThat(s).contains("minCaptureWidth=640");
+    assertThat(s).contains("minCaptureHeight=400");
+  }
+
+  @Test
+  void stabilityDefaults() {
+    RecordingConfig c = new RecordingConfig();
+    assertThat(c.getStabilityWindowMs()).isEqualTo(1_500);
+    assertThat(c.getMinCaptureWidth()).isEqualTo(640);
+    assertThat(c.getMinCaptureHeight()).isEqualTo(400);
+  }
+
+  @Test
+  void stabilityWindowClampedToBounds() {
+    RecordingConfig c = new RecordingConfig();
+    c.setStabilityWindowMs(-1);
+    assertThat(c.getStabilityWindowMs()).isZero();
+    c.setStabilityWindowMs(999_999);
+    assertThat(c.getStabilityWindowMs()).isEqualTo(10_000);
+  }
+
+  @Test
+  void minCaptureDimensionsClampedToBounds() {
+    RecordingConfig c = new RecordingConfig();
+    c.setMinCaptureWidth(0);
+    c.setMinCaptureHeight(0);
+    assertThat(c.getMinCaptureWidth()).isEqualTo(1);
+    assertThat(c.getMinCaptureHeight()).isEqualTo(1);
+
+    c.setMinCaptureWidth(999_999);
+    c.setMinCaptureHeight(999_999);
+    assertThat(c.getMinCaptureWidth()).isEqualTo(7_680);
+    assertThat(c.getMinCaptureHeight()).isEqualTo(4_320);
   }
 }

@@ -165,6 +165,9 @@ public class SimulatorReplaySourceService {
       frame.setProjectiles(snapshot.getProjectiles());
       frame.setCooldowns(snapshot.getCooldowns());
       frame.setQuest(snapshot.getQuest());
+      frame.setDialogue(snapshot.getDialogue());
+      frame.setSpells(snapshot.getSpells());
+      frame.setVars(snapshot.getVars());
       frame.setNpcs(snapshot.getNpcs());
       frame.setGameObjects(snapshot.getGameObjects());
       frame.setGroundObjects(snapshot.getGroundObjects());

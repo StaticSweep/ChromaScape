@@ -58,11 +58,14 @@ public class SimulatorVerifyJobStore {
       return requestedAt;
     }
 
-    public JobStatus getStatus() {
+    public synchronized JobStatus getStatus() {
       return status;
     }
 
-    public void setStatus(JobStatus status) {
+    public synchronized void setStatus(JobStatus status) {
+      if (cancelled && status != JobStatus.FAILED) {
+        return;
+      }
       this.status = status;
     }
 
@@ -86,11 +89,11 @@ public class SimulatorVerifyJobStore {
       this.reportPath = reportPath;
     }
 
-    public String getError() {
+    public synchronized String getError() {
       return error;
     }
 
-    public void setError(String error) {
+    public synchronized void setError(String error) {
       this.error = error;
     }
 
@@ -102,12 +105,22 @@ public class SimulatorVerifyJobStore {
       this.summary = summary;
     }
 
-    public boolean isCancelled() {
+    public synchronized boolean isCancelled() {
       return cancelled;
     }
 
-    public void setCancelled(boolean cancelled) {
+    public synchronized void setCancelled(boolean cancelled) {
       this.cancelled = cancelled;
+    }
+
+    public synchronized boolean cancelIfActive() {
+      if (status != JobStatus.QUEUED && status != JobStatus.RUNNING) {
+        return false;
+      }
+      cancelled = true;
+      status = JobStatus.FAILED;
+      error = "Job cancelled by user";
+      return true;
     }
   }
 

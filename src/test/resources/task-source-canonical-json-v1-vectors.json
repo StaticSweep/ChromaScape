@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "vectors": [
+    {
+      "name": "nested-key-order",
+      "wire": "{\"outer\":{\"z\":1,\"a\":{\"y\":2,\"b\":1}},\"a\":0}",
+      "canonical": "{\"a\":0,\"outer\":{\"a\":{\"b\":1,\"y\":2},\"z\":1}}",
+      "checksum": "sha256:e6011c9bd0a35802558ebba7c77f524d0b89f93fa21dcf9618a93007edeac11c"
+    },
+    {
+      "name": "nested-arrays",
+      "wire": "{\"a\":[{\"z\":2,\"b\":1},[3,{\"y\":1,\"x\":0}],\"s\"],\"m\":{\"k\":[]}}",
+      "canonical": "{\"a\":[{\"b\":1,\"z\":2},[3,{\"x\":0,\"y\":1}],\"s\"],\"m\":{\"k\":[]}}",
+      "checksum": "sha256:7f567e9c27bd3c7797fbe570313469d81f156c662bb12d9a927d646d6a079d60"
+    },
+    {
+      "name": "crlf-in-string",
+      "wire": "{\"s\":\"a\\r\\nb\"}",
+      "canonical": "{\"s\":\"a\\r\\nb\"}",
+      "checksum": "sha256:068ed77d47140be3ff6f345b37526054f248a862d18cfa166a4ac57edb40682c"
+    },
+    {
+      "name": "lf-in-string",
+      "wire": "{\"s\":\"a\\nb\"}",
+      "canonical": "{\"s\":\"a\\nb\"}",
+      "checksum": "sha256:539d05783bcaa18932974451c64e9489fa08792d632859fd746379bbec1d8db7"
+    },
+    {
+      "name": "non-ascii",
+      "wire": "{\"s\":\"caf\\u00e9 \\u4e2d\\u6587\",\"k\\u00e9y\":1}",
+      "canonical": "{\"kéy\":1,\"s\":\"café 中文\"}",
+      "checksum": "sha256:150bc223a44b1df45069ed43b4200e22c8747a6646fc93c8a2fd2b0efa978b2f"
+    },
+    {
+      "name": "utf8-key-order",
+      "wire": "{\"\\u00e9\":1,\"z\":2,\"a\":3}",
+      "canonical": "{\"a\":3,\"z\":2,\"é\":1}",
+      "checksum": "sha256:fa7ddcf43923b2711f2f592f210e5ab9e4a54a3b2df09830d93f402391a33e4e"
+    },
+    {
+      "name": "controls",
+      "wire": "{\"s\":\"\\\"\\/\\\\\\b\\f\\n\\r\\t\\u0001\\u001f\"}",
+      "canonical": "{\"s\":\"\\\"/\\\\\\b\\f\\n\\r\\t\\u0001\\u001F\"}",
+      "checksum": "sha256:b2df8f8165f23c19c445d15f8d877f8669015f68271de100f0b8434abeab226d"
+    },
+    {
+      "name": "surrogate-pair",
+      "wire": "{\"s\":\"\\ud83d\\ude00\"}",
+      "canonical": "{\"s\":\"😀\"}",
+      "checksum": "sha256:f9949e1006d1ca22bc0b60ea94f09779f11a8f0a29bae250fc7ab313d879f5e7"
+    },
+    {
+      "name": "zero",
+      "wire": "{\"v\":0}",
+      "canonical": "{\"v\":0}",
+      "checksum": "sha256:ec4f95abcb4e2e3dbe856c3eb2f81995eacb3823d40aa2e78ed4c5e1798f664d"
+    },
+    {
+      "name": "neg-zero",
+      "wire": "{\"v\":-0}",
+      "canonical": "{\"v\":0}",
+      "checksum": "sha256:ec4f95abcb4e2e3dbe856c3eb2f81995eacb3823d40aa2e78ed4c5e1798f664d"
+    },
+    {
+      "name": "neg-int",
+      "wire": "{\"v\":-7}",
+      "canonical": "{\"v\":-7}",
+      "checksum": "sha256:52ae45b129ae23c1a33de13b956913bbd0671150205a1919d6aec89a9ab5c761"
+    },
+    {
+      "name": "long-min",
+      "wire": "{\"v\":-9223372036854775808}",
+      "canonical": "{\"v\":-9223372036854775808}",
+      "checksum": "sha256:9e52feb18cdc447ae70062ecd2e763c4d1cfac1607ac1b1499738f28cae639fb"
+    },
+    {
+      "name": "long-max",
+      "wire": "{\"v\":9223372036854775807}",
+      "canonical": "{\"v\":9223372036854775807}",
+      "checksum": "sha256:4d5d642a64e3c1a8e596e38aee8553a52eac57e39cf8c545a0960260c9a9af7d"
+    }
+  ],
+  "invalid": [
+    {
+      "name": "integer-overflow",
+      "wire": "{\"v\":9223372036854775808}"
+    },
+    {
+      "name": "integer-underflow",
+      "wire": "{\"v\":-9223372036854775809}"
+    },
+    {
+      "name": "float",
+      "wire": "{\"v\":1.0}"
+    },
+    {
+      "name": "exponent",
+      "wire": "{\"v\":1e3}"
+    },
+    {
+      "name": "duplicate-keys",
+      "wire": "{\"a\":1,\"a\":2}"
+    },
+    {
+      "name": "trailing-values",
+      "wire": "{\"a\":1} {\"b\":2}"
+    },
+    {
+      "name": "comment",
+      "wire": "/*c*/{\"a\":1}"
+    },
+    {
+      "name": "unquoted-name",
+      "wire": "{a:1}"
+    },
+    {
+      "name": "trailing-comma",
+      "wire": "{\"a\":1,}"
+    },
+    {
+      "name": "empty",
+      "wire": ""
+    },
+    {
+      "name": "unpaired-high-surrogate",
+      "wire": "{\"s\":\"\\ud83d\"}"
+    },
+    {
+      "name": "unpaired-low-surrogate",
+      "wire": "{\"s\":\"\\ude00\"}"
+    }
+  ]
+}

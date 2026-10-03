@@ -87,12 +87,13 @@ class StabilizationAuthFilterTest {
   @DisplayName("oversized request bodies are rejected with 413 before parsing")
   void oversizedBodyRejected() throws Exception {
     StabilizationAuthFilter filter = new StabilizationAuthFilter(TOKEN, "", 1024L);
-    MockHttpServletRequest request = new MockHttpServletRequest() {
-      @Override
-      public long getContentLengthLong() {
-        return 2048L;
-      }
-    };
+    MockHttpServletRequest request =
+        new MockHttpServletRequest() {
+          @Override
+          public long getContentLengthLong() {
+            return 2048L;
+          }
+        };
     request.setRemoteAddr("127.0.0.1");
     request.addHeader("X-Stabilization-Auth", TOKEN);
 
@@ -105,8 +106,7 @@ class StabilizationAuthFilterTest {
   @Test
   @DisplayName("triage resolution requires the write token, not the read token")
   void triageResolutionRequiresWriteToken() throws Exception {
-    StabilizationAuthFilter filter =
-        new StabilizationAuthFilter(TOKEN, WRITE_TOKEN, 5_000_000L);
+    StabilizationAuthFilter filter = new StabilizationAuthFilter(TOKEN, WRITE_TOKEN, 5_000_000L);
 
     MockHttpServletRequest readOnly = request("127.0.0.1");
     readOnly.setMethod("POST");
@@ -173,8 +173,7 @@ class StabilizationAuthFilterTest {
   @Test
   @DisplayName("read-only GET endpoints never require the write token")
   void readOnlyEndpointsNeverRequireWriteToken() throws Exception {
-    StabilizationAuthFilter filter =
-        new StabilizationAuthFilter(TOKEN, WRITE_TOKEN, 5_000_000L);
+    StabilizationAuthFilter filter = new StabilizationAuthFilter(TOKEN, WRITE_TOKEN, 5_000_000L);
     MockHttpServletRequest request = request("127.0.0.1");
     request.setMethod("GET");
     request.addHeader("X-Stabilization-Auth", TOKEN);
@@ -192,42 +191,47 @@ class StabilizationAuthFilterTest {
     // second must trip the bound instead of starting a fresh counter that could read the whole
     // body without a 413.
     StabilizationAuthFilter filter = new StabilizationAuthFilter(TOKEN, "", 1024L);
-    MockHttpServletRequest request = new MockHttpServletRequest() {
-      @Override
-      public long getContentLengthLong() {
-        return -1L; // chunked-style: no known length, so only the streaming bound applies
-      }
-    };
+    MockHttpServletRequest request =
+        new MockHttpServletRequest() {
+          @Override
+          public long getContentLengthLong() {
+            return -1L; // chunked-style: no known length, so only the streaming bound applies
+          }
+        };
     request.setRemoteAddr("127.0.0.1");
     request.addHeader("X-Stabilization-Auth", TOKEN);
     String body = "a".repeat(1536);
     request.setContent(body.getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
     MockHttpServletResponse response = new MockHttpServletResponse();
-    filter.doFilter(request, response, new MockFilterChain() {
-      @Override
-      public void doFilter(jakarta.servlet.ServletRequest req,
-          jakarta.servlet.ServletResponse res) throws java.io.IOException {
-        // Two reads through two separate getInputStream() calls must observe the same counter.
-        jakarta.servlet.ServletInputStream first = ((jakarta.servlet.http.HttpServletRequest) req)
-            .getInputStream();
-        byte[] buf = new byte[512];
-        for (int i = 0; i < 2; i++) {
-          int read = first.read(buf);
-          if (read < 0) {
-            break;
+    filter.doFilter(
+        request,
+        response,
+        new MockFilterChain() {
+          @Override
+          public void doFilter(
+              jakarta.servlet.ServletRequest req, jakarta.servlet.ServletResponse res)
+              throws java.io.IOException {
+            // Two reads through two separate getInputStream() calls must observe the same counter.
+            jakarta.servlet.ServletInputStream first =
+                ((jakarta.servlet.http.HttpServletRequest) req).getInputStream();
+            byte[] buf = new byte[512];
+            for (int i = 0; i < 2; i++) {
+              int read = first.read(buf);
+              if (read < 0) {
+                break;
+              }
+            }
+            jakarta.servlet.ServletInputStream second =
+                ((jakarta.servlet.http.HttpServletRequest) req).getInputStream();
+            // Reading the remaining bytes via the second handle must continue the same counter and
+            // trip the bound.
+            int read;
+            while ((read = second.read(buf)) > 0) {
+              // consume
+            }
           }
-        }
-        jakarta.servlet.ServletInputStream second = ((jakarta.servlet.http.HttpServletRequest) req)
-            .getInputStream();
-        // Reading the remaining bytes via the second handle must continue the same counter and
-        // trip the bound.
-        int read;
-        while ((read = second.read(buf)) > 0) {
-          // consume
-        }
-      }
-    });
+        });
 
     assertThat(response.getStatus()).isEqualTo(413);
     assertThat(response.getContentAsString()).contains("request_body_too_large");
@@ -237,34 +241,39 @@ class StabilizationAuthFilterTest {
   @DisplayName("isFinished() reflects EOF, not quota exhaustion")
   void isFinishedReflectsEofNotQuota() throws Exception {
     StabilizationAuthFilter filter = new StabilizationAuthFilter(TOKEN, "", 10L);
-    MockHttpServletRequest request = new MockHttpServletRequest() {
-      @Override
-      public long getContentLengthLong() {
-        return -1L;
-      }
-    };
+    MockHttpServletRequest request =
+        new MockHttpServletRequest() {
+          @Override
+          public long getContentLengthLong() {
+            return -1L;
+          }
+        };
     request.setRemoteAddr("127.0.0.1");
     request.addHeader("X-Stabilization-Auth", TOKEN);
     request.setContent("0123456789".getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
     MockHttpServletResponse response = new MockHttpServletResponse();
-    filter.doFilter(request, response, new MockFilterChain() {
-      @Override
-      public void doFilter(jakarta.servlet.ServletRequest req,
-          jakarta.servlet.ServletResponse res) throws java.io.IOException {
-        jakarta.servlet.ServletInputStream stream =
-            ((jakarta.servlet.http.HttpServletRequest) req).getInputStream();
-        // Exactly the bound: quota reached but EOF not yet observed -> must NOT be finished.
-        for (int i = 0; i < 10; i++) {
-          assertThat(stream.isFinished()).as("before byte %d", i).isFalse();
-          int value = stream.read();
-          assertThat(value).isNotEqualTo(-1);
-        }
-        assertThat(stream.isFinished()).as("quota reached, EOF not yet observed").isFalse();
-        assertThat(stream.read()).as("end of body").isEqualTo(-1);
-        assertThat(stream.isFinished()).as("after EOF").isTrue();
-      }
-    });
+    filter.doFilter(
+        request,
+        response,
+        new MockFilterChain() {
+          @Override
+          public void doFilter(
+              jakarta.servlet.ServletRequest req, jakarta.servlet.ServletResponse res)
+              throws java.io.IOException {
+            jakarta.servlet.ServletInputStream stream =
+                ((jakarta.servlet.http.HttpServletRequest) req).getInputStream();
+            // Exactly the bound: quota reached but EOF not yet observed -> must NOT be finished.
+            for (int i = 0; i < 10; i++) {
+              assertThat(stream.isFinished()).as("before byte %d", i).isFalse();
+              int value = stream.read();
+              assertThat(value).isNotEqualTo(-1);
+            }
+            assertThat(stream.isFinished()).as("quota reached, EOF not yet observed").isFalse();
+            assertThat(stream.read()).as("end of body").isEqualTo(-1);
+            assertThat(stream.isFinished()).as("after EOF").isTrue();
+          }
+        });
 
     assertThat(response.getStatus()).isEqualTo(200);
   }

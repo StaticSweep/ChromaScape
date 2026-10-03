@@ -1,6 +1,7 @@
 package com.chromascape.web.aiplayer.routine.service;
 
 import com.chromascape.web.aiplayer.contract.CanonicalJsonHasher;
+import com.chromascape.web.aiplayer.routine.source.SourceManifestContract;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -104,9 +105,8 @@ public class IsolatedPatchWorker {
       Path patch = temp.resolve("candidate.patch");
       Path source = request.micro6Root().toAbsolutePath().normalize();
       if (!Files.isDirectory(source)) throw new IOException("ISOLATED_SOURCE_NOT_FOUND");
-      Path captureContracts = source.resolveSibling("contracts").resolve("java").normalize();
-      if (!Files.isDirectory(captureContracts))
-        throw new IOException("CAPTURE_CONTRACTS_NOT_FOUND");
+      Path captureContracts =
+          resolveCaptureContracts(source, System.getenv("SC968_CAPTURE_CONTRACTS_DIR"));
       String commonGitDirectory =
           capture(
                   List.of(
@@ -142,16 +142,14 @@ public class IsolatedPatchWorker {
               repo.toString()),
           temp,
           "ISOLATED_CLONE_FAILED");
-      runCommand(
-          List.of("git", "-C", repo.toString(), "checkout", "--detach", request.baseCommit()),
-          temp,
-          "ISOLATED_CHECKOUT_FAILED");
+      checkoutPinnedCommit(repository, repo, request.baseCommit(), temp);
       if (!capture(List.of("git", "-C", repo.toString(), "status", "--porcelain"), temp)
           .isBlank()) {
         return failed(request, changed, "ISOLATED_TREE_DIRTY");
       }
       verifyCompleteSourceManifest(repo, request);
-      if (!verifySourcePreimage(repo, request)) throw new IOException("SOURCE_PREIMAGE_MISMATCH");
+      if (request.preimageHash() != null && !verifySourcePreimage(repo, request))
+        throw new IOException("SOURCE_PREIMAGE_MISMATCH");
       Files.writeString(patch, request.unifiedDiff(), StandardCharsets.UTF_8);
       runCommand(
           List.of("git", "-C", repo.toString(), "apply", "--check", patch.toString()),
@@ -231,6 +229,46 @@ public class IsolatedPatchWorker {
     return result;
   }
 
+  /** Retrieve and verify the immutable approved commit even when no branch references it. */
+  static void checkoutPinnedCommit(Path repository, Path repo, String baseCommit, Path temp)
+      throws IOException, InterruptedException {
+    if (baseCommit == null || !baseCommit.matches("[0-9a-f]{40}"))
+      throw new IOException("BASE_COMMIT_INVALID");
+    // A linked detached worktree's commit need not be reachable from any cloned branch.
+    // Fetch exactly the approved object from its common local repository, not a moving ref.
+    runCommand(
+        List.of(
+            "git", "-C", repo.toString(), "fetch", "--no-tags", repository.toString(), baseCommit),
+        temp,
+        "ISOLATED_BASE_FETCH_FAILED");
+    runCommand(
+        List.of("git", "-C", repo.toString(), "checkout", "--detach", baseCommit),
+        temp,
+        "ISOLATED_CHECKOUT_FAILED");
+    if (!baseCommit.equals(
+        capture(List.of("git", "-C", repo.toString(), "rev-parse", "HEAD"), temp).trim())) {
+      throw new IOException("ISOLATED_BASE_COMMIT_MISMATCH");
+    }
+  }
+
+  /** Explicit acceptance configuration must not silently fall back to a different contract tree. */
+  static Path resolveCaptureContracts(Path source, String configured) throws IOException {
+    Path contracts;
+    if (configured == null || configured.isBlank()) {
+      contracts = source.resolveSibling("contracts").resolve("java");
+    } else {
+      try {
+        contracts = Path.of(configured);
+      } catch (java.nio.file.InvalidPathException invalid) {
+        throw new IOException("CAPTURE_CONTRACTS_PATH_INVALID", invalid);
+      }
+      if (!contracts.isAbsolute()) throw new IOException("CAPTURE_CONTRACTS_PATH_NOT_ABSOLUTE");
+    }
+    contracts = contracts.toAbsolutePath().normalize();
+    if (!Files.isDirectory(contracts)) throw new IOException("CAPTURE_CONTRACTS_NOT_FOUND");
+    return contracts;
+  }
+
   private static BuildResult failed(BuildRequest request, List<String> changed, String code) {
     return new BuildResult(
         "FAILED", request == null ? null : request.baseCommit(), List.copyOf(changed), code, null);
@@ -282,7 +320,7 @@ public class IsolatedPatchWorker {
       throw new IOException(code + ";OUTPUT_LIMIT_EXCEEDED");
     }
     if (output.exitValue() != 0) {
-      throw new IOException(code + ";OUTPUT=" + output.tail());
+      throw new IOException(code + ";EXIT=" + output.exitValue() + ";OUTPUT=" + output.tail());
     }
   }
 
@@ -442,6 +480,23 @@ public class IsolatedPatchWorker {
     copyEnvironment(environment, "TMPDIR");
     copyEnvironment(environment, "TMP");
     copyEnvironment(environment, "TEMP");
+    if (isWindows()) {
+      for (String name :
+          List.of(
+              "HOME",
+              "USERPROFILE",
+              "HOMEDRIVE",
+              "HOMEPATH",
+              "APPDATA",
+              "LOCALAPPDATA",
+              "SystemRoot",
+              "SystemDrive",
+              "WINDIR",
+              "COMSPEC",
+              "PATHEXT")) {
+        copyEnvironmentIgnoringCase(environment, name);
+      }
+    }
     environment.put("LC_ALL", "C.UTF-8");
     environment.put("LANG", "C.UTF-8");
     environment.putAll(extra);
@@ -450,6 +505,14 @@ public class IsolatedPatchWorker {
   private static void copyEnvironment(Map<String, String> destination, String name) {
     String value = System.getenv(name);
     if (value != null && !value.isBlank()) destination.put(name, value);
+  }
+
+  private static void copyEnvironmentIgnoringCase(Map<String, String> destination, String name) {
+    System.getenv().entrySet().stream()
+        .filter(entry -> entry.getKey().equalsIgnoreCase(name))
+        .findFirst()
+        .filter(entry -> !entry.getValue().isBlank())
+        .ifPresent(entry -> destination.put(entry.getKey(), entry.getValue()));
   }
 
   private static boolean isWindows() {
@@ -624,46 +687,93 @@ public class IsolatedPatchWorker {
     return CanonicalJsonHasher.canonical(certification).getBytes(StandardCharsets.UTF_8);
   }
 
-  private static void verifyCompleteSourceManifest(Path repo, BuildRequest request)
-      throws Exception {
+  static void verifyCompleteSourceManifest(Path repo, BuildRequest request) throws Exception {
     JsonNode manifest =
         CanonicalJsonHasher.parse(request.sourceManifestJson().getBytes(StandardCharsets.UTF_8));
-    ObjectNode unsigned = (ObjectNode) manifest.deepCopy();
-    unsigned.remove("source_manifest_hash");
-    unsigned.remove("source_snapshot_id");
-    if (!request.sourceManifestHash().equals(CanonicalJsonHasher.hash(unsigned, null))
+    // Signature verification occurs when the proposal binds this persisted manifest. Recheck
+    // the same canonical content identity here; the signature is not part of that checksum.
+    if (!SourceManifestContract.SCHEMA.equals(manifest.path("schema").asText())
+        || !"AVAILABLE".equals(manifest.path("status").asText())
+        || !request
+            .sourceManifestHash()
+            .equals(hash(SourceManifestContract.canonicalHashBytes(manifest)))
+        || !request
+            .sourceManifestHash()
+            .equals(SourceManifestContract.declaredManifestHash(manifest))
+        || !request
+            .sourceSnapshotId()
+            .equals(SourceManifestContract.snapshotForHash(request.sourceManifestHash()))
         || !request.sourceSnapshotId().equals(manifest.path("source_snapshot_id").asText())
-        || !request.baseCommit().equals(manifest.path("client_build_id").asText()))
+        || !request.baseCommit().equals(manifest.path("repository").path("commit_id").asText())
+        || !request.baseCommit().equals(manifest.path("build").path("build_id").asText())
+        || !manifest.path("repository").path("clean").isBoolean()
+        || !manifest.path("repository").path("clean").asBoolean())
       throw new IOException("SOURCE_MANIFEST_MISMATCH");
-    if (!manifest.path("files").isArray() || manifest.path("files").isEmpty())
+    if (!manifest.path("files").isArray()
+        || manifest.path("files").isEmpty()
+        || manifest.path("files").size() > SourceManifestContract.MAX_FILES)
       throw new IOException("SOURCE_MANIFEST_INVALID");
-    boolean selected = false;
+    Path root = repo.toRealPath();
+    boolean selected = request.sourceFile() == null;
     for (JsonNode entry : manifest.path("files")) {
       String relative = entry.path("relative_path").asText();
       String expectedHash = entry.path("content_hash").asText();
       long expectedSize = entry.path("size_bytes").asLong(-1);
-      Path file = repo.resolve("runelite-client").resolve(relative).normalize();
-      if (!file.startsWith(repo.resolve("runelite-client").normalize())
-          || !Files.isRegularFile(file)) throw new IOException("SOURCE_FILE_MISSING_" + relative);
+      if (!SourceManifestContract.isSafeRelativePath(relative))
+        throw new IOException("SOURCE_FILE_PATH_INVALID");
+      Path file = root.resolve(relative).normalize();
+      if (!file.startsWith(root)
+          || !Files.isRegularFile(file)
+          || !file.toRealPath().startsWith(root))
+        throw new IOException("SOURCE_FILE_MISSING_" + relative);
       byte[] normalized = normalize(Files.readAllBytes(file));
       if (!expectedHash.equals(hash(normalized)) || expectedSize != normalized.length)
         throw new IOException("SOURCE_MANIFEST_FILE_MISMATCH_" + relative);
-      if (("runelite-client/" + relative).equals(request.sourceFile())) selected = true;
+      if (request.sourceFile() != null && relative.equals(request.sourceFile())) selected = true;
     }
     if (!selected) throw new IOException("SOURCE_SELECTED_FILE_MISMATCH");
   }
 
-  private static boolean verifySourcePreimage(Path repo, BuildRequest request) throws Exception {
+  static boolean verifySourcePreimage(Path repo, BuildRequest request) throws Exception {
     if (request.sourceFile() == null
         || request.preimageHash() == null
         || request.startLine() <= 0
         || request.endLine() < request.startLine()) return false;
-    Path file = repo.resolve(request.sourceFile()).normalize();
-    if (!file.startsWith(repo.normalize()) || !Files.isRegularFile(file)) return false;
-    List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
-    if (request.endLine() > lines.size()) return false;
-    String span = String.join("\n", lines.subList(request.startLine() - 1, request.endLine()));
-    return request.preimageHash().equals(hash(span.getBytes(StandardCharsets.UTF_8)));
+    Path root = repo.toRealPath();
+    if (!SourceManifestContract.isSafeRelativePath(request.sourceFile())) return false;
+    Path file = root.resolve(request.sourceFile()).normalize();
+    if (!file.startsWith(root) || !Files.isRegularFile(file) || !file.toRealPath().startsWith(root))
+      return false;
+    JsonNode manifest =
+        CanonicalJsonHasher.parse(request.sourceManifestJson().getBytes(StandardCharsets.UTF_8));
+    List<String> fileIds = new ArrayList<>();
+    for (JsonNode entry : manifest.path("files")) {
+      if (request.sourceFile().equals(entry.path("relative_path").asText()))
+        fileIds.add(entry.path("file_id").asText());
+    }
+    if (fileIds.size() != 1 || fileIds.get(0).isBlank()) return false;
+    List<JsonNode> symbols = new ArrayList<>();
+    for (JsonNode symbol : manifest.path("symbols")) {
+      if (fileIds.get(0).equals(symbol.path("file_id").asText())
+          && request.startLine() == symbol.path("start_line").asInt(-1)
+          && request.endLine() == symbol.path("end_line").asInt(-1)) symbols.add(symbol);
+    }
+    if (symbols.size() != 1) return false;
+    JsonNode symbol = symbols.get(0);
+    if (!symbol.path("start_byte").isIntegralNumber()
+        || !symbol.path("end_byte").isIntegralNumber()
+        || !symbol.path("start_byte").canConvertToInt()
+        || !symbol.path("end_byte").canConvertToInt()) return false;
+    byte[] bytes = normalize(Files.readAllBytes(file));
+    int start = symbol.path("start_byte").asInt();
+    int end = symbol.path("end_byte").asInt();
+    if (start < 0
+        || end <= start
+        || end > bytes.length
+        || (bytes[start] & 0xc0) == 0x80
+        || (end < bytes.length && (bytes[end] & 0xc0) == 0x80)) return false;
+    // The producer indexes UTF-8 bytes, not reconstructed whole lines (which include indentation).
+    return request.preimageHash().equals(hash(java.util.Arrays.copyOfRange(bytes, start, end)));
   }
 
   private static byte[] normalize(byte[] bytes) {

@@ -4,6 +4,7 @@ param(
   [Parameter(Mandatory=$true)][string] $LeeuwBotRoot,
   [Parameter(Mandatory=$true)][string] $ChromaScapeRoot,
   [Parameter(Mandatory=$true)][string] $Micro6Root,
+  [string] $SourceMicro6Root = '',
   [Parameter(Mandatory=$true)][string] $RuneLiteRoot,
   [Parameter(Mandatory=$true)][string] $OutputRoot
 )
@@ -14,6 +15,7 @@ Import-Module (Join-Path $PSScriptRoot 'Acceptance.Common.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'Acceptance.Http.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'Acceptance.Processes.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'Acceptance.Micro6.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'Acceptance.Approval.psm1') -Force
 
 function EnvOr([string] $Name, [string] $Default = '') {
   $value = [Environment]::GetEnvironmentVariable($Name)
@@ -42,6 +44,69 @@ function Sha256Bytes([byte[]] $Bytes) {
   return 'sha256:' + (($digest | ForEach-Object { $_.ToString('x2') }) -join '')
 }
 
+# Prove that the exact acceptance-owned executor serves the exact signed manifest already
+# validated from the promoted bundle. This runs before asking the operator to log in, so a missing
+# environment header, stale process, unloadable bundle, oversized response, or byte mismatch fails
+# without consuming a human gameplay phase.
+function Wait-LiveSourceManifest {
+  param(
+    [Parameter(Mandatory=$true)][string] $ExecutorUrl,
+    [Parameter(Mandatory=$true)][object] $SourceIdentity,
+    [Parameter(Mandatory=$true)][string] $EvidencePath,
+    [int] $TimeoutSeconds = 180
+  )
+  $expectedBytes = [IO.File]::ReadAllBytes([string]$SourceIdentity.SourceManifestPath)
+  $expectedHash = Sha256Bytes $expectedBytes
+  if ($expectedHash -ne [string]$SourceIdentity.SourceManifestFileHash) {
+    throw 'The packaged source manifest bytes differ from the validated managed identity'
+  }
+  $headers = @{
+    'X-Source-Actor' = 'sc968-native-acceptance'
+    'X-Source-Purpose' = 'MANIFEST'
+    'X-Correlation-ID' = ('sc968-source-' + [Guid]::NewGuid().ToString('N'))
+    'X-Source-Environment' = (Require 'MICRO6_SOURCE_ENVIRONMENT')
+  }
+  $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
+  $lastStatus = $null
+  $lastBody = ''
+  do {
+    try {
+      $response = Invoke-Sc968Http -BaseUrl $ExecutorUrl `
+        -Path '/api/v1/source-manifests/FISHING_TRAINING' -RequestHeaders $headers
+      $lastStatus = $response.StatusCode
+      $lastBody = $response.BodyText
+      if ($response.StatusCode -eq 200) {
+        if (-not (BytesEqual $expectedBytes $response.BodyBytes)) {
+          throw 'Live executor source manifest is not byte-identical to the promoted bundle'
+        }
+        Write-JsonFile $EvidencePath ([ordered]@{
+          schema = 'sc968-live-source-probe/v1'
+          status = 'PASS'
+          http_status = 200
+          executor_url = $ExecutorUrl
+          task_key = 'FISHING_TRAINING'
+          source_snapshot_id = [string]$SourceIdentity.SourceSnapshotId
+          source_manifest_hash = [string]$SourceIdentity.SourceManifestHash
+          transport_sha256 = $expectedHash
+          size_bytes = $expectedBytes.Length
+          byte_equal = $true
+        })
+        return
+      }
+    } catch {
+      $lastBody = $_.Exception.Message
+    }
+    Start-Sleep -Milliseconds 500
+  } while ([DateTimeOffset]::UtcNow -lt $deadline)
+  Write-JsonFile $EvidencePath ([ordered]@{
+    schema = 'sc968-live-source-probe/v1'
+    status = 'FAIL'
+    http_status = $lastStatus
+    response = $lastBody
+  })
+  throw "Acceptance-owned Micro6 did not serve the authoritative Fishing source manifest (HTTP $lastStatus): $lastBody"
+}
+
 function BytesEqual([byte[]] $Left, [byte[]] $Right) {
   if ($Left.Length -ne $Right.Length) { return $false }
   for ($index = 0; $index -lt $Left.Length; $index++) { if ($Left[$index] -ne $Right[$index]) { return $false } }
@@ -66,6 +131,9 @@ function Wait-CaptureLogin([string] $StatusFile, [int] $TimeoutSeconds) {
   $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
   do {
     $status = Read-Sc968CaptureStatus -StatusFile $StatusFile
+    if ($status -and $status.status_publication_failed -eq $true) {
+      throw "Capture status sidecar publication failed for '$StatusFile'"
+    }
     if ($status -and $status.PSObject.Properties.Name -contains 'logged_in' -and $status.logged_in) { return $status }
     Start-Sleep -Milliseconds 500
   } while ([DateTimeOffset]::UtcNow -lt $deadline)
@@ -79,6 +147,9 @@ function Wait-CaptureClientReady([string] $StatusFile, [int] $TimeoutSeconds, [i
   $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
   do {
     $status = Read-Sc968CaptureStatus -StatusFile $StatusFile
+    if ($status -and $status.status_publication_failed -eq $true) {
+      throw "Capture status sidecar publication failed for '$StatusFile'"
+    }
     if ($status) { return $status }
     if ($null -eq (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)) {
       throw "Client launcher process $ProcessId exited before publishing its capture status sidecar"
@@ -156,7 +227,7 @@ function Wait-CaptureTicks([string] $BaseUrl, [string] $Token, [string] $Session
 function Require-CompletedCapture([object] $Status, [string] $Name, [int] $MinimumTicks) {
   if ($Status.status -ne 'COMPLETED') { throw "$Name capture did not complete" }
   if ([int]$Status.tick_count -lt $MinimumTicks) { throw "$Name capture has too few ticks" }
-  if ([int]$Status.action_count -lt 1) { throw "$Name capture has no observed action" }
+  if ([int]$Status.action_count -ne 1) { throw "$Name capture must contain exactly one observed action; found $($Status.action_count)" }
   if ([string]::IsNullOrWhiteSpace([string]$Status.recording_id)) { throw "$Name capture has no recording ID" }
   if ([string]::IsNullOrWhiteSpace([string]$Status.recording_hash) -or [string]$Status.recording_hash -notmatch '^sha256:[0-9a-f]{64}$') { throw "$Name capture has no finalized recording hash" }
   if ($Status.control_allowed -ne $false) { throw "$Name capture control_allowed is not false" }
@@ -176,6 +247,14 @@ function Require-CaptureIdentity([object] $Status, [string] $ExpectedClientKind)
   if ($ExpectedClientKind -eq 'MICRO6_MANAGED') {
     if ([string]::IsNullOrWhiteSpace([string](Field $run 'attempt_id')) -or $null -eq (Field $run 'entry_id') -or [string]::IsNullOrWhiteSpace([string](Field $run 'executor_instance_id'))) { throw 'Micro6 capture is missing executor-bound run identity' }
     if ((Field $client 'adapter_contract') -ne 'micro6-builder/v2' -or (Field $client 'domain') -ne 'MICRO6') { throw 'Micro6 capture capability identity is invalid' }
+    if ([string]::IsNullOrWhiteSpace([string](Field $source 'repository_id')) -or
+        [string](Field $source 'commit_id') -notmatch '^[0-9a-f]{40}$' -or
+        [string](Field $source 'tree_id') -notmatch '^[0-9a-f]{40}$' -or
+        [string]::IsNullOrWhiteSpace([string](Field $source 'build_id')) -or
+        [string](Field $source 'artifact_digest') -notmatch '^sha256:[0-9a-f]{64}$' -or
+        (Field $source 'signature_verified') -ne $true) {
+      throw 'Micro6 capture is missing verified authoritative source provenance'
+    }
   } else {
     if ($null -ne (Field $run 'attempt_id') -or $null -ne (Field $run 'entry_id') -or $null -ne (Field $run 'executor_instance_id')) { throw 'RuneLite capture fabricated Micro6 executor identity' }
     if ((Field $client 'adapter_contract') -ne 'runelite-capture/v1' -or (Field $client 'domain') -ne 'RUNELITE') { throw 'RuneLite capture capability identity is invalid' }
@@ -186,15 +265,18 @@ function Require-CaptureIdentity([object] $Status, [string] $ExpectedClientKind)
 $owned = @()
 $savedEnvironment = @{}
 $temporaryEnvironmentNames = @(
-  'SC968_CAPTURE_ENABLED','SC968_CHROMASCAPE_URL','SC968_CAPTURE_TOKEN','SC968_CAPTURE_STATUS_FILE','SC968_CAPTURE_SPOOL',
+  'SC968_CAPTURE_ENABLED','SC968_CHROMASCAPE_URL','CHROMASCAPE_BASE_URL','SC968_CAPTURE_TOKEN','SC968_CAPTURE_STATUS_FILE','SC968_CAPTURE_SPOOL',
   'SC968_CAPTURE_START_FILE',
   'SC968_TASK_KEY','SC968_SETTINGS_HASH','SC968_PROFILE_ID','SC968_PROFILE_HASH','SC968_CATALOG_HASH','SC968_CLIENT_ID',
   'SC968_RUN_ID','SC968_ATTEMPT_ID','SC968_ENTRY_ID','SC968_EXECUTOR_INSTANCE_ID','SC968_SOURCE_SNAPSHOT_ID','SC968_SOURCE_MANIFEST_HASH',
+  'MICRO6_SOURCE_BUNDLE_ROOT','MICRO6_SOURCE_SIGNING_PRIVATE_KEY_BASE64','MICRO6_SOURCE_SIGNING_KEY_ID','MICRO6_SOURCE_VERIFICATION_PUBLIC_KEY_BASE64','MICRO6_SOURCE_VERIFICATION_KEY_ID','MICRO6_SOURCE_ENVIRONMENT',
+  'MICRO6_SOURCE_PUBLIC_KEY_BASE64','MICRO6_SOURCE_PUBLIC_KEY_ID','MICRO6_SOURCE_REQUIRE_SIGNATURE','MICRO6_SOURCE_ALLOW_LEGACY',
+  'CHROMASCAPE_SOURCE_PUBLIC_KEY_BASE64','CHROMASCAPE_SOURCE_PUBLIC_KEY_ID','CHROMASCAPE_SOURCE_REQUIRE_SIGNATURE','CHROMASCAPE_SOURCE_ALLOW_LEGACY','CHROMASCAPE_SOURCE_ENVIRONMENT',
   'MICRO6_REMOTE_ACCOUNTBUILDER_ENABLED','MICRO6_REMOTE_ACCOUNTBUILDER_BASE_URL','MICRO6_REMOTE_ACCOUNTBUILDER_CANDIDATE_ID',
   'MICRO6_REMOTE_ACCOUNTBUILDER_TOKEN','MICRO6_REMOTE_PUBLIC_KEY_RING','AI_ROUTINE_CAPTURE_TOKEN','AI_ROUTINE_OPERATOR_TOKEN',
   'AI_ROUTINE_OPERATOR_ID','SC967_CANDIDATE_BUILDS_ENABLED','SC967_CANDIDATE_STAGING_ROOT','LEEUWBOT_CANDIDATE_REGISTRY_URL',
   'STATIC_API_TOKEN','CANDIDATE_STORAGE_ROOT','CANDIDATE_TRUSTED_KEYS_DIR','CANDIDATE_SIGNING_PRIVATE_KEY_PATH',
-  'CANDIDATE_SIGNING_PUBLIC_KEY_PATH','CANDIDATE_SIGNING_KEY_ID','MICRO6_ROOT','BUILDER_GOAL_MICRO6_PROJECT_DIR','MICRO6_EXPECTED_ARTIFACT_NAME',
+  'CANDIDATE_SIGNING_PUBLIC_KEY_PATH','CANDIDATE_SIGNING_KEY_ID','MICRO6_ROOT','BUILDER_GOAL_MICRO6_PROJECT_DIR','MICRO6_EXPECTED_ARTIFACT_NAME','SC968_CAPTURE_CONTRACTS_DIR',
   'STABILIZATION_AUTH_TOKEN','STABILIZATION_AUTH_WRITE_TOKEN','SPRING_DATASOURCE_URL','MCP_AUTO_START',
   'LOGGING_LEVEL_ROOT','CHROMASCAPE_LOG_LEVEL','TEMP','TMP')
 
@@ -213,7 +295,7 @@ try {
   $signingKeyId = Require 'SC968_SIGNING_KEY_ID'
   $artifactName = Require 'SC968_EXPECTED_ARTIFACT_NAME'
 
-  $chromaUrl = EnvOr 'SC968_CHROMASCAPE_URL' 'http://127.0.0.1:8090'
+  $chromaUrl = EnvOr 'SC968_CHROMASCAPE_URL' 'http://127.0.0.1:18090'
   $chromaUri = $null
   if (-not [Uri]::TryCreate($chromaUrl, [UriKind]::Absolute, [ref]$chromaUri) -or
       $chromaUri.Scheme -ne 'http' -or -not $chromaUri.IsLoopback -or $chromaUri.Port -lt 1 -or
@@ -221,8 +303,22 @@ try {
       -not [string]::IsNullOrWhiteSpace($chromaUri.Fragment)) {
     throw 'SC968_CHROMASCAPE_URL must be a loopback HTTP origin with an explicit port and no path, query, or fragment'
   }
+  if ($chromaUri.Port -eq 8090) {
+    throw 'SC968 acceptance must use an isolated port; development port 8090 is not allowed'
+  }
   # Keep the server bind and every native-client callback on the same configured origin. Previously
   # the clients honored SC968_CHROMASCAPE_URL while Spring silently retained its 8090 default.
+  # This is process-scoped and is intentionally set before the executable JAR is started so Spring
+  # resolves chromascape.base-url from the acceptance origin rather than an inherited developer
+  # environment. The post-write check makes a failed environment assignment a preflight failure.
+  $inheritedChromaBaseUrl = [Environment]::GetEnvironmentVariable('CHROMASCAPE_BASE_URL')
+  if (-not [string]::IsNullOrWhiteSpace($inheritedChromaBaseUrl) -and $inheritedChromaBaseUrl -ne $chromaUrl) {
+    throw "CHROMASCAPE_BASE_URL '$inheritedChromaBaseUrl' differs from isolated SC968_CHROMASCAPE_URL '$chromaUrl'"
+  }
+  [Environment]::SetEnvironmentVariable('CHROMASCAPE_BASE_URL',$chromaUrl,'Process')
+  if ([Environment]::GetEnvironmentVariable('CHROMASCAPE_BASE_URL') -ne $chromaUrl) {
+    throw "CHROMASCAPE_BASE_URL did not resolve to the isolated SC968_CHROMASCAPE_URL '$chromaUrl'"
+  }
   $env:SERVER_PORT = [string]$chromaUri.Port
   $registryUrl = EnvOr 'SC968_REGISTRY_URL' 'http://127.0.0.1:8181'
   $minimumTicks = [int](EnvOr 'SC968_MINIMUM_TICKS' '20')
@@ -236,6 +332,10 @@ try {
   $logs = Join-Path $OutputRoot 'logs'
   $registryOutput = Join-Path $OutputRoot 'registry'
   $stagingRoot = Join-Path $registryOutput 'staging'
+  $captureContracts = Join-Path $ContractsRoot 'java'
+  if (-not (Test-Path -LiteralPath $captureContracts -PathType Container)) {
+    throw "Integrated capture contracts directory is missing: $captureContracts"
+  }
   # Keep candidate-worker sandboxes under the acceptance-owned output root. Some Windows machines
   # force every executable launched beneath the user TEMP directory into Sandboxie; Git then exits
   # before repository discovery without producing output. A run-owned TEMP/TMP also prevents the
@@ -275,6 +375,7 @@ try {
   [Environment]::SetEnvironmentVariable('CANDIDATE_SIGNING_PUBLIC_KEY_PATH',$signingPublic,'Process')
   [Environment]::SetEnvironmentVariable('CANDIDATE_SIGNING_KEY_ID',$signingKeyId,'Process')
   [Environment]::SetEnvironmentVariable('MICRO6_ROOT',$Micro6Root,'Process')
+  [Environment]::SetEnvironmentVariable('SC968_CAPTURE_CONTRACTS_DIR',$captureContracts,'Process')
   # PatchCandidateWorkflowService reads the builder-goal recovery property. Pass the absolute
   # acceptance worktree path explicitly: its isolated clone runs from a temporary directory, where
   # the application's relative ../micro6 default cannot resolve to this run's clean worktree.
@@ -356,9 +457,21 @@ try {
   $javaExecutable = (Get-Command java.exe -ErrorAction Stop).Source
   $chromaExecutable = EnvOr 'SC968_CHROMASCAPE_EXECUTABLE' $javaExecutable
   $chromaArguments = EnvOr 'SC968_CHROMASCAPE_ARGUMENTS' ("-jar `"" + $chromaJar + "`"")
-  $chroma = Start-Sc968OwnedProcess -Name 'chromascape' -FilePath $chromaExecutable -WorkingDirectory $ChromaScapeRoot -ArgumentList $chromaArguments -LogPath (Join-Path $logs 'chromascape-runtime.log')
-  $owned += $chroma
-  Wait-Sc968Http -BaseUrl $chromaUrl -Path '/debugger' -AcceptedStatusCodes @(200,301,302) -TimeoutSeconds 900 -PollMilliseconds 1000 | Out-Null
+  $chroma = $null
+  for ($startupAttempt = 1; $startupAttempt -le 3; $startupAttempt++) {
+    $chroma = Start-Sc968OwnedProcess -Name 'chromascape' -FilePath $chromaExecutable -WorkingDirectory $ChromaScapeRoot -ArgumentList $chromaArguments -LogPath (Join-Path $logs 'chromascape-runtime.log')
+    $owned += $chroma
+    try {
+      Wait-Sc968Http -BaseUrl $chromaUrl -Path '/debugger' -AcceptedStatusCodes @(200,301,302) -TimeoutSeconds 180 -PollMilliseconds 1000 | Out-Null
+      break
+    } catch {
+      Stop-Sc968OwnedProcess $chroma
+      $owned = @($owned | Where-Object { $_.Pid -ne $chroma.Pid })
+      if ($startupAttempt -eq 3) { throw }
+      Write-Warning "ChromaScape startup attempt $startupAttempt failed; retrying against the already-provisioned acceptance database"
+      Start-Sleep -Seconds 2
+    }
+  }
 
   # Exercise the same authenticated run-creation POST used by CaptureSessionClient before launching
   # an interactive client. An empty request passes capture authentication and then fails identity
@@ -372,7 +485,7 @@ try {
   if ($managedCaptureAuthProbe.StatusCode -ne 422) { throw "Managed capture authentication probe returned unexpected HTTP $($managedCaptureAuthProbe.StatusCode)" }
 
   $managedSeedPlan = Join-Path $ChromaScapeRoot 'src/test/resources/sc968/micro6-managed-stabilization-plan.json'
-  $baselineManagedIdentity = Initialize-Sc968ManagedCaptureIdentity -Micro6Root $Micro6Root -ContractsRoot $ContractsRoot -BaseUrl $chromaUrl -PlanPath $managedSeedPlan -OutputDirectory (Join-Path $output 'stabilization-baseline') -Name 'baseline' -RunIndex 0
+  $baselineManagedIdentity = Initialize-Sc968ManagedCaptureIdentity -Micro6Root $Micro6Root -ArtifactMicro6Root $SourceMicro6Root -ContractsRoot $ContractsRoot -BaseUrl $chromaUrl -PlanPath $managedSeedPlan -OutputDirectory (Join-Path $output 'stabilization-baseline') -Name 'baseline' -RunIndex 0
 
   # Baseline: the status sidecar is produced by the real Micro6 plugin. No run/session or action
   # data is generated by this harness.
@@ -386,6 +499,9 @@ try {
   # come after RECORDING was already reached. The 2026-08-28 09:45 run failed exactly here: the
   # client sat on LOGIN_SCREEN for the whole 1800 s wait with nothing on screen asking for a login.
   $null = Wait-CaptureClientReady $baselineStatusFile $runtimeTimeout $micro.Pid
+  Wait-LiveSourceManifest -ExecutorUrl $acceptanceExecutorUrl `
+    -SourceIdentity $baselineManagedIdentity `
+    -EvidencePath (Join-Path $output 'baseline-live-source-probe.json')
   Write-Host 'LOG IN NOW (1/3): log into the baseline Micro6 client, then do nothing until the FISH prompt.' -ForegroundColor Cyan
   $null = Wait-CaptureLogin $baselineStatusFile $runtimeTimeout
   Start-CaptureWindow $baselineStartTrigger
@@ -451,6 +567,16 @@ try {
       base_commit=[string]$modelResponse.identity.client.client_build_id }).Json
   $patchProposalId = [string]$failure.proposal_id
   if ([string]::IsNullOrWhiteSpace($patchProposalId)) { throw 'Candidate proposal was not created' }
+  $proposalForReview = (Api $chromaUrl "/api/v1/ai-routine/patches/$patchProposalId" $operatorToken).Json
+  $proposalReviewPath = Join-Path $output 'patch-proposal.json'
+  Write-JsonFile $proposalReviewPath $proposalForReview
+  $humanApproval = Wait-Sc968HumanPatchApproval -ProposalId $patchProposalId `
+    -ProposalHash (Sha256Bytes ([IO.File]::ReadAllBytes($proposalReviewPath))) `
+    -Directory $output -TimeoutSeconds $runtimeTimeout
+  if ((Sha256Bytes ([IO.File]::ReadAllBytes($proposalReviewPath))) -cne $humanApproval.proposal_sha256) {
+    throw 'Reviewed patch proposal changed while waiting for human approval'
+  }
+  Write-JsonFile (Join-Path $output 'human-patch-approval.json') $humanApproval
   Api $chromaUrl "/api/v1/ai-routine/patches/$patchProposalId/approve" $operatorToken 'POST' | Out-Null
   Api $chromaUrl "/api/v1/ai-routine/patches/$patchProposalId/build" $operatorToken 'POST' | Out-Null
   $candidate = $null
@@ -504,7 +630,7 @@ try {
 
   # Second Micro6 launch proves exact candidate retrieval and AccountBuilder loading. Shadow is not
   # opened here: the cross-runner compatibility contract intentionally requires RuneLite capture.
-  $candidateManagedIdentity = Initialize-Sc968ManagedCaptureIdentity -Micro6Root $Micro6Root -ContractsRoot $ContractsRoot -BaseUrl $chromaUrl -PlanPath $managedSeedPlan -OutputDirectory (Join-Path $output 'stabilization-candidate') -Name 'candidate' -RunIndex 1
+  $candidateManagedIdentity = Initialize-Sc968ManagedCaptureIdentity -Micro6Root $Micro6Root -ArtifactMicro6Root $SourceMicro6Root -ContractsRoot $ContractsRoot -BaseUrl $chromaUrl -PlanPath $managedSeedPlan -OutputDirectory (Join-Path $output 'stabilization-candidate') -Name 'candidate' -RunIndex 1
   $candidateStatusFile = Join-Path $output 'candidate-status.json'
   $candidateStartTrigger = Join-Path $output 'candidate-start.trigger'
   Set-Sc968Micro6Environment -BaseUrl $chromaUrl -CaptureToken $captureToken -StatusFile $candidateStatusFile -SpoolDirectory (Join-Path $OutputRoot 'spool/candidate') -ManagedIdentity $candidateManagedIdentity -StartTriggerFile $candidateStartTrigger -CandidateId $candidateId
@@ -513,6 +639,9 @@ try {
   $owned += $candidateMicro
   Wait-LogMarkers $candidateLog $candidateMicro.Pid @('verified exact registry manifest','verified candidate artifact','immediate pre-load artifact rehash passed','applied remote AccountBuilder candidate') $runtimeTimeout
   $null = Wait-CaptureClientReady $candidateStatusFile $runtimeTimeout $candidateMicro.Pid
+  Wait-LiveSourceManifest -ExecutorUrl $acceptanceExecutorUrl `
+    -SourceIdentity $candidateManagedIdentity `
+    -EvidencePath (Join-Path $output 'candidate-live-source-probe.json')
   Write-Host 'LOG IN NOW (2/3): log into the candidate Micro6 client, then do nothing until the FISH prompt.' -ForegroundColor Cyan
   $null = Wait-CaptureLogin $candidateStatusFile $runtimeTimeout
   Start-CaptureWindow $candidateStartTrigger

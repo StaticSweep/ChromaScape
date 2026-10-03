@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Response Validation" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:28:18.509Z" hostname="fedora" time="0.017">
+  <properties/>
+  <testcase name="FAILURE with error but missing code fails validation" classname="com.chromascape.web.debug.patchloop.AnalysisV1ValidatorTest$ResponseValidationTests" time="0.001"/>
+  <testcase name="Valid SUCCESS response passes validation" classname="com.chromascape.web.debug.patchloop.AnalysisV1ValidatorTest$ResponseValidationTests" time="0.0"/>
+  <testcase name="Schema version 1.1.0 in response passes validation (forward compatible)" classname="com.chromascape.web.debug.patchloop.AnalysisV1ValidatorTest$ResponseValidationTests" time="0.0"/>
+  <testcase name="FAILURE status without error fails validation" classname="com.chromascape.web.debug.patchloop.AnalysisV1ValidatorTest$ResponseValidationTests" time="0.001"/>
+  <testcase name="Valid FAILURE response passes validation" classname="com.chromascape.web.debug.patchloop.AnalysisV1ValidatorTest$ResponseValidationTests" time="0.001"/>
+  <testcase name="Unsupported schema version (2.0.0) in response fails validation" classname="com.chromascape.web.debug.patchloop.AnalysisV1ValidatorTest$ResponseValidationTests" time="0.001"/>
+  <testcase name="SUCCESS with diagnosis but missing confidence fails validation" classname="com.chromascape.web.debug.patchloop.AnalysisV1ValidatorTest$ResponseValidationTests" time="0.001"/>
+  <testcase name="Null response fails validation" classname="com.chromascape.web.debug.patchloop.AnalysisV1ValidatorTest$ResponseValidationTests" time="0.001"/>
+  <testcase name="SUCCESS with diagnosis but missing summary fails validation" classname="com.chromascape.web.debug.patchloop.AnalysisV1ValidatorTest$ResponseValidationTests" time="0.0"/>
+  <testcase name="Missing schema version in response fails validation" classname="com.chromascape.web.debug.patchloop.AnalysisV1ValidatorTest$ResponseValidationTests" time="0.0"/>
+  <testcase name="Schema version 1.0.0 in response passes validation (base version)" classname="com.chromascape.web.debug.patchloop.AnalysisV1ValidatorTest$ResponseValidationTests" time="0.001"/>
+  <testcase name="FAILURE with error but missing message fails validation" classname="com.chromascape.web.debug.patchloop.AnalysisV1ValidatorTest$ResponseValidationTests" time="0.001"/>
+  <testcase name="SUCCESS status without diagnosis fails validation" classname="com.chromascape.web.debug.patchloop.AnalysisV1ValidatorTest$ResponseValidationTests" time="0.001"/>
+  <testcase name="Missing status fails validation" classname="com.chromascape.web.debug.patchloop.AnalysisV1ValidatorTest$ResponseValidationTests" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

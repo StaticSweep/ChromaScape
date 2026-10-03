@@ -1,0 +1,510 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.accounttask.config.StabilizationEndpointAuthTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:39:09.669Z" hostname="fedora" time="2.745">
+  <properties/>
+  <testcase name="every endpoint accepts a valid read token (write endpoints need the write token)" classname="com.chromascape.web.accounttask.config.StabilizationEndpointAuthTest" time="2.332"/>
+  <testcase name="every endpoint rejects a missing token when a token is configured" classname="com.chromascape.web.accounttask.config.StabilizationEndpointAuthTest" time="0.062"/>
+  <testcase name="triage resolution with only the read token is rejected" classname="com.chromascape.web.accounttask.config.StabilizationEndpointAuthTest" time="0.049"/>
+  <testcase name="every endpoint permits loopback development requests when no token is configured" classname="com.chromascape.web.accounttask.config.StabilizationEndpointAuthTest" time="0.131"/>
+  <testcase name="every endpoint rejects an invalid token" classname="com.chromascape.web.accounttask.config.StabilizationEndpointAuthTest" time="0.043"/>
+  <testcase name="oversized bodies on the ingestion endpoints are rejected with 413" classname="com.chromascape.web.accounttask.config.StabilizationEndpointAuthTest" time="0.041"/>
+  <testcase name="every endpoint rejects non-loopback requests when no token is configured" classname="com.chromascape.web.accounttask.config.StabilizationEndpointAuthTest" time="0.074"/>
+  <system-out><![CDATA[12:39:11.165 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+12:39:11.288 [Test worker] DEBUG org.hibernate.validator.messageinterpolation.ResourceBundleMessageInterpolator - Loaded expression factory via original TCCL
+12:39:11.290 [Test worker] DEBUG org.hibernate.validator.internal.engine.AbstractConfigurationImpl - Setting custom MessageInterpolator of type org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator
+12:39:11.292 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - Trying to load META-INF/validation.xml for XML based Validator configuration.
+12:39:11.292 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via TCCL
+12:39:11.294 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via Hibernate Validator's class loader
+12:39:11.295 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - No META-INF/validation.xml found. Using annotation based configuration only.
+12:39:11.295 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Found jakarta.persistence.Persistence on classpath containing 'getPersistenceUtil'. Assuming JPA 2 environment. Trying to instantiate JPA aware TraversableResolver
+12:39:11.295 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Instantiated JPA aware TraversableResolver of type org.hibernate.validator.internal.engine.resolver.JPATraversableResolver.
+12:39:11.302 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000252: Using org.hibernate.validator.internal.engine.DefaultPropertyNodeNameProvider as property node name provider.
+12:39:11.303 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator as ValidatorFactory-scoped message interpolator.
+12:39:11.303 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.resolver.JPATraversableResolver as ValidatorFactory-scoped traversable resolver.
+12:39:11.304 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
+12:39:11.304 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
+12:39:11.304 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
+12:39:11.421 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+	c.c.w.a.c.StabilizationController:
+	{GET [/api/account-tasks/stabilization/catalog]}: catalog(boolean)
+	{POST [/api/account-tasks/stabilization/reliability-matrix]}: ingestReliabilityMatrix(JsonNode)
+	{GET [/api/account-tasks/stabilization/runs/{runId}]}: getRunByRunId(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/attempts/{attemptId}]}: getRunByRunIdAndAttemptId(String,String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/attempts]}: getRunAttempts(String)
+	{POST [/api/account-tasks/stabilization/triage/{id}/resolve]}: resolveTriage(Long)
+	{POST [/api/account-tasks/stabilization/ingest-report]}: ingestReport(JsonNode)
+	{POST [/api/account-tasks/stabilization/harness-manifest]}: ingestHarnessManifest(JsonNode)
+	{POST [/api/account-tasks/stabilization/report-bundles], consumes [multipart/form-data]}: ingestReportBundle(HttpServletRequest)
+	{GET [/api/account-tasks/stabilization/kpi]}: kpi()
+	{GET [/api/account-tasks/stabilization/triage]}: openTriage()
+	{GET [/api/account-tasks/stabilization/matrices/{matrixHash}]}: getMatrixByMatrixHash(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/transitions]}: getRunTransitions(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/evidence]}: getRunEvidence(String)
+	{GET [/api/account-tasks/stabilization/artifacts/{artifactId}]}: getArtifact(String)
+12:39:11.457 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - 15 mappings in org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+12:39:11.510 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter - ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+12:39:11.587 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - ControllerAdvice beans: 0 @ExceptionHandler, 1 ResponseBodyAdvice
+12:39:11.621 [Test worker] INFO  org.springframework.mock.web.MockServletContext - Initializing Spring TestDispatcherServlet ''
+12:39:11.622 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Initializing Servlet ''
+12:39:11.626 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected AcceptHeaderLocaleResolver
+12:39:11.627 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected FixedThemeResolver
+12:39:11.627 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@5b076d23
+12:39:11.628 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.support.SessionFlashMapManager@14d43f13
+12:39:11.628 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+12:39:11.629 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Completed initialization in 6 ms
+12:39:11.746 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - POST "/api/account-tasks/stabilization/ingest-report", parameters={}
+12:39:11.789 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#ingestReport(JsonNode)
+12:39:11.841 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessor - Read "application/json" to [{"report_id":"r"}]
+12:39:11.877 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+12:39:11.878 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{reportId=r}]
+12:39:11.885 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 200 OK
+12:39:11.886 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - POST "/api/account-tasks/stabilization/harness-manifest", parameters={}
+12:39:11.887 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#ingestHarnessManifest(JsonNode)
+12:39:11.895 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessor - Read "application/json" to [{"schema_version":"harness-run-manifest/v1"}]
+12:39:11.897 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+12:39:11.897 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{runId=run}]
+12:39:11.898 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 200 OK
+12:39:11.899 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - POST "/api/account-tasks/stabilization/reliability-matrix", parameters={}
+12:39:11.899 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#ingestReliabilityMatrix(JsonNode)
+12:39:11.900 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessor - Read "application/json" to [{"schema_version":"reliability-matrix/v1"}]
+12:39:11.901 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+12:39:11.902 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{matrixHash=m}]
+12:39:11.902 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 200 OK
+12:39:11.903 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/account-tasks/stabilization/runs/run-1", parameters={}
+12:39:11.904 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#getRunByRunId(String)
+12:39:11.908 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/octet-stream', given [*/*] and supported [*/*]
+12:39:11.909 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 404 NOT_FOUND
+12:39:11.909 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/account-tasks/stabilization/runs/run-1/attempts", parameters={}
+12:39:11.910 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#getRunAttempts(String)
+12:39:11.916 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+12:39:11.916 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [[com.chromascape.web.accounttask.entity.ScriptStabilizationRun@5c519681]]
+12:39:11.962 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 200 OK
+12:39:11.963 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/account-tasks/stabilization/runs/run-1/attempts/attempt-1", parameters={}
+12:39:11.963 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#getRunByRunIdAndAttemptId(String, String)
+12:39:11.966 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/octet-stream', given [*/*] and supported [*/*]
+12:39:11.966 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 404 NOT_FOUND
+12:39:11.967 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/account-tasks/stabilization/matrices/sha256:abc", parameters={}
+12:39:11.967 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#getMatrixByMatrixHash(String)
+12:39:11.969 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/octet-stream', given [*/*] and supported [*/*]
+12:39:11.970 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 404 NOT_FOUND
+12:39:11.970 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/account-tasks/stabilization/kpi", parameters={}
+12:39:11.970 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#kpi()
+12:39:11.972 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+12:39:11.972 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{window_24h_count=0}]
+12:39:11.973 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 200 OK
+12:39:11.973 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/account-tasks/stabilization/triage", parameters={}
+12:39:11.974 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#openTriage()
+12:39:11.975 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+12:39:11.975 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [[com.chromascape.web.accounttask.entity.ScriptFailureTriage@7fdf32a4]]
+12:39:11.978 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 200 OK
+12:39:11.979 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - POST "/api/account-tasks/stabilization/triage/42/resolve", parameters={}
+12:39:11.979 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#resolveTriage(Long)
+12:39:11.984 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+12:39:11.984 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [com.chromascape.web.accounttask.entity.ScriptFailureTriage@58e61e18]
+12:39:11.985 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 200 OK
+12:39:11.986 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/account-tasks/stabilization/catalog", parameters={}
+12:39:11.986 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#catalog(boolean)
+12:39:11.989 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+12:39:11.989 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{}]
+12:39:11.990 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 200 OK
+12:39:12.012 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+12:39:12.014 [Test worker] DEBUG org.hibernate.validator.messageinterpolation.ResourceBundleMessageInterpolator - Loaded expression factory via original TCCL
+12:39:12.014 [Test worker] DEBUG org.hibernate.validator.internal.engine.AbstractConfigurationImpl - Setting custom MessageInterpolator of type org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator
+12:39:12.015 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - Trying to load META-INF/validation.xml for XML based Validator configuration.
+12:39:12.015 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via TCCL
+12:39:12.017 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via Hibernate Validator's class loader
+12:39:12.018 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - No META-INF/validation.xml found. Using annotation based configuration only.
+12:39:12.018 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Found jakarta.persistence.Persistence on classpath containing 'getPersistenceUtil'. Assuming JPA 2 environment. Trying to instantiate JPA aware TraversableResolver
+12:39:12.019 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Instantiated JPA aware TraversableResolver of type org.hibernate.validator.internal.engine.resolver.JPATraversableResolver.
+12:39:12.023 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000252: Using org.hibernate.validator.internal.engine.DefaultPropertyNodeNameProvider as property node name provider.
+12:39:12.024 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator as ValidatorFactory-scoped message interpolator.
+12:39:12.024 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.resolver.JPATraversableResolver as ValidatorFactory-scoped traversable resolver.
+12:39:12.024 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
+12:39:12.025 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
+12:39:12.025 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
+12:39:12.043 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+	c.c.w.a.c.StabilizationController:
+	{GET [/api/account-tasks/stabilization/catalog]}: catalog(boolean)
+	{POST [/api/account-tasks/stabilization/reliability-matrix]}: ingestReliabilityMatrix(JsonNode)
+	{GET [/api/account-tasks/stabilization/runs/{runId}]}: getRunByRunId(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/attempts/{attemptId}]}: getRunByRunIdAndAttemptId(String,String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/attempts]}: getRunAttempts(String)
+	{POST [/api/account-tasks/stabilization/triage/{id}/resolve]}: resolveTriage(Long)
+	{POST [/api/account-tasks/stabilization/ingest-report]}: ingestReport(JsonNode)
+	{POST [/api/account-tasks/stabilization/harness-manifest]}: ingestHarnessManifest(JsonNode)
+	{POST [/api/account-tasks/stabilization/report-bundles], consumes [multipart/form-data]}: ingestReportBundle(HttpServletRequest)
+	{GET [/api/account-tasks/stabilization/kpi]}: kpi()
+	{GET [/api/account-tasks/stabilization/triage]}: openTriage()
+	{GET [/api/account-tasks/stabilization/matrices/{matrixHash}]}: getMatrixByMatrixHash(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/transitions]}: getRunTransitions(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/evidence]}: getRunEvidence(String)
+	{GET [/api/account-tasks/stabilization/artifacts/{artifactId}]}: getArtifact(String)
+12:39:12.051 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - 15 mappings in org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+12:39:12.055 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter - ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+12:39:12.056 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - ControllerAdvice beans: 0 @ExceptionHandler, 1 ResponseBodyAdvice
+12:39:12.057 [Test worker] INFO  org.springframework.mock.web.MockServletContext - Initializing Spring TestDispatcherServlet ''
+12:39:12.057 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Initializing Servlet ''
+12:39:12.057 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected AcceptHeaderLocaleResolver
+12:39:12.058 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected FixedThemeResolver
+12:39:12.058 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@4016d5fe
+12:39:12.058 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.support.SessionFlashMapManager@6f8fa77a
+12:39:12.058 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+12:39:12.058 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Completed initialization in 1 ms
+12:39:12.074 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+12:39:12.076 [Test worker] DEBUG org.hibernate.validator.messageinterpolation.ResourceBundleMessageInterpolator - Loaded expression factory via original TCCL
+12:39:12.077 [Test worker] DEBUG org.hibernate.validator.internal.engine.AbstractConfigurationImpl - Setting custom MessageInterpolator of type org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator
+12:39:12.078 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - Trying to load META-INF/validation.xml for XML based Validator configuration.
+12:39:12.078 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via TCCL
+12:39:12.079 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via Hibernate Validator's class loader
+12:39:12.080 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - No META-INF/validation.xml found. Using annotation based configuration only.
+12:39:12.080 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Found jakarta.persistence.Persistence on classpath containing 'getPersistenceUtil'. Assuming JPA 2 environment. Trying to instantiate JPA aware TraversableResolver
+12:39:12.080 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Instantiated JPA aware TraversableResolver of type org.hibernate.validator.internal.engine.resolver.JPATraversableResolver.
+12:39:12.083 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000252: Using org.hibernate.validator.internal.engine.DefaultPropertyNodeNameProvider as property node name provider.
+12:39:12.084 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator as ValidatorFactory-scoped message interpolator.
+12:39:12.084 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.resolver.JPATraversableResolver as ValidatorFactory-scoped traversable resolver.
+12:39:12.084 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
+12:39:12.085 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
+12:39:12.085 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
+12:39:12.099 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+	c.c.w.a.c.StabilizationController:
+	{GET [/api/account-tasks/stabilization/catalog]}: catalog(boolean)
+	{POST [/api/account-tasks/stabilization/reliability-matrix]}: ingestReliabilityMatrix(JsonNode)
+	{GET [/api/account-tasks/stabilization/runs/{runId}]}: getRunByRunId(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/attempts/{attemptId}]}: getRunByRunIdAndAttemptId(String,String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/attempts]}: getRunAttempts(String)
+	{POST [/api/account-tasks/stabilization/triage/{id}/resolve]}: resolveTriage(Long)
+	{POST [/api/account-tasks/stabilization/ingest-report]}: ingestReport(JsonNode)
+	{POST [/api/account-tasks/stabilization/harness-manifest]}: ingestHarnessManifest(JsonNode)
+	{POST [/api/account-tasks/stabilization/report-bundles], consumes [multipart/form-data]}: ingestReportBundle(HttpServletRequest)
+	{GET [/api/account-tasks/stabilization/kpi]}: kpi()
+	{GET [/api/account-tasks/stabilization/triage]}: openTriage()
+	{GET [/api/account-tasks/stabilization/matrices/{matrixHash}]}: getMatrixByMatrixHash(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/transitions]}: getRunTransitions(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/evidence]}: getRunEvidence(String)
+	{GET [/api/account-tasks/stabilization/artifacts/{artifactId}]}: getArtifact(String)
+12:39:12.107 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - 15 mappings in org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+12:39:12.110 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter - ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+12:39:12.111 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - ControllerAdvice beans: 0 @ExceptionHandler, 1 ResponseBodyAdvice
+12:39:12.111 [Test worker] INFO  org.springframework.mock.web.MockServletContext - Initializing Spring TestDispatcherServlet ''
+12:39:12.112 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Initializing Servlet ''
+12:39:12.112 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected AcceptHeaderLocaleResolver
+12:39:12.112 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected FixedThemeResolver
+12:39:12.113 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@142ac60e
+12:39:12.113 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.support.SessionFlashMapManager@43376a03
+12:39:12.113 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+12:39:12.113 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Completed initialization in 1 ms
+12:39:12.125 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+12:39:12.127 [Test worker] DEBUG org.hibernate.validator.messageinterpolation.ResourceBundleMessageInterpolator - Loaded expression factory via original TCCL
+12:39:12.127 [Test worker] DEBUG org.hibernate.validator.internal.engine.AbstractConfigurationImpl - Setting custom MessageInterpolator of type org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator
+12:39:12.128 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - Trying to load META-INF/validation.xml for XML based Validator configuration.
+12:39:12.128 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via TCCL
+12:39:12.132 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via Hibernate Validator's class loader
+12:39:12.132 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - No META-INF/validation.xml found. Using annotation based configuration only.
+12:39:12.133 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Found jakarta.persistence.Persistence on classpath containing 'getPersistenceUtil'. Assuming JPA 2 environment. Trying to instantiate JPA aware TraversableResolver
+12:39:12.133 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Instantiated JPA aware TraversableResolver of type org.hibernate.validator.internal.engine.resolver.JPATraversableResolver.
+12:39:12.136 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000252: Using org.hibernate.validator.internal.engine.DefaultPropertyNodeNameProvider as property node name provider.
+12:39:12.137 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator as ValidatorFactory-scoped message interpolator.
+12:39:12.137 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.resolver.JPATraversableResolver as ValidatorFactory-scoped traversable resolver.
+12:39:12.137 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
+12:39:12.138 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
+12:39:12.138 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
+12:39:12.150 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+	c.c.w.a.c.StabilizationController:
+	{GET [/api/account-tasks/stabilization/catalog]}: catalog(boolean)
+	{POST [/api/account-tasks/stabilization/reliability-matrix]}: ingestReliabilityMatrix(JsonNode)
+	{GET [/api/account-tasks/stabilization/runs/{runId}]}: getRunByRunId(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/attempts/{attemptId}]}: getRunByRunIdAndAttemptId(String,String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/attempts]}: getRunAttempts(String)
+	{POST [/api/account-tasks/stabilization/triage/{id}/resolve]}: resolveTriage(Long)
+	{POST [/api/account-tasks/stabilization/ingest-report]}: ingestReport(JsonNode)
+	{POST [/api/account-tasks/stabilization/harness-manifest]}: ingestHarnessManifest(JsonNode)
+	{POST [/api/account-tasks/stabilization/report-bundles], consumes [multipart/form-data]}: ingestReportBundle(HttpServletRequest)
+	{GET [/api/account-tasks/stabilization/kpi]}: kpi()
+	{GET [/api/account-tasks/stabilization/triage]}: openTriage()
+	{GET [/api/account-tasks/stabilization/matrices/{matrixHash}]}: getMatrixByMatrixHash(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/transitions]}: getRunTransitions(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/evidence]}: getRunEvidence(String)
+	{GET [/api/account-tasks/stabilization/artifacts/{artifactId}]}: getArtifact(String)
+12:39:12.158 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - 15 mappings in org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+12:39:12.163 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter - ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+12:39:12.163 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - ControllerAdvice beans: 0 @ExceptionHandler, 1 ResponseBodyAdvice
+12:39:12.164 [Test worker] INFO  org.springframework.mock.web.MockServletContext - Initializing Spring TestDispatcherServlet ''
+12:39:12.164 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Initializing Servlet ''
+12:39:12.164 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected AcceptHeaderLocaleResolver
+12:39:12.164 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected FixedThemeResolver
+12:39:12.164 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@579b1d86
+12:39:12.165 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.support.SessionFlashMapManager@5d28ac23
+12:39:12.165 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+12:39:12.165 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Completed initialization in 1 ms
+12:39:12.170 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+12:39:12.171 [Test worker] DEBUG org.hibernate.validator.messageinterpolation.ResourceBundleMessageInterpolator - Loaded expression factory via original TCCL
+12:39:12.171 [Test worker] DEBUG org.hibernate.validator.internal.engine.AbstractConfigurationImpl - Setting custom MessageInterpolator of type org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator
+12:39:12.172 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - Trying to load META-INF/validation.xml for XML based Validator configuration.
+12:39:12.172 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via TCCL
+12:39:12.173 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via Hibernate Validator's class loader
+12:39:12.174 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - No META-INF/validation.xml found. Using annotation based configuration only.
+12:39:12.174 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Found jakarta.persistence.Persistence on classpath containing 'getPersistenceUtil'. Assuming JPA 2 environment. Trying to instantiate JPA aware TraversableResolver
+12:39:12.174 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Instantiated JPA aware TraversableResolver of type org.hibernate.validator.internal.engine.resolver.JPATraversableResolver.
+12:39:12.177 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000252: Using org.hibernate.validator.internal.engine.DefaultPropertyNodeNameProvider as property node name provider.
+12:39:12.178 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator as ValidatorFactory-scoped message interpolator.
+12:39:12.179 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.resolver.JPATraversableResolver as ValidatorFactory-scoped traversable resolver.
+12:39:12.179 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
+12:39:12.179 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
+12:39:12.179 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
+12:39:12.190 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+	c.c.w.a.c.StabilizationController:
+	{GET [/api/account-tasks/stabilization/catalog]}: catalog(boolean)
+	{POST [/api/account-tasks/stabilization/reliability-matrix]}: ingestReliabilityMatrix(JsonNode)
+	{GET [/api/account-tasks/stabilization/runs/{runId}]}: getRunByRunId(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/attempts/{attemptId}]}: getRunByRunIdAndAttemptId(String,String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/attempts]}: getRunAttempts(String)
+	{POST [/api/account-tasks/stabilization/triage/{id}/resolve]}: resolveTriage(Long)
+	{POST [/api/account-tasks/stabilization/ingest-report]}: ingestReport(JsonNode)
+	{POST [/api/account-tasks/stabilization/harness-manifest]}: ingestHarnessManifest(JsonNode)
+	{POST [/api/account-tasks/stabilization/report-bundles], consumes [multipart/form-data]}: ingestReportBundle(HttpServletRequest)
+	{GET [/api/account-tasks/stabilization/kpi]}: kpi()
+	{GET [/api/account-tasks/stabilization/triage]}: openTriage()
+	{GET [/api/account-tasks/stabilization/matrices/{matrixHash}]}: getMatrixByMatrixHash(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/transitions]}: getRunTransitions(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/evidence]}: getRunEvidence(String)
+	{GET [/api/account-tasks/stabilization/artifacts/{artifactId}]}: getArtifact(String)
+12:39:12.196 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - 15 mappings in org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+12:39:12.199 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter - ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+12:39:12.200 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - ControllerAdvice beans: 0 @ExceptionHandler, 1 ResponseBodyAdvice
+12:39:12.200 [Test worker] INFO  org.springframework.mock.web.MockServletContext - Initializing Spring TestDispatcherServlet ''
+12:39:12.200 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Initializing Servlet ''
+12:39:12.201 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected AcceptHeaderLocaleResolver
+12:39:12.201 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected FixedThemeResolver
+12:39:12.201 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@466fb9be
+12:39:12.201 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.support.SessionFlashMapManager@282c3aa0
+12:39:12.201 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+12:39:12.201 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Completed initialization in 0 ms
+12:39:12.204 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - POST "/api/account-tasks/stabilization/ingest-report", parameters={}
+12:39:12.204 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#ingestReport(JsonNode)
+12:39:12.206 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessor - Read "application/json" to [{"report_id":"r"}]
+12:39:12.209 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+12:39:12.210 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{reportId=r}]
+12:39:12.210 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 200 OK
+12:39:12.211 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - POST "/api/account-tasks/stabilization/harness-manifest", parameters={}
+12:39:12.211 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#ingestHarnessManifest(JsonNode)
+12:39:12.212 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessor - Read "application/json" to [{"schema_version":"harness-run-manifest/v1"}]
+12:39:12.213 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+12:39:12.213 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{runId=run}]
+12:39:12.214 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 200 OK
+12:39:12.214 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - POST "/api/account-tasks/stabilization/reliability-matrix", parameters={}
+12:39:12.215 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#ingestReliabilityMatrix(JsonNode)
+12:39:12.215 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessor - Read "application/json" to [{"schema_version":"reliability-matrix/v1"}]
+12:39:12.216 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+12:39:12.216 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{matrixHash=m}]
+12:39:12.217 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 200 OK
+12:39:12.217 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/account-tasks/stabilization/runs/run-1", parameters={}
+12:39:12.218 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#getRunByRunId(String)
+12:39:12.219 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/octet-stream', given [*/*] and supported [*/*]
+12:39:12.219 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 404 NOT_FOUND
+12:39:12.220 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/account-tasks/stabilization/runs/run-1/attempts", parameters={}
+12:39:12.220 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#getRunAttempts(String)
+12:39:12.224 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+12:39:12.224 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [[com.chromascape.web.accounttask.entity.ScriptStabilizationRun@74a121fe]]
+12:39:12.230 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 200 OK
+12:39:12.230 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/account-tasks/stabilization/runs/run-1/attempts/attempt-1", parameters={}
+12:39:12.231 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#getRunByRunIdAndAttemptId(String, String)
+12:39:12.232 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/octet-stream', given [*/*] and supported [*/*]
+12:39:12.232 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 404 NOT_FOUND
+12:39:12.233 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/account-tasks/stabilization/matrices/sha256:abc", parameters={}
+12:39:12.234 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#getMatrixByMatrixHash(String)
+12:39:12.235 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/octet-stream', given [*/*] and supported [*/*]
+12:39:12.235 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 404 NOT_FOUND
+12:39:12.235 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/account-tasks/stabilization/kpi", parameters={}
+12:39:12.236 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#kpi()
+12:39:12.238 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+12:39:12.238 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{window_24h_count=0}]
+12:39:12.239 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 200 OK
+12:39:12.239 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/account-tasks/stabilization/triage", parameters={}
+12:39:12.240 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#openTriage()
+12:39:12.241 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+12:39:12.241 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [[com.chromascape.web.accounttask.entity.ScriptFailureTriage@12639753]]
+12:39:12.243 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 200 OK
+12:39:12.244 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - POST "/api/account-tasks/stabilization/triage/42/resolve", parameters={}
+12:39:12.244 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#resolveTriage(Long)
+12:39:12.247 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+12:39:12.247 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [com.chromascape.web.accounttask.entity.ScriptFailureTriage@7c5a7f]
+12:39:12.248 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 200 OK
+12:39:12.248 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/account-tasks/stabilization/catalog", parameters={}
+12:39:12.249 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.accounttask.controller.StabilizationController#catalog(boolean)
+12:39:12.250 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+12:39:12.251 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{}]
+12:39:12.251 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 200 OK
+12:39:12.257 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+12:39:12.259 [Test worker] DEBUG org.hibernate.validator.messageinterpolation.ResourceBundleMessageInterpolator - Loaded expression factory via original TCCL
+12:39:12.259 [Test worker] DEBUG org.hibernate.validator.internal.engine.AbstractConfigurationImpl - Setting custom MessageInterpolator of type org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator
+12:39:12.260 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - Trying to load META-INF/validation.xml for XML based Validator configuration.
+12:39:12.260 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via TCCL
+12:39:12.261 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via Hibernate Validator's class loader
+12:39:12.262 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - No META-INF/validation.xml found. Using annotation based configuration only.
+12:39:12.262 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Found jakarta.persistence.Persistence on classpath containing 'getPersistenceUtil'. Assuming JPA 2 environment. Trying to instantiate JPA aware TraversableResolver
+12:39:12.262 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Instantiated JPA aware TraversableResolver of type org.hibernate.validator.internal.engine.resolver.JPATraversableResolver.
+12:39:12.265 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000252: Using org.hibernate.validator.internal.engine.DefaultPropertyNodeNameProvider as property node name provider.
+12:39:12.266 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator as ValidatorFactory-scoped message interpolator.
+12:39:12.266 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.resolver.JPATraversableResolver as ValidatorFactory-scoped traversable resolver.
+12:39:12.266 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
+12:39:12.266 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
+12:39:12.266 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
+12:39:12.276 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+	c.c.w.a.c.StabilizationController:
+	{GET [/api/account-tasks/stabilization/catalog]}: catalog(boolean)
+	{POST [/api/account-tasks/stabilization/reliability-matrix]}: ingestReliabilityMatrix(JsonNode)
+	{GET [/api/account-tasks/stabilization/runs/{runId}]}: getRunByRunId(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/attempts/{attemptId}]}: getRunByRunIdAndAttemptId(String,String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/attempts]}: getRunAttempts(String)
+	{POST [/api/account-tasks/stabilization/triage/{id}/resolve]}: resolveTriage(Long)
+	{POST [/api/account-tasks/stabilization/ingest-report]}: ingestReport(JsonNode)
+	{POST [/api/account-tasks/stabilization/harness-manifest]}: ingestHarnessManifest(JsonNode)
+	{POST [/api/account-tasks/stabilization/report-bundles], consumes [multipart/form-data]}: ingestReportBundle(HttpServletRequest)
+	{GET [/api/account-tasks/stabilization/kpi]}: kpi()
+	{GET [/api/account-tasks/stabilization/triage]}: openTriage()
+	{GET [/api/account-tasks/stabilization/matrices/{matrixHash}]}: getMatrixByMatrixHash(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/transitions]}: getRunTransitions(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/evidence]}: getRunEvidence(String)
+	{GET [/api/account-tasks/stabilization/artifacts/{artifactId}]}: getArtifact(String)
+12:39:12.283 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - 15 mappings in org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+12:39:12.286 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter - ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+12:39:12.287 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - ControllerAdvice beans: 0 @ExceptionHandler, 1 ResponseBodyAdvice
+12:39:12.287 [Test worker] INFO  org.springframework.mock.web.MockServletContext - Initializing Spring TestDispatcherServlet ''
+12:39:12.287 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Initializing Servlet ''
+12:39:12.287 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected AcceptHeaderLocaleResolver
+12:39:12.287 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected FixedThemeResolver
+12:39:12.288 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@292d1705
+12:39:12.288 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.support.SessionFlashMapManager@70796b21
+12:39:12.288 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+12:39:12.288 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Completed initialization in 1 ms
+12:39:12.301 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+12:39:12.303 [Test worker] DEBUG org.hibernate.validator.messageinterpolation.ResourceBundleMessageInterpolator - Loaded expression factory via original TCCL
+12:39:12.303 [Test worker] DEBUG org.hibernate.validator.internal.engine.AbstractConfigurationImpl - Setting custom MessageInterpolator of type org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator
+12:39:12.304 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - Trying to load META-INF/validation.xml for XML based Validator configuration.
+12:39:12.304 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via TCCL
+12:39:12.305 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via Hibernate Validator's class loader
+12:39:12.305 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - No META-INF/validation.xml found. Using annotation based configuration only.
+12:39:12.305 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Found jakarta.persistence.Persistence on classpath containing 'getPersistenceUtil'. Assuming JPA 2 environment. Trying to instantiate JPA aware TraversableResolver
+12:39:12.306 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Instantiated JPA aware TraversableResolver of type org.hibernate.validator.internal.engine.resolver.JPATraversableResolver.
+12:39:12.308 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000252: Using org.hibernate.validator.internal.engine.DefaultPropertyNodeNameProvider as property node name provider.
+12:39:12.309 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator as ValidatorFactory-scoped message interpolator.
+12:39:12.310 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.resolver.JPATraversableResolver as ValidatorFactory-scoped traversable resolver.
+12:39:12.310 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
+12:39:12.311 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
+12:39:12.311 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
+12:39:12.321 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+	c.c.w.a.c.StabilizationController:
+	{GET [/api/account-tasks/stabilization/catalog]}: catalog(boolean)
+	{POST [/api/account-tasks/stabilization/reliability-matrix]}: ingestReliabilityMatrix(JsonNode)
+	{GET [/api/account-tasks/stabilization/runs/{runId}]}: getRunByRunId(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/attempts/{attemptId}]}: getRunByRunIdAndAttemptId(String,String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/attempts]}: getRunAttempts(String)
+	{POST [/api/account-tasks/stabilization/triage/{id}/resolve]}: resolveTriage(Long)
+	{POST [/api/account-tasks/stabilization/ingest-report]}: ingestReport(JsonNode)
+	{POST [/api/account-tasks/stabilization/harness-manifest]}: ingestHarnessManifest(JsonNode)
+	{POST [/api/account-tasks/stabilization/report-bundles], consumes [multipart/form-data]}: ingestReportBundle(HttpServletRequest)
+	{GET [/api/account-tasks/stabilization/kpi]}: kpi()
+	{GET [/api/account-tasks/stabilization/triage]}: openTriage()
+	{GET [/api/account-tasks/stabilization/matrices/{matrixHash}]}: getMatrixByMatrixHash(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/transitions]}: getRunTransitions(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/evidence]}: getRunEvidence(String)
+	{GET [/api/account-tasks/stabilization/artifacts/{artifactId}]}: getArtifact(String)
+12:39:12.327 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - 15 mappings in org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+12:39:12.330 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter - ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+12:39:12.331 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - ControllerAdvice beans: 0 @ExceptionHandler, 1 ResponseBodyAdvice
+12:39:12.331 [Test worker] INFO  org.springframework.mock.web.MockServletContext - Initializing Spring TestDispatcherServlet ''
+12:39:12.331 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Initializing Servlet ''
+12:39:12.331 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected AcceptHeaderLocaleResolver
+12:39:12.332 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected FixedThemeResolver
+12:39:12.332 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@7f9083b4
+12:39:12.332 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.support.SessionFlashMapManager@40f40221
+12:39:12.332 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+12:39:12.332 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Completed initialization in 1 ms
+12:39:12.343 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+12:39:12.344 [Test worker] DEBUG org.hibernate.validator.messageinterpolation.ResourceBundleMessageInterpolator - Loaded expression factory via original TCCL
+12:39:12.344 [Test worker] DEBUG org.hibernate.validator.internal.engine.AbstractConfigurationImpl - Setting custom MessageInterpolator of type org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator
+12:39:12.345 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - Trying to load META-INF/validation.xml for XML based Validator configuration.
+12:39:12.345 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via TCCL
+12:39:12.346 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via Hibernate Validator's class loader
+12:39:12.347 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - No META-INF/validation.xml found. Using annotation based configuration only.
+12:39:12.347 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Found jakarta.persistence.Persistence on classpath containing 'getPersistenceUtil'. Assuming JPA 2 environment. Trying to instantiate JPA aware TraversableResolver
+12:39:12.347 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Instantiated JPA aware TraversableResolver of type org.hibernate.validator.internal.engine.resolver.JPATraversableResolver.
+12:39:12.350 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000252: Using org.hibernate.validator.internal.engine.DefaultPropertyNodeNameProvider as property node name provider.
+12:39:12.351 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator as ValidatorFactory-scoped message interpolator.
+12:39:12.351 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.resolver.JPATraversableResolver as ValidatorFactory-scoped traversable resolver.
+12:39:12.351 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
+12:39:12.351 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
+12:39:12.351 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
+12:39:12.362 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+	c.c.w.a.c.StabilizationController:
+	{GET [/api/account-tasks/stabilization/catalog]}: catalog(boolean)
+	{POST [/api/account-tasks/stabilization/reliability-matrix]}: ingestReliabilityMatrix(JsonNode)
+	{GET [/api/account-tasks/stabilization/runs/{runId}]}: getRunByRunId(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/attempts/{attemptId}]}: getRunByRunIdAndAttemptId(String,String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/attempts]}: getRunAttempts(String)
+	{POST [/api/account-tasks/stabilization/triage/{id}/resolve]}: resolveTriage(Long)
+	{POST [/api/account-tasks/stabilization/ingest-report]}: ingestReport(JsonNode)
+	{POST [/api/account-tasks/stabilization/harness-manifest]}: ingestHarnessManifest(JsonNode)
+	{POST [/api/account-tasks/stabilization/report-bundles], consumes [multipart/form-data]}: ingestReportBundle(HttpServletRequest)
+	{GET [/api/account-tasks/stabilization/kpi]}: kpi()
+	{GET [/api/account-tasks/stabilization/triage]}: openTriage()
+	{GET [/api/account-tasks/stabilization/matrices/{matrixHash}]}: getMatrixByMatrixHash(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/transitions]}: getRunTransitions(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/evidence]}: getRunEvidence(String)
+	{GET [/api/account-tasks/stabilization/artifacts/{artifactId}]}: getArtifact(String)
+12:39:12.371 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - 15 mappings in org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+12:39:12.375 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter - ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+12:39:12.375 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - ControllerAdvice beans: 0 @ExceptionHandler, 1 ResponseBodyAdvice
+12:39:12.376 [Test worker] INFO  org.springframework.mock.web.MockServletContext - Initializing Spring TestDispatcherServlet ''
+12:39:12.376 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Initializing Servlet ''
+12:39:12.376 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected AcceptHeaderLocaleResolver
+12:39:12.376 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected FixedThemeResolver
+12:39:12.376 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@7ab5b01a
+12:39:12.376 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.support.SessionFlashMapManager@25fa5c0c
+12:39:12.376 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+12:39:12.376 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Completed initialization in 0 ms
+12:39:12.381 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+12:39:12.382 [Test worker] DEBUG org.hibernate.validator.messageinterpolation.ResourceBundleMessageInterpolator - Loaded expression factory via original TCCL
+12:39:12.382 [Test worker] DEBUG org.hibernate.validator.internal.engine.AbstractConfigurationImpl - Setting custom MessageInterpolator of type org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator
+12:39:12.383 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - Trying to load META-INF/validation.xml for XML based Validator configuration.
+12:39:12.383 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via TCCL
+12:39:12.384 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via Hibernate Validator's class loader
+12:39:12.385 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - No META-INF/validation.xml found. Using annotation based configuration only.
+12:39:12.386 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Found jakarta.persistence.Persistence on classpath containing 'getPersistenceUtil'. Assuming JPA 2 environment. Trying to instantiate JPA aware TraversableResolver
+12:39:12.386 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Instantiated JPA aware TraversableResolver of type org.hibernate.validator.internal.engine.resolver.JPATraversableResolver.
+12:39:12.389 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000252: Using org.hibernate.validator.internal.engine.DefaultPropertyNodeNameProvider as property node name provider.
+12:39:12.390 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator as ValidatorFactory-scoped message interpolator.
+12:39:12.390 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.resolver.JPATraversableResolver as ValidatorFactory-scoped traversable resolver.
+12:39:12.390 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
+12:39:12.390 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
+12:39:12.390 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
+12:39:12.400 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+	c.c.w.a.c.StabilizationController:
+	{GET [/api/account-tasks/stabilization/catalog]}: catalog(boolean)
+	{POST [/api/account-tasks/stabilization/reliability-matrix]}: ingestReliabilityMatrix(JsonNode)
+	{GET [/api/account-tasks/stabilization/runs/{runId}]}: getRunByRunId(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/attempts/{attemptId}]}: getRunByRunIdAndAttemptId(String,String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/attempts]}: getRunAttempts(String)
+	{POST [/api/account-tasks/stabilization/triage/{id}/resolve]}: resolveTriage(Long)
+	{POST [/api/account-tasks/stabilization/ingest-report]}: ingestReport(JsonNode)
+	{POST [/api/account-tasks/stabilization/harness-manifest]}: ingestHarnessManifest(JsonNode)
+	{POST [/api/account-tasks/stabilization/report-bundles], consumes [multipart/form-data]}: ingestReportBundle(HttpServletRequest)
+	{GET [/api/account-tasks/stabilization/kpi]}: kpi()
+	{GET [/api/account-tasks/stabilization/triage]}: openTriage()
+	{GET [/api/account-tasks/stabilization/matrices/{matrixHash}]}: getMatrixByMatrixHash(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/transitions]}: getRunTransitions(String)
+	{GET [/api/account-tasks/stabilization/runs/{runId}/evidence]}: getRunEvidence(String)
+	{GET [/api/account-tasks/stabilization/artifacts/{artifactId}]}: getArtifact(String)
+12:39:12.405 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - 15 mappings in org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+12:39:12.408 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter - ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+12:39:12.408 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - ControllerAdvice beans: 0 @ExceptionHandler, 1 ResponseBodyAdvice
+12:39:12.409 [Test worker] INFO  org.springframework.mock.web.MockServletContext - Initializing Spring TestDispatcherServlet ''
+12:39:12.409 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Initializing Servlet ''
+12:39:12.409 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected AcceptHeaderLocaleResolver
+12:39:12.409 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected FixedThemeResolver
+12:39:12.409 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@2102eb7a
+12:39:12.409 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.support.SessionFlashMapManager@4ebf82d9
+12:39:12.409 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+12:39:12.409 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Completed initialization in 0 ms
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

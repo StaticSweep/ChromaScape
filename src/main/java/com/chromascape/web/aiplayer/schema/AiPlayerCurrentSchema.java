@@ -15,6 +15,7 @@ import org.springframework.core.io.ClassPathResource;
  */
 public final class AiPlayerCurrentSchema {
   public static final String IDENTITY = "sc641-current-v1";
+  public static final int MIGRATION_COUNT = 5;
   public static final String LOCATION = "classpath:db/ai-player-current";
   private static final long LOCK = 66520261002L;
   private final DataSource dataSource;
@@ -175,12 +176,12 @@ public final class AiPlayerCurrentSchema {
       if (java.util.Arrays.stream(flyway.info().all())
                   .filter(info -> info.getVersion() != null)
                   .count()
-              != 4
+              != MIGRATION_COUNT
           || flyway.info().pending().length != 0
           || java.util.Arrays.stream(flyway.info().applied())
                   .filter(info -> info.getVersion() != null)
                   .count()
-              != 4) {
+              != MIGRATION_COUNT) {
         throw mismatch();
       }
       if (!IDENTITY.equals(pinned.getProperty("identity"))

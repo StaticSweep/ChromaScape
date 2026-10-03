@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.prototype.FishingActionNormalizerTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:39:16.240Z" hostname="fedora" time="0.015">
+  <properties/>
+  <testcase name="walking, banking, inventory, object, and unrelated NPC actions are unsupported" classname="com.chromascape.web.aiplayer.prototype.FishingActionNormalizerTest" time="0.005"/>
+  <testcase name="CANCEL actions are ignored" classname="com.chromascape.web.aiplayer.prototype.FishingActionNormalizerTest" time="0.0"/>
+  <testcase name="supported fishing options normalize" classname="com.chromascape.web.aiplayer.prototype.FishingActionNormalizerTest" time="0.001"/>
+  <testcase name="RuneLite markup, nbsp, and whitespace normalize to the canonical target" classname="com.chromascape.web.aiplayer.prototype.FishingActionNormalizerTest" time="0.001"/>
+  <testcase name="all five NPC option families are accepted" classname="com.chromascape.web.aiplayer.prototype.FishingActionNormalizerTest" time="0.001"/>
+  <testcase name="a fishing option on a non-fishing target is unsupported" classname="com.chromascape.web.aiplayer.prototype.FishingActionNormalizerTest" time="0.001"/>
+  <testcase name="supported fishing NPC clicks are accepted" classname="com.chromascape.web.aiplayer.prototype.FishingActionNormalizerTest" time="0.006"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

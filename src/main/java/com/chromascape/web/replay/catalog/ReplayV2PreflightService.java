@@ -8,29 +8,34 @@ import com.chromascape.web.replay.api.dto.XrspsPreflightResponse;
 import com.chromascape.web.replay.capability.CapabilityManifest;
 import com.chromascape.web.replay.capability.ReplayCapabilityService;
 import com.chromascape.web.replay.catalog.ReplayRecordingResolver.ResolvedRecording;
+import com.chromascape.web.replay.catalog.dto.ReplayBlockingReason;
+import com.chromascape.web.replay.catalog.dto.ReplayEligibility;
 import com.chromascape.web.replay.conversion.ConversionMode;
 import com.chromascape.web.replay.conversion.ConversionQuality;
 import com.chromascape.web.replay.conversion.ConvertedReplayAction;
 import com.chromascape.web.replay.conversion.ReplayActionConversionResult;
 import com.chromascape.web.replay.conversion.ReplayActionConversionService;
-import com.chromascape.web.replay.catalog.dto.ReplayBlockingReason;
-import com.chromascape.web.replay.catalog.dto.ReplayEligibility;
 import com.chromascape.web.replay.error.ReplayErrorCode;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Computes the v2 recording preview without creating a curation, manifest, run, or artifact.
- * A preview can therefore safely be called by the debugger as the capability handshake changes.
+ * Computes the v2 recording preview without creating a curation, manifest, run, or artifact. A
+ * preview can therefore safely be called by the debugger as the capability handshake changes.
  */
 @Service
 @Transactional(readOnly = true)
 public class ReplayV2PreflightService {
+
+  private static final Set<String> SUPPORTED_FISHING_OPTIONS =
+      Set.of("net", "bait", "lure", "cage", "harpoon");
 
   private final ReplayRecordingResolver resolver;
   private final RecordingIntegrityService integrityService;
@@ -63,16 +68,7 @@ public class ReplayV2PreflightService {
 
     DebugSession session = resolved.debugSession();
     if (session == null || session.getSessionId() == null || session.getSessionId().isBlank()) {
-      return response(
-          recordingId,
-          null,
-          base,
-          mode,
-          null,
-          blockers,
-          capability,
-          false,
-          false);
+      return response(recordingId, null, base, mode, null, blockers, capability, false, false);
     }
 
     var minTick = snapshotRepository.findMinTickBySessionId(session.getSessionId());
@@ -107,10 +103,15 @@ public class ReplayV2PreflightService {
           "Tick snapshots do not cover the complete recording range",
           "Repair or recapture the missing ticks before simulation");
     }
-    addInitialStateBlockers(snapshots, blockers);
-
     ReplayActionConversionResult conversion =
         conversionService.convert(session.getSessionId(), startTick, endTick, mode);
+    addInitialStateBlockers(snapshots, conversion, blockers);
+    boolean authoritativeNpcPins =
+        conversion != null && conversion.quality() == ConversionQuality.CERTIFIED;
+    for (ReplayNpcPinValidator.Violation violation :
+        ReplayNpcPinValidator.validate(snapshots, conversion, authoritativeNpcPins)) {
+      addBlocker(blockers, violation.code(), violation.message(), violation.remediation());
+    }
     List<String> unsupported = unsupportedActions(conversion, capability);
     if (!conversion.hasExecutableActions()) {
       addBlocker(
@@ -186,12 +187,16 @@ public class ReplayV2PreflightService {
       CapabilityManifest capability,
       boolean simulationEligible,
       boolean certificationEligible) {
-    ConversionQuality quality = conversion == null ? ConversionQuality.UNSUPPORTED : conversion.quality();
+    ConversionQuality quality =
+        conversion == null ? ConversionQuality.UNSUPPORTED : conversion.quality();
     int actionCount = conversion == null ? 0 : conversion.actions().size();
     int typedCount = conversion == null ? 0 : conversion.typedActionCount();
     int legacyCount = conversion == null ? 0 : conversion.legacyLogCount();
     double coverage = conversion == null ? 0.0 : conversion.actionCoveragePct();
-    var gaps = conversion == null ? List.<com.chromascape.web.replay.conversion.ReplayGap>of() : conversion.gaps();
+    var gaps =
+        conversion == null
+            ? List.<com.chromascape.web.replay.conversion.ReplayGap>of()
+            : conversion.gaps();
     var approximations =
         conversion == null
             ? List.<com.chromascape.web.replay.conversion.ReplayApproximation>of()
@@ -247,7 +252,9 @@ public class ReplayV2PreflightService {
   }
 
   private void addInitialStateBlockers(
-      List<TickSnapshot> snapshots, List<ReplayBlockingReason> blockers) {
+      List<TickSnapshot> snapshots,
+      ReplayActionConversionResult conversion,
+      List<ReplayBlockingReason> blockers) {
     if (snapshots == null || snapshots.isEmpty()) return;
     TickSnapshot first = snapshots.get(0);
     JsonNode playerState = first.getPlayerState();
@@ -286,21 +293,182 @@ public class ReplayV2PreflightService {
           "Initial world has no typed NPC list",
           "Capture stable NPC identities and positions at the recording start");
     } else {
-      Set<String> ids = new HashSet<>();
+      Set<String> referencedNpcIds = new HashSet<>();
+      Map<String, Set<String>> spotTypeCandidates = new HashMap<>();
+      Map<String, List<JsonNode>> npcsByStableId = new HashMap<>();
       for (JsonNode npc : npcs) {
-        String stableId = npc.path("stableId").asText(null);
-        if (!npc.isObject()
-            || !nonblank(stableId)
-            || positionNode(npc) == null
-            || !nonblank(npc.path("spotType").asText(null))
-            || !ids.add(stableId)) {
+        String stableId = npc == null ? null : npc.path("stableId").asText(null);
+        if (npc == null || !npc.isObject() || !nonblank(stableId) || positionNode(npc) == null) {
           addBlocker(
               blockers,
               ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
-              "Initial NPC world state lacks a unique stable identity, position, or spot type",
-              "Capture complete typed NPC state at the recording start");
-          break;
+              "Initial NPC world state lacks a stable identity or position",
+              "Capture stable NPC identities and positions at the recording start");
+          continue;
         }
+        npcsByStableId.computeIfAbsent(stableId, ignored -> new ArrayList<>()).add(npc);
+      }
+      if (conversion != null && conversion.actions() != null) {
+        for (ConvertedReplayAction converted : conversion.actions()) {
+          if (converted == null
+              || converted.action() == null
+              || (!"INTERACT_NPC".equals(converted.action().getActionType())
+                  && !"USE_ITEM_ON_NPC".equals(converted.action().getActionType()))) {
+            continue;
+          }
+          String stableId = textValue(converted.action().getTarget(), "stableId");
+          if (!nonblank(stableId)) {
+            addBlocker(
+                blockers,
+                ReplayErrorCode.ACTION_TARGET_UNRESOLVED,
+                "INTERACT_NPC action has no stable target id",
+                "Capture a stable NPC identity at the semantic dispatch boundary");
+            continue;
+          }
+          referencedNpcIds.add(stableId);
+          List<JsonNode> matches = npcsByStableId.getOrDefault(stableId, List.of());
+          if (matches.isEmpty()) {
+            addBlocker(
+                blockers,
+                ReplayErrorCode.ACTION_TARGET_UNRESOLVED,
+                "Referenced NPC target " + stableId + " is absent from the initial world",
+                "Capture the referenced NPC at the recording start");
+            continue;
+          }
+          if (matches.size() > 1) {
+            addBlocker(
+                blockers,
+                ReplayErrorCode.ACTION_AMBIGUOUS,
+                "Referenced NPC target " + stableId + " is duplicated in the initial world",
+                "Capture each stable NPC identity exactly once");
+            continue;
+          }
+          JsonNode target = matches.get(0);
+          String option = normalizedText(converted.action().getArguments(), "option");
+          if ("USE_ITEM_ON_NPC".equals(converted.action().getActionType())) {
+            // The legacy action has no menu option; its item/tool contract is validated by the
+            // conversion and worker boundary. It still requires a uniquely resolved NPC.
+            continue;
+          }
+          if (option == null) {
+            addBlocker(
+                blockers,
+                ReplayErrorCode.ACTION_UNSUPPORTED,
+                "INTERACT_NPC action for " + stableId + " has no selected option",
+                "Capture the server-facing NPC menu option");
+            continue;
+          }
+          String recordedSpotType = normalizedText(target, "spotType");
+          boolean fishingAction =
+              isSupportedFishingOption(option)
+                  && (recordedSpotType == null || isSupportedFishingOption(recordedSpotType));
+          if (fishingAction) {
+            spotTypeCandidates.computeIfAbsent(stableId, ignored -> new HashSet<>()).add(option);
+            if (isSupportedFishingOption(recordedSpotType) && !recordedSpotType.equals(option)) {
+              addBlocker(
+                  blockers,
+                  ReplayErrorCode.ACTION_UNSUPPORTED,
+                  "NPC target "
+                      + stableId
+                      + " records spotType "
+                      + recordedSpotType
+                      + " but the action selects "
+                      + option,
+                  "Align the action option with the recorded NPC spot type");
+            }
+          } else if (!hasNpcOption(target, option)) {
+            addBlocker(
+                blockers,
+                ReplayErrorCode.ACTION_UNSUPPORTED,
+                "Generic NPC " + stableId + " does not expose recorded option '" + option + "'",
+                "Capture the NPC's server menu options at the dispatch tick");
+          }
+        }
+      }
+
+      for (String stableId : referencedNpcIds) {
+        List<JsonNode> matches = npcsByStableId.getOrDefault(stableId, List.of());
+        if (matches.isEmpty()) {
+          addBlocker(
+              blockers,
+              ReplayErrorCode.ACTION_TARGET_UNRESOLVED,
+              "Referenced NPC target " + stableId + " is absent from the initial world",
+              "Capture the referenced NPC at the recording start");
+        } else if (matches.size() > 1) {
+          addBlocker(
+              blockers,
+              ReplayErrorCode.ACTION_AMBIGUOUS,
+              "Referenced NPC target " + stableId + " is duplicated in the initial world",
+              "Capture each stable NPC identity exactly once");
+        }
+        if (!spotTypeCandidates.getOrDefault(stableId, Set.of()).isEmpty()
+            && spotTypeCandidates.getOrDefault(stableId, Set.of()).size() != 1) {
+          addBlocker(
+              blockers,
+              ReplayErrorCode.ACTION_AMBIGUOUS,
+              "Referenced NPC target " + stableId + " has no single supported fishing option",
+              "Capture one unambiguous semantic option for the target");
+        }
+      }
+
+      int retainedNpcCount = 0;
+      Set<String> retainedIds = new HashSet<>();
+      for (JsonNode npc : npcs) {
+        String stableId = npc == null ? null : npc.path("stableId").asText(null);
+        if (!nonblank(stableId) || positionNode(npc) == null) continue;
+        boolean referenced = referencedNpcIds.contains(stableId);
+        String recordedSpotType = npc.path("spotType").asText(null);
+        if (!referenced && !isSupportedFishingOption(recordedSpotType)) {
+          // Nearby non-fishing NPCs are valid capture context, but the fishing kernel must not
+          // be forced to invent a spot type for an NPC no action ever targets.
+          continue;
+        }
+        if (referenced) {
+          if (nonblank(recordedSpotType)
+              && !isSupportedFishingOption(recordedSpotType)
+              && spotTypeCandidates.containsKey(stableId)) {
+            addBlocker(
+                blockers,
+                ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
+                "Referenced NPC " + stableId + " has unsupported spotType " + recordedSpotType,
+                "Capture a supported fishing spot type for the referenced NPC");
+          }
+          String inferred =
+              spotTypeCandidates.getOrDefault(stableId, Set.of()).stream().findFirst().orElse(null);
+          if (isSupportedFishingOption(recordedSpotType)
+              && inferred != null
+              && !recordedSpotType.equals(inferred)) {
+            addBlocker(
+                blockers,
+                ReplayErrorCode.ACTION_UNSUPPORTED,
+                "NPC target "
+                    + stableId
+                    + " records spotType "
+                    + recordedSpotType
+                    + " but the action selects "
+                    + inferred,
+                "Align the action option with the recorded NPC spot type");
+          }
+        }
+        if (isSupportedFishingOption(recordedSpotType)
+            || (referenced && !spotTypeCandidates.getOrDefault(stableId, Set.of()).isEmpty())
+            || (referenced && !spotTypeCandidates.containsKey(stableId))) {
+          retainedNpcCount++;
+          if (!retainedIds.add(stableId)) {
+            addBlocker(
+                blockers,
+                ReplayErrorCode.ACTION_AMBIGUOUS,
+                "Initial NPC target " + stableId + " is not unique",
+                "Capture each stable NPC identity exactly once");
+          }
+        }
+      }
+      if (retainedNpcCount == 0) {
+        addBlocker(
+            blockers,
+            ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
+            "Initial world contains no supported fishing NPC",
+            "Capture the fishing NPC referenced by the semantic action stream");
       }
     }
     if (first.getGameObjects() == null || first.getGroundItems() == null) {
@@ -320,6 +488,9 @@ public class ReplayV2PreflightService {
           EQUIPMENT_SLOT_MISSING,
           SIM_INITIAL_STATE_INCOMPLETE,
           SIM_INITIAL_WORLD_INCOMPLETE,
+          ACTION_TARGET_UNRESOLVED,
+          ACTION_AMBIGUOUS,
+          ACTION_UNSUPPORTED,
           TICK_GAP_DETECTED,
           NO_TICK_SNAPSHOTS,
           DEBUG_SESSION_NOT_FINALIZED,
@@ -335,11 +506,11 @@ public class ReplayV2PreflightService {
       String remediation) {
     boolean present =
         blockers.stream()
-            .anyMatch(reason -> reason.mode() == ReplayMode.CAUSAL_SIMULATION && reason.code() == code);
+            .anyMatch(
+                reason -> reason.mode() == ReplayMode.CAUSAL_SIMULATION && reason.code() == code);
     if (!present) {
       blockers.add(
-          new ReplayBlockingReason(
-              ReplayMode.CAUSAL_SIMULATION, code, message, remediation));
+          new ReplayBlockingReason(ReplayMode.CAUSAL_SIMULATION, code, message, remediation));
     }
   }
 
@@ -379,5 +550,39 @@ public class ReplayV2PreflightService {
 
   private static boolean nonblank(String value) {
     return value != null && !value.isBlank();
+  }
+
+  private static boolean isSupportedFishingOption(String value) {
+    return value != null && SUPPORTED_FISHING_OPTIONS.contains(value.trim().toLowerCase());
+  }
+
+  private static String textValue(Map<String, Object> values, String key) {
+    if (values == null) return null;
+    Object value = values.get(key);
+    return value instanceof String text && !text.isBlank() ? text : null;
+  }
+
+  private static String normalizedText(Map<String, Object> values, String key) {
+    String value = textValue(values, key);
+    return value == null ? null : value.trim().toLowerCase();
+  }
+
+  private static String normalizedText(JsonNode node, String key) {
+    if (node == null || !node.has(key) || !node.get(key).isTextual()) return null;
+    String value = node.get(key).asText().trim().toLowerCase();
+    return value.isBlank() ? null : value;
+  }
+
+  private static boolean hasNpcOption(JsonNode npc, String option) {
+    if (npc == null || option == null) return false;
+    JsonNode options = npc.has("actions") ? npc.get("actions") : npc.get("options");
+    if (options == null || !options.isArray()) return false;
+    String expected = option.trim().toLowerCase();
+    for (JsonNode candidate : options) {
+      if (candidate.isTextual() && expected.equals(candidate.asText().trim().toLowerCase())) {
+        return true;
+      }
+    }
+    return false;
   }
 }

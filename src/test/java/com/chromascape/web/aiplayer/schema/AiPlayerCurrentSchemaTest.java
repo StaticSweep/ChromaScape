@@ -79,7 +79,8 @@ class AiPlayerCurrentSchemaTest {
     assertEquals(fixture, scalar("SELECT row_to_json(p)::text FROM ai_player_behavior_profiles p"));
     assertEquals("preserve-me", scalar("SELECT value FROM public.sc665_outside_sentinel"));
     assertEquals(
-        "4", scalar("SELECT count(*) FROM flyway_schema_history WHERE version IS NOT NULL"));
+        Integer.toString(AiPlayerCurrentSchema.MIGRATION_COUNT),
+        scalar("SELECT count(*) FROM flyway_schema_history WHERE version IS NOT NULL"));
   }
 
   @Test
@@ -256,7 +257,8 @@ class AiPlayerCurrentSchemaTest {
     sql("DROP TABLE ai_player_schema_identity");
     assertThrows(IllegalStateException.class, schema::bootstrap);
     assertEquals(
-        "4", scalar("SELECT count(*) FROM flyway_schema_history WHERE version IS NOT NULL"));
+        Integer.toString(AiPlayerCurrentSchema.MIGRATION_COUNT),
+        scalar("SELECT count(*) FROM flyway_schema_history WHERE version IS NOT NULL"));
   }
 
   @Test

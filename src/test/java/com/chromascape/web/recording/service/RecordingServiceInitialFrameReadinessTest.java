@@ -2,11 +2,15 @@ package com.chromascape.web.recording.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.chromascape.utils.core.screen.FrameEvent;
+import com.chromascape.utils.core.screen.FrameSourceBinding;
+import com.chromascape.utils.core.screen.window.ProcessOrigin;
 import com.chromascape.web.recording.capture.WindowFrameCapture;
 import com.chromascape.web.recording.config.RecordingConfig;
 import com.chromascape.web.recording.config.RecordingTriggerSource;
@@ -17,15 +21,17 @@ import java.awt.image.BufferedImage;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit tests for the bounded initial-frame readiness wait in {@link RecordingService}.
+ * Unit tests for the bounded, stability-gated initial-frame wait in {@link RecordingService}.
  *
- * <p>Verifies that {@code waitForInitialFrame} retries until a valid (positive-dimension) frame
- * arrives, honors the configured timeout, aborts on interruption with the interrupt flag restored,
- * and that a timed-out {@code startRecording} resets the {@code recordingStarting} guard so a later
- * attempt can proceed.
+ * <p>Verifies that {@code waitForStableInitialFrame} retries until a valid frame arrives, prefers a
+ * canvas size that stays unchanged for the configured stability window, falls back to the most
+ * recent frame at the deadline, honors the configured timeout, aborts on interruption with the
+ * interrupt flag restored, and that a timed-out {@code startRecording} resets the {@code
+ * recordingStarting} guard so a later attempt can proceed.
  */
 class RecordingServiceInitialFrameReadinessTest {
 
@@ -38,6 +44,11 @@ class RecordingServiceInitialFrameReadinessTest {
   private RecordingConfig config() {
     RecordingConfig c = new RecordingConfig();
     c.setEnabled(true);
+    // Legacy-style readiness for tests that only care about retry semantics: accept the first
+    // valid frame regardless of size. Stability-specific tests override these.
+    c.setStabilityWindowMs(0);
+    c.setMinCaptureWidth(1);
+    c.setMinCaptureHeight(1);
     try {
       Path tmp = Files.createTempDirectory("rec-readiness");
       c.setOutputDirectory(tmp.toString());
@@ -47,8 +58,8 @@ class RecordingServiceInitialFrameReadinessTest {
     return c;
   }
 
-  private BufferedImage waitForInitialFrame(RecordingService service) throws Exception {
-    Method m = RecordingService.class.getDeclaredMethod("waitForInitialFrame");
+  private BufferedImage waitForStableInitialFrame(RecordingService service) throws Exception {
+    Method m = RecordingService.class.getDeclaredMethod("waitForStableInitialFrame");
     m.setAccessible(true);
     try {
       return (BufferedImage) m.invoke(service);
@@ -64,14 +75,34 @@ class RecordingServiceInitialFrameReadinessTest {
   @Test
   void validFrameOnFirstAttemptIsReturnedImmediately() throws Exception {
     WindowFrameCapture capture = mock(WindowFrameCapture.class);
-    when(capture.capture()).thenReturn(frame(8, 7));
+    when(capture.capture()).thenReturn(frame(8, 6));
     RecordingService service = newService(config(), capture);
 
-    BufferedImage result = waitForInitialFrame(service);
+    BufferedImage result = waitForStableInitialFrame(service);
 
     assertThat(result.getWidth()).isEqualTo(8);
-    assertThat(result.getHeight()).isEqualTo(7);
+    assertThat(result.getHeight()).isEqualTo(6);
     verify(capture, times(1)).capture();
+  }
+
+  @Test
+  void validInitialEventPinsExactRecordingSource() throws Exception {
+    WindowFrameCapture capture = mock(WindowFrameCapture.class);
+    BufferedImage image = frame(8, 8);
+    FrameSourceBinding binding =
+        new FrameSourceBinding(
+            ProcessOrigin.LOCAL,
+            "fedora-host",
+            88,
+            Instant.parse("2026-09-18T00:00:00Z"),
+            "boot",
+            4);
+    when(capture.captureEvent())
+        .thenReturn(new FrameEvent(image, 12, 8, 8, binding, null, null, null));
+    RecordingService service = newService(config(), capture);
+
+    assertThat(waitForStableInitialFrame(service)).isSameAs(image);
+    assertThat(service.getMetrics().get("sourceBinding")).isEqualTo(binding.toDisplayString());
   }
 
   @Test
@@ -80,7 +111,7 @@ class RecordingServiceInitialFrameReadinessTest {
     when(capture.capture()).thenReturn(null, null, frame(16, 16));
     RecordingService service = newService(config(), capture);
 
-    BufferedImage result = waitForInitialFrame(service);
+    BufferedImage result = waitForStableInitialFrame(service);
 
     assertThat(result.getWidth()).isEqualTo(16);
     verify(capture, times(3)).capture();
@@ -94,7 +125,7 @@ class RecordingServiceInitialFrameReadinessTest {
         .thenReturn(frame(4, 4));
     RecordingService service = newService(config(), capture);
 
-    BufferedImage result = waitForInitialFrame(service);
+    BufferedImage result = waitForStableInitialFrame(service);
 
     assertThat(result.getWidth()).isEqualTo(4);
     verify(capture, times(2)).capture();
@@ -109,10 +140,46 @@ class RecordingServiceInitialFrameReadinessTest {
     when(capture.capture()).thenReturn(zeroDim, frame(10, 10));
     RecordingService service = newService(config(), capture);
 
-    BufferedImage result = waitForInitialFrame(service);
+    BufferedImage result = waitForStableInitialFrame(service);
 
     assertThat(result.getWidth()).isEqualTo(10);
     verify(capture, times(2)).capture();
+  }
+
+  @Test
+  void prefersStableSizeOverTransientStartupSize() throws Exception {
+    WindowFrameCapture capture = mock(WindowFrameCapture.class);
+    // RuneLite reports a transient startup canvas (200x274) before settling on 764x502.
+    when(capture.capture()).thenReturn(frame(200, 274), frame(764, 502));
+    RecordingConfig cfg = config();
+    cfg.setStabilityWindowMs(100);
+    cfg.setInitialFrameRetryIntervalMs(25);
+    cfg.setInitialFrameTimeoutMs(5_000);
+    RecordingService service = newService(cfg, capture);
+
+    BufferedImage result = waitForStableInitialFrame(service);
+
+    assertThat(result.getWidth()).isEqualTo(764);
+    assertThat(result.getHeight()).isEqualTo(502);
+    verify(capture, atLeast(4)).capture();
+  }
+
+  @Test
+  void deadlineFallsBackToLastObservedFrameWhenNeverLargeEnough() throws Exception {
+    WindowFrameCapture capture = mock(WindowFrameCapture.class);
+    when(capture.capture()).thenReturn(frame(200, 274));
+    RecordingConfig cfg = config();
+    cfg.setStabilityWindowMs(100);
+    cfg.setInitialFrameRetryIntervalMs(25);
+    cfg.setInitialFrameTimeoutMs(300);
+    cfg.setMinCaptureWidth(640);
+    cfg.setMinCaptureHeight(400);
+    RecordingService service = newService(cfg, capture);
+
+    BufferedImage result = waitForStableInitialFrame(service);
+
+    assertThat(result.getWidth()).isEqualTo(200);
+    assertThat(result.getHeight()).isEqualTo(274);
   }
 
   @Test
@@ -123,7 +190,7 @@ class RecordingServiceInitialFrameReadinessTest {
     cfg.setInitialFrameTimeoutMs(300);
     RecordingService service = newService(cfg, capture);
 
-    assertThatThrownBy(() -> waitForInitialFrame(service))
+    assertThatThrownBy(() -> waitForStableInitialFrame(service))
         .isInstanceOf(FrameCaptureException.class)
         .hasMessageContaining("Failed to capture initial frame after")
         .hasMessageContaining("capture returned no frame");
@@ -139,7 +206,7 @@ class RecordingServiceInitialFrameReadinessTest {
 
     Thread.currentThread().interrupt();
     try {
-      assertThatThrownBy(() -> waitForInitialFrame(service))
+      assertThatThrownBy(() -> waitForStableInitialFrame(service))
           .isInstanceOf(FrameCaptureException.class)
           .hasMessageContaining("interrupted after");
       assertThat(Thread.currentThread().isInterrupted()).isTrue();

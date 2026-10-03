@@ -32,7 +32,9 @@ public final class CandidateCertificationV1Validator {
     }
   }
 
-  /** Parses and validates exact certification bytes, rejecting duplicate keys and non-contract JSON. */
+  /**
+   * Parses and validates exact certification bytes, rejecting duplicate keys and non-contract JSON.
+   */
   public JsonNode validate(byte[] certificationBytes) {
     if (certificationBytes == null || certificationBytes.length > MAX_BYTES) {
       throw new IllegalArgumentException("CERTIFICATION_TOO_LARGE");

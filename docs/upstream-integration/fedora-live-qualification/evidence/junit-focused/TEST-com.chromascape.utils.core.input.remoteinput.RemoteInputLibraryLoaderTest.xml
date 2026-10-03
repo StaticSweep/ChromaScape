@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.input.remoteinput.RemoteInputLibraryLoaderTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-09-19T18:55:25.149Z" hostname="fedora" time="0.705">
+  <properties/>
+  <testcase name="relativePathCannotBecomeWorkingDirectoryDependent(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputLibraryLoaderTest" time="0.112"/>
+  <testcase name="absoluteNonNormalisedPathIsRejected(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputLibraryLoaderTest" time="0.003"/>
+  <testcase name="everyRequiredSymbolIsChecked(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputLibraryLoaderTest" time="0.428"/>
+  <testcase name="nativeBooleanAbiUsesOneByteValues()" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputLibraryLoaderTest" time="0.002"/>
+  <testcase name="loadFailureIsReportedWithOriginalCause(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputLibraryLoaderTest" time="0.003"/>
+  <testcase name="missingSymbolProducesExpectedDiagnostic(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputLibraryLoaderTest" time="0.003"/>
+  <testcase name="bindFailureIsReportedAsLoadFailed(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputLibraryLoaderTest" time="0.002"/>
+  <testcase name="bindingIsNeverInvoked(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputLibraryLoaderTest" time="0.136"/>
+  <testcase name="loadsAbsolutePathAndVerifiesSymbols(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputLibraryLoaderTest" time="0.002"/>
+  <testcase name="relativePathIsRejectedRatherThanResolvedAgainstTheWorkingDirectory()" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputLibraryLoaderTest" time="0.003"/>
+  <testcase name="constructingTheLoaderPerformsNoNativeAccess()" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputLibraryLoaderTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

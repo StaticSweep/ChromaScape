@@ -375,6 +375,7 @@ public class BuilderGoalLaunchOperationService {
     private final String accountName;
     private final String launcherMachineUuid;
     private final Integer world;
+    private final boolean packetCapture;
     private final Instant createdAt;
     private final AtomicReference<OperationSnapshot> snapshot;
 
@@ -384,13 +385,15 @@ public class BuilderGoalLaunchOperationService {
         String accountHash,
         String accountName,
         String launcherMachineUuid,
-        Integer world) {
+        Integer world,
+        boolean packetCapture) {
       this.operationId = operationId;
       this.accountId = accountId;
       this.accountHash = accountHash;
       this.accountName = accountName;
       this.launcherMachineUuid = launcherMachineUuid;
       this.world = world;
+      this.packetCapture = packetCapture;
       this.createdAt = Instant.now();
       this.snapshot = new AtomicReference<>(OperationSnapshot.initial());
     }
@@ -461,6 +464,16 @@ public class BuilderGoalLaunchOperationService {
       String accountName,
       String launcherMachineUuid,
       Integer world) {
+    return createOrReuse(accountId, accountHash, accountName, launcherMachineUuid, world, false);
+  }
+
+  public CreateResult createOrReuse(
+      String accountId,
+      String accountHash,
+      String accountName,
+      String launcherMachineUuid,
+      Integer world,
+      boolean packetCapture) {
     pruneExpired();
     String accountKey = normalizeAccountKey(accountHash, accountId);
 
@@ -474,6 +487,10 @@ public class BuilderGoalLaunchOperationService {
               if (currentId != null) {
                 LaunchOperation existing = operations.get(currentId);
                 if (existing != null && !existing.isTerminal()) {
+                  if (existing.packetCapture != packetCapture) {
+                    throw new IllegalStateException(
+                        "An account launch with a different Packet Capture setting is already active");
+                  }
                   deduplicated[0] = true;
                   return currentId;
                 }
@@ -485,7 +502,8 @@ public class BuilderGoalLaunchOperationService {
                       accountHash,
                       accountName,
                       launcherMachineUuid,
-                      world);
+                      world,
+                      packetCapture);
               operations.put(newOperationId, operation);
               return newOperationId;
             });
@@ -495,7 +513,8 @@ public class BuilderGoalLaunchOperationService {
       // The assigned mapping referenced an operation that was removed between compute and get;
       // clear the stale mapping and retry.
       activeByAccount.remove(accountKey, assigned);
-      return createOrReuse(accountId, accountHash, accountName, launcherMachineUuid, world);
+      return createOrReuse(
+          accountId, accountHash, accountName, launcherMachineUuid, world, packetCapture);
     }
     return new CreateResult(operation, deduplicated[0]);
   }
@@ -807,6 +826,7 @@ public class BuilderGoalLaunchOperationService {
         "launcherMachineUuid",
         BuilderGoalSensitiveTextSanitizer.sanitize(operation.launcherMachineUuid));
     response.put("world", operation.world);
+    response.put("packetCapture", operation.packetCapture);
     response.put("deduplicated", deduplicated);
     response.put(
         "statusUrl",

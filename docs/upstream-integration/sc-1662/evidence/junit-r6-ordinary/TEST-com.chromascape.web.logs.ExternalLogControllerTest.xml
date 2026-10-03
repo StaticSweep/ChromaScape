@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.logs.ExternalLogControllerTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:41:22.468Z" hostname="fedora" time="0.139">
+  <properties/>
+  <testcase name="nullFieldsFallBackToDefaults()" classname="com.chromascape.web.logs.ExternalLogControllerTest" time="0.135"/>
+  <testcase name="legacyLevelMessagePayloadStillSucceeds()" classname="com.chromascape.web.logs.ExternalLogControllerTest" time="0.001"/>
+  <testcase name="optionalCorrelationFieldsArePassedToRecordingService()" classname="com.chromascape.web.logs.ExternalLogControllerTest" time="0.002"/>
+  <system-out><![CDATA[12:41:22.594 [Test worker] INFO  com.chromascape.web.logs.ExternalLogController - Received external log - Level: INFO, Message: , JSON: {"level": "INFO", "message": "", "source": "external", "timestamp": "2026-09-16T12:41:22.593922464"}
+12:41:22.599 [Test worker] INFO  com.chromascape.web.logs.ExternalLogController - Broadcast complete - log sent to WebSocket clients
+12:41:22.604 [Test worker] INFO  com.chromascape.web.logs.ExternalLogController - Received external log - Level: ERROR, Message: legacy failure, JSON: {"level": "ERROR", "message": "legacy failure", "source": "external", "timestamp": "2026-09-16T12:41:22.604621603"}
+12:41:22.605 [Test worker] INFO  com.chromascape.web.logs.ExternalLogController - Broadcast complete - log sent to WebSocket clients
+12:41:22.606 [Test worker] INFO  com.chromascape.web.logs.ExternalLogController - Received external log - Level: INFO, Message: correlated event, JSON: {"level": "INFO", "message": "correlated event", "source": "micro6", "timestamp": "2026-08-05T02:12:38.643", "logType": "DIALOGUE", "tick": 42, "debugSessionId": "debug-ext", "recordingId": "recording-ext"}
+12:41:22.606 [Test worker] INFO  com.chromascape.web.logs.ExternalLogController - Broadcast complete - log sent to WebSocket clients
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

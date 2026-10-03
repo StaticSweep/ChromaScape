@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.tickdebugger.service.ReplayRecordingActionIngestionServiceTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:40:59.811Z" hostname="fedora" time="0.121">
+  <properties/>
+  <testcase name="acceptsLexicographicOrderingWhenSequenceRestartsOnANewTick()" classname="com.chromascape.web.debug.tickdebugger.service.ReplayRecordingActionIngestionServiceTest" time="0.105"/>
+  <testcase name="comparesTheWinnerAfterNativeConflictWithoutSaveAndFlush()" classname="com.chromascape.web.debug.tickdebugger.service.ReplayRecordingActionIngestionServiceTest" time="0.003"/>
+  <testcase name="rejectsAnActionBoundToAnotherRecording()" classname="com.chromascape.web.debug.tickdebugger.service.ReplayRecordingActionIngestionServiceTest" time="0.001"/>
+  <testcase name="rejectsTamperedArgumentsByContentChecksum()" classname="com.chromascape.web.debug.tickdebugger.service.ReplayRecordingActionIngestionServiceTest" time="0.002"/>
+  <testcase name="rejectsAConflictingNativeWinnerByProducerChecksum()" classname="com.chromascape.web.debug.tickdebugger.service.ReplayRecordingActionIngestionServiceTest" time="0.005"/>
+  <testcase name="acceptsTheMicro6ChecksumAndRetainsTheProducerIdentity()" classname="com.chromascape.web.debug.tickdebugger.service.ReplayRecordingActionIngestionServiceTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

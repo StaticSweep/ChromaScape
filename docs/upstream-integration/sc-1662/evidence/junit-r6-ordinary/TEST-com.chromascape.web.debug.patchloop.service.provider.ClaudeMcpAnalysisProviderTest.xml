@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" tests="23" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:40:16.851Z" hostname="fedora" time="0.121">
+  <properties/>
+  <testcase name="isAvailable() returns false when transport throws HTTP_ERROR" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.078"/>
+  <testcase name="analyzeEvidence() maps CONFIGURATION_ERROR to INVALID_REQUEST" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.005"/>
+  <testcase name="analyzeEvidence() validates request before calling transport" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.002"/>
+  <testcase name="getProviderName() preserves legacy alias 'claude-mcp' when configured" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.001"/>
+  <testcase name="analyzeEvidence() throws INVALID_RESPONSE_SCHEMA when response is null" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.003"/>
+  <testcase name="analyzeEvidence() returns V2 response on successful analysis" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.001"/>
+  <testcase name="analyzeEvidence() includes timeout in request options" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.001"/>
+  <testcase name="analyzeEvidence() maps SERIALIZATION_ERROR to PARSE_ERROR" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.002"/>
+  <testcase name="isAvailable() returns false when transport throws CONNECTION_REFUSED" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.002"/>
+  <testcase name="analyzeEvidence() validates response from MCP server" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.002"/>
+  <testcase name="analyzeEvidence() throws API_ERROR when response contains error field" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.002"/>
+  <testcase name="isAvailable() returns true when MCP server is healthy" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.001"/>
+  <testcase name="analyzeEvidence() preserves V2 request in MCP wrapper" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.002"/>
+  <testcase name="isAvailable() returns false when MCP server is unhealthy" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.001"/>
+  <testcase name="analyzeEvidence() maps AUTH_FAILED to API_AUTH_FAILED" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.002"/>
+  <testcase name="analyzeEvidence() maps INVALID_RESPONSE to PARSE_ERROR" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.002"/>
+  <testcase name="getProviderName() returns 'codex-mcp' by default" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.001"/>
+  <testcase name="analyzeEvidence() maps UNKNOWN to INTERNAL_ERROR" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.002"/>
+  <testcase name="analyzeEvidence() maps TIMEOUT to API_TIMEOUT" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.001"/>
+  <testcase name="isAvailable() returns false when transport throws TIMEOUT" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.001"/>
+  <testcase name="analyzeEvidence() maps CONNECTION_REFUSED to API_ERROR" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.002"/>
+  <testcase name="analyzeEvidence() maps RATE_LIMIT to API_RATE_LIMIT" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.002"/>
+  <testcase name="analyzeEvidence() maps HTTP_ERROR to API_ERROR" classname="com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProviderTest" time="0.002"/>
+  <system-out><![CDATA[12:40:16.928 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.929 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP server unavailable: HTTP_ERROR - MCP server returned 500
+12:40:16.931 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.932 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP analyzeEvidence() called
+12:40:16.935 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP transport error: CONFIGURATION_ERROR -> INVALID_REQUEST
+12:40:16.936 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.937 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.938 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: claude-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.939 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.940 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP analyzeEvidence() called
+12:40:16.940 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP server returned null analysisResponse
+12:40:16.941 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.942 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP analyzeEvidence() called
+12:40:16.942 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP analyzeEvidence() completed - analysisId: test-analysis-123, status: SUCCESS
+12:40:16.943 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.943 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 60s, maxRetries: 3
+12:40:16.944 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP analyzeEvidence() called
+12:40:16.944 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP analyzeEvidence() completed - analysisId: test-analysis-123, status: SUCCESS
+12:40:16.945 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.945 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP analyzeEvidence() called
+12:40:16.946 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP transport error: SERIALIZATION_ERROR -> PARSE_ERROR
+12:40:16.947 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.947 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP server unavailable: CONNECTION_REFUSED - Cannot connect to MCP server
+12:40:16.949 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.949 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP analyzeEvidence() called
+12:40:16.950 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.951 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP analyzeEvidence() called
+12:40:16.951 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP server returned error in response: MCP server internal error
+12:40:16.952 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.953 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP server is available - version: 1.0.0
+12:40:16.954 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.954 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP analyzeEvidence() called
+12:40:16.954 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP analyzeEvidence() completed - analysisId: test-analysis-123, status: SUCCESS
+12:40:16.955 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.956 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP server returned unhealthy status
+12:40:16.957 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.957 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP analyzeEvidence() called
+12:40:16.958 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP transport error: AUTH_FAILED -> API_AUTH_FAILED
+12:40:16.959 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.960 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP analyzeEvidence() called
+12:40:16.960 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP transport error: INVALID_RESPONSE -> PARSE_ERROR
+12:40:16.961 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.962 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.963 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP analyzeEvidence() called
+12:40:16.963 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP transport error: UNKNOWN -> INTERNAL_ERROR
+12:40:16.964 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.965 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP analyzeEvidence() called
+12:40:16.965 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP transport error: TIMEOUT -> API_TIMEOUT
+12:40:16.966 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.966 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP server unavailable: TIMEOUT - MCP server request timed out
+12:40:16.968 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.968 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP analyzeEvidence() called
+12:40:16.968 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP transport error: CONNECTION_REFUSED -> API_ERROR
+12:40:16.970 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.970 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP analyzeEvidence() called
+12:40:16.970 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP transport error: RATE_LIMIT -> API_RATE_LIMIT
+12:40:16.971 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+12:40:16.972 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP analyzeEvidence() called
+12:40:16.972 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - [codex-mcp] MCP transport error: HTTP_ERROR -> API_ERROR
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

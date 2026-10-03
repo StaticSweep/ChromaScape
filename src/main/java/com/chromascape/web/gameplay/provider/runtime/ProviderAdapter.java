@@ -24,7 +24,8 @@ public interface ProviderAdapter {
       String runtimeTurnId,
       String modelId,
       String prompt,
-      Instant deadline) {}
+      Instant deadline,
+      ProviderToolGateway tools) {}
 
   record ProviderTurnResult(
       boolean submitted,

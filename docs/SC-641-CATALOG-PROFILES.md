@@ -130,3 +130,12 @@ Revert the SC-641 UI/API changes and leave additive immutable snapshots intact f
 A down migration or deletion of published versions is not provided. The development identity
 must match its pinned code; moving back to SC-665 requires its explicit disposable reset rather
 than silently accepting a mixed schema. Apply no reset to a shared or non-disposable database.
+
+
+## Current-main integration — 2026-10-03
+
+SC-665 PR42 and prerequisite SC-260 PR44 are now merged. This branch reconciles with that main lineage, preserving both Gradle task groups, the Node dependency ignore, the catalog panel and current replay script. It inherits SC-665's development-only V6 current-main mapping/invariant migration; the SC-641 development schema contains five migrations (V1/V2/V3/V4/V6). The measured fingerprint is sha256:93ce9aed90ec352c5729be231588bc35e85bafd61bcb0f6bc50ea3e343d0920f. An existing dedicated development schema must pass the identity/history/fingerprint gate or undergo the documented explicit disposable reset. No shared/user database was reset.
+
+Fedora JavaScript verification on the combined source passed 276 tests with no failures; three opt-in SC-968 native capture/approval/live-source tests were skipped. Those skips are unrelated to catalog behavior and are not counted as passed. CI monitoring and Felix mutations are skipped by user instruction; Windows/live platform qualification is not claimed.
+
+Final combined Fedora backend results: aiPlayerSchemaTest 21/21 passed; aiPlayerCatalogTest 44/44 passed, zero failures/errors/skips. The first catalog run exposed one stale schema-bundle golden hash and four database-search-path failures; the fixture now matches the current Micro6 canonical schema bundle, and the owned-test JDBC URL explicitly selects ai_player_dev. No production validator was relaxed. Final catalog run BUILD SUCCESSFUL in 45s.

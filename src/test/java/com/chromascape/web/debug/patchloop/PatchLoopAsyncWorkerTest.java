@@ -558,8 +558,7 @@ class PatchLoopAsyncWorkerTest {
     org.mockito.ArgumentCaptor<String> failureCodeCaptor =
         org.mockito.ArgumentCaptor.forClass(String.class);
     verify(persistenceService)
-        .markIterationFailed(
-            eq(iteration), failureCodeCaptor.capture(), anyString(), any());
+        .markIterationFailed(eq(iteration), failureCodeCaptor.capture(), anyString(), any());
     assertEquals(PatchLoopFailureCode.ANALYSIS_API_TIMEOUT, failureCodeCaptor.getValue());
 
     // Assert - COMPLETED was never requested after the failure (terminal guard).

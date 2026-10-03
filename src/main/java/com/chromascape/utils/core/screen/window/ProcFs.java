@@ -1,13 +1,16 @@
 package com.chromascape.utils.core.screen.window;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.PriorityQueue;
 
 /**
  * Read-only adapter over a procfs root (normally {@code /proc}).
@@ -17,6 +20,10 @@ import java.util.Optional;
  * never abort a discovery scan. Command lines are returned as raw bytes for in-memory matching only
  * and must never be logged, written to evidence or returned in diagnostics, because Micro6 client
  * arguments can carry account credentials.
+ *
+ * <p>Reads are bounded by content, not by file-size metadata: procfs pseudo-files commonly report a
+ * size of zero regardless of their readable content, so every read streams at most {@link
+ * #MAX_FILE_BYTES} bytes plus one probe byte and rejects oversized content.
  */
 public final class ProcFs {
 
@@ -43,27 +50,52 @@ public final class ProcFs {
    * Non-numeric directory names are skipped; an unreadable root yields an empty list.
    */
   public List<Long> listPidDirs() {
-    List<Long> pids = new ArrayList<>();
-    if (!Files.isDirectory(root)) {
-      return pids;
-    }
-    try (DirectoryStream<Path> stream = Files.newDirectoryStream(root, "[0-9]*")) {
-      for (Path entry : stream) {
-        if (pids.size() >= MAX_PID_ENTRIES) {
-          break;
-        }
-        try {
-          pids.add(Long.parseLong(entry.getFileName().toString()));
-        } catch (NumberFormatException ignored) {
-          // non-numeric directory name: skip
-        }
-      }
-    } catch (IOException ignored) {
-      // procfs became unreadable mid-listing: return what was collected
-    }
-    pids.sort(Long::compare);
-    return pids;
+    return listPidDirectories().pids();
   }
+
+  /**
+   * Deterministically bounded listing of the numeric pid directories: the smallest {@link
+   * #MAX_PID_ENTRIES} numeric pids are retained no matter which order the filesystem enumerates
+   * entries in, and the result is returned ascending. Memory stays bounded to the cap while every
+   * numeric entry is still considered.
+   *
+   * @param truncated whether the procfs held more numeric entries than the cap
+   */
+  public PidListing listPidDirectories() {
+    PriorityQueue<Long> retained =
+        new PriorityQueue<>(MAX_PID_ENTRIES + 1, Comparator.reverseOrder());
+    int numericEntries = 0;
+    if (Files.isDirectory(root)) {
+      try (DirectoryStream<Path> stream = Files.newDirectoryStream(root, "[0-9]*")) {
+        for (Path entry : stream) {
+          long pid;
+          try {
+            pid = Long.parseLong(entry.getFileName().toString());
+          } catch (NumberFormatException ignored) {
+            // non-numeric directory name that matched the glob: skip
+            continue;
+          }
+          numericEntries++;
+          if (retained.size() >= MAX_PID_ENTRIES) {
+            if (pid < retained.peek()) {
+              retained.poll();
+              retained.add(pid);
+            }
+          } else {
+            retained.add(pid);
+          }
+        }
+      } catch (IOException ignored) {
+        // procfs became unreadable mid-listing: return what was collected
+      }
+    }
+    List<Long> pids = new ArrayList<>(retained);
+    pids.sort(Long::compare);
+    return new PidListing(pids, numericEntries > MAX_PID_ENTRIES);
+  }
+
+  /** Deterministic outcome of one bounded pid-directory listing. */
+  public record PidListing(List<Long> pids, boolean truncated) {}
 
   /**
    * Reads {@code <pid>/cmdline} as raw null-delimited bytes; empty when the entry is missing,
@@ -110,19 +142,21 @@ public final class ProcFs {
   /** Resolves the {@code <pid>/exe} symlink target; empty when unavailable or the pid is gone. */
   public Optional<String> readExeTarget(long pid) {
     try {
-      return Optional.ofNullable(
-          Files.readSymbolicLink(pidDir(pid).resolve("exe")).toString());
+      return Optional.ofNullable(Files.readSymbolicLink(pidDir(pid).resolve("exe")).toString());
     } catch (IOException | SecurityException e) {
       return Optional.empty();
     }
   }
 
   private Optional<byte[]> readBounded(Path file) {
-    try {
-      if (Files.size(file) > MAX_FILE_BYTES) {
+    // Stream with a hard read cap: procfs size metadata (Files.size) is unreliable — pseudo-files
+    // report zero while carrying content — so the bound is enforced on the bytes actually read.
+    try (InputStream input = Files.newInputStream(file)) {
+      byte[] bytes = input.readNBytes(MAX_FILE_BYTES + 1);
+      if (bytes.length > MAX_FILE_BYTES) {
         return Optional.empty();
       }
-      return Optional.of(Files.readAllBytes(file));
+      return Optional.of(bytes);
     } catch (IOException | SecurityException e) {
       return Optional.empty();
     }

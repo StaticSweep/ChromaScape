@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" tests="26" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:39:39.203Z" hostname="fedora" time="0.231">
+  <properties/>
+  <testcase name="startAccount_blankResponseBodyReportsExceptionType()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.026"/>
+  <testcase name="getCommandStatus_preservesNullMetadataFields()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.009"/>
+  <testcase name="listMachineSummaries_invalidJsonReportsActionableParsingCause()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.007"/>
+  <testcase name="describeSanitizedFailure_nullFailureReturnsGenericDetail()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.002"/>
+  <testcase name="listAccounts_defaultsSchemeForCanonicalHashWhenLauncherOmitsIt()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.009"/>
+  <testcase name="describeSanitizedFailure_neverDisclosesConfiguredToken()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.002"/>
+  <testcase name="getCommandStatus_lastErrorIsSanitizedAtIngestion()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.007"/>
+  <testcase name="listAccounts_preservesNullMetadataFields()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.008"/>
+  <testcase name="describeSanitizedFailure_redactsBearerCredentialWithoutConfiguredToken()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.001"/>
+  <testcase name="describeSanitizedFailure_blankExceptionMessageFallsBackToExceptionType()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.002"/>
+  <testcase name="getCommandStatus_transportFailureUsesSanitizedNonNullCause()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.009"/>
+  <testcase name="listMachineSummaries_http200MalformedJsonNeverDisclosesConfiguredToken()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.007"/>
+  <testcase name="describeSanitizedFailure_truncatesUnboundedUpstreamResponse()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.001"/>
+  <testcase name="describeSanitizedFailure_truncatesAcrossTokenBoundaryAfterRedaction()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.002"/>
+  <testcase name="startAccount_malformedResponseNeverDisclosesConfiguredToken()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.007"/>
+  <testcase name="getCommandStatus_malformedResponseNeverDisclosesConfiguredToken()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.01"/>
+  <testcase name="describeSanitizedFailure_nullExceptionMessageFallsBackToExceptionType()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.002"/>
+  <testcase name="listMachineSummaries_preservesNullRuntimeMetadataAndIsImmutable()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.054"/>
+  <testcase name="describeSanitizedFailure_redactsAuthorizationBearerCredentialForms()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.001"/>
+  <testcase name="describeSanitizedFailure_removesEveryOccurrenceOfConfiguredToken()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.001"/>
+  <testcase name="listAccounts_metadataIsImmutableSnapshotNotTiedToSourceMap()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.002"/>
+  <testcase name="awaitCommandSuccess_terminalResponseLastErrorIsSanitizedAtIngestion()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.008"/>
+  <testcase name="listMachineSummaries_includesUpstreamStatusAndSanitizedBodyButNotCredentials()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.008"/>
+  <testcase name="listMachines_marksOnlyTheEnabledOnlineLocalMachineAsBuilderGoalRunnable()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.012"/>
+  <testcase name="startAccount_transportFailureUsesSanitizedNonNullCause()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.012"/>
+  <testcase name="listMachineSummaries_http500BodyNeverDisclosesConfiguredToken()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest" time="0.01"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -40,7 +40,8 @@ public class ShadowPolicyService {
   @PostConstruct
   void enforceReadOnlyAtStartup() {
     if (controlEnabled) {
-      log.warn("FEATURES_AI_PLAYER_CONTROL was requested, but AI Routine permanently enforces control_allowed=false");
+      log.warn(
+          "FEATURES_AI_PLAYER_CONTROL was requested, but AI Routine permanently enforces control_allowed=false");
     }
   }
 
@@ -130,8 +131,8 @@ public class ShadowPolicyService {
   }
 
   /**
-   * AI Routine is permanently read-only in this slice. The configured control flag is retained
-   * only for diagnostics and is never an authority decision.
+   * AI Routine is permanently read-only in this slice. The configured control flag is retained only
+   * for diagnostics and is never an authority decision.
    */
   public boolean isControlAllowed() {
     return false;

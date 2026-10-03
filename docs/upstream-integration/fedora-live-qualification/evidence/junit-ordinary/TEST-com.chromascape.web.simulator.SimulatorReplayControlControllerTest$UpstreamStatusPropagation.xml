@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Upstream status propagation" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:48.756Z" hostname="fedora" time="0.01">
+  <properties/>
+  <testcase name="propagates upstream 401 status" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$UpstreamStatusPropagation" time="0.005"/>
+  <testcase name="propagates upstream 403 status" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$UpstreamStatusPropagation" time="0.001"/>
+  <testcase name="propagates upstream 404 status" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$UpstreamStatusPropagation" time="0.001"/>
+  <testcase name="propagates upstream 500 status" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$UpstreamStatusPropagation" time="0.001"/>
+  <system-out><![CDATA[19:30:48.758 [Test worker] WARN  com.chromascape.web.simulator.SimulatorReplayControlController - Replay control request failed: OpenRune API returned 401: Invalid API key
+19:30:48.762 [Test worker] WARN  com.chromascape.web.simulator.SimulatorReplayControlController - Replay control request failed: OpenRune API returned 403: Forbidden
+19:30:48.764 [Test worker] WARN  com.chromascape.web.simulator.SimulatorReplayControlController - Replay control request failed: OpenRune API returned 404: Player not found
+19:30:48.766 [Test worker] WARN  com.chromascape.web.simulator.SimulatorReplayControlController - Replay control request failed: OpenRune API returned 500: Internal error
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

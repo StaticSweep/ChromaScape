@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.config.AiRoutineOperatorInterceptorTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:39:31.983Z" hostname="fedora" time="0.191">
+  <properties/>
+  <testcase name="mutationRequiresOperatorToken()" classname="com.chromascape.web.aiplayer.routine.config.AiRoutineOperatorInterceptorTest" time="0.186"/>
+  <testcase name="validTokenPlacesConfiguredOperatorIdInRequest()" classname="com.chromascape.web.aiplayer.routine.config.AiRoutineOperatorInterceptorTest" time="0.001"/>
+  <testcase name="readOnlyGetRequestsRemainUnauthenticated()" classname="com.chromascape.web.aiplayer.routine.config.AiRoutineOperatorInterceptorTest" time="0.001"/>
+  <testcase name="wrongTokenIsRejectedWith401()" classname="com.chromascape.web.aiplayer.routine.config.AiRoutineOperatorInterceptorTest" time="0.001"/>
+  <testcase name="unconfiguredTokenFailsClosedWith503()" classname="com.chromascape.web.aiplayer.routine.config.AiRoutineOperatorInterceptorTest" time="0.001"/>
+  <testcase name="missingAuthorizationIsRejectedWith401()" classname="com.chromascape.web.aiplayer.routine.config.AiRoutineOperatorInterceptorTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

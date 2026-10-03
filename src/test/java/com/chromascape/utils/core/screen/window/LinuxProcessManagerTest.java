@@ -13,10 +13,14 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
+@EnabledOnOs(OS.LINUX)
 class LinuxProcessManagerTest {
 
   private static final Instant T1 = Instant.ofEpochMilli(1_000L);
@@ -275,5 +279,55 @@ class LinuxProcessManagerTest {
 
     assertEquals("", target.identity().bootId());
     assertNotNull(target.identity().startTime());
+  }
+
+  @Test
+  void bootIdIsObservedOncePerScanAndSharedByEveryIdentityOfThatScan() throws IOException {
+    createBootId("boot-1");
+    createPid(100L, null, "java", "-cp", "app.jar", "net.runelite.client.RuneLite");
+    createPid(200L, null, "java", "-cp", "app.jar", "net.runelite.client.RuneLite");
+    // The resolver rewrites the boot id when the second candidate is observed: a per-candidate
+    // boot-id read would then produce inconsistent identities within one scan
+    AtomicInteger observations = new AtomicInteger();
+    LinuxProcessManager scanning =
+        manager(
+            "",
+            pid -> {
+              if (observations.incrementAndGet() == 2) {
+                try {
+                  Files.writeString(
+                      root.resolve("sys").resolve("kernel").resolve("random").resolve("boot_id"),
+                      "boot-2\n");
+                } catch (IOException e) {
+                  throw new IllegalStateException(e);
+                }
+              }
+              return Optional.of(Instant.ofEpochSecond(pid));
+            });
+
+    List<DiscoveredTarget> targets = scanning.discoverEligibleLocal();
+
+    assertEquals(2, targets.size());
+    assertEquals("boot-1", targets.get(0).identity().bootId());
+    assertEquals("boot-1", targets.get(1).identity().bootId());
+  }
+
+  @Test
+  void listingTruncationBeyondThePidCapIsReportedAsAScanDiagnostic() throws IOException {
+    // One more numeric pid directory than the bounded scan can retain
+    for (long pid = 0; pid <= ProcFs.MAX_PID_ENTRIES; pid++) {
+      Files.createDirectories(root.resolve(Long.toString(pid)));
+    }
+
+    LinuxProcessManager scanning = manager("");
+    List<DiscoveredTarget> targets = scanning.discoverEligibleLocal();
+
+    assertTrue(targets.isEmpty());
+    assertTrue(
+        scanning
+            .lastScanDiagnostics()
+            .diagnostics()
+            .contains(TargetSelectionDiagnostic.PROC_SCAN_TRUNCATED));
+    assertEquals(ProcFs.MAX_PID_ENTRIES, scanning.lastScanDiagnostics().scannedEntries());
   }
 }

@@ -2,6 +2,7 @@ package com.chromascape.web.debug.tickdebugger.controller;
 
 import com.chromascape.web.debug.tickdebugger.service.DebugSessionService;
 import com.chromascape.web.debug.tickdebugger.websocket.TickStreamWebSocketHandler;
+import com.chromascape.web.integration.micro6.service.Micro6LogShipperService;
 import java.util.HashMap;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -26,11 +27,15 @@ public class DebugStatusController {
 
   private final DebugSessionService sessionService;
   private final TickStreamWebSocketHandler tickStreamWebSocketHandler;
+  private final Micro6LogShipperService logShipperService;
 
   public DebugStatusController(
-      DebugSessionService sessionService, TickStreamWebSocketHandler tickStreamWebSocketHandler) {
+      DebugSessionService sessionService,
+      TickStreamWebSocketHandler tickStreamWebSocketHandler,
+      Micro6LogShipperService logShipperService) {
     this.sessionService = sessionService;
     this.tickStreamWebSocketHandler = tickStreamWebSocketHandler;
+    this.logShipperService = logShipperService;
   }
 
   /**
@@ -60,9 +65,8 @@ public class DebugStatusController {
         }
       }
 
-      // Placeholder values for log shipper (can be enhanced later)
-      status.put("logShipperEnabled", false);
-      status.put("logShipperSource", "micro6");
+      status.put("logShipperEnabled", logShipperService.isRunning());
+      status.put("logShipperSource", logShipperService.getSourceName());
 
       return ResponseEntity.ok(status);
     } catch (Exception e) {

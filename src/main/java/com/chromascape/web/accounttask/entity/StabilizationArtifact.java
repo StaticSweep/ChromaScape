@@ -10,14 +10,13 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * One verified stabilization artifact stored under an opaque UUID id. Never stores host paths;
- * the bytes live in the filesystem artifact store and are retrievable only through the artifact
- * id.
+ * One verified stabilization artifact stored under an opaque UUID id. Never stores host paths; the
+ * bytes live in the filesystem artifact store and are retrievable only through the artifact id.
  *
  * <p>SC-572: every verified artifact carries a nonblank run id and a durable external evidence
- * reference, and {@code (run_id, external_reference)} is unique. The constraints are enforced by
- * a versioned Flyway migration (never by {@code ddl-auto: update}); this entity deliberately does
- * not ask Hibernate to create or alter those indexes.
+ * reference, and {@code (run_id, external_reference)} is unique. The constraints are enforced by a
+ * versioned Flyway migration (never by {@code ddl-auto: update}); this entity deliberately does not
+ * ask Hibernate to create or alter those indexes.
  */
 @Entity
 @Table(name = "stabilization_artifact")
@@ -37,9 +36,11 @@ public class StabilizationArtifact {
   @Column(length = 100)
   private String attemptId;
 
-  /** Durable external evidence reference (e.g. {@code artifact://debug-recorder/log-...}) bound to
-   *  the stored artifact UUID so the contract's evidence-reference → artifact-UUID mapping is
-   *  auditable without reconstructing a checksum lookup (SC-572). Non-null and unique per run. */
+  /**
+   * Durable external evidence reference (e.g. {@code artifact://debug-recorder/log-...}) bound to
+   * the stored artifact UUID so the contract's evidence-reference → artifact-UUID mapping is
+   * auditable without reconstructing a checksum lookup (SC-572). Non-null and unique per run.
+   */
   @Column(nullable = false, length = 512)
   private String externalReference;
 
@@ -49,8 +50,7 @@ public class StabilizationArtifact {
   @Column(length = 200)
   private String sha256;
 
-  @Column
-  private Long sizeBytes;
+  @Column private Long sizeBytes;
 
   @Column(length = 100)
   private String mediaType;

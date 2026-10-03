@@ -173,7 +173,7 @@ public class SimulatorVerifyService {
       return false;
     }
 
-    if (job.getStatus() == JobStatus.QUEUED || job.getStatus() == JobStatus.RUNNING) {
+    if (job.cancelIfActive()) {
       // Terminate the running process if it exists
       Process process = runningProcesses.remove(jobId);
       if (process != null && process.isAlive()) {
@@ -181,9 +181,6 @@ public class SimulatorVerifyService {
         logger.info("Terminated process for cancelled job: {}", jobId);
       }
 
-      job.setStatus(JobStatus.FAILED);
-      job.setError("Job cancelled by user");
-      job.setCancelled(true);
       logger.info("Cancelled verification job: {}", jobId);
       return true;
     }

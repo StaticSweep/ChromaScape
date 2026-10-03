@@ -438,7 +438,8 @@ public class DebugSessionService {
       Boolean recordingEnabled,
       RecordingTriggerSource triggerSource,
       String preferredSessionId) {
-    return startSession(accountName, scriptName, recordingEnabled, triggerSource, preferredSessionId);
+    return startSession(
+        accountName, scriptName, recordingEnabled, triggerSource, preferredSessionId);
   }
 
   /**
@@ -1044,6 +1045,7 @@ public class DebugSessionService {
               recSession.setDurationMs(metadata.getDuration());
               recSession.setFrameCount(metadata.getFrameCount());
               recSession.setFps(metadata.getFps());
+              recSession.setVideoCodec(metadata.getVideoCodec());
               recordingSessionRepository.save(recSession);
             });
   }

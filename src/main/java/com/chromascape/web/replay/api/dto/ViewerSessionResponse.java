@@ -5,15 +5,11 @@ import java.util.UUID;
 
 /** Short-lived launch URL for the read-only xRSPS observer. */
 public record ViewerSessionResponse(
-        String schema,
-        UUID runId,
-        String viewerUrl,
-        Instant expiresAt,
-        boolean controlAllowed) {
+    String schema, UUID runId, String viewerUrl, Instant expiresAt, boolean controlAllowed) {
 
-    public static final String SCHEMA = "xrsps-replay-viewer-session/v1";
+  public static final String SCHEMA = "xrsps-replay-viewer-session/v1";
 
-    public ViewerSessionResponse {
-        schema = schema == null ? SCHEMA : schema;
-    }
+  public ViewerSessionResponse {
+    schema = schema == null ? SCHEMA : schema;
+  }
 }

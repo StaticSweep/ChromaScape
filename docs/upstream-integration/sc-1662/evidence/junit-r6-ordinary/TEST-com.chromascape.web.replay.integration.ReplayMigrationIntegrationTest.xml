@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" tests="9" skipped="0" failures="9" errors="0" timestamp="2026-09-16T10:39:09.210Z" hostname="fedora" time="0.028">
+  <properties/>
+  <testcase name="v19RejectsConflictingOldAndNewChecksums()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.004">
+    <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
+	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
+	at org.testcontainers.DockerClientFactory.client(DockerClientFactory.java:196)
+	at org.testcontainers.DockerClientFactory$1.getDockerClient(DockerClientFactory.java:108)
+	at com.github.dockerjava.api.DockerClientDelegate.authConfig(DockerClientDelegate.java:109)
+	at org.testcontainers.containers.GenericContainer.start(GenericContainer.java:321)
+	at com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest.postgres(ReplayMigrationIntegrationTest.java:88)
+	at com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest.v19RejectsConflictingOldAndNewChecksums(ReplayMigrationIntegrationTest.java:496)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <testcase name="freshHibernateManagedTablesConvergeAfterFlywayAndRemainStableOnRepeatStartup()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.003">
+    <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
+	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
+	at org.testcontainers.DockerClientFactory.client(DockerClientFactory.java:196)
+	at org.testcontainers.DockerClientFactory$1.getDockerClient(DockerClientFactory.java:108)
+	at com.github.dockerjava.api.DockerClientDelegate.authConfig(DockerClientDelegate.java:109)
+	at org.testcontainers.containers.GenericContainer.start(GenericContainer.java:321)
+	at com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest.postgres(ReplayMigrationIntegrationTest.java:88)
+	at com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest.freshHibernateManagedTablesConvergeAfterFlywayAndRemainStableOnRepeatStartup(ReplayMigrationIntegrationTest.java:182)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <testcase name="v31CreatesPlaybackIndexesWhenDebuggerTablesExist()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.003">
+    <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
+	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
+	at org.testcontainers.DockerClientFactory.client(DockerClientFactory.java:196)
+	at org.testcontainers.DockerClientFactory$1.getDockerClient(DockerClientFactory.java:108)
+	at com.github.dockerjava.api.DockerClientDelegate.authConfig(DockerClientDelegate.java:109)
+	at org.testcontainers.containers.GenericContainer.start(GenericContainer.java:321)
+	at com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest.postgres(ReplayMigrationIntegrationTest.java:88)
+	at com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest.v31CreatesPlaybackIndexesWhenDebuggerTablesExist(ReplayMigrationIntegrationTest.java:139)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <testcase name="v19BackfillsAndDropsWhenBothColumnsHoldEqualValues()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.003">
+    <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
+	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
+	at org.testcontainers.DockerClientFactory.client(DockerClientFactory.java:196)
+	at org.testcontainers.DockerClientFactory$1.getDockerClient(DockerClientFactory.java:108)
+	at com.github.dockerjava.api.DockerClientDelegate.authConfig(DockerClientDelegate.java:109)
+	at org.testcontainers.containers.GenericContainer.start(GenericContainer.java:321)
+	at com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest.postgres(ReplayMigrationIntegrationTest.java:88)
+	at com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest.v19BackfillsAndDropsWhenBothColumnsHoldEqualValues(ReplayMigrationIntegrationTest.java:468)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <testcase name="v19AcceptsNewColumnOnlyState()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.003">
+    <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
+	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
+	at org.testcontainers.DockerClientFactory.client(DockerClientFactory.java:196)
+	at org.testcontainers.DockerClientFactory$1.getDockerClient(DockerClientFactory.java:108)
+	at com.github.dockerjava.api.DockerClientDelegate.authConfig(DockerClientDelegate.java:109)
+	at org.testcontainers.containers.GenericContainer.start(GenericContainer.java:321)
+	at com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest.postgres(ReplayMigrationIntegrationTest.java:88)
+	at com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest.v19AcceptsNewColumnOnlyState(ReplayMigrationIntegrationTest.java:456)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <testcase name="v19ConvergesFromOldColumnOnlyState()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.003">
+    <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
+	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
+	at org.testcontainers.DockerClientFactory.client(DockerClientFactory.java:196)
+	at org.testcontainers.DockerClientFactory$1.getDockerClient(DockerClientFactory.java:108)
+	at com.github.dockerjava.api.DockerClientDelegate.authConfig(DockerClientDelegate.java:109)
+	at org.testcontainers.containers.GenericContainer.start(GenericContainer.java:321)
+	at com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest.postgres(ReplayMigrationIntegrationTest.java:88)
+	at com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest.v19ConvergesFromOldColumnOnlyState(ReplayMigrationIntegrationTest.java:418)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <testcase name="v30AppliesOnAV20UpgradedDatabase()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.002">
+    <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
+	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
+	at org.testcontainers.DockerClientFactory.client(DockerClientFactory.java:196)
+	at org.testcontainers.DockerClientFactory$1.getDockerClient(DockerClientFactory.java:108)
+	at com.github.dockerjava.api.DockerClientDelegate.authConfig(DockerClientDelegate.java:109)
+	at org.testcontainers.containers.GenericContainer.start(GenericContainer.java:321)
+	at com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest.postgres(ReplayMigrationIntegrationTest.java:88)
+	at com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest.v30AppliesOnAV20UpgradedDatabase(ReplayMigrationIntegrationTest.java:225)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <testcase name="replayChainThroughV31AppliesOnEmptyDatabase()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.002">
+    <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
+	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
+	at org.testcontainers.DockerClientFactory.client(DockerClientFactory.java:196)
+	at org.testcontainers.DockerClientFactory$1.getDockerClient(DockerClientFactory.java:108)
+	at com.github.dockerjava.api.DockerClientDelegate.authConfig(DockerClientDelegate.java:109)
+	at org.testcontainers.containers.GenericContainer.start(GenericContainer.java:321)
+	at com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest.postgres(ReplayMigrationIntegrationTest.java:88)
+	at com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest.replayChainThroughV31AppliesOnEmptyDatabase(ReplayMigrationIntegrationTest.java:123)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <testcase name="v30AllowsNullAttemptIdButKeepsTheForeignKey()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.002">
+    <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
+	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
+	at org.testcontainers.DockerClientFactory.client(DockerClientFactory.java:196)
+	at org.testcontainers.DockerClientFactory$1.getDockerClient(DockerClientFactory.java:108)
+	at com.github.dockerjava.api.DockerClientDelegate.authConfig(DockerClientDelegate.java:109)
+	at org.testcontainers.containers.GenericContainer.start(GenericContainer.java:321)
+	at com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest.postgres(ReplayMigrationIntegrationTest.java:88)
+	at com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest.v30AllowsNullAttemptIdButKeepsTheForeignKey(ReplayMigrationIntegrationTest.java:259)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <system-out><![CDATA[12:39:09.212 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+12:39:09.216 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+12:39:09.220 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+12:39:09.223 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+12:39:09.226 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+12:39:09.228 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+12:39:09.232 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+12:39:09.234 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+12:39:09.237 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

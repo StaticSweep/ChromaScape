@@ -217,6 +217,31 @@ class PatchLoopEvidenceServiceTest {
   }
 
   @Test
+  @DisplayName("Evidence window spans the run when the run start is missing")
+  void testEvidenceWindowAnchorsToCreationWhenRunStartMissing() {
+    // Arrange: builder-goal runs record only the end timestamp, so the window must not collapse to
+    // a slice before creation (which would clip all evidence collected during the run).
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("test-iter-no-start");
+    iteration.setScriptName("TestScript");
+    iteration.setStatus(PatchLoopStatus.COLLECTING_EVIDENCE);
+    LocalDateTime created = LocalDateTime.now().minusMinutes(10);
+    LocalDateTime ended = created.plusMinutes(8);
+    iteration.setCreatedAt(created);
+    iteration.setRunEndTime(ended);
+    // runStartTime intentionally left null.
+    setupMockDataOnlyLogs();
+
+    // Act
+    AnalysisV1EvidenceBundle bundle = evidenceService.collectEvidence(iteration, null);
+
+    // Assert
+    assertNotNull(bundle.getTimeWindow());
+    assertEquals(created, bundle.getTimeWindow().getStart());
+    assertEquals(ended, bundle.getTimeWindow().getEnd());
+  }
+
+  @Test
   @DisplayName("Sufficiency validation passes with evidence")
   void testSufficiencyValidationPassesWithEvidence() {
     // Arrange

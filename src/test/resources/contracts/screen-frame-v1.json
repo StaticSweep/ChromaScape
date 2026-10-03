@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "streamId": "fixture-stream-1",
+  "maxJpegBytes": 768000,
+  "maxLongEdge": 960,
+  "maxFps": 5,
+  "enabled": true
+}

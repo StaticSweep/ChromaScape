@@ -1,0 +1,105 @@
+# command: ./gradlew --offline tasks --console=plain -Psc967VectorsPath=<redacted>
+# utc: 2026-09-15T11:03:08Z
+# revision: be4230c0198e065748ff5b49a76f434a581fee4d
+# worktree_status_sha256: 21117c54488d0ccb0ecbfa2827d15b5069f1e80458afde5458463a71dcf6bc29
+# run_sequence: 3 (second-review fixes; runs 1-2 retained unmodified apart from redaction)
+
+
+> Task :tasks
+
+------------------------------------------------------------
+Tasks runnable from root project 'chromascape'
+------------------------------------------------------------
+
+Application tasks
+-----------------
+bootRun - Runs this project as a Spring Boot application.
+bootTestRun - Runs this project as a Spring Boot application using the test runtime classpath.
+
+Build tasks
+-----------
+assemble - Assembles the outputs of this project.
+bootBuildImage - Builds an OCI image of the application using the output of the bootJar task
+bootJar - Assembles an executable jar archive containing the main classes and their dependencies.
+build - Assembles and tests this project.
+buildDependents - Assembles and tests this project and all projects that depend on it.
+buildNeeded - Assembles and tests this project and all projects it depends on.
+classes - Assembles main classes.
+clean - Deletes the build directory.
+jar - Assembles a jar archive containing the classes of the 'main' feature.
+replayTestClasses - Assembles replay test classes.
+resolveMainClassName - Resolves the name of the application's main class.
+resolveTestMainClassName - Resolves the name of the application's test main class.
+testClasses - Assembles test classes.
+
+Build Setup tasks
+-----------------
+init - Initializes a new Gradle build.
+updateDaemonJvm - Generates or updates the Gradle Daemon JVM criteria.
+wrapper - Generates Gradle wrapper files.
+
+Cleanup tasks
+-------------
+cleanAll - Clean build artifacts and .chromascape directory
+cleanChromascape - Remove the .chromascape directory
+
+Documentation tasks
+-------------------
+javadoc - Generates Javadoc API documentation for the 'main' feature.
+
+Help tasks
+----------
+artifactTransforms - Displays the Artifact Transforms that can be executed in root project 'chromascape'.
+buildEnvironment - Displays all buildscript dependencies declared in root project 'chromascape'.
+dependencies - Displays all dependencies declared in root project 'chromascape'.
+dependencyInsight - Displays the insight into a specific dependency in root project 'chromascape'.
+dependencyManagement - Displays the dependency management declared in root project 'chromascape'.
+help - Displays a help message.
+javaToolchains - Displays the detected java toolchains.
+kotlinDslAccessorsReport - Prints the Kotlin code for accessing the currently available project extensions and conventions.
+outgoingVariants - Displays the outgoing variants of root project 'chromascape'.
+projects - Displays the sub-projects of root project 'chromascape'.
+properties - Displays the properties of root project 'chromascape'.
+resolvableConfigurations - Displays the configurations that can be resolved in root project 'chromascape'.
+tasks - Displays the tasks runnable from root project 'chromascape'.
+
+Native tasks
+------------
+assembleLinuxDistribution - Assemble the Linux distribution: application jar, native sidecar and launcher.
+buildRemoteInputLinux - Preflight and compile libRemoteInput.so from pinned sources (Linux x86_64).
+copyNativeLibraries - Copy prebuilt native libraries to build/dist
+nativeMetadataTests - Run the fixture-only tests for the native metadata and provenance helper.
+stageRemoteInputLinux - Validate the built library and provenance manifest and publish the pair to build/dist atomically.
+verifyPackagedRemoteInputLinux - Load the packaged artifact from the assembled distribution and verify symbols (no attachment).
+verifyRemoteInputDistributionLicence - Fail closed while the top-level RemoteInput licence gate is unresolved.
+verifyRemoteInputLinux - Load the staged artifact and verify required native symbols (no process attachment).
+
+Verification tasks
+------------------
+check - Runs all checks.
+replayCertificationTest - Windows-only replay contract certification against the synthetic xRSPS worker, PostgreSQL, and artifact storage
+replayStressCertificationTest - Windows-only replay stress evidence: synthetic determinism-100, failure injection, and PostgreSQL races
+replayTest - Runs replay-scoped tests isolated from unrelated test compilation
+spotlessApply - Applies code formatting steps to sourcecode in-place.
+spotlessCheck - Checks that sourcecode satisfies formatting steps.
+spotlessDiagnose
+spotlessJava
+spotlessJavaApply
+spotlessJavaCheck
+spotlessJavaDiagnose
+test - Runs the test suite.
+
+Rules
+-----
+Pattern: clean<TaskName>: Cleans the output files of a task.
+Pattern: build<ConfigurationName>: Assembles the artifacts of a configuration.
+
+To see all tasks and more detail, run gradlew tasks --all
+
+To see more detail about a task, run gradlew help --task <task>
+
+BUILD SUCCESSFUL in 1s
+1 actionable task: 1 executed
+
+# exit: 0
+# elapsed_seconds: 1

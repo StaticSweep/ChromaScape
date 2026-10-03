@@ -1,0 +1,61 @@
+# command: fixture harness: atomic staging contract (versioned payload + symlink swap); native compiler excluded
+# utc: 2026-09-15T11:03:27Z
+# revision: be4230c0198e065748ff5b49a76f434a581fee4d
+# worktree_status_sha256: 21117c54488d0ccb0ecbfa2827d15b5069f1e80458afde5458463a71dcf6bc29
+# run_sequence: 3 (second-review fixes; runs 1-2 retained unmodified apart from redaction)
+
+== fixture pair A (8256-byte synthetic ELF) ==
+PROVENANCE_OK files=278 tree=b727319f7289959019ecfc13313993312e92c03dccd88996f676b649c5d8ee0c patch=none
+MANIFEST_WRITTEN <repo>/build/native/remoteinput/linux-x86_64/remoteinput-manifest.json sha256=89ee653fd161d220a67ad6c9b539f77a5b87aa7c19a08495a6a8368de4011853 size=8256 patch=none
+manifest sha256=eae1c53708b99324fd504e7f4a413776b6feb6204a6debfccfb1df0a641cc0de
+artifact sha256=89ee653fd161d220a67ad6c9b539f77a5b87aa7c19a08495a6a8368de4011853
+
+== stage A: publish ==
+Staged validated artifact pair 89ee653fd161d220a67ad6c9b539f77a5b87aa7c19a08495a6a8368de4011853 at <repo>/build/dist/native/linux-x86_64 -> .versions/89ee653fd161d220a67ad6c9b539f77a5b87aa7c19a08495a6a8368de4011853
+BUILD SUCCESSFUL in 1s
+exit=0
+publish point: .versions/89ee653fd161d220a67ad6c9b539f77a5b87aa7c19a08495a6a8368de4011853 (symbolic link)
+resolves to:   <repo>/build/dist/native/.versions/89ee653fd161d220a67ad6c9b539f77a5b87aa7c19a08495a6a8368de4011853
+payload files: libRemoteInput.so remoteinput-manifest.json 
+payload perms: 644 libRemoteInput.so 644 remoteinput-manifest.json 
+artifact via symlink sha256=89ee653fd161d220a67ad6c9b539f77a5b87aa7c19a08495a6a8368de4011853
+
+== stage A again: an already-published payload is re-validated, not trusted ==
+payloads before: 1
+Staged validated artifact pair 89ee653fd161d220a67ad6c9b539f77a5b87aa7c19a08495a6a8368de4011853 at <repo>/build/dist/native/linux-x86_64 -> .versions/89ee653fd161d220a67ad6c9b539f77a5b87aa7c19a08495a6a8368de4011853
+BUILD SUCCESSFUL in 1s
+exit=0
+payloads after:  1
+
+== stage B (different artifact): publish a second payload ==
+PROVENANCE_OK files=278 tree=b727319f7289959019ecfc13313993312e92c03dccd88996f676b649c5d8ee0c patch=none
+MANIFEST_WRITTEN <repo>/build/native/remoteinput/linux-x86_64/remoteinput-manifest.json sha256=558afb92c0b5ef8edd7784ddb4198c0021e4dd815db99c0d6bfd2274094ee081 size=9000 patch=none
+artifact sha256=558afb92c0b5ef8edd7784ddb4198c0021e4dd815db99c0d6bfd2274094ee081
+Staged validated artifact pair 558afb92c0b5ef8edd7784ddb4198c0021e4dd815db99c0d6bfd2274094ee081 at <repo>/build/dist/native/linux-x86_64 -> .versions/558afb92c0b5ef8edd7784ddb4198c0021e4dd815db99c0d6bfd2274094ee081
+BUILD SUCCESSFUL in 1s
+exit=0
+publish point -> .versions/558afb92c0b5ef8edd7784ddb4198c0021e4dd815db99c0d6bfd2274094ee081
+payloads retained (current + previous): 2
+558afb92c0b5ef8edd7784ddb4198c0021e4dd815db99c0d6bfd2274094ee081
+89ee653fd161d220a67ad6c9b539f77a5b87aa7c19a08495a6a8368de4011853
+
+== failed stage (artifact mutated after the manifest was written) ==
+> Task :stageRemoteInputLinux FAILED
+ERROR: artifact.sizeBytes (9000) does not match the measured artifact (9006)
+BUILD FAILED in 1s
+exit=1
+publish point before failed stage: .versions/558afb92c0b5ef8edd7784ddb4198c0021e4dd815db99c0d6bfd2274094ee081
+publish point after  failed stage: .versions/558afb92c0b5ef8edd7784ddb4198c0021e4dd815db99c0d6bfd2274094ee081
+previous pair preserved: YES
+no leftover temp dirs: 0
+no leftover temp links: 0
+payload still validates: YES
+
+== distribution dereference (structural) ==
+symlink entries under build/dist/native: 1
+copied-from-dereferenced-path file types: 0 symlinks, 2 regular files
+NOTE: assembleLinuxDistribution itself was not executed here; it additionally requires bootJar,
+      the staged payload, and (correctly) the unresolved licence gate to be closed.
+
+# exit: 0
+# elapsed_seconds: 7

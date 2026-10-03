@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Transport failures" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:41:52.234Z" hostname="fedora" time="0.009">
+  <properties/>
+  <testcase name="throws on interrupted thread" classname="com.chromascape.web.simulator.SimulatorReplayControlServiceTest$TransportFailures" time="0.006"/>
+  <testcase name="throws on connection failure" classname="com.chromascape.web.simulator.SimulatorReplayControlServiceTest$TransportFailures" time="0.003"/>
+  <system-out><![CDATA[12:41:52.239 [Test worker] INFO  com.chromascape.web.simulator.SimulatorReplayControlService - SimulatorReplayControlService initialized - enabled: false, url: http://127.0.0.1:8095
+12:41:52.239 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'httpClient' of type [null] on target object [com.chromascape.web.simulator.SimulatorReplayControlService@aa0b5ce] or target class [class com.chromascape.web.simulator.SimulatorReplayControlService] to value [httpClient]
+12:41:52.242 [Test worker] INFO  com.chromascape.web.simulator.SimulatorReplayControlService - SimulatorReplayControlService initialized - enabled: false, url: http://127.0.0.1:8095
+12:41:52.242 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'httpClient' of type [null] on target object [com.chromascape.web.simulator.SimulatorReplayControlService@6eb3cbdf] or target class [class com.chromascape.web.simulator.SimulatorReplayControlService] to value [httpClient]
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
