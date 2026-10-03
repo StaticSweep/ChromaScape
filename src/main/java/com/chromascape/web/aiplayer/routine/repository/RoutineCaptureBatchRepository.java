@@ -6,6 +6,8 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface RoutineCaptureBatchRepository extends JpaRepository<RoutineCaptureBatch, Long> {
-  Optional<RoutineCaptureBatch> findBySessionIdAndKindAndSequence(String sessionId, String kind, int sequence);
+  Optional<RoutineCaptureBatch> findBySessionIdAndKindAndSequence(
+      String sessionId, String kind, int sequence);
+
   List<RoutineCaptureBatch> findBySessionIdOrderByAcceptedAtAscIdAsc(String sessionId);
 }

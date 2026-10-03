@@ -58,6 +58,26 @@ class WebsocketViewportTest {
     assertTrue(buffer.remaining() > 0);
   }
 
+  @Test
+  void encodedFramesPreserveJpegBytesAndWireHeader() {
+    when(handler.getActiveSessionCount()).thenReturn(1);
+    WebsocketViewport viewport =
+        new WebsocketViewport(handler, streamConfig(), new JpegFrameEncoder());
+    byte[] jpeg = {(byte) 0xff, (byte) 0xd8, 1, 2, (byte) 0xff, (byte) 0xd9};
+    viewport.publishEncodedFrame(jpeg, 16, 12, Runnable::run);
+    ArgumentCaptor<byte[]> payload = ArgumentCaptor.forClass(byte[].class);
+    await()
+        .atMost(2, TimeUnit.SECONDS)
+        .untilAsserted(() -> verify(handler).broadcast(payload.capture()));
+    ByteBuffer buffer = ByteBuffer.wrap(payload.getValue());
+    assertEquals(1L, buffer.getLong());
+    assertEquals(16, buffer.getInt());
+    assertEquals(12, buffer.getInt());
+    byte[] actual = new byte[buffer.remaining()];
+    buffer.get(actual);
+    org.junit.jupiter.api.Assertions.assertArrayEquals(jpeg, actual);
+  }
+
   private static ViewportStreamConfig streamConfig() {
     ViewportStreamConfig config = new ViewportStreamConfig();
     config.setTargetFps(15);

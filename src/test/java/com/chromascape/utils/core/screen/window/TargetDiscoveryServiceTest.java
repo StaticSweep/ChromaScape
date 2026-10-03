@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.awt.Rectangle;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -165,5 +166,117 @@ class TargetDiscoveryServiceTest {
 
     assertFalse(resolution.isResolved());
     assertEquals(TargetSelectionDiagnostic.UNSUPPORTED_PLATFORM, resolution.diagnostic());
+  }
+
+  @Test
+  void unsupportedPlatformListingsAreEmpty() {
+    TargetDiscoveryService unsupported = unsupportedService();
+
+    assertTrue(unsupported.listUiCandidates().isEmpty());
+    assertTrue(unsupported.listAllTargetWindows().isEmpty());
+  }
+
+  @Test
+  void windowsCandidateIdentitySurvivesEnumerationSelectionAndResolution() {
+    // Windows-shaped discovery: supported-client and fallback candidates carrying identities
+    ProcessIdentity first =
+        new ProcessIdentity(ProcessOrigin.LOCAL, "host-a", 4242L, Instant.ofEpochMilli(777L), "");
+    WindowInfo firstWindow =
+        new WindowInfo(
+            "1",
+            null,
+            "RuneLite - alpha",
+            "alpha",
+            4242,
+            true,
+            new Rectangle(0, 0, 600, 400),
+            first);
+    DiscoveredTarget firstTarget =
+        new DiscoveredTarget(
+            first, firstWindow, "supported-client", false, true, "direct capture canvas available");
+    ProcessIdentity second =
+        new ProcessIdentity(ProcessOrigin.LOCAL, "host-a", 4243L, Instant.ofEpochMilli(999L), "");
+    WindowInfo secondWindow =
+        new WindowInfo(
+            "2", null, "Some Java Window", null, 4243, true, new Rectangle(5, 5, 640, 480), second);
+    DiscoveredTarget secondTarget =
+        new DiscoveredTarget(
+            second, secondWindow, "java-fallback", true, true, "fallback standalone Java window");
+    TargetDiscoveryService service =
+        stubService(new StubCandidateManager(List.of(firstTarget, secondTarget)));
+
+    List<WindowHandler.WindowCandidate> candidates = service.listUiCandidates();
+
+    // Enumeration: same order, same metadata, identities attached
+    assertEquals(2, candidates.size());
+    assertEquals(List.of("1", "2"), candidates.stream().map(c -> c.window().getId()).toList());
+    assertEquals("supported-client", candidates.get(0).source());
+    assertFalse(candidates.get(0).fallback());
+    assertTrue(candidates.get(0).captureable());
+    assertEquals(first, candidates.get(0).window().getProcessIdentity());
+    assertEquals("java-fallback", candidates.get(1).source());
+    assertTrue(candidates.get(1).fallback());
+    assertEquals(second, candidates.get(1).window().getProcessIdentity());
+    assertEquals(List.of(firstWindow, secondWindow), service.listAllTargetWindows());
+
+    // The controller stores exactly the presented candidate window
+    selection.setSelectedWindow(candidates.get(0).window());
+
+    // Resolution observes the same identity that was presented and stored
+    TargetDiscoveryService.TargetResolution resolution = service.resolveSelectedTarget();
+    assertTrue(resolution.isResolved());
+    assertNull(resolution.diagnostic());
+    assertEquals(first, resolution.target().orElseThrow().identity());
+    assertEquals(4242L, resolution.target().orElseThrow().identity().pid());
+    assertEquals(
+        Instant.ofEpochMilli(777L), resolution.target().orElseThrow().identity().startTime());
+  }
+
+  @Test
+  void legacySelectionWithoutIdentityFailsClosedInsteadOfMatchingByPid() throws IOException {
+    createEligiblePid(100L);
+    // A pre-enrichment selection carrying only a pid: even though the enriched candidate has the
+    // same pid, resolution must refuse it instead of silently selecting by pid
+    selection.setSelectedWindow(
+        new WindowInfo("linux:100:" + STAT_START_TICKS, null, null, null, 100, false, null));
+
+    TargetDiscoveryService.TargetResolution resolution = service("").resolveSelectedTarget();
+
+    assertFalse(resolution.isResolved());
+    assertEquals(TargetSelectionDiagnostic.STALE_SELECTION, resolution.diagnostic());
+  }
+
+  /** Stub manager serving a fixed candidate list, used to exercise the facade contract. */
+  private static final class StubCandidateManager implements ProcessManager {
+
+    private final List<DiscoveredTarget> targets;
+
+    StubCandidateManager(List<DiscoveredTarget> targets) {
+      this.targets = targets;
+    }
+
+    @Override
+    public List<DiscoveredTarget> discoverEligibleLocal() {
+      return targets;
+    }
+
+    @Override
+    public Optional<ProcessIdentity> resolveLocal(long pid) {
+      return targets.stream()
+          .filter(target -> target.identity() != null && target.identity().pid() == pid)
+          .findFirst()
+          .map(DiscoveredTarget::identity);
+    }
+  }
+
+  private TargetDiscoveryService stubService(ProcessManager manager) {
+    ProcessManagerFactory factory =
+        new ProcessManagerFactory(ProcFs.production(), "", "") {
+          @Override
+          public ProcessManager getProcessManager() {
+            return manager;
+          }
+        };
+    return new TargetDiscoveryService(factory, selection);
   }
 }

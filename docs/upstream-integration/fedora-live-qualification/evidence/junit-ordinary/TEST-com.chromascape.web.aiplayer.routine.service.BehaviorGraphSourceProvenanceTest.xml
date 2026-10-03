@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.service.BehaviorGraphSourceProvenanceTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:34.085Z" hostname="fedora" time="0.54">
+  <properties/>
+  <testcase name="stillRejectsUnknownFieldsAndMalformedProvenance()" classname="com.chromascape.web.aiplayer.routine.service.BehaviorGraphSourceProvenanceTest" time="0.511"/>
+  <testcase name="graphSourceSchemaMatchesCanonicalIdentitySourceSchema()" classname="com.chromascape.web.aiplayer.routine.service.BehaviorGraphSourceProvenanceTest" time="0.008"/>
+  <testcase name="generatedAndPersistedGraphRetainsFullVerifiedSourceIdentity()" classname="com.chromascape.web.aiplayer.routine.service.BehaviorGraphSourceProvenanceTest" time="0.021"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,45 +1,54 @@
 # SC-609 verification and review handoff
 
 Complete implemented plan: [SC-609-DELIVERY-PLAN.md](SC-609-DELIVERY-PLAN.md). Operations and compatibility: [SC-609-CAPTURE-PROVENANCE.md](SC-609-CAPTURE-PROVENANCE.md).
-Felix task `task_1790971893615_dult4y03` is in review. Backend draft PR: https://github.com/ikiddoi/ChromaScape/pull/45 (source commit `9f5151be`). Shortcut SC-609 review synchronization succeeded with marker `[felix-sync:task_1790971893615_dult4y03:review]`, comment activity-1946. Coordinated producer draft PR: https://github.com/ikiddoi/micro6/pull/160 (commit `caa19d25de`). This handoff distinguishes backend/UI verification from unrun native checks. Both projects use branch `codex/sc-609-recording-provenance`; ChromaScape stacks on SC-641, Micro6 on main.
+
+## Delivery status — 2026-10-03
+
+Micro6 PR #160 is merged into main at `77c758e91dda00fef16e3984cdb676d1741e5e63`; it includes #159's AccountBuilder lifecycle fixes. ChromaScape dependencies #44 (SC-260), #42 (SC-665) and #43 (SC-641) are merged. PR #45 is reconciled with their resulting main revision `5050b79d`, for submission directly to main.
+
+Felix task `task_1790971893615_dult4y03` was previously recorded in review. Felix writes and CI monitoring are skipped at the user's request; no new Felix state or synchronization success is claimed. SC-609 remains In Review because the requested delivery targets are both Fedora and Windows, and native Windows recovery qualification is outstanding.
 
 ## Acceptance results
 
-- Immutable exact profile/catalog/settings/requirements and run identity: backend PostgreSQL tests exercise snapshot preservation and reject direct SQL tampering.
-- Legacy/incomplete eligibility: explicit audited INFERRED assignment, finalized-session and complete-quality gates; no silent promotion of legacy evidence.
-- Alignment/source/semantic conformance: frozen frames validate session, sequence, source tick, UUID events, complete contract and human/provider distinctions. Missing observation fields remain null.
-- Capture quality: durable append-only frame persistence, idempotent receipts, gap/conflict rejection and finalized disconnect evidence tested on PostgreSQL. Native overflow/restart fixtures are authored but unrun.
-- Producer propagation: actual accepted settings/task-entry identity carried through executor, bridge, recorder and SESSION_START; statically reviewed only.
-- Catalog: JSONB, duplicate-time account/task keyset traversal and recording-row identity authority tested with PostgreSQL; video-only access regression covered.
-- UI: cursor loading, groups, safe settings text, null/empty distinction and video-only visibility covered with Node/JSDOM. Real browser inspection unrun.
+- Immutable profile/catalog/settings/requirements/run identity, SQL tamper rejection, inferred legacy assignment, finalized-session eligibility and incomplete-quality rejection: passed backend PostgreSQL tests.
+- Canonical alignment, source/semantic validation, append-only frames, idempotent receipts and gap/conflict/finalized-disconnect behavior: passed backend tests.
+- Main compatibility: preserve v2 wire checksum/durable receipt handling and screen-frame response capability alongside v3 negotiation/run context. Canonical v3 frames use their committed canonical ACK; legacy projection does not create a second receipt or validate a redacted frame as a v2 wire document.
+- Two added WebSocket regressions verify exactly one durable ACK, retention of the original wire document, and preservation of the committed ACK when legacy projection fails.
+- Current development-schema convergence includes six migrations and inherited V6 mappings for main's entities, columns and integrity constraints; no released legacy migration was edited in this reconciliation.
+- Catalog pagination, authoritative recording identity, video-only access, cursor loading, safe settings text and null/empty behavior: passed backend and Node/JSDOM tests.
+- Windows-specific locking, ACLs, atomic replacement, process restart and power-loss qualification: unrun. Fedora automated tests establish shared behavior, not native Windows or physical power-loss behavior. Real browser acceptance and a live client/server capture remain unrun.
 
 ## Tests
 
-- `recordingProvenanceTest`: 126 passed, zero failures/errors/skips.
+Actually run on this Fedora host using JDK 17:
+
 - `aiPlayerSchemaTest`: 21 passed, zero failures/errors/skips.
 - `aiPlayerCatalogTest`: 44 passed, zero failures/errors/skips.
-- `npm test`: 240 Node/JSDOM tests passed, zero failures/skips (latest UI run).
-- Frozen backend compilation, scoped `spotlessApply`/`spotlessCheck`: passed. Scoped `checkstyleMain`: task succeeded with 306 advisory warnings.
-- Both staged Git diffs passed whitespace checks. Generated semantic artifacts are byte-identical; new native Java fixtures/outbox parsed by the formatter without compiling Micro6.
-- Final combined Gradle run: BUILD SUCCESSFUL; scoped suites only, not the full default test tree.
+- `recordingProvenanceTest`: 141 passed, zero failures/errors/skips, including the two new ACK regressions.
+- Combined Gradle invocation: BUILD SUCCESSFUL; production and scoped test compilation succeeded. This is not the full default backend test tree.
+- `npm ci --ignore-scripts`: locked dependencies installed successfully, zero audit vulnerabilities reported; lockfile unchanged.
+- `npm test`: 281 passed, zero failures, three opt-in checks skipped (284 total).
+- Scoped Google Java formatting and whitespace verification are included in the integration commit checks.
 
-The final run follows corrected failures: procedural SQL splitting on fresh convergence, a Mockito varargs fixture cast, account assertions that expected fabricated identity, and an inconsistent test catalog snapshot. Earlier partial/failing runs do not substitute for the final result.
-Current schema fingerprint was exported against an agent-owned PostgreSQL16 database after all five migrations:
-`sha256:a70940b0d3fa05cd67cc255e4b2f0222198a0107134cd1da0c581489206d1ba7` (`sc609-current-v1`). No shared/user database was reset.
+Current schema identity: `sc609-current-v1`; six-migration fingerprint exported from an agent-owned disposable PostgreSQL 16 database:
+`sha256:62fe48dd10464cb0ffb057557b25884c61c24a5282b95e4925daec1a64423a5e`.
+No shared/user database was reset. PostgreSQL test storage was disposable, including tmpfs for the final scoped suites; these tests do not certify physical crash durability.
 
-Micro6 compilation/tests were NOT RUN. Its AGENTS.md states: “Do not compile or test this project unless the user explicitly requests that exact action in the current request.” Native DTO/outbox fixtures, static review and formatting are not a test pass. No client, application or server was launched.
+Micro6 evidence supplied by the user for pushed revision `57f3dfd`: JDK 17 compilation successful, 25 focused tests passed, full client suite 1649 tests across 189 classes passed with zero failures/errors/skips, and repository hygiene clean. Those producer checks were not rerun in this session. CI monitoring and Felix were skipped as requested. No application or client was launched for this verification.
+
+The successful final runs follow integration fixes for schema mappings, catalog hash fixtures and the correct JDBC schema selection. An initial Node run could not load JSDOM; installing locked dependencies corrected it. Earlier failing runs are not used as passing evidence.
 
 ## Risks
 
-The current producer knows menu dispatches but lacks measured human/automation origin, complete script-intent and transition-verification telemetry. It reports UNKNOWN/unsupported evidence and remains training-ineligible. Native compile/API compatibility, Windows atomic-write/process-restart/power-loss behavior and real browser acceptance remain unverified. Scoped checks do not claim that the repository's entire existing test tree passes. Checkstyle warnings remain advisory under existing configuration.
+Native Windows qualification, real browser acceptance and live coordinated recovery remain outstanding. Current producer origin/script-intent/transition telemetry remains UNKNOWN or unsupported where not observed, keeping incomplete evidence training-ineligible. Scoped tests do not claim the full backend test tree passes. Existing disposable development databases may require an explicitly authorized reset to adopt changed development migration history; no such user database operation was performed.
 
 ## Rollback
 
-Revert coordinated application/producer commits, retain additive nullable columns, immutable frames and audit records, and preserve retained producer outboxes. Current development-schema version rollback requires an explicitly authorized disposable reset. No merge or deployment is performed here.
+Revert the coordinated merge commits with the correct mainline while preserving stored frames, audit records and retained producer outboxes. Retain additive nullable data columns. Development-schema rollback/reset needs explicit authorization against a confirmed disposable database. This work does not deploy or restart services.
 
 ## Remaining work
 
-Run explicitly authorized native module tests/compile and Windows recovery checks, then reconcile remaining acceptance/verification evidence before marking the story done. Downstream telemetry capability adapters must supply observed completeness before canonical training can be enabled.
+Qualify recovery on native Windows and complete the unrun live/browser acceptance checks required by the delivery plan, then reconcile acceptance evidence before marking SC-609 Done. The Fedora automated checks above are complete. Downstream telemetry adapters must supply observed completeness before canonical training can be enabled. Felix remains untouched at the user's request.
 
 ## Changed files
 

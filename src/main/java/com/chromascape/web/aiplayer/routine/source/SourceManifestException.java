@@ -11,8 +11,7 @@ public class SourceManifestException extends RuntimeException {
     this(code, defaultStatus(code), message, null);
   }
 
-  public SourceManifestException(
-      SourceManifestFailureCode code, String message, Throwable cause) {
+  public SourceManifestException(SourceManifestFailureCode code, String message, Throwable cause) {
     this(code, defaultStatus(code), message, cause);
   }
 
@@ -40,11 +39,15 @@ public class SourceManifestException extends RuntimeException {
     if (code == null) return HttpStatus.UNPROCESSABLE_ENTITY;
     return switch (code) {
       case SOURCE_ACCESS_DENIED -> HttpStatus.UNAUTHORIZED;
-      case SOURCE_REDACTED, SOURCE_FILE_NOT_FOUND, SOURCE_SYMBOL_NOT_FOUND,
+      case SOURCE_REDACTED,
+          SOURCE_FILE_NOT_FOUND,
+          SOURCE_SYMBOL_NOT_FOUND,
           SOURCE_UNAVAILABLE -> HttpStatus.NOT_FOUND;
       case SOURCE_PRUNED -> HttpStatus.GONE;
       case SOURCE_NETWORK_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
       case SOURCE_RATE_LIMITED -> HttpStatus.TOO_MANY_REQUESTS;
+      case SOURCE_BUILD_MISMATCH -> HttpStatus.CONFLICT;
+      case SOURCE_AUDIT_CONTEXT_INVALID -> HttpStatus.BAD_REQUEST;
       default -> HttpStatus.UNPROCESSABLE_ENTITY;
     };
   }

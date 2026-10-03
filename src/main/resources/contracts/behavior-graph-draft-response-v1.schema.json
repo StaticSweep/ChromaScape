@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.leeuwbot.dev/sc728/behavior-graph-draft-response/v1",
+  "title": "behavior-graph-draft-response/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "draft_id", "revision", "state", "definition", "layout", "graph_hash", "layout_hash", "validation", "authority", "control_allowed"],
+  "properties": {
+    "schema": { "const": "behavior-graph-draft-response/v1" },
+    "draft_id": { "$ref": "#/$defs/identifier" },
+    "revision": { "type": "integer", "minimum": 1, "maximum": 9223372036854775807 },
+    "state": { "enum": ["DRAFT", "PUBLISHED"] },
+    "definition": { "$ref": "behavior-graph-definition-v2.schema.json" },
+    "layout": { "$ref": "behavior-graph-layout-v1.schema.json" },
+    "graph_hash": { "$ref": "#/$defs/hash" },
+    "layout_hash": { "$ref": "#/$defs/hash" },
+    "validation": { "$ref": "#/$defs/validation" },
+    "authority": { "$ref": "#/$defs/authority" },
+    "control_allowed": { "const": false }
+  },
+  "$defs": {
+    "identifier": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+    "hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "issue": { "type": "object", "additionalProperties": false, "required": ["code", "severity", "path", "message"], "properties": { "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,127}$" }, "severity": { "enum": ["ERROR", "WARNING"] }, "path": { "type": "string", "minLength": 1, "maxLength": 2000 }, "message": { "type": "string", "minLength": 1, "maxLength": 2000 }, "node_id": { "$ref": "#/$defs/identifier" }, "edge_id": { "$ref": "#/$defs/identifier" } } },
+    "validation": { "type": "object", "additionalProperties": false, "required": ["state", "errors", "warnings"], "properties": { "state": { "enum": ["VALID", "INVALID"] }, "errors": { "type": "array", "maxItems": 1024, "items": { "$ref": "#/$defs/issue" } }, "warnings": { "type": "array", "maxItems": 1024, "items": { "$ref": "#/$defs/issue" } } } },
+    "authority": { "type": "object", "additionalProperties": false, "required": ["can_write_source", "can_approve_patch", "can_publish_graph", "can_activate_model", "can_dispatch_input"], "properties": { "can_write_source": { "const": false }, "can_approve_patch": { "const": false }, "can_publish_graph": { "const": false }, "can_activate_model": { "const": false }, "can_dispatch_input": { "const": false } } }
+  }
+}

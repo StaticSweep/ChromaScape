@@ -2,6 +2,7 @@ package com.chromascape.utils.core.screen.window;
 
 import java.awt.Rectangle;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.logging.log4j.LogManager;
@@ -37,7 +38,8 @@ public class WindowController {
    */
   @Autowired
   public WindowController(
-      WindowSelectionService windowSelectionService, TargetDiscoveryService targetDiscoveryService) {
+      WindowSelectionService windowSelectionService,
+      TargetDiscoveryService targetDiscoveryService) {
     this.windowSelectionService = windowSelectionService;
     this.targetDiscoveryService = targetDiscoveryService;
   }
@@ -168,8 +170,13 @@ public class WindowController {
     windowSelectionService.setSelectedWindow(selectedWindow);
     logger.info("Window selected via API: {} (ID: {})", selectedWindow.getTitle(), windowId);
 
-    return ResponseEntity.ok(
-        Map.of("status", "selected", "id", windowId, "title", selectedWindow.getTitle()));
+    // A null-tolerant map is required here: neutral Linux candidates intentionally carry no title,
+    // and Map.of rejects null values.
+    Map<String, String> response = new LinkedHashMap<>();
+    response.put("status", "selected");
+    response.put("id", windowId);
+    response.put("title", selectedWindow.getTitle());
+    return ResponseEntity.ok(response);
   }
 
   /**

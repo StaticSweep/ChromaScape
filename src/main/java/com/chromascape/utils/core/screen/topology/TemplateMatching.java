@@ -5,6 +5,7 @@ import static org.bytedeco.opencv.global.opencv_core.minMaxLoc;
 import static org.bytedeco.opencv.global.opencv_imgproc.*;
 import static org.opencv.imgproc.Imgproc.TM_SQDIFF_NORMED;
 
+import com.chromascape.utils.core.screen.capture.FrameImageAdapter;
 import com.chromascape.utils.core.screen.viewport.ViewportManager;
 import com.chromascape.utils.core.screen.window.ScreenManager;
 import com.chromascape.utils.core.state.BotState;
@@ -20,7 +21,6 @@ import java.nio.file.StandardCopyOption;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.bytedeco.javacpp.DoublePointer;
-import org.bytedeco.javacv.Java2DFrameUtils;
 import org.bytedeco.opencv.global.opencv_imgcodecs;
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.Point;
@@ -97,7 +97,7 @@ public class TemplateMatching {
       throw new IllegalArgumentException("Template image is empty");
     }
 
-    Mat base = Java2DFrameUtils.toMat(baseImg);
+    Mat base = FrameImageAdapter.toMat(baseImg);
 
     if (base.empty()) {
       throw new IllegalArgumentException("Base image is empty");

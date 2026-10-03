@@ -1,0 +1,330 @@
+> Task :spotlessInternalRegisterDependencies UP-TO-DATE
+> Task :spotlessJava
+> Task :spotlessJavaCheck FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':spotlessJavaCheck'.
+> The following files had format violations:
+      src/main/java/com/chromascape/web/accounttask/config/StabilizationAuthConfig.java
+          @@ -5,12 +5,12 @@
+           import·org.springframework.context.annotation.Configuration;
+
+           /**
+          -·*·Registers·the·stabilization·authorization·filter·on·the·entire·stabilization·surface:
+          -·*·{@code·/api/account-tasks/stabilization/*}.·A·request·filter·authenticates·before·multipart
+          -·*·parsing·so·no·stabilization·endpoint·—·{@code·/harness-manifest},
+          -·*·{@code·/reliability-matrix},·{@code·/report-bundles},·{@code·/runs/**},·{@code·/matrices/**},
+          -·*·{@code·/ingest-report},·{@code·/kpi},·{@code·/triage},·{@code·/triage/{id}/resolve}·or
+          -·*·{@code·/catalog}·—·is·ever·parsed·or·served·without·an·explicit·authorization·decision.
+          +·*·Registers·the·stabilization·authorization·filter·on·the·entire·stabilization·surface:·{@code
+          +·*·/api/account-tasks/stabilization/*}.·A·request·filter·authenticates·before·multipart·parsing·so
+          +·*·no·stabilization·endpoint·—·{@code·/harness-manifest},·{@code·/reliability-matrix},·{@code
+          +·*·/report-bundles},·{@code·/runs/**},·{@code·/matrices/**},·{@code·/ingest-report},·{@code·/kpi},
+          +·*·{@code·/triage},·{@code·/triage/{id}/resolve}·or·{@code·/catalog}·—·is·ever·parsed·or·served
+          +·*·without·an·explicit·authorization·decision.
+           ·*/
+           @Configuration
+           public·class·StabilizationAuthConfig·{
+          @@ -23,8 +23,7 @@
+
+           ··@Bean
+           ··public·FilterRegistrationBean<StabilizationAuthFilter>·stabilizationAuthFilterRegistration()·{
+          -····FilterRegistrationBean<StabilizationAuthFilter>·registration·=
+          -········new·FilterRegistrationBean<>();
+          +····FilterRegistrationBean<StabilizationAuthFilter>·registration·=·new·FilterRegistrationBean<>();
+           ····registration.setFilter(filter);
+           ····registration.addUrlPatterns("/api/account-tasks/stabilization/*");
+           ····registration.setName("stabilizationAuthFilter");
+      src/main/java/com/chromascape/web/accounttask/config/StabilizationAuthFilter.java
+          @@ -4,7 +4,6 @@
+           import·jakarta.servlet.ReadListener;
+           import·jakarta.servlet.ServletException;
+           import·jakarta.servlet.ServletInputStream;
+          -import·jakarta.servlet.ServletRequest;
+           import·jakarta.servlet.http.HttpServletRequest;
+           import·jakarta.servlet.http.HttpServletRequestWrapper;
+           import·jakarta.servlet.http.HttpServletResponse;
+          @@ -21,15 +20,15 @@
+           ·*·so·authentication·always·runs·before·any·multipart·parsing.
+           ·*
+           ·*·<p>The·read·token·authorizes·GET·requests;·the·write·token·authorizes·every·POST·(complete·report
+          -·*·ingestion·included).·Tokenless·access·is·permitted·only·when·the·active·profile·is·exactly
+          -·*·{@code·local-development}·and·the·direct·peer·is·loopback;·forwarded·address·headers·are·never
+          -·*·trusted·without·an·explicit·trusted-proxy·configuration.·Outside·{@code·local-development},
+          -·*·application·startup·fails·when·either·token·is·blank.
+          +·*·ingestion·included).·Tokenless·access·is·permitted·only·when·the·active·profile·is·exactly·{@code
+          +·*·local-development}·and·the·direct·peer·is·loopback;·forwarded·address·headers·are·never·trusted
+          +·*·without·an·explicit·trusted-proxy·configuration.·Outside·{@code·local-development},·application
+      ... (102 more lines that didn't fit)
+  Violations also present in 255 other files.
+  Run './gradlew :spotlessApply' to fix these violations.
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 1s
+3 actionable tasks: 2 executed, 1 up-to-date
+SPOTLESS_EXIT=1
+--- complete offender set (post-remediation, 257 files) ---
+src/main/java/com/chromascape/web/accounttask/config/StabilizationAuthConfig.java
+src/main/java/com/chromascape/web/accounttask/config/StabilizationAuthFilter.java
+src/main/java/com/chromascape/web/accounttask/config/StabilizationAuthInterceptor.java
+src/main/java/com/chromascape/web/accounttask/controller/StabilizationController.java
+src/main/java/com/chromascape/web/accounttask/entity/ScriptStabilizationRun.java
+src/main/java/com/chromascape/web/accounttask/entity/ScriptStabilizationSnapshot.java
+src/main/java/com/chromascape/web/accounttask/entity/StabilizationArtifact.java
+src/main/java/com/chromascape/web/accounttask/entity/StabilizationRunAggregate.java
+src/main/java/com/chromascape/web/accounttask/repository/ScriptStabilizationRunRepository.java
+src/main/java/com/chromascape/web/accounttask/repository/ScriptStabilizationSnapshotRepository.java
+src/main/java/com/chromascape/web/accounttask/repository/StabilizationArtifactRepository.java
+src/main/java/com/chromascape/web/accounttask/service/StabilizationArtifactStore.java
+src/main/java/com/chromascape/web/accounttask/service/StabilizationBundleStreamReader.java
+src/main/java/com/chromascape/web/accounttask/service/StabilizationHashUtil.java
+src/main/java/com/chromascape/web/accounttask/service/StabilizationIngestionResourceTracker.java
+src/main/java/com/chromascape/web/accounttask/service/StabilizationIngestionService.java
+src/main/java/com/chromascape/web/accounttask/service/StabilizationRecoverySweeper.java
+src/main/java/com/chromascape/web/aiplayer/contract/CanonicalJsonHasher.java
+src/main/java/com/chromascape/web/aiplayer/contract/CurrentSliceContractException.java
+src/main/java/com/chromascape/web/aiplayer/contract/CurrentSliceIdentity.java
+src/main/java/com/chromascape/web/aiplayer/contract/CurrentSliceIdentityValidator.java
+src/main/java/com/chromascape/web/aiplayer/prototype/FishingShadowDecisionService.java
+src/main/java/com/chromascape/web/aiplayer/routine/AiRoutineOperatorContext.java
+src/main/java/com/chromascape/web/aiplayer/routine/config/AiRoutineOperatorInterceptor.java
+src/main/java/com/chromascape/web/aiplayer/routine/config/AiRoutineOperatorProperties.java
+src/main/java/com/chromascape/web/aiplayer/routine/config/AiRoutineOperatorWebConfig.java
+src/main/java/com/chromascape/web/aiplayer/routine/config/Sc967CandidateProperties.java
+src/main/java/com/chromascape/web/aiplayer/routine/controller/PatchCandidateController.java
+src/main/java/com/chromascape/web/aiplayer/routine/controller/RoutineAssistantController.java
+src/main/java/com/chromascape/web/aiplayer/routine/controller/RoutineController.java
+src/main/java/com/chromascape/web/aiplayer/routine/controller/RoutineReplayController.java
+src/main/java/com/chromascape/web/aiplayer/routine/controller/SourceDebuggerController.java
+src/main/java/com/chromascape/web/aiplayer/routine/dto/RoutineApiDtos.java
+src/main/java/com/chromascape/web/aiplayer/routine/entity/BehaviorGraphDefinition.java
+src/main/java/com/chromascape/web/aiplayer/routine/entity/CurrentSliceRun.java
+src/main/java/com/chromascape/web/aiplayer/routine/entity/PatchCandidateRun.java
+src/main/java/com/chromascape/web/aiplayer/routine/entity/RoutineAssistantConversation.java
+src/main/java/com/chromascape/web/aiplayer/routine/entity/RoutineAssistantEvent.java
+src/main/java/com/chromascape/web/aiplayer/routine/entity/RoutineAssistantProposal.java
+src/main/java/com/chromascape/web/aiplayer/routine/entity/RoutineCaptureBatch.java
+src/main/java/com/chromascape/web/aiplayer/routine/entity/RoutineCaptureExternalBinding.java
+src/main/java/com/chromascape/web/aiplayer/routine/entity/RoutineCaptureOperation.java
+src/main/java/com/chromascape/web/aiplayer/routine/entity/RoutineCaptureRecord.java
+src/main/java/com/chromascape/web/aiplayer/routine/entity/RoutineCuration.java
+src/main/java/com/chromascape/web/aiplayer/routine/entity/RoutineModel.java
+src/main/java/com/chromascape/web/aiplayer/routine/entity/RoutineReplayTrace.java
+src/main/java/com/chromascape/web/aiplayer/routine/entity/RoutineShadowDecision.java
+src/main/java/com/chromascape/web/aiplayer/routine/entity/RoutineShadowRun.java
+src/main/java/com/chromascape/web/aiplayer/routine/event/RoutineCaptureBatchAccepted.java
+src/main/java/com/chromascape/web/aiplayer/routine/repository/BehaviorGraphDefinitionRepository.java
+src/main/java/com/chromascape/web/aiplayer/routine/repository/CurrentSliceRunRepository.java
+src/main/java/com/chromascape/web/aiplayer/routine/repository/PatchCandidateRunRepository.java
+src/main/java/com/chromascape/web/aiplayer/routine/repository/RoutineAssistantConversationRepository.java
+src/main/java/com/chromascape/web/aiplayer/routine/repository/RoutineAssistantEventRepository.java
+src/main/java/com/chromascape/web/aiplayer/routine/repository/RoutineAssistantProposalRepository.java
+src/main/java/com/chromascape/web/aiplayer/routine/repository/RoutineCaptureBatchRepository.java
+src/main/java/com/chromascape/web/aiplayer/routine/repository/RoutineCaptureExternalBindingRepository.java
+src/main/java/com/chromascape/web/aiplayer/routine/repository/RoutineCaptureOperationRepository.java
+src/main/java/com/chromascape/web/aiplayer/routine/repository/RoutineCurationRepository.java
+src/main/java/com/chromascape/web/aiplayer/routine/repository/RoutineReplayTraceRepository.java
+src/main/java/com/chromascape/web/aiplayer/routine/repository/RoutineShadowDecisionRepository.java
+src/main/java/com/chromascape/web/aiplayer/routine/repository/RoutineShadowRunRepository.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/BehaviorGraphService.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/CandidateCertificationV1Validator.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/CandidateRegistryClient.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/CandidateSigner.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/CaptureExternalBindingService.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/CaptureOperationDispatcher.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/CaptureOperationResultService.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/CaptureRecordingGateway.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/CertifiedCandidateV2Validator.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/CurrentSliceRunService.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/DeterministicRoutineAssistantProvider.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/GraphSchemaValidator.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/IsolatedPatchWorker.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/Micro6SourceManifestClient.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/PatchCandidateBuildDispatcher.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/PatchCandidateRegistrationDispatcher.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/PatchCandidateWorkflowService.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/RoutineAssistantConversationStore.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/RoutineAssistantProvider.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/RoutineAssistantService.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/RoutineCaptureIngestionService.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/RoutineCurationService.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/RoutineReplayShadowService.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/RoutineShadowCompatibilityValidator.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/RoutineShadowCoordinator.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/RoutineShadowService.java
+src/main/java/com/chromascape/web/aiplayer/routine/service/Sc967CanonicalJson.java
+src/main/java/com/chromascape/web/aiplayer/routine/source/persistence/SourceContentObject.java
+src/main/java/com/chromascape/web/aiplayer/routine/source/persistence/SourceManifestReference.java
+src/main/java/com/chromascape/web/aiplayer/routine/source/persistence/SourceManifestReferenceRepository.java
+src/main/java/com/chromascape/web/aiplayer/routine/source/persistence/SourceReadAuditEvent.java
+src/main/java/com/chromascape/web/aiplayer/routine/source/persistence/SourceRunBinding.java
+src/main/java/com/chromascape/web/aiplayer/routine/source/persistence/SourceRunBindingRepository.java
+src/main/java/com/chromascape/web/aiplayer/routine/source/SourceAccessPolicy.java
+src/main/java/com/chromascape/web/aiplayer/routine/source/SourceDebuggerReadService.java
+src/main/java/com/chromascape/web/aiplayer/routine/source/SourceManifestBindingService.java
+src/main/java/com/chromascape/web/aiplayer/routine/source/SourceManifestContract.java
+src/main/java/com/chromascape/web/aiplayer/routine/source/SourceManifestException.java
+src/main/java/com/chromascape/web/aiplayer/routine/source/SourceManifestFetchService.java
+src/main/java/com/chromascape/web/aiplayer/routine/source/SourceManifestSignatureVerifier.java
+src/main/java/com/chromascape/web/aiplayer/routine/source/SourceReadAuditService.java
+src/main/java/com/chromascape/web/aiplayer/routine/source/SourceRetentionService.java
+src/main/java/com/chromascape/web/aiplayer/routine/source/SourceRunOrchestrationService.java
+src/main/java/com/chromascape/web/aiplayer/routine/source/TaskSourceManifest.java
+src/main/java/com/chromascape/web/aiplayer/routine/source/TaskSourceManifestVerifier.java
+src/main/java/com/chromascape/web/aiplayer/routine/source/VerifiedSourceContentCache.java
+src/main/java/com/chromascape/web/aiplayer/ShadowPolicyService.java
+src/main/java/com/chromascape/web/config/SourceConfigurationValidator.java
+src/main/java/com/chromascape/web/config/SourceTrustProperties.java
+src/main/java/com/chromascape/web/config/WebSocketConfig.java
+src/main/java/com/chromascape/web/debug/buildergoal/controller/BuilderGoalRunnerController.java
+src/main/java/com/chromascape/web/debug/buildergoal/service/AccountIdentityContract.java
+src/main/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalAccountCatalogService.java
+src/main/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalLauncherControlService.java
+src/main/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalRepairIncidentService.java
+src/main/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalRepairPatchExportService.java
+src/main/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalRunnerService.java
+src/main/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalRunStateMutationService.java
+src/main/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalStartException.java
+src/main/java/com/chromascape/web/debug/buildergoal/service/Micro6OnlineClientRegistryService.java
+src/main/java/com/chromascape/web/debug/buildergoal/service/Micro6TargetRelaunchService.java
+src/main/java/com/chromascape/web/debug/patchloop/service/ScriptExecutionService.java
+src/main/java/com/chromascape/web/debug/tickdebugger/dto/RecordingAction.java
+src/main/java/com/chromascape/web/debug/tickdebugger/entity/ReplayRecordingAction.java
+src/main/java/com/chromascape/web/debug/tickdebugger/service/DebugSessionService.java
+src/main/java/com/chromascape/web/debug/tickdebugger/service/ReplayRecordingActionIngestionService.java
+src/main/java/com/chromascape/web/debug/tickdebugger/service/TickStreamIngestionService.java
+src/main/java/com/chromascape/web/gameplay/authority/HumanGameplayAuthorityService.java
+src/main/java/com/chromascape/web/gameplay/orchestration/accountbuilder/AccountBuilderOrchestrationModels.java
+src/main/java/com/chromascape/web/gameplay/orchestration/accountbuilder/AccountBuilderOrchestrationValidator.java
+src/main/java/com/chromascape/web/gameplay/orchestration/accountbuilder/InMemoryAccountBuilderOrchestrationStore.java
+src/main/java/com/chromascape/web/gameplay/orchestration/accountbuilder/JpaAccountBuilderOrchestrationStore.java
+src/main/java/com/chromascape/web/gateway/dto/DebuggerServiceCapabilities.java
+src/main/java/com/chromascape/web/integration/micro6/service/Micro6CanonicalHash.java
+src/main/java/com/chromascape/web/integration/micro6/service/Micro6CatalogV2Contract.java
+src/main/java/com/chromascape/web/recording/service/RecordingService.java
+src/main/java/com/chromascape/web/replay/api/dto/ReplayMismatchPageResponse.java
+src/main/java/com/chromascape/web/replay/api/dto/ReplayMismatchResponse.java
+src/main/java/com/chromascape/web/replay/api/dto/ReplayStopPolicy.java
+src/main/java/com/chromascape/web/replay/api/dto/ViewerSessionResponse.java
+src/main/java/com/chromascape/web/replay/api/dto/XrspsPreflightResponse.java
+src/main/java/com/chromascape/web/replay/api/dto/XrspsRunResponse.java
+src/main/java/com/chromascape/web/replay/api/dto/XrspsTraceFramePageResponse.java
+src/main/java/com/chromascape/web/replay/api/ReplayV2Controller.java
+src/main/java/com/chromascape/web/replay/artifact/PublishedArtifact.java
+src/main/java/com/chromascape/web/replay/artifact/ReplayArtifactService.java
+src/main/java/com/chromascape/web/replay/artifact/repository/ArtifactRefRepository.java
+src/main/java/com/chromascape/web/replay/catalog/ReplayV2PreflightService.java
+src/main/java/com/chromascape/web/replay/config/ReplayConfiguration.java
+src/main/java/com/chromascape/web/replay/config/ReplayProperties.java
+src/main/java/com/chromascape/web/replay/conversion/ReplayActionConversionService.java
+src/main/java/com/chromascape/web/replay/conversion/ReplayApproximation.java
+src/main/java/com/chromascape/web/replay/conversion/ReplayGap.java
+src/main/java/com/chromascape/web/replay/curation/entity/CuratedAction.java
+src/main/java/com/chromascape/web/replay/error/ReplayErrorCode.java
+src/main/java/com/chromascape/web/replay/kernel/XrspsKernelProcess.java
+src/main/java/com/chromascape/web/replay/manifest/entity/ScenarioManifest.java
+src/main/java/com/chromascape/web/replay/manifest/ScenarioManifestV2Compiler.java
+src/main/java/com/chromascape/web/replay/playback/dto/ReplayPlaybackCatalogResponse.java
+src/main/java/com/chromascape/web/replay/playback/ReplayPlaybackController.java
+src/main/java/com/chromascape/web/replay/playback/ReplayPlaybackFrameCursorCodec.java
+src/main/java/com/chromascape/web/replay/playback/ReplayPlaybackIndexConvergence.java
+src/main/java/com/chromascape/web/replay/playback/ReplayPlaybackService.java
+src/main/java/com/chromascape/web/replay/report/entity/ReplayReport.java
+src/main/java/com/chromascape/web/replay/report/ReplayReportService.java
+src/main/java/com/chromascape/web/replay/run/dto/CreateXrspsRunRequest.java
+src/main/java/com/chromascape/web/replay/run/entity/ReplayRun.java
+src/main/java/com/chromascape/web/replay/run/ReplayRunService.java
+src/main/java/com/chromascape/web/replay/run/ReplayV2RunService.java
+src/main/java/com/chromascape/web/replay/viewer/ReplayViewerService.java
+src/main/java/com/chromascape/web/simulator/SimulatorReplayControlController.java
+src/test/java/com/chromascape/web/accounttask/config/StabilizationAuthConfigTest.java
+src/test/java/com/chromascape/web/accounttask/config/StabilizationAuthFilterTest.java
+src/test/java/com/chromascape/web/accounttask/config/StabilizationEndpointAuthTest.java
+src/test/java/com/chromascape/web/accounttask/controller/StabilizationControllerTest.java
+src/test/java/com/chromascape/web/accounttask/service/StabilizationAttemptLookupTest.java
+src/test/java/com/chromascape/web/accounttask/service/StabilizationBundleStreamReaderBoundaryTest.java
+src/test/java/com/chromascape/web/accounttask/service/StabilizationIngestionIdempotencyTest.java
+src/test/java/com/chromascape/web/accounttask/service/StabilizationIngestionServiceTest.java
+src/test/java/com/chromascape/web/accounttask/service/StabilizationManifestIntegrityTest.java
+src/test/java/com/chromascape/web/accounttask/service/StabilizationMatrixIncomparableTest.java
+src/test/java/com/chromascape/web/accounttask/service/StabilizationRecoverySweeperTest.java
+src/test/java/com/chromascape/web/accounttask/service/StabilizationReportBundleIntegrationTest.java
+src/test/java/com/chromascape/web/aiplayer/contract/CanonicalJsonHasherTest.java
+src/test/java/com/chromascape/web/aiplayer/contract/CurrentSliceIdentityValidatorTest.java
+src/test/java/com/chromascape/web/aiplayer/prototype/FishingShadowDecisionServiceTest.java
+src/test/java/com/chromascape/web/aiplayer/routine/config/AiRoutineOperatorInterceptorTest.java
+src/test/java/com/chromascape/web/aiplayer/routine/config/AiRoutineOperatorWebConfigTest.java
+src/test/java/com/chromascape/web/aiplayer/routine/RoutineArchitectureTest.java
+src/test/java/com/chromascape/web/aiplayer/routine/service/CandidateRegistryClientTest.java
+src/test/java/com/chromascape/web/aiplayer/routine/service/DeterministicRoutineAssistantProviderTest.java
+src/test/java/com/chromascape/web/aiplayer/routine/service/IsolatedPatchWorkerTest.java
+src/test/java/com/chromascape/web/aiplayer/routine/service/Micro6SourceManifestClientTest.java
+src/test/java/com/chromascape/web/aiplayer/routine/service/PatchCandidateBuildDispatcherTest.java
+src/test/java/com/chromascape/web/aiplayer/routine/service/PatchCandidateManifestV2Test.java
+src/test/java/com/chromascape/web/aiplayer/routine/service/PatchCandidateWorkflowServiceTest.java
+src/test/java/com/chromascape/web/aiplayer/routine/service/RoutineAssistantGenerationContextIT.java
+src/test/java/com/chromascape/web/aiplayer/routine/service/RoutineAssistantGenerationContextTest.java
+src/test/java/com/chromascape/web/aiplayer/routine/service/RoutineReplayShadowServiceTest.java
+src/test/java/com/chromascape/web/aiplayer/routine/service/Sc967FlywaySchemaTest.java
+src/test/java/com/chromascape/web/aiplayer/routine/source/SourceAccessAndCacheTest.java
+src/test/java/com/chromascape/web/aiplayer/routine/source/SourceContractSchemaEqualityTest.java
+src/test/java/com/chromascape/web/aiplayer/routine/source/SourceDebuggerReadServiceTest.java
+src/test/java/com/chromascape/web/aiplayer/routine/source/SourceFetchTransactionSuspensionTest.java
+src/test/java/com/chromascape/web/aiplayer/routine/source/SourceManifestBindingServiceTest.java
+src/test/java/com/chromascape/web/aiplayer/routine/source/SourceManifestConcurrentPersistenceIntegrationTest.java
+src/test/java/com/chromascape/web/aiplayer/routine/source/SourceManifestTestFixtures.java
+src/test/java/com/chromascape/web/aiplayer/routine/source/SourceRetentionServiceTest.java
+src/test/java/com/chromascape/web/aiplayer/routine/source/SourceRunOrchestrationIntegrationTest.java
+src/test/java/com/chromascape/web/aiplayer/routine/source/TaskSourceManifestVerifierTest.java
+src/test/java/com/chromascape/web/config/SourceConfigurationValidatorTest.java
+src/test/java/com/chromascape/web/debug/buildergoal/controller/BuilderGoalRunnerControllerTest.java
+src/test/java/com/chromascape/web/debug/buildergoal/service/AccountIdentityContractTest.java
+src/test/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalAccountCatalogServiceTest.java
+src/test/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalRepairIncidentServiceTest.java
+src/test/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalRunnerServiceTest.java
+src/test/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalRunStateMutationServiceTest.java
+src/test/java/com/chromascape/web/debug/buildergoal/service/CanonicalSettingsHasherTest.java
+src/test/java/com/chromascape/web/debug/buildergoal/service/Micro6ExecutorReadinessEvaluatorTest.java
+src/test/java/com/chromascape/web/debug/buildergoal/service/Micro6OnlineClientRegistryServiceTest.java
+src/test/java/com/chromascape/web/debug/buildergoal/service/Micro6TargetRelaunchServiceTest.java
+src/test/java/com/chromascape/web/debug/patchloop/AnalysisV2ContractSerializationTest.java
+src/test/java/com/chromascape/web/debug/patchloop/PatchLoopAsyncWorkerTest.java
+src/test/java/com/chromascape/web/debug/patchloop/service/ScriptExecutionServiceTest.java
+src/test/java/com/chromascape/web/debug/startup/CdiStartupRegressionTest.java
+src/test/java/com/chromascape/web/debug/tickdebugger/websocket/TickStreamWebSocketHandlerTest.java
+src/test/java/com/chromascape/web/gameplay/orchestration/accountbuilder/AccountBuilderOrchestrationConcurrencyTest.java
+src/test/java/com/chromascape/web/gameplay/orchestration/accountbuilder/JpaAccountBuilderOrchestrationStoreTest.java
+src/test/java/com/chromascape/web/gameplay/orchestration/accountbuilder/Sc1431FlywaySchemaTest.java
+src/test/java/com/chromascape/web/integration/micro6/service/Micro6CatalogIdentityHardeningTest.java
+src/test/java/com/chromascape/web/integration/micro6/service/Micro6CatalogV2ContractTest.java
+src/test/java/com/chromascape/web/integration/micro6/service/Micro6ContractFixtureCompatibilityTest.java
+src/test/java/com/chromascape/web/integration/micro6/service/Micro6RuntimeRegistryClientTest.java
+src/test/java/com/chromascape/web/replay/artifact/ReplayArtifactServiceReuseTest.java
+src/test/java/com/chromascape/web/replay/capability/XrspsStartupValidatorTest.java
+src/test/java/com/chromascape/web/replay/certification/ReplayCertificationTest.java
+src/test/java/com/chromascape/web/replay/certification/ReplayStressCertificationTest.java
+src/test/java/com/chromascape/web/replay/conversion/ReplayActionConversionServiceTest.java
+src/test/java/com/chromascape/web/replay/integration/ReplayMigrationIntegrationTest.java
+src/test/java/com/chromascape/web/replay/kernel/XrspsDisposeHandshakeTest.java
+src/test/java/com/chromascape/web/replay/kernel/XrspsProcessLaunchDiagnosticsTest.java
+src/test/java/com/chromascape/web/replay/playback/LegacySimulatorProfileContractTest.java
+src/test/java/com/chromascape/web/replay/playback/ReplayPlaybackCatalogRepositoryIntegrationTest.java
+src/test/java/com/chromascape/web/replay/playback/ReplayPlaybackContractSerializationTest.java
+src/test/java/com/chromascape/web/replay/playback/ReplayPlaybackControllerTest.java
+src/test/java/com/chromascape/web/replay/playback/ReplayPlaybackCursorCodecTest.java
+src/test/java/com/chromascape/web/replay/playback/ReplayPlaybackIndexConvergenceTest.java
+src/test/java/com/chromascape/web/replay/playback/ReplayPlaybackParityIntegrationTest.java
+src/test/java/com/chromascape/web/replay/playback/ReplayPlaybackServiceTest.java
+src/test/java/com/chromascape/web/replay/report/ReplayReportServiceTest.java
+src/test/java/com/chromascape/web/replay/run/ReplayV2RunServiceTest.java
+src/test/java/com/chromascape/web/replay/support/HostPortWaitStrategy.java
+src/test/java/com/chromascape/web/replay/viewer/ReplayViewerServiceTest.java
+src/test/java/com/chromascape/web/replay/worker/ReplayWorkerLifecycleTest.java
+src/test/java/com/chromascape/web/simulator/SimulatorReplayControlControllerTest.java

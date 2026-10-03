@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" tests="26" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:54.025Z" hostname="fedora" time="0.035">
+  <properties/>
+  <testcase name="accountDefinition_blankEmailIsNotLaunchReady()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.001"/>
+  <testcase name="accountDefinition_bannedAccountIsNotRunnableAndNotLaunchReady()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.0"/>
+  <testcase name="accountDefinition_launcherSecretFieldsDeclareMissingPassword()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.001"/>
+  <testcase name="accountDefinition_launcherSecretFieldsDeclareStoredPassword()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.0"/>
+  <testcase name="accountDefinition_determineDisabledReasonReportsBanned()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.0"/>
+  <testcase name="listAccounts_summaryDisabledReasonUsesDetermineDisabledReason()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.003"/>
+  <testcase name="accountDefinition_disabledAccountIsNotRunnableAndNotLaunchReady()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.001"/>
+  <testcase name="accountDefinition_metadataSnapshotIsImmutable()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.001"/>
+  <testcase name="accountDefinition_missingPasswordIsNotLaunchReady()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.0"/>
+  <testcase name="accountDefinition_determineDisabledReasonReturnsNullForRunnableAccount()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.001"/>
+  <testcase name="accountDefinition_acceptsNullValuedMetadataFields()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.001"/>
+  <testcase name="accountDefinition_determineDisabledReasonReportsDisabled()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.001"/>
+  <testcase name="accountDefinition_declaredSecretFieldsOverrideAbsentPlaintextPassword()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.001"/>
+  <testcase name="accountDefinition_disabledReasonTakesPrecedenceOverMissingCredentials()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.001"/>
+  <testcase name="accountDefinition_missingEmailTakesPrecedenceOverMissingPassword()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.0"/>
+  <testcase name="accountDefinition_blankPasswordIsNotLaunchReady()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.001"/>
+  <testcase name="accountDefinition_withCompleteCredentialsIsLaunchReady()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.001"/>
+  <testcase name="listAccounts_reportsOfflineWhenNoMatchingExecutorHeartbeat()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.001"/>
+  <testcase name="accountDefinition_tempBannedStatusCountsAsBanned()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.001"/>
+  <testcase name="listAccounts_onlineAliasAlwaysMatchesExecutorOnline()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.002"/>
+  <testcase name="listAccounts_reportsSetupNeededWhenCredentialsAreMissing()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.001"/>
+  <testcase name="listAccounts_retainsOnlineAliasAndAddsExecutorFields()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.005"/>
+  <testcase name="accountDefinition_missingEmailIsNotLaunchReady()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.001"/>
+  <testcase name="listAccounts_neverDisclosesPassword()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.002"/>
+  <testcase name="accountDefinition_malformedHashIsNeverLaunchReady()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.001"/>
+  <testcase name="accountDefinition_unparsableSecretFieldsFallBackToPlaintextPassword()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalAccountCatalogServiceTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

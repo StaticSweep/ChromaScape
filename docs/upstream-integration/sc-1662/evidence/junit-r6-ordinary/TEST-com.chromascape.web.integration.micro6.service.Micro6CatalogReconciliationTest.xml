@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" tests="42" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:41:12.539Z" hostname="fedora" time="6.473">
+  <properties/>
+  <testcase name="missingPostFetchCatalogStateIsIdentityUnverified()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.14"/>
+  <testcase name="postFetchInvalidLifecycleOn503IsContractInvalidWithoutStale()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.237"/>
+  <testcase name="missingIdentityHeadersOn503IsIdentityUnverified()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.101"/>
+  <testcase name="headerAndPayloadCatalogStateDisagreementIsIdentityConflict()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.103"/>
+  <testcase name="executorChangeDuringFetchIsRuntimeChanged()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.096"/>
+  <testcase name="catalogHashChangeDuringFetchRetriesOnceThenSucceeds()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.191"/>
+  <testcase name="unavailableRuntimeServesLightweightCacheOnlyAsStale()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.149"/>
+  <testcase name="seededLightweightCacheThenImpossibleStatePairIsContractInvalid()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.146"/>
+  <testcase name="stableReadyRuntimeReceivingTwoStale202IsRuntimeChanged()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.186"/>
+  <testcase name="missingIdentityHeadersOn202IsIdentityUnverified()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.096"/>
+  <testcase name="catalogHashChangeThatNeverSettlesIsRuntimeChanged()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.2"/>
+  <testcase name="machineChangeDuringFetchIsRuntimeChanged()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.102"/>
+  <testcase name="runtimeBecomingReadyDuring202RefetchesOnceWithoutHashChange()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.189"/>
+  <testcase name="readyToGeneratingWithPersistentStale202HeadersIsIdentityUnverified()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.196"/>
+  <testcase name="lightweightPayloadWithArrayBundleHashIsIdentityConflict()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.242"/>
+  <testcase name="concurrentCallersCoalesceAcrossBoundedRetry()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.479"/>
+  <testcase name="missingInitialSchemaBundleStateDoesNotServeLightweightCache()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.144"/>
+  <testcase name="headerCatalogStateDiffersFromStableRuntimeIsIdentityUnverified()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.103"/>
+  <testcase name="readyToGeneratingWithStale202HeadersRetriesAndReturnsGenerating()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.197"/>
+  <testcase name="generatingRuntimeAcceptsCompletedCatalogOnlyWhenRuntimeAfterConfirms()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.104"/>
+  <testcase name="runtimeLosingCatalogHashWith503IsContractInvalidWithoutStale()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.239"/>
+  <testcase name="onlineRuntimeWithoutCatalogHashIsContractInvalid()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.009"/>
+  <testcase name="missingInitialCatalogStateDoesNotServeLightweightCache()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.143"/>
+  <testcase name="stableReadyRuntimeReceivesStale202Then200()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.193"/>
+  <testcase name="generatingRuntimeServesLightweightCacheOnlyAsStale()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.141"/>
+  <testcase name="postFetchInvalidLifecycleOn200IsContractInvalidWithoutStale()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.234"/>
+  <testcase name="seededLightweightCacheThenInvalidAvailableBundleIsContractInvalid()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.138"/>
+  <testcase name="lightweightPayloadWithMalformedBundleHashIsIdentityConflict()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.098"/>
+  <testcase name="lightweightPayloadWithObjectBundleHashIsIdentityConflict()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.234"/>
+  <testcase name="degradedRuntimeServesLightweightCacheOnlyAsStale()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.145"/>
+  <testcase name="headerHashDisagreeingWithRuntimeHashIsRejected()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.096"/>
+  <testcase name="seededLightweightCacheThenUnknownCatalogStateIsContractInvalid()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.144"/>
+  <testcase name="runtimeLosingCatalogHashWith202IsContractInvalid()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.098"/>
+  <testcase name="missingLifecycleHeadersStillCausesPostFetchResolve()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.099"/>
+  <testcase name="schemaBundleChangeDuringFetchNeverServesOldFullAsCurrent()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.197"/>
+  <testcase name="generatingRuntimeRejectsCompletedCatalogWithoutRuntimeAfterConfirmation()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.101"/>
+  <testcase name="generatingRuntimeWithValid202HeadersReturnsGenerating()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.101"/>
+  <testcase name="missingPostFetchSchemaBundleStateIsIdentityUnverified()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.1"/>
+  <testcase name="runtimeLosingCatalogHashWithMalformed200IsContractInvalidWithoutStale()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.238"/>
+  <testcase name="payloadBundleWithRuntimeNotAvailableIsIdentityConflict()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.103"/>
+  <testcase name="sessionChangeDuringFetchIsRuntimeChanged()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.098"/>
+  <testcase name="headerSchemaBundleStateDiffersFromStableRuntimeIsIdentityUnverified()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest" time="0.1"/>
+  <system-out><![CDATA[12:41:18.663 [Test worker] WARN  com.chromascape.web.integration.micro6.service.Micro6RuntimeRegistryClient - [Micro6Registry] catalog response was not JSON from ref=dev-micro6:HASH-LOSS-200 mode=lightweight: Unrecognized token 'not': was expecting (JSON String, Number, Array, Object or token 'null', 'true' or 'false')
+ at [Source: REDACTED (`StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION` disabled); line: 1, column: 4]
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

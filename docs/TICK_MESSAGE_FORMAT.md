@@ -6,6 +6,90 @@ The debugger supports two message formats for tick data transmission:
 1. **Legacy Format** - Full data every tick (backward compatible)
 2. **New Format** - Snapshots + Diffs (optimized, 80-95% bandwidth reduction)
 
+## RSProx packet observations (v1 and v2)
+
+`TICK_BATCH` messages produced by the packet-aware Micro6 recorder use
+`schemaVersion: 3` and may contain a `packets` array. The packet envelope has its
+own `schema` field. Micro6 accepts both packet schemas explicitly; the meaning of
+`sequence` is never inferred from the other fields.
+
+### Packet schema v1
+
+`schema: "rsprox-packet/v1"` is the legacy contract. `sequence` is the original
+capture identity and the delivery-order identity. `packetSequence` must be absent
+(or `null`). Legacy GAP markers retain their historical marker semantics and carry
+their missing capture range in the decoded GAP details.
+
+### Packet schema v2
+
+`schema: "rsprox-packet/v2"` separates the two identities:
+
+```json
+{
+  "schema": "rsprox-packet/v2",
+  "sourceSessionId": "proxy-session-uuid",
+  "sequence": 77,
+  "packetSequence": 4812,
+  "capturedAt": "2026-09-04T18:12:34.567Z",
+  "captureDeltaMillis": 4,
+  "direction": "SERVER_TO_CLIENT",
+  "opcode": 81,
+  "protocolName": "NPC_INFO_LARGE",
+  "encodedSize": 137,
+  "decodedType": "NpcInfo",
+  "decoded": {},
+  "decodeStatus": "DECODED",
+  "synthetic": false
+}
+```
+
+`sequence` is the per-source observation identity. RSProx allocates one value for
+every real observation and every GAP observation when it enters delivery order;
+requeueing never changes it. `packetSequence` is the original capture identity
+and is required for real v2 observations. A v2 GAP has `packetSequence: null`,
+`synthetic: true`, and represents missing capture identities in its decoded detail:
+
+```json
+{
+  "decodeStatus": "GAP",
+  "synthetic": true,
+  "decoded": {
+    "droppedPacketCount": 2,
+    "firstDroppedPacketSequence": 4813,
+    "lastDroppedPacketSequence": 4814,
+    "droppedPacketRanges": [
+      { "first": 4813, "last": 4813, "count": 1 },
+      { "first": 4814, "last": 4814, "count": 1 }
+    ],
+    "rangeSummaryTruncated": false
+  }
+}
+```
+
+The range `count` is authoritative; it must not be calculated from the endpoint
+span because non-contiguous losses can surround delivered packets. Ranges are
+source-scoped, bounded, and may set `rangeSummaryTruncated` when only a summary
+can be retained. A failed GAP is merged back into the represented ranges rather
+than counted as one additional lost packet. Pending GAPs are emitted even when
+no later game packet arrives.
+
+### Persistence and replay identity
+
+Packet rows are unique by
+`(session_id, source_session_id, packet_schema, observation_sequence)`. Existing
+v1 rows are backfilled with `packet_schema = "rsprox-packet/v1"` and
+`observation_sequence = packet_sequence`; they remain readable without changing
+their legacy meaning. For v2 rows, `packet_sequence` is nullable only for GAPs.
+Retries with the same observation identity and identical content are idempotent;
+different content under that identity is a permanent `PACKET_IDENTITY_CONFLICT`.
+
+Replay packet pages use the deterministic keyset tuple
+`(tick, source_session_id, packet_schema, observation_sequence, id)` in both the
+query and the opaque continuation cursor. `packetSequence` is returned as capture
+metadata and is not substituted into cursor ordering. A delayed v2 GAP is a
+diagnostic marker and must not make an otherwise valid normal batch fail solely
+because its capture range is older than the surrounding observations.
+
 ---
 
 ## New Format (Recommended)
@@ -216,7 +300,6 @@ micro6 sends a rich `playerState` object under `TICK_BATCH` messages with both c
 - ChromaScape accepts old flat-only payloads but normalizes them internally to include nested containers.
 - ChromaScape stores the full `playerState` JSON including both nested groups and legacy aliases.
 - The UI displays the raw `playerState` as a collapsible JSON tree.
-```
 
 ---
 
@@ -515,6 +598,97 @@ searchable in replay.
   }
 }
 ```
+
+---
+
+## Schema-3 RSProx Packets (SC-1618)
+
+Newly produced `TICK_BATCH` messages are `schemaVersion: 3` and MAY carry RSProx packet
+observations. Schema-v2 batches and recordings carry no packets and MUST be accepted with
+`packets` absent or empty. ChromaScape validates packets only when the list is non-empty
+and persists them in the same transaction as the enclosing batch, before the durable
+`TICK_BATCH_ACK status=PERSISTED`.
+
+### Wire shape
+
+```json
+{
+  "type": "TICK_BATCH",
+  "schemaVersion": 3,
+  "batchId": "uuid",
+  "sessionId": "chromascape-session-id",
+  "tick": 12004,
+  "packets": [
+    {
+      "schema": "rsprox-packet/v1",
+      "sourceSessionId": "proxy-session-uuid",
+      "sequence": 4812,
+      "capturedAt": "2026-09-04T18:12:34.567Z",
+      "captureDeltaMillis": 4,
+      "direction": "SERVER_TO_CLIENT",
+      "opcode": 81,
+      "protocolName": "NPC_INFO_LARGE",
+      "encodedSize": 137,
+      "decodedType": "NpcInfo",
+      "decoded": {},
+      "sanitizedPayloadBase64": null,
+      "decodeStatus": "DECODED",
+      "decodeError": null,
+      "synthetic": false,
+      "tick": 12004
+    }
+  ],
+  "transport": {
+    "droppedPacketCount": 0,
+    "firstDroppedPacketSequence": null,
+    "lastDroppedPacketSequence": null,
+    "omittedPacketCount": 0,
+    "omittedPacketPayloadBytes": 0,
+    "packetSourceStatus": "CONNECTED"
+  },
+  "payloadChecksum": "sha256:<64 lowercase hex>"
+}
+```
+
+### Field and validation rules
+
+- `schema` MUST be `rsprox-packet/v1` or `rsprox-packet/v2`. v1 keeps one legacy
+  capture/delivery identity in `sequence`; v2 uses `sequence` for the per-source observation
+  identity and `packetSequence` for the original capture identity.
+- A v1 envelope MUST omit `packetSequence`. A v2 real observation MUST carry a non-negative
+  `packetSequence`; a v2 `GAP` MUST carry `packetSequence: null` and `synthetic=true`.
+- `direction` is exactly `CLIENT_TO_SERVER` or `SERVER_TO_CLIENT`.
+- `decodeStatus` is exactly `DECODED`, `UNKNOWN_PROTOCOL`, `DECODE_ERROR`, or `GAP`.
+  `synthetic=true` marks gap/stream lifecycle observations, never wire packets.
+- v2 `sequence` is monotonic per `sourceSessionId`, including GAP observations. A delayed GAP
+  may be persisted after the real observations it describes because its missing capture range is
+  diagnostic metadata; it still has its own unique observation identity.
+- Retry idempotency uses unique `(session_id, source_session_id, packet_schema,
+  observation_sequence)`. The original `packetSequence` is not the v2 uniqueness key.
+- `tick` is the Micro6-assigned tick and MUST be within `PACKET_TICK_WINDOW` (600) of the
+  enclosing batch tick. The browser groups by the envelope tick, so one batch can feed
+  several tick groups when `tickBatchInterval > 1`.
+- Server limits: `MAX_PACKETS_PER_BATCH=512`, `MAX_BATCH_PACKET_BYTES=512KB` of decoded
+  JSON, `MAX_DECODED_BYTES=64KB` per envelope, `MAX_DECODED_DEPTH=8`; protocol/type/error
+  strings are capped at 128/128/512 chars. Violations are permanent `PACKET_*` errors;
+  storage/transient failures stay retryable as `BATCH_PERSISTENCE_FAILED`.
+- `packets` are included in the canonical batch checksum AFTER all size-limit degradation.
+- `sanitizedPayloadBase64` is disabled by default. When enabled it is capped and decoded
+  server-side; malformed payloads fail as `PACKET_PAYLOAD_INVALID`.
+- Packets are stripped from the optional Go-backend forwarding payload by default.
+
+### Replay and UI
+
+- Paginated replay: `GET /api/debug/replay/packets/{sessionId}?tick=&startTick=&endTick=`
+  `&direction=&protocolName=&opcode=&decodeStatus=&search=&cursor=&limit=&includePayload=`.
+  Rows are ordered by `(tick, sourceSessionId, schema, observationSequence, id)` with an
+  opaque base64url JSON cursor carrying that same tuple. `limit` is capped at 500, raw bytes are
+  excluded unless `includePayload=true`, and session existence is verified like other replay data.
+- Replay responses expose `sequence` as the observation identity and `packetSequence` separately
+  as capture metadata; GAP rows have no capture sequence and retain their decoded loss ranges.
+- Live `/ws/debugger/tick-stream` broadcast carries packets inline after commit; the UI
+  `Packets` section renders direction arrows, sequence, opcode, protocol name, size, and
+  status badges with bounded lazy detail and row caps.
 
 ---
 

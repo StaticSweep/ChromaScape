@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.accounttask.controller.StabilizationControllerTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:18.289Z" hostname="fedora" time="0.053">
+  <properties/>
+  <testcase name="getRunByRunId returns 404 when missing" classname="com.chromascape.web.accounttask.controller.StabilizationControllerTest" time="0.004"/>
+  <testcase name="getMatrixByMatrixHash returns 404 when missing" classname="com.chromascape.web.accounttask.controller.StabilizationControllerTest" time="0.003"/>
+  <testcase name="getMatrixByMatrixHash returns the full matrix document when present" classname="com.chromascape.web.accounttask.controller.StabilizationControllerTest" time="0.006"/>
+  <testcase name="ingestReliabilityMatrix returns the service payload" classname="com.chromascape.web.accounttask.controller.StabilizationControllerTest" time="0.003"/>
+  <testcase name="resolveTriage returns 400 when triage item is missing" classname="com.chromascape.web.accounttask.controller.StabilizationControllerTest" time="0.004"/>
+  <testcase name="getRunByRunId returns the run when present" classname="com.chromascape.web.accounttask.controller.StabilizationControllerTest" time="0.003"/>
+  <testcase name="getRunByRunIdAndAttemptId returns the attempt when present" classname="com.chromascape.web.accounttask.controller.StabilizationControllerTest" time="0.003"/>
+  <testcase name="openTriage returns the unresolved triage list" classname="com.chromascape.web.accounttask.controller.StabilizationControllerTest" time="0.008"/>
+  <testcase name="getRunAttempts returns the attempt list" classname="com.chromascape.web.accounttask.controller.StabilizationControllerTest" time="0.004"/>
+  <testcase name="ingestReport returns the service payload" classname="com.chromascape.web.accounttask.controller.StabilizationControllerTest" time="0.002"/>
+  <testcase name="kpi returns the computed KPI payload" classname="com.chromascape.web.accounttask.controller.StabilizationControllerTest" time="0.002"/>
+  <testcase name="ingestHarnessManifest returns 400 for unknown schema" classname="com.chromascape.web.accounttask.controller.StabilizationControllerTest" time="0.003"/>
+  <testcase name="ingestHarnessManifest returns the service payload" classname="com.chromascape.web.accounttask.controller.StabilizationControllerTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

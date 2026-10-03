@@ -8,19 +8,34 @@ import org.springframework.stereotype.Service;
 /**
  * Single read path from the HTTP controllers to process discovery and selection.
  *
- * <p>On Windows it delegates to the existing {@link WindowHandler} enumeration exactly as before,
- * preserving the JSON shape, sequential ids and the canvas-preference ranking. On Linux it builds
- * candidates from {@link ProcessManager#discoverEligibleLocal()} with neutral identities and no
- * window handle, and resolves targets fail-closed: multiple eligible clients without an explicit
- * matching selection are refused with {@link TargetSelectionDiagnostic#AMBIGUOUS_TARGET} instead of
- * a first-match pick.
+ * <p>Every listing and resolution flows through {@link ProcessManagerFactory#getProcessManager()} —
+ * the single platform switch — so the identities presented by {@link #listUiCandidates()} are
+ * exactly the identities observed by {@link #resolveSelectedTarget()}: a Windows selection made
+ * from the debugger UI therefore resolves instead of degrading to {@code STALE_SELECTION}. On
+ * Windows the discovery implementation wraps the existing {@link WindowHandler} enumeration,
+ * preserving the JSON shape, sequential ids, the canvas-preference ranking, deduplication and the
+ * {@code source}/{@code fallback}/{@code captureable} flags, and enriches each candidate with a
+ * neutral identity. On Linux it builds candidates from {@link
+ * ProcessManager#discoverEligibleLocal()} with neutral identities and no window handle, and
+ * resolves targets fail-closed: multiple eligible clients without an explicit matching selection
+ * are refused with {@link TargetSelectionDiagnostic#AMBIGUOUS_TARGET} instead of a first-match
+ * pick, and a selection without a matching identity is refused with {@link
+ * TargetSelectionDiagnostic#STALE_SELECTION} rather than resolved by pid.
+ *
+ * <p>Compatibility note: {@link #listUiCandidates()} returns {@link WindowHandler.WindowCandidate},
+ * the Windows-owned nested record, so the UI candidate shape stays byte-identical. Instantiating
+ * that nested record never initializes {@link WindowHandler} (whose static state would load the
+ * Win32 user32 library); the Linux runtime isolation test executes this facade with an empty {@code
+ * jna.library.path} to prove it.
  */
 @Service
 public class TargetDiscoveryService {
 
   private final ProcessManagerFactory processManagerFactory;
 
-  /** Selection service; null only via the convenience constructor used where selection is unused. */
+  /**
+   * Selection service; null only via the convenience constructor used where selection is unused.
+   */
   private final WindowSelectionService windowSelectionService;
 
   /**
@@ -47,45 +62,34 @@ public class TargetDiscoveryService {
   }
 
   /**
-   * Returns the debugger/UI candidates for the current platform, preserving the Windows shape and
-   * exposing neutral Linux candidates with {@code source} {@code "process"} and {@code fallback}
-   * {@code false} ({@code captureable} is decided by SC-1665 and is {@code false} here).
+   * Returns the debugger/UI candidates for the current platform through the single discovery path.
+   *
+   * <p>The {@code WindowCandidate} flags ({@code source}, {@code fallback}, {@code captureable},
+   * {@code selectionReason}) pass through from discovery unchanged: Windows keeps its {@code
+   * "supported-client"}/{@code "java-fallback"} metadata, Linux exposes {@code "process"}
+   * candidates with {@code fallback} and {@code captureable} false ({@code captureable} is decided
+   * by SC-1665). Unsupported platforms yield an empty list.
    */
   public List<WindowHandler.WindowCandidate> listUiCandidates() {
-    ProcessManagerFactory.Platform platform = ProcessManagerFactory.currentPlatform();
-    if (platform == ProcessManagerFactory.Platform.WINDOWS) {
-      return WindowHandler.getUiWindowCandidates();
-    }
-    if (platform == ProcessManagerFactory.Platform.LINUX) {
-      return processManager().discoverEligibleLocal().stream()
-          .map(
-              target ->
-                  new WindowHandler.WindowCandidate(
-                      target.window(),
-                      false,
-                      target.source(),
-                      false,
-                      target.selectionReason()))
-          .toList();
-    }
-    return List.of();
+    return processManager().discoverEligibleLocal().stream()
+        .map(
+            target ->
+                new WindowHandler.WindowCandidate(
+                    target.window(),
+                    target.fallback(),
+                    target.source(),
+                    target.captureable(),
+                    target.selectionReason()))
+        .toList();
   }
 
   /**
-   * Returns all detected target windows for the debug endpoints: exactly
-   * {@link WindowHandler#getAllTargetWindows()} on Windows, neutral discovered windows on Linux.
+   * Returns all detected target windows for the debug endpoints through the single discovery path:
+   * the Windows discovery-preferred candidates (one per process, identities attached) and the
+   * neutral discovered windows on Linux; an empty list on unsupported platforms.
    */
   public List<WindowInfo> listAllTargetWindows() {
-    ProcessManagerFactory.Platform platform = ProcessManagerFactory.currentPlatform();
-    if (platform == ProcessManagerFactory.Platform.WINDOWS) {
-      return WindowHandler.getAllTargetWindows();
-    }
-    if (platform == ProcessManagerFactory.Platform.LINUX) {
-      return processManager().discoverEligibleLocal().stream()
-          .map(DiscoveredTarget::window)
-          .toList();
-    }
-    return List.of();
+    return processManager().discoverEligibleLocal().stream().map(DiscoveredTarget::window).toList();
   }
 
   /**

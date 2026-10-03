@@ -16,7 +16,7 @@ final class TestMicro6Catalog {
   static final String GOLDEN_SETTINGS_SCHEMA_HASH =
       "sha256:95d587eacd8492a5f65e56e34fcf6085ab0c85aa2643da7f69823b9be0cf0957";
   static final String GOLDEN_SCHEMA_BUNDLE_HASH =
-      "sha256:815b527d3704999719e42c882536740f6313401b1bba9ed4422b173c04a4f100";
+      "sha256:93e263fa9413599010166a886f710579b056ab72487ff8fa8fab6fac7f0f073f";
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
 

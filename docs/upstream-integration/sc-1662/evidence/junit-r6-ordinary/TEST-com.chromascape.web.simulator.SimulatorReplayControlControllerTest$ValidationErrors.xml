@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Validation errors" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:41:52.191Z" hostname="fedora" time="0.013">
+  <properties/>
+  <testcase name="start returns 409 when recording has no tick frames" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$ValidationErrors" time="0.001"/>
+  <testcase name="pause allows missing player and forwards auto-target request" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$ValidationErrors" time="0.001"/>
+  <testcase name="start returns 409 when no debug session exists for recording" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$ValidationErrors" time="0.001"/>
+  <testcase name="speed returns 400 for invalid number" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$ValidationErrors" time="0.002"/>
+  <testcase name="seek returns 400 when seconds is missing" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$ValidationErrors" time="0.001"/>
+  <testcase name="start allows missing player and forwards auto-target request" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$ValidationErrors" time="0.002"/>
+  <testcase name="speed returns 400 when speed is missing" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$ValidationErrors" time="0.001"/>
+  <testcase name="start allows missing player and forwards auto-target request" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$ValidationErrors" time="0.001"/>
+  <system-out><![CDATA[12:41:52.197 [Test worker] WARN  com.chromascape.web.simulator.SimulatorReplayControlController - Replay control request failed: Invalid number for field: speed
+12:41:52.199 [Test worker] WARN  com.chromascape.web.simulator.SimulatorReplayControlController - Replay control request failed: Missing required field: seconds
+12:41:52.203 [Test worker] WARN  com.chromascape.web.simulator.SimulatorReplayControlController - Replay control request failed: Missing required field: speed
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

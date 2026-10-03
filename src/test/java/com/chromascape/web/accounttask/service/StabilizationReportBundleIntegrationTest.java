@@ -59,30 +59,49 @@ class StabilizationReportBundleIntegrationTest {
 
   @BeforeEach
   void setUp() {
-    service = new StabilizationIngestionService(runRepository, triageRepository, snapshotRepository,
-        artifactStore, artifactRepository, aggregateRepository, entityManager);
-    lenient().when(artifactStore.stage(any(java.nio.file.Path.class), any(), any(), any(), any()))
-        .thenAnswer(invocation -> {
-          // The staged artifact's digest, size, evidence type, media type and identities must be
-          // derived from the ACTUAL uploaded bytes and the real stage arguments so the evidence
-          // size/digest/type verification and the returned artifact mappings are exercised against
-          // real staged metadata.
-          java.nio.file.Path source = invocation.getArgument(0);
-          String mediaType = invocation.getArgument(1);
-          String evidenceType = invocation.getArgument(2);
-          String runId = invocation.getArgument(3);
-          String attemptId = invocation.getArgument(4);
-          byte[] data = java.nio.file.Files.readAllBytes(source);
-          return new StabilizationArtifactStore.StoredArtifact(
-              UUID.randomUUID(), rawDigest(data), data.length, mediaType, evidenceType,
-              runId, attemptId, "now");
-        });
-    lenient().when(artifactStore.promote(any()))
+    service =
+        new StabilizationIngestionService(
+            runRepository,
+            triageRepository,
+            snapshotRepository,
+            artifactStore,
+            artifactRepository,
+            aggregateRepository,
+            entityManager);
+    lenient()
+        .when(artifactStore.stage(any(java.nio.file.Path.class), any(), any(), any(), any()))
+        .thenAnswer(
+            invocation -> {
+              // The staged artifact's digest, size, evidence type, media type and identities must
+              // be
+              // derived from the ACTUAL uploaded bytes and the real stage arguments so the evidence
+              // size/digest/type verification and the returned artifact mappings are exercised
+              // against
+              // real staged metadata.
+              java.nio.file.Path source = invocation.getArgument(0);
+              String mediaType = invocation.getArgument(1);
+              String evidenceType = invocation.getArgument(2);
+              String runId = invocation.getArgument(3);
+              String attemptId = invocation.getArgument(4);
+              byte[] data = java.nio.file.Files.readAllBytes(source);
+              return new StabilizationArtifactStore.StoredArtifact(
+                  UUID.randomUUID(),
+                  rawDigest(data),
+                  data.length,
+                  mediaType,
+                  evidenceType,
+                  runId,
+                  attemptId,
+                  "now");
+            });
+    lenient()
+        .when(artifactStore.promote(any()))
         .thenAnswer(invocation -> invocation.getArgument(0));
   }
 
   @Test
-  @DisplayName("a ReportBundleClient-shaped multipart bundle streams in with preserved artifact filenames")
+  @DisplayName(
+      "a ReportBundleClient-shaped multipart bundle streams in with preserved artifact filenames")
   void streamingReaderPreservesArtifactFilenames() throws Exception {
     ObjectNode manifest = manifest();
     BundleDocuments docs = documents(manifest);
@@ -97,10 +116,19 @@ class StabilizationReportBundleIntegrationTest {
             "multipart/form-data; boundary=" + boundary,
             staging);
 
-    assertThat(bundle.names()).containsAll(
-        Set.of("plan", "manifest", "matrix", "transitions", "evidence", "checksums", "completeMarker"));
+    assertThat(bundle.names())
+        .containsAll(
+            Set.of(
+                "plan",
+                "manifest",
+                "matrix",
+                "transitions",
+                "evidence",
+                "checksums",
+                "completeMarker"));
     // Artifact filenames must be preserved exactly as uploaded (sha256_<64>.<ext>).
-    assertThat(bundle.artifacts()).extracting(StabilizationBundleStreamReader.StagedArtifact::filename)
+    assertThat(bundle.artifacts())
+        .extracting(StabilizationBundleStreamReader.StagedArtifact::filename)
         .hasSize(3)
         .allMatch(name -> name.matches("sha256_[0-9a-f]{64}\\.ndjson"));
     assertThat(java.nio.file.Files.isRegularFile(bundle.artifacts().get(0).path())).isTrue();
@@ -113,7 +141,8 @@ class StabilizationReportBundleIntegrationTest {
   void validBundleIsIngested() {
     ObjectNode manifest = manifest();
     BundleDocuments docs = documents(manifest);
-    when(runRepository.existsByRunIdAndManifestHash("run-1", manifest.path("manifest_hash").asText()))
+    when(runRepository.existsByRunIdAndManifestHash(
+            "run-1", manifest.path("manifest_hash").asText()))
         .thenReturn(false);
     when(runRepository.existsByRunId("run-1")).thenReturn(false);
     when(snapshotRepository.existsByMatrixHashAndGroupKey(any(), any())).thenReturn(true);
@@ -131,20 +160,22 @@ class StabilizationReportBundleIntegrationTest {
   void externalReferenceBoundToStoredArtifact() {
     ObjectNode manifest = manifest();
     BundleDocuments docs = documents(manifest);
-    when(runRepository.existsByRunIdAndManifestHash("run-1", manifest.path("manifest_hash").asText()))
+    when(runRepository.existsByRunIdAndManifestHash(
+            "run-1", manifest.path("manifest_hash").asText()))
         .thenReturn(false);
 
     service.ingestReportBundle(docs.source());
 
-    org.mockito.ArgumentCaptor<List<com.chromascape.web.accounttask.entity.StabilizationArtifact>> captor =
-        org.mockito.ArgumentCaptor.forClass(List.class);
+    org.mockito.ArgumentCaptor<List<com.chromascape.web.accounttask.entity.StabilizationArtifact>>
+        captor = org.mockito.ArgumentCaptor.forClass(List.class);
     verify(artifactRepository).saveAll(captor.capture());
     List<com.chromascape.web.accounttask.entity.StabilizationArtifact> saved = captor.getValue();
     assertThat(saved).hasSize(3);
     // The evidence references (artifact://debug-recorder/...) must be durably bound to the stored
     // artifact UUIDs so the mapping never needs a reconstructed checksum lookup (SC-572).
     assertThat(saved)
-        .extracting(com.chromascape.web.accounttask.entity.StabilizationArtifact::getExternalReference)
+        .extracting(
+            com.chromascape.web.accounttask.entity.StabilizationArtifact::getExternalReference)
         .containsExactlyInAnyOrder(
             "artifact://debug-recorder/log-1",
             "artifact://debug-recorder/tick-1",
@@ -159,7 +190,8 @@ class StabilizationReportBundleIntegrationTest {
   void identicalReUploadIsDuplicate() {
     ObjectNode manifest = manifest();
     BundleDocuments docs = documents(manifest);
-    when(runRepository.existsByRunIdAndManifestHash("run-1", manifest.path("manifest_hash").asText()))
+    when(runRepository.existsByRunIdAndManifestHash(
+            "run-1", manifest.path("manifest_hash").asText()))
         .thenReturn(true);
 
     Map<String, Object> result = service.ingestReportBundle(docs.source());
@@ -173,7 +205,8 @@ class StabilizationReportBundleIntegrationTest {
   void sameRunDifferentContentConflicts() {
     ObjectNode manifest = manifest();
     BundleDocuments docs = documents(manifest);
-    when(runRepository.existsByRunIdAndManifestHash("run-1", manifest.path("manifest_hash").asText()))
+    when(runRepository.existsByRunIdAndManifestHash(
+            "run-1", manifest.path("manifest_hash").asText()))
         .thenReturn(false);
     when(runRepository.existsByRunId("run-1")).thenReturn(true);
 
@@ -199,8 +232,9 @@ class StabilizationReportBundleIntegrationTest {
   void missingMarkerRejected() {
     ObjectNode manifest = manifest();
     BundleDocuments original = documents(manifest);
-    final BundleDocuments docs = new BundleDocuments(original.nodes(), original.artifacts(),
-        "NOT_COMPLETE", original.tempDir());
+    final BundleDocuments docs =
+        new BundleDocuments(
+            original.nodes(), original.artifacts(), "NOT_COMPLETE", original.tempDir());
 
     assertThatThrownBy(() -> service.ingestReportBundle(docs.source()))
         .isInstanceOf(IllegalArgumentException.class)
@@ -257,8 +291,8 @@ class StabilizationReportBundleIntegrationTest {
     // Tamper only the attempt hash; the aggregate manifest hash is recomputed over the modified
     // attempt content so the aggregate hash alone cannot hide the tampered attempt.
     ObjectNode manifestNode = (ObjectNode) docs.nodes().get("manifest");
-    ((ObjectNode) manifestNode.get("attempts").get(0)).put("attempt_manifest_hash",
-        "sha256:" + "c".repeat(64));
+    ((ObjectNode) manifestNode.get("attempts").get(0))
+        .put("attempt_manifest_hash", "sha256:" + "c".repeat(64));
     rehash(manifestNode);
     docs.rechecksum();
 
@@ -287,7 +321,8 @@ class StabilizationReportBundleIntegrationTest {
     JsonNode attemptEvidence = manifest.get("attempts").get(0).get("evidence");
     // Divert the owning attempt's first evidence record to a reference absent from the aggregate
     // evidence (cardinality stays one-of-each, so only the ordered union can catch the divergence).
-    ((ObjectNode) attemptEvidence.get(0)).put("reference", "artifact://debug-recorder/diverged-log");
+    ((ObjectNode) attemptEvidence.get(0))
+        .put("reference", "artifact://debug-recorder/diverged-log");
     BundleDocuments docs = documents(manifest);
     docs.rehashManifest();
 
@@ -303,8 +338,8 @@ class StabilizationReportBundleIntegrationTest {
     // Add a second distinct LOG record (different reference and checksum) to the attempt evidence
     // AND the top-level evidence so every earlier check passes and only the exact cardinality rule
     // can reject it.
-    ObjectNode extraLog = (ObjectNode) mapper.readTree(
-        mapper.writeValueAsString(manifest.get("evidence").get(0)));
+    ObjectNode extraLog =
+        (ObjectNode) mapper.readTree(mapper.writeValueAsString(manifest.get("evidence").get(0)));
     extraLog.put("reference", "artifact://debug-recorder/log-extra");
     extraLog.put("checksum", rawDigest("extra-log-bytes".getBytes(StandardCharsets.UTF_8)));
     ((ArrayNode) manifest.get("evidence")).add(extraLog);
@@ -322,10 +357,10 @@ class StabilizationReportBundleIntegrationTest {
     ObjectNode manifest = manifest();
     // Reuse the LOG reference for the TICK_LOG record: the (run_id, external_reference) mapping
     // must be unambiguous, so the reference alone (never type|reference) is the uniqueness key.
-    ((ObjectNode) manifest.get("evidence").get(1)).put("reference",
-        "artifact://debug-recorder/log-1");
-    ((ObjectNode) manifest.get("attempts").get(0).get("evidence").get(1)).put("reference",
-        "artifact://debug-recorder/log-1");
+    ((ObjectNode) manifest.get("evidence").get(1))
+        .put("reference", "artifact://debug-recorder/log-1");
+    ((ObjectNode) manifest.get("attempts").get(0).get("evidence").get(1))
+        .put("reference", "artifact://debug-recorder/log-1");
     BundleDocuments docs = documents(manifest);
     docs.rehashManifest();
 
@@ -339,7 +374,8 @@ class StabilizationReportBundleIntegrationTest {
   void successResponseReturnsArtifactMappings() {
     ObjectNode manifest = manifest();
     BundleDocuments docs = documents(manifest);
-    when(runRepository.existsByRunIdAndManifestHash("run-1", manifest.path("manifest_hash").asText()))
+    when(runRepository.existsByRunIdAndManifestHash(
+            "run-1", manifest.path("manifest_hash").asText()))
         .thenReturn(false);
     when(runRepository.existsByRunId("run-1")).thenReturn(false);
     when(snapshotRepository.existsByMatrixHashAndGroupKey(any(), any())).thenReturn(true);
@@ -376,8 +412,8 @@ class StabilizationReportBundleIntegrationTest {
     artifact.setRunId("run-1");
     artifact.setExternalReference("artifact://debug-recorder/log-1");
     artifact.setEvidenceType("LOG");
-    when(artifactRepository.findByRunIdAndExternalReference("run-1",
-        "artifact://debug-recorder/log-1"))
+    when(artifactRepository.findByRunIdAndExternalReference(
+            "run-1", "artifact://debug-recorder/log-1"))
         .thenReturn(java.util.Optional.of(artifact));
 
     assertThat(service.getArtifactByExternalReference("run-1", "artifact://debug-recorder/log-1"))
@@ -388,8 +424,7 @@ class StabilizationReportBundleIntegrationTest {
         .isEmpty();
     assertThat(service.getArtifactByExternalReference(null, "artifact://debug-recorder/log-1"))
         .isEmpty();
-    assertThat(service.getArtifactByExternalReference("run-1", ""))
-        .isEmpty();
+    assertThat(service.getArtifactByExternalReference("run-1", "")).isEmpty();
   }
 
   @Test
@@ -412,8 +447,7 @@ class StabilizationReportBundleIntegrationTest {
   void unusedArtifactRejected() {
     ObjectNode manifest = manifest();
     BundleDocuments docs = documents(manifest);
-    List<StabilizationIngestionService.ArtifactPart> parts =
-        new ArrayList<>(docs.artifacts());
+    List<StabilizationIngestionService.ArtifactPart> parts = new ArrayList<>(docs.artifacts());
     byte[] extra = new byte[8];
     String extraHex = rawDigest(extra).substring("sha256:".length());
     java.nio.file.Path extraPath = tempDir.resolve("sha256_" + extraHex + ".ndjson");
@@ -422,10 +456,10 @@ class StabilizationReportBundleIntegrationTest {
     } catch (java.io.IOException e) {
       throw new RuntimeException(e);
     }
-    parts.add(new StabilizationIngestionService.ArtifactPart(
-        extraPath.getFileName().toString(), "application/x-ndjson", extraPath, extra.length));
-    final BundleDocuments withExtra = new BundleDocuments(
-        docs.nodes(), parts, "COMPLETE", tempDir);
+    parts.add(
+        new StabilizationIngestionService.ArtifactPart(
+            extraPath.getFileName().toString(), "application/x-ndjson", extraPath, extra.length));
+    final BundleDocuments withExtra = new BundleDocuments(docs.nodes(), parts, "COMPLETE", tempDir);
 
     assertThatThrownBy(() -> service.ingestReportBundle(withExtra.source()))
         .isInstanceOf(IllegalArgumentException.class)
@@ -437,20 +471,29 @@ class StabilizationReportBundleIntegrationTest {
   void secondArtifactStagingFailureCleansFirst() {
     ObjectNode manifest = manifest();
     BundleDocuments docs = documents(manifest);
-    when(runRepository.existsByRunIdAndManifestHash("run-1", manifest.path("manifest_hash").asText()))
+    when(runRepository.existsByRunIdAndManifestHash(
+            "run-1", manifest.path("manifest_hash").asText()))
         .thenReturn(false);
     when(runRepository.existsByRunId("run-1")).thenReturn(false);
     when(artifactStore.stage(any(java.nio.file.Path.class), any(), any(), any(), any()))
-        .thenAnswer(invocation -> {
-          // The first artifact must stage with metadata derived from the ACTUAL uploaded bytes so the
-          // evidence digest/size validation passes and the second staging call reaches the failure.
-          java.nio.file.Path source = invocation.getArgument(0);
-          byte[] data = java.nio.file.Files.readAllBytes(source);
-          return new StabilizationArtifactStore.StoredArtifact(
-              UUID.randomUUID(), rawDigest(data), data.length,
-              invocation.getArgument(1), invocation.getArgument(2),
-              invocation.getArgument(3), invocation.getArgument(4), "now");
-        })
+        .thenAnswer(
+            invocation -> {
+              // The first artifact must stage with metadata derived from the ACTUAL uploaded bytes
+              // so the
+              // evidence digest/size validation passes and the second staging call reaches the
+              // failure.
+              java.nio.file.Path source = invocation.getArgument(0);
+              byte[] data = java.nio.file.Files.readAllBytes(source);
+              return new StabilizationArtifactStore.StoredArtifact(
+                  UUID.randomUUID(),
+                  rawDigest(data),
+                  data.length,
+                  invocation.getArgument(1),
+                  invocation.getArgument(2),
+                  invocation.getArgument(3),
+                  invocation.getArgument(4),
+                  "now");
+            })
         .thenThrow(new IllegalStateException("simulated staging failure"));
 
     assertThatThrownBy(() -> service.ingestReportBundle(docs.source()))
@@ -459,8 +502,7 @@ class StabilizationReportBundleIntegrationTest {
 
     // The first staged artifact id must have been tracked and cleaned immediately even though the
     // stageEvidenceArtifacts() call never returned successfully.
-    verify(artifactStore, atLeastOnce())
-        .deleteStaged(any(UUID.class));
+    verify(artifactStore, atLeastOnce()).deleteStaged(any(UUID.class));
   }
 
   @Test
@@ -594,8 +636,10 @@ class StabilizationReportBundleIntegrationTest {
   }
 
   private static void rehash(ObjectNode manifest) {
-    manifest.put("manifest_hash", "sha256:" + StabilizationHashUtil.sha256(
-        manifest, StabilizationHashUtil.MANIFEST_EXCLUSIONS));
+    manifest.put(
+        "manifest_hash",
+        "sha256:"
+            + StabilizationHashUtil.sha256(manifest, StabilizationHashUtil.MANIFEST_EXCLUSIONS));
   }
 
   /** Recomputed attempt, deterministic and aggregate manifest hashes after a fixture mutation. */
@@ -604,22 +648,31 @@ class StabilizationReportBundleIntegrationTest {
     if (attempts.isArray()) {
       for (JsonNode attemptNode : attempts) {
         if (attemptNode.isObject()) {
-          ((ObjectNode) attemptNode).put("attempt_manifest_hash",
-              "sha256:" + StabilizationHashUtil.sha256(
-                  attemptNode, StabilizationHashUtil.ATTEMPT_MANIFEST_EXCLUSIONS));
+          ((ObjectNode) attemptNode)
+              .put(
+                  "attempt_manifest_hash",
+                  "sha256:"
+                      + StabilizationHashUtil.sha256(
+                          attemptNode, StabilizationHashUtil.ATTEMPT_MANIFEST_EXCLUSIONS));
         }
       }
     }
-    manifest.put("deterministic_content_hash", "sha256:" + StabilizationHashUtil.sha256(
-        manifest, StabilizationHashUtil.DETERMINISTIC_EXCLUSIONS));
+    manifest.put(
+        "deterministic_content_hash",
+        "sha256:"
+            + StabilizationHashUtil.sha256(
+                manifest, StabilizationHashUtil.DETERMINISTIC_EXCLUSIONS));
     rehash(manifest);
   }
 
-  /** Re-hashes a mutated plan document and syncs the manifest plan_hash so the plan hash chain
-   *  (plan.planHash == recomputed == manifest.plan_hash) stays self-consistent and only the
-   *  plan-side field change is the tamper under test. */
+  /**
+   * Re-hashes a mutated plan document and syncs the manifest plan_hash so the plan hash chain
+   * (plan.planHash == recomputed == manifest.plan_hash) stays self-consistent and only the
+   * plan-side field change is the tamper under test.
+   */
   private void rehashPlan(ObjectNode plan, ObjectNode manifest) {
-    String planHash = "sha256:" + StabilizationHashUtil.sha256(plan, StabilizationHashUtil.PLAN_EXCLUSIONS);
+    String planHash =
+        "sha256:" + StabilizationHashUtil.sha256(plan, StabilizationHashUtil.PLAN_EXCLUSIONS);
     plan.put("planHash", planHash);
     if (manifest != null) {
       manifest.put("plan_hash", planHash);
@@ -685,14 +738,22 @@ class StabilizationReportBundleIntegrationTest {
     attempt.put("latency_ms", 1000);
     attempt.put("poll_count", 3);
     attempt.putArray("evidence").addAll(evidenceRecords());
-    attempt.put("attempt_manifest_hash",
-        "sha256:" + StabilizationHashUtil.sha256(attempt, StabilizationHashUtil.ATTEMPT_MANIFEST_EXCLUSIONS));
+    attempt.put(
+        "attempt_manifest_hash",
+        "sha256:"
+            + StabilizationHashUtil.sha256(
+                attempt, StabilizationHashUtil.ATTEMPT_MANIFEST_EXCLUSIONS));
     ArrayNode evidence = manifest.putArray("evidence");
     evidence.addAll(evidenceRecords());
-    manifest.put("deterministic_content_hash",
-        "sha256:" + StabilizationHashUtil.sha256(manifest, StabilizationHashUtil.DETERMINISTIC_EXCLUSIONS));
-    manifest.put("manifest_hash",
-        "sha256:" + StabilizationHashUtil.sha256(manifest, StabilizationHashUtil.MANIFEST_EXCLUSIONS));
+    manifest.put(
+        "deterministic_content_hash",
+        "sha256:"
+            + StabilizationHashUtil.sha256(
+                manifest, StabilizationHashUtil.DETERMINISTIC_EXCLUSIONS));
+    manifest.put(
+        "manifest_hash",
+        "sha256:"
+            + StabilizationHashUtil.sha256(manifest, StabilizationHashUtil.MANIFEST_EXCLUSIONS));
     return manifest;
   }
 
@@ -717,8 +778,11 @@ class StabilizationReportBundleIntegrationTest {
   private ArrayNode evidenceRecords() {
     ArrayNode records = mapper.createArrayNode();
     records.add(record("LOG", "artifact://debug-recorder/log-1", rawDigest(artifactBytes(0))));
-    records.add(record("TICK_LOG", "artifact://debug-recorder/tick-1", rawDigest(artifactBytes(1))));
-    records.add(record("RECORDING_SESSION", "artifact://debug-recorder/rec-1", rawDigest(artifactBytes(2))));
+    records.add(
+        record("TICK_LOG", "artifact://debug-recorder/tick-1", rawDigest(artifactBytes(1))));
+    records.add(
+        record(
+            "RECORDING_SESSION", "artifact://debug-recorder/rec-1", rawDigest(artifactBytes(2))));
     return records;
   }
 
@@ -790,7 +854,8 @@ class StabilizationReportBundleIntegrationTest {
     group.put("cancelled", 0);
     group.put("invalid", 0);
     matrix.putArray("incomparable");
-    matrix.put("matrix_hash",
+    matrix.put(
+        "matrix_hash",
         "sha256:" + StabilizationHashUtil.sha256(matrix, StabilizationHashUtil.MATRIX_EXCLUSIONS));
 
     ArrayNode transitions = mapper.createArrayNode();
@@ -821,8 +886,9 @@ class StabilizationReportBundleIntegrationTest {
         String hex = rawDigest(content).substring("sha256:".length());
         java.nio.file.Path path = artifactDir.resolve("sha256_" + hex + ".ndjson");
         java.nio.file.Files.write(path, content);
-        artifacts.add(new StabilizationIngestionService.ArtifactPart(
-            path.getFileName().toString(), "application/x-ndjson", path, content.length));
+        artifacts.add(
+            new StabilizationIngestionService.ArtifactPart(
+                path.getFileName().toString(), "application/x-ndjson", path, content.length));
       }
     } catch (java.io.IOException e) {
       throw new RuntimeException(e);
@@ -865,30 +931,49 @@ class StabilizationReportBundleIntegrationTest {
       byte[] content = bytes(entry.getValue());
       writePart(out, boundary, entry.getKey(), entry.getKey() + ".json", content);
     }
-    writePart(out, boundary, "completeMarker", "complete.marker",
+    writePart(
+        out,
+        boundary,
+        "completeMarker",
+        "complete.marker",
         docs.marker().getBytes(StandardCharsets.UTF_8));
     for (StabilizationIngestionService.ArtifactPart artifact : docs.artifacts()) {
-      writePart(out, boundary, "artifacts", artifact.filename(),
+      writePart(
+          out,
+          boundary,
+          "artifacts",
+          artifact.filename(),
           java.nio.file.Files.readAllBytes(artifact.path()));
     }
     out.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
     return out.toByteArray();
   }
 
-  private static void writePart(java.io.ByteArrayOutputStream out, String boundary, String name,
-      String filename, byte[] content) throws Exception {
+  private static void writePart(
+      java.io.ByteArrayOutputStream out,
+      String boundary,
+      String name,
+      String filename,
+      byte[] content)
+      throws Exception {
     out.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
-    out.write(("Content-Disposition: form-data; name=\"" + name + "\"; filename=\"" + filename
-        + "\"\r\n").getBytes(StandardCharsets.UTF_8));
-    out.write(("Content-Type: " + (name.equals("completeMarker") ? "text/plain" : "application/json")
-        + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+    out.write(
+        ("Content-Disposition: form-data; name=\"" + name + "\"; filename=\"" + filename + "\"\r\n")
+            .getBytes(StandardCharsets.UTF_8));
+    out.write(
+        ("Content-Type: "
+                + (name.equals("completeMarker") ? "text/plain" : "application/json")
+                + "\r\n\r\n")
+            .getBytes(StandardCharsets.UTF_8));
     out.write(content);
     out.write("\r\n".getBytes(StandardCharsets.UTF_8));
   }
 
   /** The seven report documents as live JSON nodes plus artifacts, plus an overridable marker. */
-  private record BundleDocuments(Map<String, JsonNode> nodes,
-      List<StabilizationIngestionService.ArtifactPart> artifacts, String marker,
+  private record BundleDocuments(
+      Map<String, JsonNode> nodes,
+      List<StabilizationIngestionService.ArtifactPart> artifacts,
+      String marker,
       java.nio.file.Path tempDir) {
 
     JsonNode evidence() {
@@ -944,7 +1029,8 @@ class StabilizationReportBundleIntegrationTest {
         private static String safeName(String name) {
           return name.replaceAll("[^A-Za-z0-9._-]", "_");
         }
-    @Override
+
+        @Override
         public List<StabilizationIngestionService.ArtifactPart> artifacts() {
           return artifacts;
         }

@@ -6,19 +6,37 @@ import java.util.regex.Pattern;
 /**
  * Wire-level account identity contract for Builder Goal launch and executor readiness.
  *
- * <p>The hash is supplied by the launcher/Micro6 AccountConnector contract. ChromaScape deliberately
- * never derives it from a launcher profile or display name; it only normalizes and compares the
- * canonical value received from the selected account and the actual logged-in executor.
+ * <p>The hash is supplied by the launcher/Micro6 AccountConnector contract. ChromaScape never
+ * derives it itself; it only normalizes and compares the value received from the selected account
+ * and the actual logged-in executor.
+ *
+ * <p><strong>The supplied value is not identity-stable across a character rename.</strong> Both
+ * producers under {@code accountconnector/v1} derive the hash from the current display name —
+ * micro6's {@code AccountHashGenerator.generateAccountHash} and mule-service's {@code
+ * generateSHA256Hash} both compute {@code sha256(trim(lowercase(name)))[0..16]}. Renaming a
+ * character therefore yields a different hash, and launcher control mints a separate account record
+ * for it. Treat a hash as identifying a name, not a player.
+ *
+ * <p>{@link #isCanonicalHash(String)} accordingly validates only the <em>shape</em> of the value —
+ * a trimmed lowercase 16-hex string. It is not, and cannot be, evidence that the value came from a
+ * trustworthy resolver, because a name hash satisfies exactly the same shape.
  */
 public final class AccountIdentityContract {
   public static final String HASH_SCHEME = "accountconnector/v1";
-  /** Canonical identity must come from the AccountConnector resolver; profile hashing is not valid. */
+
+  /**
+   * Canonical identity must come from the AccountConnector resolver; profile hashing is not valid.
+   */
   public static final String ACTUAL_ACCOUNT_HASH_FIELD = "account_hash";
+
   public static final String EXPECTED_ACCOUNT_HASH_FIELD = "requested_account_hash";
+
   /** Legacy field name accepted only for compatibility with older producers. */
   public static final String LEGACY_EXPECTED_ACCOUNT_HASH_FIELD = "expected_account_hash";
 
-  /** Canonical hashes are normalized lowercase 16-hex values under the accountconnector/v1 scheme. */
+  /**
+   * Canonical hashes are normalized lowercase 16-hex values under the accountconnector/v1 scheme.
+   */
   private static final Pattern CANONICAL_HASH_PATTERN = Pattern.compile("[0-9a-f]{16}");
 
   private AccountIdentityContract() {}

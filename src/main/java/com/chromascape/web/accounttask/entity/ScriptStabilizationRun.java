@@ -64,8 +64,7 @@ public class ScriptStabilizationRun {
   @Column(length = 100)
   private String primaryFailureCode;
 
-  @Column
-  private Boolean evidenceComplete;
+  @Column private Boolean evidenceComplete;
 
   @Column(length = 200)
   private String manifestHash;

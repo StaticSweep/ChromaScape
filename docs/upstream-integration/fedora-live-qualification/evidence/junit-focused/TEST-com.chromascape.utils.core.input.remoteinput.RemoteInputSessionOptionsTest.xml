@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.input.remoteinput.RemoteInputSessionOptionsTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-19T18:55:26.725Z" hostname="fedora" time="0.053">
+  <properties/>
+  <testcase name="rejectsUnboundedTimeouts()" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputSessionOptionsTest" time="0.006"/>
+  <testcase name="defaultsAreDisabledAndCoverTheDocumentedNativeBudget()" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputSessionOptionsTest" time="0.0"/>
+  <testcase name="rejectsZeroDuration()" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputSessionOptionsTest" time="0.01"/>
+  <testcase name="acceptsTheDocumentedUpperBoundsExactly()" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputSessionOptionsTest" time="0.003"/>
+  <testcase name="rejectsNegativeAndNullDurations()" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputSessionOptionsTest" time="0.007"/>
+  <testcase name="acceptsAPollingIntervalEqualToTheInjectionDeadline()" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputSessionOptionsTest" time="0.001"/>
+  <testcase name="rejectsAPollingIntervalLongerThanTheInjectionDeadline()" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputSessionOptionsTest" time="0.003"/>
+  <testcase name="rejectsExcessiveOrNonPositiveClientCounts()" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputSessionOptionsTest" time="0.009"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -20,8 +20,8 @@ public interface ProcessManager {
   List<DiscoveredTarget> discoverEligibleLocal();
 
   /**
-   * Re-reads the current identity of a local pid; empty when the process is gone or its identity
-   * is unreadable. Read-only: never attaches or mutates the target.
+   * Re-reads the current identity of a local pid; empty when the process is gone or its identity is
+   * unreadable. Read-only: never attaches or mutates the target.
    */
   Optional<ProcessIdentity> resolveLocal(long pid);
 

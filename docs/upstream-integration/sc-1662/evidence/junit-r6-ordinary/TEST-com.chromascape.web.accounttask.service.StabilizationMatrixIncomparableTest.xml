@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.accounttask.service.StabilizationMatrixIncomparableTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:39:14.344Z" hostname="fedora" time="0.01">
+  <properties/>
+  <testcase name="an unknown matrix hash returns empty" classname="com.chromascape.web.accounttask.service.StabilizationMatrixIncomparableTest" time="0.004"/>
+  <testcase name="a matrix with incomparable entries persists them and reconstructs the document" classname="com.chromascape.web.accounttask.service.StabilizationMatrixIncomparableTest" time="0.006"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

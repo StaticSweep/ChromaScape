@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorServiceTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:39:39.435Z" hostname="fedora" time="0.007">
+  <properties/>
+  <testcase name="tryAcquire_succeedsForUniqueResource()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorServiceTest" time="0.002"/>
+  <testcase name="resourceKeySeparatesMachineAndPort()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorServiceTest" time="0.001"/>
+  <testcase name="release_staleTokenIsIgnored()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorServiceTest" time="0.001"/>
+  <testcase name="tryAcquire_conflictsForSameAccountWhileHeld()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorServiceTest" time="0.0"/>
+  <testcase name="replacementLeaseCannotBeReleasedByOldWorker()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorServiceTest" time="0.001"/>
+  <testcase name="tryAcquire_conflictsForDifferentAccountWhileHeld()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorServiceTest" time="0.0"/>
+  <testcase name="conflictDescribesWorkflowTypeWithoutRawAccountKey()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorServiceTest" time="0.0"/>
+  <testcase name="release_removesOnlyExactTokenHolder()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorServiceTest" time="0.0"/>
+  <system-out><![CDATA[12:39:39.436 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=hash-1 owner=op-1
+12:39:39.438 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=hash-1 owner=op-1
+12:39:39.438 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8099 account=hash-1 owner=op-2
+12:39:39.438 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-2:8098 account=hash-1 owner=op-3
+12:39:39.438 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=hash-1 owner=op-1
+12:39:39.439 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Stale lease release ignored for resource machine-1:8098: requested owner=op-1, current owner=op-1
+12:39:39.439 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Local launch lease conflict for resource machine-1:8098: requested account=hash-1 owner=op-2, held by account=hash-1 owner=op-1
+12:39:39.440 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=hash-1 owner=op-1
+12:39:39.440 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Local launch lease conflict for resource machine-1:8098: requested account=hash-1 owner=op-2, held by account=hash-1 owner=op-1
+12:39:39.441 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=hash-1 owner=op-1
+12:39:39.441 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Released local launch lease for resource machine-1:8098 account=hash-1 owner=op-1
+12:39:39.441 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=hash-1 owner=op-2
+12:39:39.441 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Stale lease release ignored for resource machine-1:8098: requested owner=op-1, current owner=op-2
+12:39:39.441 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Released local launch lease for resource machine-1:8098 account=hash-1 owner=op-2
+12:39:39.441 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=hash-1 owner=op-1
+12:39:39.441 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Local launch lease conflict for resource machine-1:8098: requested account=hash-2 owner=op-2, held by account=hash-1 owner=op-1
+12:39:39.442 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=hash-1 owner=recovery:iter-1
+12:39:39.442 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Local launch lease conflict for resource machine-1:8098: requested account=hash-2 owner=op-2, held by account=hash-1 owner=recovery:iter-1
+12:39:39.442 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=hash-1 owner=op-1
+12:39:39.442 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Released local launch lease for resource machine-1:8098 account=hash-1 owner=op-1
+12:39:39.443 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalLocalLaunchCoordinatorService - Acquired local launch lease for resource machine-1:8098 account=hash-1 owner=op-2
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

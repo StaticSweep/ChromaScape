@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.patchloop.service.ExecutionRuntimeSnapshotServiceTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:28:35.676Z" hostname="fedora" time="0.121">
+  <properties/>
+  <testcase name="getSnapshotVersion returns 0 when snapshot doesn't exist" classname="com.chromascape.web.debug.patchloop.service.ExecutionRuntimeSnapshotServiceTest" time="0.109"/>
+  <testcase name="clearPaused removes pause flag via deleteSnapshot equivalent" classname="com.chromascape.web.debug.patchloop.service.ExecutionRuntimeSnapshotServiceTest" time="0.001"/>
+  <testcase name="getRuntimeValue returns null when snapshot doesn't exist" classname="com.chromascape.web.debug.patchloop.service.ExecutionRuntimeSnapshotServiceTest" time="0.002"/>
+  <testcase name="loadRuntimeData returns empty map when snapshot doesn't exist" classname="com.chromascape.web.debug.patchloop.service.ExecutionRuntimeSnapshotServiceTest" time="0.001"/>
+  <testcase name="getRuntimeValue returns null for non-existent key" classname="com.chromascape.web.debug.patchloop.service.ExecutionRuntimeSnapshotServiceTest" time="0.002"/>
+  <testcase name="getRuntimeValue rehydrates PatchProposal from Map" classname="com.chromascape.web.debug.patchloop.service.ExecutionRuntimeSnapshotServiceTest" time="0.002"/>
+  <testcase name="saveSnapshot persists runtime data and context" classname="com.chromascape.web.debug.patchloop.service.ExecutionRuntimeSnapshotServiceTest" time="0.002"/>
+  <testcase name="deleteSnapshot removes the snapshot" classname="com.chromascape.web.debug.patchloop.service.ExecutionRuntimeSnapshotServiceTest" time="0.001"/>
+  <system-out><![CDATA[19:28:35.789 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.ExecutionRuntimeSnapshotService - No runtime snapshot found for execution: exec_d868583e
+19:28:35.790 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.ExecutionRuntimeSnapshotService - No runtime snapshot found for execution: exec_44764691
+19:28:35.797 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.ExecutionRuntimeSnapshotService - Saved runtime snapshot for execution: exec_af0c20d9
+19:28:35.798 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.ExecutionRuntimeSnapshotService - Deleted runtime snapshot for execution: exec_4d25d5b2
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

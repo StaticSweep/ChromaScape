@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.patchloop.service.nodes.GeneratePatchNodeExecutorTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:40:16.842Z" hostname="fedora" time="0.008">
+  <properties/>
+  <testcase name="SUCCESS without patchDraft returns failure" classname="com.chromascape.web.debug.patchloop.service.nodes.GeneratePatchNodeExecutorTest" time="0.001"/>
+  <testcase name="SUCCESS with patchDraft generates patch successfully" classname="com.chromascape.web.debug.patchloop.service.nodes.GeneratePatchNodeExecutorTest" time="0.002"/>
+  <testcase name="No analysis response returns failure" classname="com.chromascape.web.debug.patchloop.service.nodes.GeneratePatchNodeExecutorTest" time="0.001"/>
+  <testcase name="PARTIAL_SUCCESS uses recommendations fallback" classname="com.chromascape.web.debug.patchloop.service.nodes.GeneratePatchNodeExecutorTest" time="0.002"/>
+  <testcase name="PARTIAL_SUCCESS with no recommendations returns failure" classname="com.chromascape.web.debug.patchloop.service.nodes.GeneratePatchNodeExecutorTest" time="0.001"/>
+  <testcase name="SUCCESS with empty patchDraft changes returns failure" classname="com.chromascape.web.debug.patchloop.service.nodes.GeneratePatchNodeExecutorTest" time="0.001"/>
+  <system-out><![CDATA[12:40:16.844 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.nodes.GeneratePatchNodeExecutor - Executing GENERATE_PATCH node (V2): generate_patch_1
+12:40:16.845 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.nodes.GeneratePatchNodeExecutor - Executing GENERATE_PATCH node (V2): generate_patch_1
+12:40:16.845 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.nodes.GeneratePatchNodeExecutor - Using patchDraft.changes as primary source (1 changes)
+12:40:16.845 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.nodes.GeneratePatchNodeExecutor - Generated patch from patchDraft: 1 changes across 1 files
+12:40:16.846 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.nodes.GeneratePatchNodeExecutor - Executing GENERATE_PATCH node (V2): generate_patch_1
+12:40:16.847 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.nodes.GeneratePatchNodeExecutor - Executing GENERATE_PATCH node (V2): generate_patch_1
+12:40:16.847 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.nodes.GeneratePatchNodeExecutor - patchDraft not available or incomplete (status: PARTIAL_SUCCESS). Falling back to recommendations
+12:40:16.848 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.nodes.GeneratePatchNodeExecutor - Using fallback patch generation from recommendations: Initialize variable
+12:40:16.849 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.nodes.GeneratePatchNodeExecutor - Executing GENERATE_PATCH node (V2): generate_patch_1
+12:40:16.850 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.nodes.GeneratePatchNodeExecutor - Executing GENERATE_PATCH node (V2): generate_patch_1
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

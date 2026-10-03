@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.patchloop.service.nodes.AnalyzeNodeExecutorTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:28:38.322Z" hostname="fedora" time="0.007">
+  <properties/>
+  <testcase name="FAILURE status stops flow immediately" classname="com.chromascape.web.debug.patchloop.service.nodes.AnalyzeNodeExecutorTest" time="0.002"/>
+  <testcase name="PARTIAL_SUCCESS status continues flow and stores diagnosis" classname="com.chromascape.web.debug.patchloop.service.nodes.AnalyzeNodeExecutorTest" time="0.002"/>
+  <testcase name="SUCCESS status continues flow and stores diagnosis" classname="com.chromascape.web.debug.patchloop.service.nodes.AnalyzeNodeExecutorTest" time="0.002"/>
+  <testcase name="Missing diagnosis returns failure even for PARTIAL_SUCCESS" classname="com.chromascape.web.debug.patchloop.service.nodes.AnalyzeNodeExecutorTest" time="0.001"/>
+  <system-out><![CDATA[19:28:38.324 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.nodes.AnalyzeNodeExecutor - Executing ANALYZE node (V2): analyze_1
+19:28:38.326 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.nodes.AnalyzeNodeExecutor - Executing ANALYZE node (V2): analyze_1
+19:28:38.327 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.nodes.AnalyzeNodeExecutor - Executing ANALYZE node (V2): analyze_1
+19:28:38.329 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.nodes.AnalyzeNodeExecutor - Executing ANALYZE node (V2): analyze_1
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -40,7 +40,10 @@ class AccountBuilderOrchestrationConcurrencyTest {
                       executor.submit(
                           () ->
                               store.claim(
-                                  request, digest("same-fingerprint"), envelopeDigest(request))))
+                                  request,
+                                  digest("same-fingerprint"),
+                                  envelopeDigest(request),
+                                  budget(request))))
               .toList();
       List<AccountBuilderOrchestrationStore.Claim> claims =
           futures.stream().map(this::get).toList();
@@ -61,8 +64,8 @@ class AccountBuilderOrchestrationConcurrencyTest {
     OrchestrationRequest second = request("authority-race-b", "shared-authority");
     String firstFingerprint = digest("authority-race-a");
     String secondFingerprint = digest("authority-race-b");
-    store.claim(first, firstFingerprint, envelopeDigest(first));
-    store.claim(second, secondFingerprint, envelopeDigest(second));
+    store.claim(first, firstFingerprint, envelopeDigest(first), budget(first));
+    store.claim(second, secondFingerprint, envelopeDigest(second), budget(second));
 
     ExecutorService executor = Executors.newFixedThreadPool(2);
     try {
@@ -70,10 +73,7 @@ class AccountBuilderOrchestrationConcurrencyTest {
           executor.submit(
               () ->
                   store.consumeAuthority(
-                      first.orchestrationId(),
-                      first.authority(),
-                      envelopeDigest(first),
-                      first));
+                      first.orchestrationId(), first.authority(), envelopeDigest(first), first));
       Future<?> secondFuture =
           executor.submit(
               () ->
@@ -106,7 +106,8 @@ class AccountBuilderOrchestrationConcurrencyTest {
   }
 
   private InMemoryAccountBuilderOrchestrationStore store() {
-    return new InMemoryAccountBuilderOrchestrationStore(Clock.fixed(NOW, ZoneOffset.UTC));
+    return new InMemoryAccountBuilderOrchestrationStore(
+        Clock.fixed(NOW, ZoneOffset.UTC), (authority, envelope) -> true);
   }
 
   private OrchestrationRequest request(String suffix, String authorityId) {
@@ -165,7 +166,11 @@ class AccountBuilderOrchestrationConcurrencyTest {
             envelope.verifierId(),
             envelope.buildId(),
             1,
-            1);
+            1,
+            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            null,
+            null);
     HumanAuthority authority =
         new HumanAuthority(
             GameplayContracts.VERSION,
@@ -209,5 +214,11 @@ class AccountBuilderOrchestrationConcurrencyTest {
     } catch (Exception exception) {
       throw new AssertionError(exception);
     }
+  }
+
+  private static AccountBuilderBudgetPolicy.OrchestrationBudget budget(
+      OrchestrationRequest request) {
+    return new AccountBuilderBudgetPolicy.OrchestrationBudget(
+        5, 2, 60_000, 0, 0, NOW, request.deadline());
   }
 }

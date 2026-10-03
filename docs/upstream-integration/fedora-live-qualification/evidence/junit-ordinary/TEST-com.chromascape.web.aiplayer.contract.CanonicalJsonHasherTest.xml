@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.contract.CanonicalJsonHasherTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:20.218Z" hostname="fedora" time="0.021">
+  <properties/>
+  <testcase name="excludesDeclaredHash()" classname="com.chromascape.web.aiplayer.contract.CanonicalJsonHasherTest" time="0.016"/>
+  <testcase name="rejectsFloatingPoint()" classname="com.chromascape.web.aiplayer.contract.CanonicalJsonHasherTest" time="0.001"/>
+  <testcase name="rejectsDuplicateKeys()" classname="com.chromascape.web.aiplayer.contract.CanonicalJsonHasherTest" time="0.001"/>
+  <testcase name="equivalentDocumentsHaveSameHash()" classname="com.chromascape.web.aiplayer.contract.CanonicalJsonHasherTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

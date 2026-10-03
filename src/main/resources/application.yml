@@ -136,20 +136,35 @@ gateway:
 
 # ChromaScape runtime configuration
 chromascape:
-  # SC-810 authoritative source manifest verification and debugger read boundary. These keys are
-  # the single canonical manifest trust configuration (SourceTrustProperties); the legacy
-  # micro6.source-manifest trust keys are aliases only and must agree with these at startup.
+  # Development-only bounded target-session harness (open/capture/move/click/key) used by the
+  # live Fedora qualification. Disabled by default and enforced twice by Spring: the bean exists
+  # only when the local-development profile is the active profile AND
+  # CHROMASCAPE_QUALIFICATION_ENABLED=true is set explicitly. The controller additionally refuses
+  # non-loopback callers so it can never expose input on a shared interface, and it closes any
+  # open session on application shutdown.
+  qualification:
+    enabled: ${CHROMASCAPE_QUALIFICATION_ENABLED:false}
+    capture-directory: ${CHROMASCAPE_QUALIFICATION_CAPTURE_DIR:.chromascape/qualification/captures}
+  # Linux RemoteInput attachment (RemoteInputProperties). Attachment is disabled by default; every
+  # deadline is bounded and validated at startup. inject-timeout is the TOTAL attachment budget
+  # shared by the native injection call and every client poll (allowed 1s-60s; the injected library
+  # needs ~5s for the JVM plus up to ~20s for AWT/window reflection, so 30s covers that with margin).
+  # The artifact settings application-root / library are consumed by the binding provider and are
+  # unchanged. Durations use Spring syntax such as 30s or 250ms.
+  remoteinput:
+    attachment-enabled: ${CHROMASCAPE_REMOTEINPUT_ATTACHMENT_ENABLED:false}
+    inject-timeout: ${CHROMASCAPE_REMOTEINPUT_INJECT_TIMEOUT:30s}
+    pair-timeout: ${CHROMASCAPE_REMOTEINPUT_PAIR_TIMEOUT:10s}
+    native-call-timeout: ${CHROMASCAPE_REMOTEINPUT_NATIVE_CALL_TIMEOUT:2s}
+    release-timeout: ${CHROMASCAPE_REMOTEINPUT_RELEASE_TIMEOUT:3s}
+    validation-interval: ${CHROMASCAPE_REMOTEINPUT_VALIDATION_INTERVAL:250ms}
+    max-clients: ${CHROMASCAPE_REMOTEINPUT_MAX_CLIENTS:4096}
+  # SC-810 authoritative source manifest trust. All values are mandatory at startup; empty
+  # placeholders deliberately fail SourceConfigurationValidator rather than enabling a fallback.
   source:
-    # Legacy manifests remain readable as provenance UNKNOWN, but production can require signed
-    # task-source-manifest/v1 documents by setting this flag and configuring the public key.
-    require-signature: ${CHROMASCAPE_SOURCE_REQUIRE_SIGNATURE:false}
-    allow-legacy: ${CHROMASCAPE_SOURCE_ALLOW_LEGACY:true}
     public-key-base64: ${CHROMASCAPE_SOURCE_PUBLIC_KEY_BASE64:}
     public-key-id: ${CHROMASCAPE_SOURCE_PUBLIC_KEY_ID:}
     environment: ${CHROMASCAPE_SOURCE_ENVIRONMENT:}
-    # Development default keeps debugger read authentication off; enabling it without both tokens
-    # fails startup through SourceConfigurationValidator. Production must enable it explicitly.
-    require-auth: ${CHROMASCAPE_SOURCE_REQUIRE_AUTH:false}
     access:
       metadata-token: ${CHROMASCAPE_SOURCE_METADATA_TOKEN:}
       content-token: ${CHROMASCAPE_SOURCE_CONTENT_TOKEN:}
@@ -166,6 +181,12 @@ chromascape:
     task-sync-interval-ms: ${CHROMASCAPE_PATCHLOOP_TASK_SYNC_INTERVAL_MS:5000}
 
 builder-goal:
+  remote:
+    machine-uuid: ${BUILDER_GOAL_REMOTE_MACHINE_UUID:}
+    endpoint: ${BUILDER_GOAL_REMOTE_ENDPOINT:}
+    executor-url: ${BUILDER_GOAL_REMOTE_EXECUTOR_URL:}
+    token: ${BUILDER_GOAL_REMOTE_TOKEN:}
+    timeout-seconds: ${BUILDER_GOAL_REMOTE_TIMEOUT_SECONDS:1800}
   run-timeout-ms: ${BUILDER_GOAL_RUN_TIMEOUT_MS:300000}
   status-sync-max-consecutive-failures: ${BUILDER_GOAL_STATUS_SYNC_MAX_CONSECUTIVE_FAILURES:3}
   status-sync-failure-grace-ms: ${BUILDER_GOAL_STATUS_SYNC_FAILURE_GRACE_MS:15000}
@@ -263,6 +284,12 @@ recording:
   initial-frame-timeout-ms: ${RECORDING_INITIAL_FRAME_TIMEOUT_MS:15000}
   # Delay between initial frame-capture attempts
   initial-frame-retry-interval-ms: ${RECORDING_INITIAL_FRAME_RETRY_INTERVAL_MS:250}
+  # How long the captured canvas size must remain unchanged before the recorder locks onto it
+  stability-window-ms: ${RECORDING_STABILITY_WINDOW_MS:1500}
+  # Minimum canvas width accepted as a stable recording size before the deadline fallback
+  min-capture-width: ${RECORDING_MIN_CAPTURE_WIDTH:640}
+  # Minimum canvas height accepted as a stable recording size before the deadline fallback
+  min-capture-height: ${RECORDING_MIN_CAPTURE_HEIGHT:400}
 
 # Tick Debugger Configuration - For tick-based debugging
 tick-debugger:
@@ -304,19 +331,11 @@ micro6:
     timeout-ms: ${MICRO6_EXECUTOR_TIMEOUT_MS:60000}
     # Cache TTL in seconds
     refresh-seconds: ${MICRO6_EXECUTOR_CATALOG_REFRESH_SECONDS:30}
-  source-manifest:
-    # The producer source API is a separate transport boundary from the general catalog API.
-    # Trust values below (require-signature/allow-legacy/public-key*/environment) are legacy
-    # aliases only: services no longer read them, and SourceConfigurationValidator fails startup
-    # when an explicitly configured alias disagrees with the canonical chromascape.source trust.
-    auth-required: ${MICRO6_SOURCE_AUTH_REQUIRED:false}
-    auth-token: ${MICRO6_SOURCE_AUTH_TOKEN:}
-    actor: ${MICRO6_SOURCE_ACTOR:chromascape-web}
-    environment: ${MICRO6_SOURCE_ENVIRONMENT:}
-    allow-legacy: ${MICRO6_SOURCE_ALLOW_LEGACY:true}
-    require-signature: ${MICRO6_SOURCE_REQUIRE_SIGNATURE:false}
-    public-key-base64: ${MICRO6_SOURCE_PUBLIC_KEY_BASE64:}
-    public-key-id: ${MICRO6_SOURCE_PUBLIC_KEY_ID:}
+  source:
+    transport:
+      base-url: ${MICRO6_SOURCE_TRANSPORT_BASE_URL:}
+      auth-token: ${MICRO6_SOURCE_TRANSPORT_AUTH_TOKEN:}
+      actor: ${MICRO6_SOURCE_TRANSPORT_ACTOR:chromascape-web}
 
 # Analysis Provider Configuration - For BMAD (Bot Metric Analysis & Diagnostics)
 analysis:
@@ -438,6 +457,16 @@ features:
 
 # SC-1430 provider decision runtime. It is deliberately disabled and has no delivery capability.
 gameplay:
+  v2:
+    # SC-1449 additive v2 live gate. Default-off; both flags stay off until the exact
+    # human gate passes. Enable Micro6 validation without start permission first,
+    # then one bounded SC-1498 Fishing run. Disable both flags immediately on any
+    # identity or reconciliation discrepancy.
+    live-enabled: ${GAMEPLAY_V2_LIVE_ENABLED:false}
+    # Operator secret for /api/internal/gameplay/v2. Fail-closed: unset or shorter than 32
+    # characters closes the boundary entirely. Compared in constant time; header presence is
+    # never authentication on its own.
+    operator-key: ${GAMEPLAY_V2_OPERATOR_KEY:}
   # SC-1431 source-neutral orchestration. Both flags stay off until dependency and SC-1449
   # conformance evidence exists; HELD/SHADOW use the application service directly in tests.
   accountbuilder-orchestration:
@@ -451,6 +480,9 @@ gameplay:
     transcript-root: ${GAMEPLAY_PROVIDER_TRANSCRIPT_ROOT:.chromascape/provider-transcripts}
     max-stdout-bytes: ${GAMEPLAY_PROVIDER_MAX_STDOUT_BYTES:1048576}
     max-stderr-bytes: ${GAMEPLAY_PROVIDER_MAX_STDERR_BYTES:131072}
+    process-start-timeout-millis: ${GAMEPLAY_PROVIDER_PROCESS_START_TIMEOUT_MS:5000}
+    first-event-timeout-millis: ${GAMEPLAY_PROVIDER_FIRST_EVENT_TIMEOUT_MS:30000}
+    tool-response-timeout-millis: ${GAMEPLAY_PROVIDER_TOOL_RESPONSE_TIMEOUT_MS:5000}
     claude:
       command: ["${GAMEPLAY_PROVIDER_CLAUDE_COMMAND:claude}"]
       allowed-models: ["claude-*", "sonnet", "opus"]

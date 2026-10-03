@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://chromascape.local/contracts/patch/micro6-candidate-rerun-request-v1.schema.json",
+  "title": "Candidate-bound rerun request and result",
+  "type": "object",
+  "required": ["rerunRequestId", "state", "candidateId", "candidateDigest", "parentIterationId"],
+  "additionalProperties": false,
+  "properties": {
+    "rerunRequestId": { "type": "string", "maxLength": 80 },
+    "state": { "enum": ["RERUN_REQUESTED", "BOUND", "NEEDS_RECONCILIATION"] },
+    "candidateId": { "type": "string", "maxLength": 80 },
+    "candidateDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "parentIterationId": { "type": "string", "maxLength": 100 },
+    "childIterationId": { "type": ["string", "null"], "maxLength": 100 },
+    "statusUrl": { "type": ["string", "null"], "maxLength": 300 }
+  }
+}

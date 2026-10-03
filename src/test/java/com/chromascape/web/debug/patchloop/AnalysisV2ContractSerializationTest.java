@@ -234,25 +234,24 @@ class AnalysisV2ContractSerializationTest {
     // The derived read-only fields that the DTO itself serializes must deserialize cleanly.
     AnalysisV2Target.SessionBounds deserialized =
         objectMapper.readValue(json, AnalysisV2Target.SessionBounds.class);
-    assertEquals(
-        bounds.getStart(),
-        deserialized.getStart(),
-        "start must survive the round trip");
+    assertEquals(bounds.getStart(), deserialized.getStart(), "start must survive the round trip");
     assertEquals(bounds.getEnd(), deserialized.getEnd(), "end must survive the round trip");
     assertTrue(deserialized.isValid());
   }
 
   @Test
   void sessionBoundsRejectsUnknownOrTypoedFields() {
-    String typo = "{\"start\":\"2026-02-28T10:30:00\",\"end\":\"2026-02-28T10:35:00\","
-        + "\"durationSeonds\":300}";
+    String typo =
+        "{\"start\":\"2026-02-28T10:30:00\",\"end\":\"2026-02-28T10:35:00\","
+            + "\"durationSeonds\":300}";
     assertThrows(
         com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException.class,
         () -> objectMapper.readValue(typo, AnalysisV2Target.SessionBounds.class),
         "a typoed derived field must be rejected, not silently ignored");
 
-    String unknown = "{\"start\":\"2026-02-28T10:30:00\",\"end\":\"2026-02-28T10:35:00\","
-        + "\"random_field\":42}";
+    String unknown =
+        "{\"start\":\"2026-02-28T10:30:00\",\"end\":\"2026-02-28T10:35:00\","
+            + "\"random_field\":42}";
     assertThrows(
         com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException.class,
         () -> objectMapper.readValue(unknown, AnalysisV2Target.SessionBounds.class),

@@ -346,4 +346,29 @@ class BuilderGoalRunStateMutationServiceEventTest {
             eq("bg_ev0011"), eq(PatchLoopEventType.RUN_STOPPED), anyString(), anyString(), any());
     assertThat(iteration.getStatus()).isEqualTo(PatchLoopStatus.CANCELLED);
   }
+
+  @Test
+  @DisplayName("risk evidence is retained when the same status observation is terminal or stopping")
+  void terminalAndStoppingStatus_retainsRiskEvidence() {
+    for (String status : java.util.List.of("FAILED", "CANCELLED", "COMPLETED", "RUNNING")) {
+      String id = "bg_risk_" + status;
+      PatchLoopIteration iteration = publishedIteration(id, "RUNNING");
+      iteration.setStatus(PatchLoopStatus.RUNNING_SCRIPT);
+      Map<String, Object> metadata =
+          objectMapper.convertValue(iteration.getTaskMetadataJson(), Map.class);
+      metadata.put("stop_requested_at", LocalDateTime.now().toString());
+      iteration.setTaskMetadataJson(objectMapper.valueToTree(metadata));
+      when(iterationRepository.findByIterationIdForUpdate(id)).thenReturn(Optional.of(iteration));
+      var raw = objectMapper.createObjectNode();
+      var risk = raw.putObject("risk");
+      risk.put("reason", "low hitpoints");
+      mutationService.applyExecutorStatus(
+          id,
+          1001,
+          new ScriptExecutionService.Micro6RunStatusResult(
+              true, status, "low hitpoints", raw, "http://127.0.0.1:8098", 1001),
+          LocalDateTime.now());
+      verify(runEventService).recordRiskEvent(eq(id), eq(1001), eq(risk));
+    }
+  }
 }

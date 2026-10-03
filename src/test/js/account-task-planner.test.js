@@ -390,11 +390,11 @@ test('publishBuilderGoal does not reject solely because the selected machine is 
   planner.loadBuilderGoalRuns = async () => {};
   planner.bindBuilderGoalCodexRun = async () => ({ bound: false, reason: '' });
 
-  let requestBody;
+  const requestBodies = [];
   const originalFetch = global.fetch;
   global.fetch = async (url, options) => {
     assert.equal(url, '/api/debug/builder-goals/publish');
-    requestBody = JSON.parse(options.body);
+    requestBodies.push(JSON.parse(options.body));
     return {
       ok: true,
       status: 200,
@@ -404,12 +404,17 @@ test('publishBuilderGoal does not reject solely because the selected machine is 
 
   try {
     await planner.publishBuilderGoal();
+    const requestBody = requestBodies[0];
     assert.ok(requestBody, 'publish request was sent');
     assert.equal(requestBody.accountId, 'hash-1');
     assert.equal(requestBody.launcherMachineUuid, undefined);
     assert.deepEqual(requestBody.settings, { treeType: 'WILLOW' });
     assert.equal(requestBody.settings.task_key, undefined, 'publish sends nested settings only');
     assert.equal(requestBody.allowLaunchFallback, false);
+
+    planner.getSelectedBuilderGoalMachine = () => ({ machineUuid: 'machine-1' });
+    await planner.publishBuilderGoal();
+    assert.equal(requestBodies[1].launcherMachineUuid, 'machine-1');
   } finally {
     if (originalFetch === undefined) {
       delete global.fetch;
@@ -743,6 +748,126 @@ test('parseBuilderGoalConfigInput accepts canonical envelopes and legacy raw set
     settings: { bait: 'LOBSTER' },
     requirements: {}
   });
+});
+
+test('parseBuilderGoalConfigInput canonicalizes copied Fishing target-level aliases', () => {
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.builderGoalConfigInput = {
+    value: JSON.stringify({
+      task_key: 'FISHING_TRAINING',
+      settings: {
+        stopCondition: 'Level Target',
+        stopConditionValue: 23,
+        targetLevel: 23,
+        target_level: 23,
+        targetFish: 'SHRIMP'
+      }
+    })
+  };
+
+  assert.deepEqual(planner.parseBuilderGoalConfigInput(), {
+    taskKey: 'FISHING_TRAINING',
+    settings: {
+      stopCondition: 'Level Target',
+      stopConditionValue: 23,
+      targetFish: 'SHRIMP'
+    },
+    requirements: {}
+  });
+});
+
+test('parseBuilderGoalConfigInput rejects conflicting copied Fishing target levels', () => {
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.builderGoalConfigInput = {
+    value: JSON.stringify({
+      task_key: 'FISHING_TRAINING',
+      settings: { stopConditionValue: 23, targetLevel: 24 }
+    })
+  };
+
+  assert.match(
+    planner.parseBuilderGoalConfigInput().error,
+    /stopConditionValue disagrees/
+  );
+});
+
+test('normalizeLevelAliasSettings folds crafting aliases into the schema stopConditionValue', () => {
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  const task = {
+    task_key: 'PROGRESSIVE_CRAFTING',
+    args_schema: {
+      fields: [
+        { key: 'stopCondition' },
+        { key: 'stopConditionValue' },
+        { key: 'budgetLevel' },
+        { key: 'preferredActivity' }
+      ]
+    }
+  };
+
+  const result = planner.normalizeLevelAliasSettings(
+    {
+      stopCondition: 'Level Target',
+      stopConditionValue: 5,
+      target_level: 5,
+      targetLevel: 5,
+      budgetLevel: 50
+    },
+    task
+  );
+
+  assert.equal(result.error, undefined);
+  assert.deepEqual(result.settings, {
+    stopCondition: 'Level Target',
+    stopConditionValue: 5,
+    budgetLevel: 50
+  });
+});
+
+test('normalizeLevelAliasSettings preserves targetLevel when the schema declares it', () => {
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  const task = {
+    task_key: 'CONSTRUCTION_PHIALS',
+    args_schema: { fields: [{ key: 'targetLevel' }] }
+  };
+
+  const result = planner.normalizeLevelAliasSettings({ targetLevel: 30, target_level: 30 }, task);
+
+  assert.equal(result.error, undefined);
+  assert.deepEqual(result.settings, { targetLevel: 30 });
+});
+
+test('normalizeLevelAliasSettings rejects a crafting canonical mismatch', () => {
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  const task = {
+    task_key: 'PROGRESSIVE_CRAFTING',
+    args_schema: { fields: [{ key: 'stopConditionValue' }] }
+  };
+
+  const result = planner.normalizeLevelAliasSettings(
+    { stopConditionValue: 5, targetLevel: 6 },
+    task
+  );
+
+  assert.match(result.error, /stopConditionValue disagrees/);
+});
+
+test('filterSavedBuilderGoalSettings migrates crafting aliases from the schema', () => {
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  const task = {
+    task_key: 'PROGRESSIVE_CRAFTING',
+    args_schema: {
+      fields: [{ key: 'stopConditionValue' }, { key: 'stopCondition' }, { key: 'budgetLevel' }]
+    }
+  };
+
+  const result = planner.filterSavedBuilderGoalSettings(
+    { target_level: 5, stopConditionValue: 5, obsolete: true },
+    task
+  );
+
+  assert.deepEqual(result.settings, { stopConditionValue: 5 });
+  assert.deepEqual(result.discardedKeys, ['target_level', 'obsolete']);
 });
 
 test('syncBuilderGoalConfigTaskKey preserves dirty settings while changing the task', () => {
@@ -1136,7 +1261,7 @@ test('refreshBuilderGoalRuns no unhandled rejection escapes the refresh method',
   assert.deepEqual(unhandled, [], 'no rejection may escape refreshBuilderGoalRuns');
 });
 
-test('builder goal bundle version markers agree on 40', () => {
+test('builder goal bundle version markers agree on 45', () => {
   const source = require('node:fs').readFileSync(
     path.resolve(__dirname, '../../main/resources/static/js/account-task-planner.js'),
     'utf8'
@@ -1146,7 +1271,7 @@ test('builder goal bundle version markers agree on 40', () => {
     'utf8'
   );
   const jsVersion = AccountTaskPlanner.BUILDER_GOAL_BUNDLE_VERSION;
-  assert.equal(jsVersion, '41');
+  assert.equal(jsVersion, '46');
   assert.ok(
     source.includes(`BUILDER_GOAL_BUNDLE_VERSION = '${jsVersion}'`),
     'JS source must declare the same bundle version'
@@ -1159,6 +1284,37 @@ test('builder goal bundle version markers agree on 40', () => {
     template.includes(`/js/account-task-planner.js?v=${jsVersion}`),
     'debugger.html must reference the same script version'
   );
+});
+
+test('builder goal auto-record is visible, defaults on, and is included in task requests', () => {
+  const source = require('node:fs').readFileSync(
+    path.resolve(__dirname, '../../main/resources/static/js/account-task-planner.js'),
+    'utf8'
+  );
+  const template = require('node:fs').readFileSync(
+    path.resolve(__dirname, '../../main/resources/templates/debugger.html'),
+    'utf8'
+  );
+
+  assert.match(
+    template,
+    /<input[^>]+id="builderGoalAutoRecord"[^>]+checked[^>]*>/,
+    'the publish option must be checked by default'
+  );
+  assert.ok(
+    source.includes('autoRecord: this.shouldAutoRecordBuilderGoal()'),
+    'task requests must carry the selected auto-record preference'
+  );
+});
+
+test('shouldAutoRecordBuilderGoal defaults on unless the operator explicitly unchecks it', () => {
+  const planner = Object.create(AccountTaskPlanner.prototype);
+
+  assert.equal(planner.shouldAutoRecordBuilderGoal(), true);
+  planner.builderGoalAutoRecord = { checked: true };
+  assert.equal(planner.shouldAutoRecordBuilderGoal(), true);
+  planner.builderGoalAutoRecord = { checked: false };
+  assert.equal(planner.shouldAutoRecordBuilderGoal(), false);
 });
 
 // --- Status label tests ---
@@ -1453,8 +1609,8 @@ test('isActivePublishState returns false for null/missing run', () => {
 
 // --- Bundle marker tests ---
 
-test('BUILDER_GOAL_BUNDLE_VERSION is 41', () => {
-  assert.equal(AccountTaskPlanner.BUILDER_GOAL_BUNDLE_VERSION, '41');
+test('BUILDER_GOAL_BUNDLE_VERSION is 46', () => {
+  assert.equal(AccountTaskPlanner.BUILDER_GOAL_BUNDLE_VERSION, '46');
 });
 
 test('ACTIVE_PRE_START_STATUSES includes RECONCILING and AWAITING_EXECUTOR_CONFIRMATION', () => {
@@ -2521,25 +2677,64 @@ test('compile recovery panel exposes safe same-screen actions without a host pat
   assert.ok(!html.includes('C:\\'));
 });
 
-test('compile recovery renders a reviewable escaped patch plan', () => {
+test('compile recovery renders a reviewable escaped canonical diff', () => {
+  const html = AccountTaskPlanner.buildProposalReviewHtml({
+    proposalId: 'proposal_<x>',
+    proposalHash: 'sha256:abc123',
+    baseCommit: 'commit<base>',
+    rationale: 'Fix <compile>',
+    citations: {'src/Task.java': [{kind: 'COMPILER_DIAGNOSTIC'}]},
+    policyReport: {violations: []},
+    canonicalDiff: 'diff --git a/src/Task.java b/src/Task.java\n+<script>alert(1)</script>',
+    expiresAt: '2026-01-01T00:00:00Z'
+  }, true, new Set(['APPROVE', 'REJECT', 'REQUEST_CHANGES']), 'buildergoal_123');
+
+  assert.ok(html.includes('Review proposed compile repair'));
+  assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
+  assert.ok(!html.includes('<script>'));
+  assert.ok(html.includes('Fix &lt;compile&gt;'));
+  assert.ok(html.includes('Evidence citations: 1'));
+  assert.ok(html.includes('Approve exact proposal'));
+  assert.ok(!html.includes('onclick="window.accountTaskPlanner.approveProposal(\'\','));
+  assert.ok(html.includes('buildergoal_123'));
+});
+
+test('compile recovery hides review buttons outside AWAITING_REVIEW', () => {
+  const html = AccountTaskPlanner.buildProposalReviewHtml({
+    proposalId: 'proposal_x',
+    canonicalDiff: 'diff --git a/src/A.java b/src/A.java\n+1',
+    citations: {a: [{}]},
+    policyReport: {violations: []}
+  }, false, new Set(), 'buildergoal_123');
+
+  assert.ok(html.includes('Review proposed compile repair'));
+  assert.ok(!html.includes('Approve exact proposal'));
+  assert.ok(!html.includes('Reject'));
+});
+
+test('validation timeline renders durable stages and cancel control only while active', () => {
   const planner = launchStatusPlanner();
-  const container = {hidden: true, innerHTML: ''};
+  const states = [{hidden: true, innerHTML: ''}, {hidden: true, innerHTML: ''}];
 
-  planner.renderCompileRepairPlan(container, {
-    description: 'Fix <compile>',
-    rationale: 'Restore the declared type',
-    changes: [{
-      changeType: 'MODIFY',
-      filePath: 'src/Task.java',
-      lineNumber: 7,
-      oldText: 'String value = <broken>;',
-      newText: 'String value = "fixed";'
-    }]
+  planner.renderValidationTimeline(states[0], {
+    state: 'RUNNING',
+    currentStage: 'COMPILE_STATIC_TESTS',
+    cancelRequested: false,
+    jobId: 'job_1'
   });
+  assert.equal(states[0].hidden, false);
+  assert.ok(states[0].innerHTML.includes('ISOLATED_CHECKOUT'));
+  assert.ok(states[0].innerHTML.includes('ARTIFACT_FINALIZATION'));
+  assert.ok(states[0].innerHTML.includes('Cancel validation'));
+  assert.ok(states[0].innerHTML.includes('job_1'));
 
-  assert.equal(container.hidden, false);
-  assert.ok(container.innerHTML.includes('Review proposed compile repair'));
-  assert.ok(container.innerHTML.includes('src/Task.java:7'));
-  assert.ok(container.innerHTML.includes('&lt;compile&gt;'));
-  assert.ok(!container.innerHTML.includes('<broken>'));
+  planner.renderValidationTimeline(states[1], {state: 'SUCCEEDED', currentStage: null, jobId: 'job_1'});
+  assert.ok(!states[1].innerHTML.includes('Cancel validation'));
+});
+
+test('candidate rerun wording keeps build validation distinct from certification', () => {
+  const planner = launchStatusPlanner();
+  const html = planner.compileRecoveryPanelHtml('buildergoal_123');
+  assert.ok(html.includes('Download sanitized log'));
+  assert.ok(!html.includes('C:\\'));
 });

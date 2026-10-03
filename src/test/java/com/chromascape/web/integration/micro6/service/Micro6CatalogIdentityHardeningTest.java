@@ -15,9 +15,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Focused tests for SC-584A identity binding and cache isolation: catalog payloads are rejected when
- * their identity conflicts with the resolved runtime, the cache is keyed by runtime identity (never
- * {@code endpoint_ref} alone), and concurrent requests coalesce onto a single fetch.
+ * Focused tests for SC-584A identity binding and cache isolation: catalog payloads are rejected
+ * when their identity conflicts with the resolved runtime, the cache is keyed by runtime identity
+ * (never {@code endpoint_ref} alone), and concurrent requests coalesce onto a single fetch.
  */
 class Micro6CatalogIdentityHardeningTest {
   private final ObjectMapper mapper = new ObjectMapper();
@@ -124,7 +124,8 @@ class Micro6CatalogIdentityHardeningTest {
     assertThat(first.path("catalog_state").asText()).isEqualTo("READY");
     assertThat(executor.lightweightCalls).isEqualTo(1);
 
-    // The same endpoint ref now resolves to a different executor instance: the cached copy under the
+    // The same endpoint ref now resolves to a different executor instance: the cached copy under
+    // the
     // old identity must not be served, so the refresh re-fetches.
     registry.executorInstanceByRef.put(ref, "executor-B");
     JsonNode second = service.getCatalogForExecutor(ref, "lightweight", false);
@@ -209,8 +210,7 @@ class Micro6CatalogIdentityHardeningTest {
     try {
       List<Future<JsonNode>> futures = new ArrayList<>();
       for (int i = 0; i < 4; i++) {
-        futures.add(
-            pool.submit(() -> service.getCatalogForExecutor(ref, "lightweight", false)));
+        futures.add(pool.submit(() -> service.getCatalogForExecutor(ref, "lightweight", false)));
       }
       for (Future<JsonNode> future : futures) {
         assertThat(future.get().path("catalog_state").asText()).isEqualTo("READY");

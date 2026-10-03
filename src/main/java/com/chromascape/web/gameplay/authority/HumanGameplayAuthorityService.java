@@ -4,6 +4,7 @@ import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import com.chromascape.web.gameplay.contract.GameplayContracts;
 import com.chromascape.web.gameplay.contract.GameplayContracts.ExecutionEnvelope;
 import com.chromascape.web.gameplay.contract.GameplayContracts.HumanAuthority;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderAuthorityVerifier;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -22,7 +23,7 @@ import org.springframework.stereotype.Service;
 
 /** Creates only human-origin, expiring, exact-scope, one-use live authorities. */
 @Service
-public final class HumanGameplayAuthorityService {
+public final class HumanGameplayAuthorityService implements AccountBuilderAuthorityVerifier {
   private static final Duration MAX_LIFETIME = Duration.ofMinutes(15);
   private final CanonicalGameplayJson canonicalJson;
   private final Clock clock;
@@ -125,8 +126,8 @@ public final class HumanGameplayAuthorityService {
   /**
    * Verifies the signed authority and the exact scope bound to an envelope.
    *
-   * <p>The orchestration persistence layer stores only the resulting ownership facts. It calls
-   * this method before creating that durable one-use ownership row, so a syntactically plausible
+   * <p>The orchestration persistence layer stores only the resulting ownership facts. It calls this
+   * method before creating that durable one-use ownership row, so a syntactically plausible
    * authority cannot be used to bypass the human approval boundary.
    */
   public boolean verifyBoundAuthority(HumanAuthority authority, ExecutionEnvelope envelope) {

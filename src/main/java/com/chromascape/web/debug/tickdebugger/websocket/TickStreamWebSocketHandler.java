@@ -1,23 +1,41 @@
 package com.chromascape.web.debug.tickdebugger.websocket;
 
+import com.chromascape.utils.core.screen.capture.TargetFrameRuntime;
+import com.chromascape.utils.core.screen.capture.ViewOnlyFrameSource;
 import com.chromascape.web.aiplayer.prototype.FishingShadowDecision;
 import com.chromascape.web.aiplayer.prototype.FishingShadowDecisionService;
+import com.chromascape.web.debug.tickdebugger.dto.ScreenFrameCapability;
+import com.chromascape.web.debug.tickdebugger.dto.ScreenFrameMessage;
 import com.chromascape.web.debug.tickdebugger.dto.SessionStartRequest;
 import com.chromascape.web.debug.tickdebugger.dto.SessionStartResponse;
 import com.chromascape.web.debug.tickdebugger.dto.SessionStopRequest;
 import com.chromascape.web.debug.tickdebugger.dto.TickBatchMessage;
+import com.chromascape.web.debug.tickdebugger.service.ClientFrameMetrics;
 import com.chromascape.web.debug.tickdebugger.service.DebugSessionService;
 import com.chromascape.web.debug.tickdebugger.service.DebugSessionService.SessionStartOutcome;
 import com.chromascape.web.debug.tickdebugger.service.DebugSessionService.SessionStartRollbackToken;
+import com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumService;
 import com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService;
+import com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService.TickBatchAcknowledgment;
+import com.chromascape.web.viewport.WebsocketViewport;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PreDestroy;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.util.Base64;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -32,6 +50,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
  * <ul>
  *   <li>SESSION_START: Initialize a new debug session
  *   <li>TICK_BATCH: Per-tick data containing logs, state, and overlays
+ *   <li>SCREEN_FRAME: Client-pushed screen pixels forwarded to the live viewport
  *   <li>SESSION_STOP: Finalize the debug session
  * </ul>
  *
@@ -39,10 +58,11 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
  *
  * <p>Each Micro6 WebSocket owns at most one canonical debug session, and each canonical debug
  * session has at most one Micro6 WebSocket owner. Ownership is tracked in {@code sessionBindings}
- * (websocket id to binding) and {@code sessionOwners} (canonical session id to websocket id); both
- * mappings are mutated only under {@code ownershipLock}. Per-WebSocket callbacks are serialized by
- * synchronizing on the WebSocket session, which also covers transport-error and close handling. The
- * lock order is {@code WebSocketSession monitor → ownershipLock} and is never reversed.
+ * (websocket id to binding) and {@code sessionOwners} (canonical session id to websocket id), while
+ * disconnected active sessions are reserved in {@code pendingReconnects}; all three mappings are
+ * mutated only under {@code ownershipLock}. Per-WebSocket callbacks are serialized by synchronizing
+ * on the WebSocket session, which also covers transport-error and close handling. The lock order is
+ * {@code WebSocketSession monitor → ownershipLock} and is never reversed.
  *
  * <p>Session start is transactional: the preferred session id is reserved under {@code
  * ownershipLock} before the (potentially slow) service call, the service call runs outside the
@@ -69,6 +89,9 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
   private final TickStreamIngestionService ingestionService;
   private final DebuggerTickWebSocketHandler debuggerWebSocketHandler;
   private final FishingShadowDecisionService shadowDecisionService;
+  private final TickBatchCanonicalChecksumService tickBatchChecksumService;
+  private final WebsocketViewport clientFrameViewport;
+  private final ClientFrameMetrics clientFrameMetrics;
   private final Set<WebSocketSession> micro6Clients = ConcurrentHashMap.newKeySet();
 
   /** Binding phase of a WebSocket-bound debug session. */
@@ -82,9 +105,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     /** The success response could not be delivered and compensation failed; close may retry. */
     START_RESPONSE_FAILED,
     /** An explicit SESSION_STOP was attempted but finalization failed; close may retry. */
-    EXPLICIT_STOP_FAILED,
-    /** Transport-error finalization failed; close may retry. */
-    TRANSPORT_FINALIZATION_FAILED
+    EXPLICIT_STOP_FAILED
   }
 
   /**
@@ -101,17 +122,43 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       String shadowRunId,
       BindingPhase phase,
       boolean shadowOpened,
-      SessionStartRollbackToken rollbackToken) {
+      SessionStartRollbackToken rollbackToken,
+      Boolean recordingEnabled,
+      String recordingId,
+      Long startTick,
+      String recordingFailureReason) {
 
     SessionBinding withPhase(BindingPhase newPhase) {
-      return new SessionBinding(sessionId, shadowRunId, newPhase, shadowOpened, rollbackToken);
+      return new SessionBinding(
+          sessionId,
+          shadowRunId,
+          newPhase,
+          shadowOpened,
+          rollbackToken,
+          recordingEnabled,
+          recordingId,
+          startTick,
+          recordingFailureReason);
+    }
+  }
+
+  /** An active binding detached from a dead socket while Micro6 is allowed to reconnect. */
+  private static final class PendingReconnect {
+    private final String token = UUID.randomUUID().toString();
+    private final SessionBinding binding;
+    private final String cause;
+    private volatile ScheduledFuture<?> timeout;
+
+    private PendingReconnect(SessionBinding binding, String cause) {
+      this.binding = binding;
+      this.cause = cause;
     }
   }
 
   /**
    * Maps WebSocket session IDs to bound debug session ownership. Populated on successful
-   * SESSION_START, cleared on successful explicit SESSION_STOP or final disconnect finalization.
-   * Mutated only under {@code ownershipLock}.
+   * SESSION_START, detached during reconnect grace, and cleared on successful explicit SESSION_STOP
+   * or final disconnect finalization. Mutated only under {@code ownershipLock}.
    */
   private final Map<String, SessionBinding> sessionBindings = new ConcurrentHashMap<>();
 
@@ -129,6 +176,98 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
    */
   private final Map<String, String> preferredReservations = new ConcurrentHashMap<>();
 
+  /** Active sessions awaiting a replacement socket, keyed by canonical debug session id. */
+  private final Map<String, PendingReconnect> pendingReconnects = new ConcurrentHashMap<>();
+
+  private final ScheduledExecutorService reconnectScheduler =
+      Executors.newSingleThreadScheduledExecutor(
+          runnable -> {
+            Thread thread = new Thread(runnable, "tick-stream-reconnect-grace");
+            thread.setDaemon(true);
+            return thread;
+          });
+
+  @Value("${debug.tick-stream.reconnect-grace-ms:30000}")
+  private long reconnectGraceMillis = 30_000L;
+
+  /** Accepted {@code screen-frame/v1} envelope version. */
+  static final int SCREEN_FRAME_SCHEMA_VERSION = 1;
+
+  /** Accepted frame media type. */
+  static final String SCREEN_FRAME_MIME_TYPE = "image/jpeg";
+
+  /** Maximum decoded JPEG bytes per frame; bounds a single decode allocation. */
+  static final int SCREEN_FRAME_MAX_JPEG_BYTES = 768_000;
+
+  /**
+   * Maximum base64 text length per frame, sized so any accepted payload decodes within {@link
+   * #SCREEN_FRAME_MAX_JPEG_BYTES}. Checked before decoding so oversized text never allocates.
+   */
+  static final int SCREEN_FRAME_MAX_BASE64_CHARS = 1_024_000;
+
+  /** Maximum declared edge in pixels; longest edge at most 960 per the wire contract. */
+  static final int SCREEN_FRAME_MAX_EDGE = 960;
+
+  /** Maximum declared pixel count (960 x 960); bounds the decoded image. */
+  static final int SCREEN_FRAME_MAX_PIXELS = 921_600;
+
+  /** Maximum frames per second the server accepts from one stream. */
+  static final int SCREEN_FRAME_MAX_FPS = 5;
+
+  /**
+   * Negotiated screen-frame stream per canonical debug session id. Created when a binding turns
+   * ACTIVE (a reconnect or new session rotates the stream id) and cleared on stop, disconnect, or
+   * failed start, so frames from a dead stream can never address a live viewport generation.
+   */
+  private final java.util.concurrent.ThreadPoolExecutor frameWorker =
+      new java.util.concurrent.ThreadPoolExecutor(
+          1,
+          1,
+          0L,
+          TimeUnit.MILLISECONDS,
+          new java.util.concurrent.ArrayBlockingQueue<>(1),
+          r -> {
+            Thread t = new Thread(r, "client-frame-validation");
+            t.setDaemon(true);
+            return t;
+          },
+          new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
+
+  private java.util.concurrent.Executor frameExecutor = frameWorker;
+  private volatile boolean frameFeedEnabled = true;
+  private final java.util.concurrent.atomic.AtomicLong frameFeedGeneration =
+      new java.util.concurrent.atomic.AtomicLong();
+  private final Map<String, FrameStreamState> frameStreams = new ConcurrentHashMap<>();
+
+  /**
+   * One session's screen-frame stream.
+   *
+   * @param streamId server-generated stream id advertised in the SESSION_START capability
+   * @param lastSeenSeq highest frame sequence reserved under the socket monitor; newer frames
+   *     replace older ones and duplicates/out-of-order arrivals are stale
+   * @param lastPublishedSeq highest frame sequence published to the viewport; a reserved frame that
+   *     loses a publish race is dropped stale so the viewport only moves forward
+   */
+  record FrameStreamState(
+      String streamId,
+      java.util.concurrent.atomic.AtomicLong lastSeenSeq,
+      java.util.concurrent.atomic.AtomicLong lastPublishedSeq,
+      java.util.concurrent.atomic.AtomicLong lastAcceptedNanos) {}
+
+  /**
+   * A structurally accepted frame reserved under the socket monitor, decoded and published outside
+   * it so pixel work never delays tick traffic on the same connection.
+   */
+  record FrameWork(
+      String wsId,
+      String sessionId,
+      String streamId,
+      long frameSeq,
+      int width,
+      int height,
+      String jpegBase64,
+      long feedGeneration) {}
+
   /**
    * Serializes session creation, canonical ownership claims, and ownership release. Acquired only
    * after the owning WebSocket session monitor.
@@ -141,11 +280,43 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       TickStreamIngestionService ingestionService,
       DebuggerTickWebSocketHandler debuggerWebSocketHandler,
       FishingShadowDecisionService shadowDecisionService) {
+    this(
+        objectMapper,
+        sessionService,
+        ingestionService,
+        debuggerWebSocketHandler,
+        shadowDecisionService,
+        null,
+        null,
+        null);
+  }
+
+  /** Spring constructor keeps one canonical parser/writer for the WebSocket boundary. */
+  @org.springframework.beans.factory.annotation.Autowired
+  public TickStreamWebSocketHandler(
+      ObjectMapper objectMapper,
+      DebugSessionService sessionService,
+      TickStreamIngestionService ingestionService,
+      DebuggerTickWebSocketHandler debuggerWebSocketHandler,
+      FishingShadowDecisionService shadowDecisionService,
+      @org.springframework.beans.factory.annotation.Autowired(required = false)
+          TickBatchCanonicalChecksumService tickBatchChecksumService,
+      @org.springframework.beans.factory.annotation.Autowired(required = false)
+          WebsocketViewport clientFrameViewport,
+      @org.springframework.beans.factory.annotation.Autowired(required = false)
+          ClientFrameMetrics clientFrameMetrics) {
     this.objectMapper = objectMapper;
     this.sessionService = sessionService;
     this.ingestionService = ingestionService;
     this.debuggerWebSocketHandler = debuggerWebSocketHandler;
     this.shadowDecisionService = shadowDecisionService;
+    this.tickBatchChecksumService =
+        tickBatchChecksumService != null
+            ? tickBatchChecksumService
+            : new TickBatchCanonicalChecksumService(objectMapper);
+    this.clientFrameViewport = clientFrameViewport;
+    this.clientFrameMetrics =
+        clientFrameMetrics != null ? clientFrameMetrics : new ClientFrameMetrics();
   }
 
   @Override
@@ -159,9 +330,10 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
   protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
     // Serialize all lifecycle handling for this WebSocket so binding transitions, tick validation,
     // transport errors, and close handling can never interleave.
+    FrameWork reservedFrame = null;
     synchronized (session) {
       try {
-        JsonNode root = objectMapper.readTree(message.getPayload());
+        JsonNode root = tickBatchChecksumService.parseWireJson(message.getPayload());
         String type = root.has("type") ? root.get("type").asText() : "";
 
         switch (type) {
@@ -170,6 +342,11 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
             break;
           case "TICK_BATCH":
             handleTickBatch(session, root);
+            break;
+          case "SCREEN_FRAME":
+            // Reserve cheaply under the monitor; pixel decode and viewport publish run outside it
+            // so a client frame can never delay tick traffic on the same connection.
+            reservedFrame = reserveScreenFrame(session, root);
             break;
           case "SESSION_STOP":
             handleSessionStop(session, root);
@@ -183,6 +360,10 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
           canonicalFrames.reject(bound.sessionId(), "MALFORMED_STREAM_MESSAGE");
         log.error("Error processing tick stream message: {}", e.getMessage(), e);
       }
+    }
+    if (reservedFrame != null) {
+      FrameWork work = reservedFrame;
+      frameExecutor.execute(() -> processScreenFrame(session, work));
     }
   }
 
@@ -229,11 +410,16 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       SessionStartRequest request = objectMapper.treeToValue(root, SessionStartRequest.class);
       String clientRequestId = request.getClientRequestId();
       log.info(
-          "Starting debug session via WebSocket: account={}, script={}, recording={}, clientRequestId={}",
+          "Starting debug session via WebSocket: account={}, script={}, recording={},"
+              + " clientRequestId={}",
           request.getAccountName(),
           request.getScriptName(),
           request.getRecordingEnabled(),
           clientRequestId != null ? clientRequestId : "none");
+
+      if (tryResumePendingSession(wsSession, request)) {
+        return;
+      }
 
       // A WebSocket owns at most one session: reject a second SESSION_START on this connection,
       // whether it already has a binding or a start reservation is still in flight.
@@ -266,7 +452,8 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
           if ((owner != null && !owner.equals(wsId))
               || (reserver != null && !reserver.equals(wsId))) {
             log.warn(
-                "Rejecting SESSION_START on connection {}: preferred session {} owned/reserved by another connection",
+                "Rejecting SESSION_START on connection {}: preferred session {} owned/reserved by"
+                    + " another connection",
                 wsId,
                 preferred);
             reservationRejection = "SESSION_ALREADY_OWNED";
@@ -368,12 +555,17 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
                   shadowRunId,
                   BindingPhase.STARTING,
                   false,
-                  outcome.rollbackToken()));
+                  outcome.rollbackToken(),
+                  outcome.response().getRecordingEnabled(),
+                  outcome.response().getRecordingId(),
+                  outcome.response().getStartTick(),
+                  outcome.response().getRecordingFailureReason()));
         }
       }
       if (conflictToken != null) {
         log.warn(
-            "Rejecting SESSION_START on connection {}: canonical session {} owned by another connection",
+            "Rejecting SESSION_START on connection {}: canonical session {} owned by another"
+                + " connection",
             wsId,
             canonicalSessionId);
         // A canonical conflict has no canonical ownership for this socket. If compensation fails,
@@ -388,7 +580,11 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
                     shadowRunId,
                     BindingPhase.START_ROLLBACK_FAILED,
                     false,
-                    conflictToken));
+                    conflictToken,
+                    outcome.response().getRecordingEnabled(),
+                    outcome.response().getRecordingId(),
+                    outcome.response().getStartTick(),
+                    outcome.response().getRecordingFailureReason()));
           }
           closeWebSocketSafely(wsSession);
           return;
@@ -425,18 +621,30 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       SessionBinding starting = sessionBindings.get(wsId);
       SessionBinding active =
           new SessionBinding(
-              canonicalSessionId, shadowRunId, BindingPhase.ACTIVE, true, outcome.rollbackToken());
+              canonicalSessionId,
+              shadowRunId,
+              BindingPhase.ACTIVE,
+              true,
+              outcome.rollbackToken(),
+              outcome.response().getRecordingEnabled(),
+              outcome.response().getRecordingId(),
+              outcome.response().getStartTick(),
+              outcome.response().getRecordingFailureReason());
       synchronized (ownershipLock) {
         sessionBindings.replace(wsId, starting, active);
       }
 
-      // Echo the transport correlation id unchanged and expose the run id for observability.
+      // Negotiate a fresh screen-frame stream for this session: a reconnect or a new session
+      // rotates the stream id, so frames from a dead stream can never address this generation.
+      // Created before the success response is serialized so no accepted frame can miss it.
       SessionStartResponse response = outcome.response();
       response.setClientRequestId(clientRequestId);
       response.setShadowRunId(shadowRunId);
+      negotiateFrames(canonicalSessionId, response);
 
       log.info(
-          "SESSION_START result: sessionId={}, shadowRunId={}, recordingId={}, failureReason={}, clientRequestId={}",
+          "SESSION_START result: sessionId={}, shadowRunId={}, recordingId={}, failureReason={},"
+              + " clientRequestId={}",
           response.getSessionId(),
           shadowRunId,
           response.getRecordingId() != null ? response.getRecordingId() : "none",
@@ -505,6 +713,85 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     }
   }
 
+  private void negotiateFrames(String sessionId, SessionStartResponse response) {
+    String streamId = UUID.randomUUID().toString();
+    frameStreams.put(
+        sessionId,
+        new FrameStreamState(
+            streamId,
+            new java.util.concurrent.atomic.AtomicLong(),
+            new java.util.concurrent.atomic.AtomicLong(),
+            new java.util.concurrent.atomic.AtomicLong()));
+    response.setScreenFrame(
+        new ScreenFrameCapability(
+            streamId, SCREEN_FRAME_MAX_JPEG_BYTES, SCREEN_FRAME_MAX_EDGE, SCREEN_FRAME_MAX_FPS));
+    response.getScreenFrame().setEnabled(frameFeedEnabled);
+    clientFrameMetrics.sessionStarted(sessionId);
+  }
+
+  /**
+   * Rebinds a reconnecting Micro6 socket to an active session without starting another session,
+   * recording, or shadow run. The preferred session id is the reconnect token already used by the
+   * wire protocol. Claiming and timeout cancellation are atomic with respect to grace expiry.
+   */
+  private boolean tryResumePendingSession(WebSocketSession wsSession, SessionStartRequest request) {
+    String preferred = request.getPreferredSessionId();
+    if (preferred == null || preferred.isBlank()) {
+      return false;
+    }
+
+    String wsId = wsSession.getId();
+    PendingReconnect pending;
+    synchronized (ownershipLock) {
+      if (sessionBindings.containsKey(wsId) || hasStartReservation(wsId)) {
+        return false;
+      }
+      pending = pendingReconnects.remove(preferred);
+      if (pending == null) {
+        return false;
+      }
+      sessionOwners.put(preferred, wsId);
+      sessionBindings.put(wsId, pending.binding.withPhase(BindingPhase.ACTIVE));
+    }
+
+    ScheduledFuture<?> timeout = pending.timeout;
+    if (timeout != null) {
+      timeout.cancel(false);
+    }
+
+    SessionBinding binding = pending.binding;
+    SessionStartResponse response =
+        new SessionStartResponse(
+            binding.sessionId(),
+            binding.recordingEnabled(),
+            binding.recordingId(),
+            binding.startTick(),
+            binding.recordingFailureReason(),
+            request.getClientRequestId());
+    response.setShadowRunId(binding.shadowRunId());
+    negotiateFrames(binding.sessionId(), response);
+
+    try {
+      wsSession.sendMessage(new TextMessage(objectMapper.writeValueAsString(response)));
+      log.info(
+          "Rebound Micro6 connection {} to debug session {} during reconnect grace",
+          wsId,
+          binding.sessionId());
+    } catch (Exception e) {
+      log.error(
+          "Failed to send reconnect response for session {}; returning it to reconnect grace",
+          binding.sessionId(),
+          e);
+      deferActiveFinalization(wsSession, "reconnect response failure");
+      try {
+        wsSession.close(CloseStatus.SERVER_ERROR);
+      } catch (Exception closeFailure) {
+        log.debug("Failed to close socket after reconnect response failure", closeFailure);
+      }
+    }
+    return true;
+  }
+
   /**
    * Unified cleanup for a failed session-start transaction.
    *
@@ -524,6 +811,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       boolean sendError) {
     String wsId = wsSession.getId();
     SessionBinding binding = sessionBindings.get(wsId);
+    if (binding != null) clearFrameStream(binding.sessionId());
     if (binding == null) {
       // Nothing was bound; release any lingering preferred reservation, then deliver the error.
       releaseReservationsForWsId(wsId);
@@ -639,8 +927,8 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     SessionBinding binding = sessionBindings.get(session.getId());
     if (binding == null) {
       log.warn("Rejecting tick batch on connection {}: SESSION_NOT_BOUND", session.getId());
-      sendErrorResponse(
-          session, "SESSION_NOT_BOUND", "Send SESSION_START before sending ticks", null);
+      sendBatchErrorResponse(
+          session, "SESSION_NOT_BOUND", "Send SESSION_START before sending ticks", batchId(root));
       return;
     }
     if (binding.phase() != BindingPhase.ACTIVE) {
@@ -648,14 +936,15 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
           "Rejecting tick batch on connection {} for session {}: SESSION_STOPPING",
           session.getId(),
           binding.sessionId());
-      sendErrorResponse(
+      sendBatchErrorResponse(
           session,
           "SESSION_STOPPING",
           "This connection no longer accepts ticks for its session",
-          null);
+          batchId(root));
       return;
     }
     try {
+      JsonNode exactWireDocument = root;
       int negotiated =
           (Integer) session.getAttributes().getOrDefault("selectedTickBatchVersion", 2);
       if (root.path("schemaVersion").asInt() != negotiated) {
@@ -719,11 +1008,11 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
             session.getId(),
             binding.sessionId(),
             batch.getSessionId());
-        sendErrorResponse(
+        sendBatchErrorResponse(
             session,
             "SESSION_ID_MISMATCH",
             "The tick session does not match the connection binding",
-            null);
+            batchId(root));
         return;
       }
 
@@ -734,16 +1023,34 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
           batch.getLogs() != null ? batch.getLogs().size() : 0,
           batch.getOverlays() != null ? batch.getOverlays().size() : 0);
 
-      // Shadow evaluation and publication run synchronously in received WebSocket order; the
-      // resulting decision is broadcast before the existing asynchronous tick-ingestion path
-      // continues. A shadow evaluation/publication failure must never prevent tick ingestion, so
-      // they live in separate error boundaries: try shadow evaluation/publication, finally process
-      // tick ingestion.
+      // Persistence is synchronous and transactional. The ACK is emitted only after the service
+      // returns successfully; a failure therefore leaves the exact client batch eligible for retry.
+      if (batch.getCanonicalFrame() != null) {
+        // CanonicalFrameStore supplied the durable ACK above. Legacy UI projection is
+        // observational: failure cannot revoke that receipt or authorize a second ACK.
+        try {
+          ingestionService.processTickBatch(batch, exactWireDocument);
+        } catch (RuntimeException projectionFailure) {
+          log.warn("Canonical frame committed but legacy projection failed", projectionFailure);
+        }
+      } else {
+        TickBatchAcknowledgment acknowledgment =
+            ingestionService.processTickBatch(batch, exactWireDocument);
+        if (acknowledgment == null) {
+          throw new IllegalStateException("Tick ingestion returned no acknowledgment");
+        }
+        sendBatchAcknowledgment(session, acknowledgment);
+      }
+
+      // Shadow evaluation is observational and must never be used as persistence evidence.
       try {
         shadowDecisionService.evaluateAndPublish(
             batch, binding.shadowRunId(), this::broadcastShadowDecision);
-      } finally {
-        ingestionService.processTickBatch(batch);
+      } catch (Exception shadowFailure) {
+        log.warn(
+            "Shadow evaluation failed after persisted batch {}: {}",
+            batch.getBatchId(),
+            shadowFailure.getMessage());
       }
 
     } catch (com.chromascape.web.recording.provenance.ProvenanceException e) {
@@ -751,6 +1058,348 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       sendErrorResponse(session, e.getCode(), "Invalid canonical tick frame", null);
     } catch (Exception e) {
       log.error("Error handling TICK_BATCH: {}", e.getMessage(), e);
+      String errorCode = mapTickBatchError(e);
+      sendBatchErrorResponse(session, errorCode, e.getMessage(), batchId(root));
+    }
+  }
+
+  private String batchId(JsonNode root) {
+    if (root == null || !root.has("batchId") || root.get("batchId").isNull()) {
+      return null;
+    }
+    String value = root.get("batchId").asText();
+    return value == null || value.isBlank() ? null : value;
+  }
+
+  private String mapTickBatchError(Exception error) {
+    String message = error.getMessage() == null ? "" : error.getMessage();
+    if (message.contains("BATCH_CHECKSUM_CONFLICT")) return "BATCH_CHECKSUM_CONFLICT";
+    if (message.contains("BATCH_WIRE_IDENTITY_MISMATCH")) return "BATCH_WIRE_IDENTITY_MISMATCH";
+    if (message.contains("BATCH_SESSION_MISMATCH")) return "BATCH_SESSION_MISMATCH";
+    if (message.contains("BATCH_ORDER_INVALID")) return "BATCH_ORDER_INVALID";
+    if (message.contains("ACTION_CHECKSUM_CONFLICT")) return "ACTION_CHECKSUM_CONFLICT";
+    if (message.contains("PACKET_")) return "BATCH_PACKET_INVALID";
+    if (error instanceof IllegalArgumentException) return "BATCH_INPUT_INVALID";
+    return "BATCH_PERSISTENCE_FAILED";
+  }
+
+  /**
+   * Cheap structural reservation for a SCREEN_FRAME message. Runs under the socket monitor and
+   * performs no pixel work: binding and stream identity, envelope shape, text size, declared
+   * dimensions, and sequence monotonicity. Returns the reserved work for processing outside the
+   * monitor, or null when the frame was rejected (rejections are reported inline with stable codes
+   * and bounded counters; rejected frames never touch the viewport or recording).
+   */
+  private FrameWork reserveScreenFrame(WebSocketSession session, JsonNode root) {
+    clientFrameMetrics.countReceived();
+    if (!frameFeedEnabled) {
+      clientFrameMetrics.countDroppedInvalid("FRAME_DISABLED");
+      return null;
+    }
+    SessionBinding binding = sessionBindings.get(session.getId());
+    if (binding == null) {
+      rejectFrame(session, "SESSION_NOT_BOUND", "Send SESSION_START before sending frames", null);
+      return null;
+    }
+    if (binding.phase() != BindingPhase.ACTIVE) {
+      rejectFrame(
+          session,
+          "SESSION_STOPPING",
+          "This connection no longer accepts frames for its session",
+          null);
+      return null;
+    }
+    JsonNode sessionNode = root.get("sessionId");
+    if (sessionNode == null
+        || !sessionNode.isTextual()
+        || !binding.sessionId().equals(sessionNode.asText())) {
+      rejectFrame(
+          session,
+          "SESSION_ID_MISMATCH",
+          "The frame session does not match the connection binding",
+          sessionNode != null && sessionNode.isTextual() ? sessionNode.asText() : null);
+      return null;
+    }
+    JsonNode widthNode = root.get("width");
+    JsonNode heightNode = root.get("height");
+    JsonNode seqNode = root.get("frameSeq");
+    if (widthNode == null
+        || !widthNode.isIntegralNumber()
+        || heightNode == null
+        || !heightNode.isIntegralNumber()
+        || seqNode == null
+        || !seqNode.isIntegralNumber()) {
+      rejectFrame(session, "FRAME_PAYLOAD_INVALID", "Screen frame envelope fields mistyped", null);
+      return null;
+    }
+    if (!root.path("schemaVersion").isIntegralNumber()
+        || !root.path("jpegBase64").isTextual()
+        || !root.path("mimeType").isTextual()
+        || !root.path("capturedAt").isTextual()) {
+      rejectFrame(session, "FRAME_PAYLOAD_INVALID", "Screen frame envelope fields mistyped", null);
+      return null;
+    }
+    try {
+      java.time.Instant.parse(root.get("capturedAt").asText());
+    } catch (RuntimeException invalid) {
+      rejectFrame(session, "FRAME_PAYLOAD_INVALID", "Invalid capture time", null);
+      return null;
+    }
+    ScreenFrameMessage frame;
+    try {
+      frame = objectMapper.treeToValue(root, ScreenFrameMessage.class);
+    } catch (Exception e) {
+      rejectFrame(session, "FRAME_PAYLOAD_INVALID", "Unparseable screen frame", null);
+      return null;
+    }
+    if (frame.getSchemaVersion() == null
+        || frame.getSchemaVersion() != SCREEN_FRAME_SCHEMA_VERSION) {
+      rejectFrame(session, "FRAME_PAYLOAD_INVALID", "Unsupported screen frame schema", null);
+      return null;
+    }
+    JsonNode streamNode = root.get("streamId");
+    if (streamNode == null || !streamNode.isTextual()) {
+      rejectFrame(session, "STREAM_ID_MISMATCH", "Screen frame carries no negotiated stream", null);
+      return null;
+    }
+    FrameStreamState stream = frameStreams.get(binding.sessionId());
+    if (stream == null || !stream.streamId().equals(frame.getStreamId())) {
+      rejectFrame(
+          session,
+          "STREAM_ID_MISMATCH",
+          "Screen frame stream is unknown or rotated; restart the session",
+          null);
+      return null;
+    }
+    if (!SCREEN_FRAME_MIME_TYPE.equals(frame.getMimeType())) {
+      rejectFrame(session, "FRAME_PAYLOAD_INVALID", "Unsupported screen frame media type", null);
+      return null;
+    }
+    if (frame.getFrameSeq() <= 0 || frame.getFrameSeq() <= stream.lastSeenSeq().get()) {
+      clientFrameMetrics.countDroppedInvalid("FRAME_STALE");
+      log.debug(
+          "Dropping client frame: duplicate or out-of-order sequence {}", frame.getFrameSeq());
+      return null;
+    }
+    String payload = frame.getJpegBase64();
+    if (payload == null || payload.isBlank()) {
+      rejectFrame(session, "FRAME_PAYLOAD_INVALID", "Screen frame carries no pixels", null);
+      return null;
+    }
+    if (payload.length() > SCREEN_FRAME_MAX_BASE64_CHARS) {
+      rejectFrame(session, "FRAME_TOO_LARGE", "Screen frame exceeds the size bound", null);
+      return null;
+    }
+    if (frame.getWidth() < 1
+        || frame.getWidth() > SCREEN_FRAME_MAX_EDGE
+        || frame.getHeight() < 1
+        || frame.getHeight() > SCREEN_FRAME_MAX_EDGE
+        || (long) frame.getWidth() * frame.getHeight() > SCREEN_FRAME_MAX_PIXELS) {
+      rejectFrame(session, "FRAME_PAYLOAD_INVALID", "Screen frame dimensions out of range", null);
+      return null;
+    }
+    long now = System.nanoTime();
+    long prior = stream.lastAcceptedNanos().get();
+    if (prior != 0 && now - prior < TimeUnit.SECONDS.toNanos(1) / SCREEN_FRAME_MAX_FPS) {
+      clientFrameMetrics.countDroppedInvalid("FRAME_RATE_LIMITED");
+      return null;
+    }
+    stream.lastAcceptedNanos().set(now);
+    // Reserve the sequence so a newer frame supersedes an older one still being processed.
+    stream.lastSeenSeq().set(frame.getFrameSeq());
+    return new FrameWork(
+        session.getId(),
+        binding.sessionId(),
+        stream.streamId(),
+        frame.getFrameSeq(),
+        frame.getWidth(),
+        frame.getHeight(),
+        payload,
+        frameFeedGeneration.get());
+  }
+
+  /**
+   * Decodes and publishes a reserved frame outside the socket monitor, so pixel work never delays
+   * tick traffic on the same connection. Revalidates the binding and stream identity first, so a
+   * stop, disconnect, or session rotation between reservation and processing drops the frame
+   * instead of publishing stale pixels. Publishes only while this frame is still the newest for its
+   * stream, keeping the viewport monotonic; a frame is never ACKed, retried, or persisted.
+   */
+  private void processScreenFrame(WebSocketSession session, FrameWork work) {
+    SessionBinding binding = sessionBindings.get(work.wsId());
+    if (binding == null
+        || !work.sessionId().equals(binding.sessionId())
+        || binding.phase() != BindingPhase.ACTIVE) {
+      rejectFrame(
+          session, "SESSION_STOPPING", "The session ended before the frame published", null);
+      return;
+    }
+    FrameStreamState stream = frameStreams.get(work.sessionId());
+    if (stream == null || !work.streamId().equals(stream.streamId())) {
+      rejectFrame(
+          session, "STREAM_ID_MISMATCH", "Screen frame stream rotated before publish", null);
+      return;
+    }
+    byte[] jpeg;
+    try {
+      jpeg = Base64.getDecoder().decode(work.jpegBase64());
+    } catch (Exception e) {
+      rejectFrame(session, "FRAME_DECODE_FAILED", "Screen frame pixels do not decode", null);
+      return;
+    }
+    if (jpeg.length > SCREEN_FRAME_MAX_JPEG_BYTES) {
+      rejectFrame(session, "FRAME_TOO_LARGE", "Screen frame exceeds the size bound", null);
+      return;
+    }
+    if (jpeg.length < 2 || (jpeg[0] & 0xFF) != 0xFF || (jpeg[1] & 0xFF) != 0xD8) {
+      rejectFrame(session, "FRAME_DECODE_FAILED", "Screen frame pixels do not decode", null);
+      return;
+    }
+    BufferedImage image;
+    try {
+      try (var input = ImageIO.createImageInputStream(new ByteArrayInputStream(jpeg))) {
+        var readers = ImageIO.getImageReaders(input);
+        if (!readers.hasNext()) throw new java.io.IOException("Unsupported image");
+        var reader = readers.next();
+        try {
+          reader.setInput(input, true, true);
+          int width = reader.getWidth(0), height = reader.getHeight(0);
+          if (width != work.width() || height != work.height()) {
+            rejectFrame(
+                session,
+                "FRAME_DIMENSION_MISMATCH",
+                "Declared and actual dimensions disagree",
+                null);
+            return;
+          }
+          // Allocation occurs only after actual metadata satisfies the already-bounded envelope.
+          image = reader.read(0);
+        } finally {
+          reader.dispose();
+        }
+      }
+    } catch (Exception e) {
+      rejectFrame(session, "FRAME_DECODE_FAILED", "Screen frame pixels do not decode", null);
+      return;
+    }
+    if (image == null) {
+      rejectFrame(session, "FRAME_DECODE_FAILED", "Screen frame pixels do not decode", null);
+      return;
+    }
+    if (image.getWidth() != work.width() || image.getHeight() != work.height()) {
+      rejectFrame(
+          session,
+          "FRAME_DIMENSION_MISMATCH",
+          "Declared and actual frame dimensions disagree",
+          null);
+      return;
+    }
+    if (isAttachedDriven()) {
+      // An open input session owns the pixels; the attached capture already shows this client.
+      clientFrameMetrics.countDroppedAttached();
+      log.debug(
+          "Dropping client frame {}: an attached input session owns the viewport", work.frameSeq());
+      return;
+    }
+    if (isDesktopWatchActive()) {
+      // An explicit desktop watch owns the pixels; never interleave two viewport sources.
+      clientFrameMetrics.countDroppedDesktopWatch();
+      log.debug(
+          "Dropping client frame {}: an explicit desktop watch owns the viewport", work.frameSeq());
+      return;
+    }
+    if (clientFrameViewport == null) {
+      clientFrameMetrics.countDroppedInvalid("VIEWPORT_UNAVAILABLE");
+      log.warn("Dropping client frame {}: no viewport is wired", work.frameSeq());
+      return;
+    }
+    if (work.frameSeq() <= stream.lastPublishedSeq().get()) {
+      clientFrameMetrics.countDroppedInvalid("FRAME_STALE");
+      log.debug("Dropping client frame {}: a newer frame already published", work.frameSeq());
+      return;
+    }
+    boolean queued =
+        clientFrameViewport.publishEncodedFrame(
+            jpeg,
+            image.getWidth(),
+            image.getHeight(),
+            publish -> {
+              synchronized (session) {
+                synchronized (TargetFrameRuntime.class) {
+                  SessionBinding current = sessionBindings.get(work.wsId());
+                  if (!frameFeedEnabled
+                      || frameFeedGeneration.get() != work.feedGeneration()
+                      || current == null
+                      || current.phase() != BindingPhase.ACTIVE
+                      || !current.sessionId().equals(work.sessionId())
+                      || frameStreams.get(work.sessionId()) != stream
+                      || stream.lastSeenSeq().get() != work.frameSeq()
+                      || stream.lastPublishedSeq().get() >= work.frameSeq()) return;
+                  if (isAttachedDriven()) {
+                    clientFrameMetrics.countDroppedAttached();
+                    return;
+                  }
+                  if (isDesktopWatchActive()) {
+                    clientFrameMetrics.countDroppedDesktopWatch();
+                    return;
+                  }
+                  publish.run();
+                  stream.lastPublishedSeq().set(work.frameSeq());
+                  clientFrameMetrics.countForwarded(work.width(), work.height());
+                  clientFrameMetrics.noteForwardedSession(work.sessionId());
+                }
+              }
+            });
+    if (!queued) clientFrameMetrics.countNoSubscribers();
+  }
+
+  /** Returns whether a real (non-view-only) input session currently owns the frames. */
+  private boolean isAttachedDriven() {
+    try {
+      return !(TargetFrameRuntime.requireActive() instanceof ViewOnlyFrameSource);
+    } catch (IllegalStateException noSource) {
+      return false;
+    }
+  }
+
+  /** Returns whether an explicit desktop watch currently owns the viewport pixels. */
+  private boolean isDesktopWatchActive() {
+    try {
+      return TargetFrameRuntime.requireActive() instanceof ViewOnlyFrameSource;
+    } catch (IllegalStateException noSource) {
+      return false;
+    }
+  }
+
+  /** Clears the negotiated screen-frame stream for a session ending by any path. */
+  private void clearFrameStream(String sessionId) {
+    if (sessionId != null) {
+      frameStreams.remove(sessionId);
+      clientFrameMetrics.sessionEnded(sessionId);
+    }
+  }
+
+  private void rejectFrame(WebSocketSession session, String code, String detail, String sessionId) {
+    clientFrameMetrics.countDroppedInvalid(code);
+    log.warn("Rejecting screen frame on connection {}: {}", session.getId(), code);
+    sendErrorResponse(session, code, detail, sessionId);
+  }
+
+  private void sendBatchAcknowledgment(
+      WebSocketSession session, TickBatchAcknowledgment acknowledgment) {
+    try {
+      Map<String, Object> response = new java.util.LinkedHashMap<>();
+      response.put("type", "TICK_BATCH_ACK");
+      response.put("schema", "tick-batch-ack/v1");
+      response.put("batchId", acknowledgment.batchId());
+      response.put("sessionId", acknowledgment.sessionId());
+      response.put("tick", acknowledgment.tick());
+      response.put("payloadChecksum", acknowledgment.payloadChecksum());
+      response.put("status", acknowledgment.status());
+      session.sendMessage(new TextMessage(objectMapper.writeValueAsString(response)));
+    } catch (Exception e) {
+      log.warn(
+          "Failed to send TICK_BATCH_ACK for {}: {}", acknowledgment.batchId(), e.getMessage());
     }
   }
 
@@ -870,6 +1519,24 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     }
   }
 
+  private boolean sendBatchErrorResponse(
+      WebSocketSession session, String error, String detail, String batchId) {
+    try {
+      java.util.LinkedHashMap<String, Object> response = new java.util.LinkedHashMap<>();
+      response.put("type", "ERROR");
+      response.put("error", error);
+      response.put("detail", detail);
+      if (batchId != null && !batchId.isBlank()) {
+        response.put("batchId", batchId);
+      }
+      session.sendMessage(new TextMessage(objectMapper.writeValueAsString(response)));
+      return true;
+    } catch (Exception e) {
+      log.error("Failed to send batch error response: {}", e.getMessage());
+      return false;
+    }
+  }
+
   /**
    * Removes one WebSocket's binding and, only when that removal actually succeeded, releases the
    * canonical ownership if it still points to this WebSocket.
@@ -878,6 +1545,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     synchronized (ownershipLock) {
       if (sessionBindings.remove(wsId, expected)) {
         sessionOwners.remove(expected.sessionId(), wsId);
+        clearFrameStream(expected.sessionId());
       }
     }
   }
@@ -896,6 +1564,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     synchronized (ownershipLock) {
       if (sessionBindings.remove(wsId, expected)) {
         sessionOwners.remove(expected.sessionId(), wsId);
+        clearFrameStream(expected.sessionId());
       }
       preferredReservations.entrySet().removeIf(e -> wsId.equals(e.getValue()));
     }
@@ -936,18 +1605,11 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     }
   }
 
-  /**
-   * Implicitly finalize the debug session bound to a WebSocket that experienced a transport error
-   * without sending an explicit SESSION_STOP.
-   *
-   * <p>For an {@code ACTIVE} binding, one implicit transport finalization is attempted; on success
-   * the binding and ownership are released, on failure the binding is retained in {@link
-   * BindingPhase#TRANSPORT_FINALIZATION_FAILED} for the close callback. Failed-start bindings are
-   * not finalized on transport error; their single retry is reserved for the close callback.
-   */
+  /** Defers finalization after a transport error so a replacement socket can resume the session. */
   private void finalizeOnTransportError(WebSocketSession wsSession) {
     String wsId = wsSession.getId();
     SessionBinding binding = sessionBindings.get(wsId);
+    if (binding != null) clearFrameStream(binding.sessionId());
     if (binding == null) {
       log.debug(
           "No debug session bound to WS session {} — nothing to finalize on transport error", wsId);
@@ -955,44 +1617,15 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     }
 
     switch (binding.phase()) {
-      case ACTIVE -> {
-        log.info(
-            "Implicit session stop on transport error for WS session {}, debugSessionId={}",
-            wsId,
-            binding.sessionId());
-        boolean finalizationSucceeded = false;
-        try {
-          sessionService.finalizeSessionOnDisconnect(binding.sessionId(), "transport error");
-          finalizationSucceeded = true;
-        } catch (Exception e) {
-          log.error(
-              "Failed to implicitly finalize session {} on transport error: {}",
-              binding.sessionId(),
-              e.getMessage(),
-              e);
-        } finally {
-          shadowDecisionService.cleanupSession(binding.sessionId(), binding.shadowRunId());
-        }
-        if (finalizationSucceeded) {
-          removeBindingAndOwnership(wsId, binding);
-        } else {
-          synchronized (ownershipLock) {
-            sessionBindings.replace(
-                wsId, binding, binding.withPhase(BindingPhase.TRANSPORT_FINALIZATION_FAILED));
-          }
-        }
-      }
+      case ACTIVE -> deferActiveFinalization(wsSession, "transport error");
       case STARTING, START_ROLLBACK_FAILED, START_RESPONSE_FAILED -> log.debug(
-          "Skipping transport-error finalization on WS session {} while start is in progress/failed (phase {})",
+          "Skipping transport-error finalization on WS session {} while start is in progress/failed"
+              + " (phase {})",
           wsId,
           binding.phase());
       case EXPLICIT_STOP_FAILED -> log.debug(
           "Skipping transport-error finalization on WS session {} while session {} awaits close "
               + "fallback",
-          wsId,
-          binding.sessionId());
-      case TRANSPORT_FINALIZATION_FAILED -> log.debug(
-          "Ignoring repeated transport-error finalization on WS session {} for session {}",
           wsId,
           binding.sessionId());
     }
@@ -1011,6 +1644,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
   private void finalizeOnDisconnect(WebSocketSession wsSession) {
     String wsId = wsSession.getId();
     SessionBinding binding = sessionBindings.get(wsId);
+    if (binding != null) clearFrameStream(binding.sessionId());
     if (binding == null) {
       log.debug(
           "No debug session bound to WS session {} — nothing to finalize on disconnect", wsId);
@@ -1020,7 +1654,8 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     switch (binding.phase()) {
       case STARTING, START_ROLLBACK_FAILED, START_RESPONSE_FAILED -> {
         log.info(
-            "Implicit session start cleanup on disconnect for WS session {}, debugSessionId={}, phase={}",
+            "Implicit session start cleanup on disconnect for WS session {}, debugSessionId={},"
+                + " phase={}",
             wsId,
             binding.sessionId(),
             binding.phase());
@@ -1029,26 +1664,8 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
         rollbackBinding(wsId, binding, "disconnect");
         removeBindingAndOwnershipAndReservation(wsId, binding);
       }
-      case ACTIVE -> {
-        log.info(
-            "Implicit session stop on disconnect for WS session {}, debugSessionId={}, shadowRunId={}",
-            wsId,
-            binding.sessionId(),
-            binding.shadowRunId());
-        try {
-          sessionService.finalizeSessionOnDisconnect(binding.sessionId(), "disconnect");
-        } catch (Exception e) {
-          log.error(
-              "Failed to implicitly finalize session {} on disconnect: {}",
-              binding.sessionId(),
-              e.getMessage(),
-              e);
-        } finally {
-          shadowDecisionService.cleanupSession(binding.sessionId(), binding.shadowRunId());
-          removeBindingAndOwnershipAndReservation(wsId, binding);
-        }
-      }
-      case EXPLICIT_STOP_FAILED, TRANSPORT_FINALIZATION_FAILED -> {
+      case ACTIVE -> deferActiveFinalization(wsSession, "disconnect");
+      case EXPLICIT_STOP_FAILED -> {
         log.info("Close fallback for WS session {}, debugSessionId={}", wsId, binding.sessionId());
         try {
           sessionService.finalizeSessionOnDisconnect(binding.sessionId(), "disconnect");
@@ -1066,6 +1683,83 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     }
   }
 
+  /** Detaches a dead socket and reserves its active session for a bounded reconnect window. */
+  private void deferActiveFinalization(WebSocketSession wsSession, String cause) {
+    String wsId = wsSession.getId();
+    SessionBinding binding = sessionBindings.get(wsId);
+    if (binding == null || binding.phase() != BindingPhase.ACTIVE) {
+      return;
+    }
+
+    PendingReconnect pending = new PendingReconnect(binding, cause);
+    synchronized (ownershipLock) {
+      if (!sessionBindings.remove(wsId, binding)) {
+        return;
+      }
+      sessionOwners.remove(binding.sessionId(), wsId);
+      preferredReservations.entrySet().removeIf(e -> wsId.equals(e.getValue()));
+      PendingReconnect previous = pendingReconnects.put(binding.sessionId(), pending);
+      if (previous != null && previous.timeout != null) {
+        previous.timeout.cancel(false);
+      }
+    }
+
+    long delayMillis = Math.max(1L, reconnectGraceMillis);
+    try {
+      pending.timeout =
+          reconnectScheduler.schedule(
+              () -> expireReconnectGrace(binding.sessionId(), pending.token),
+              delayMillis,
+              TimeUnit.MILLISECONDS);
+      log.info(
+          "Detached WS session {} from debug session {}; waiting {} ms for Micro6 reconnect ({})",
+          wsId,
+          binding.sessionId(),
+          delayMillis,
+          cause);
+    } catch (RuntimeException schedulingFailure) {
+      log.error(
+          "Could not schedule reconnect grace for session {}; finalizing now",
+          binding.sessionId(),
+          schedulingFailure);
+      expireReconnectGrace(binding.sessionId(), pending.token);
+    }
+  }
+
+  /** Finalizes only if the same pending reconnect generation still owns the grace reservation. */
+  private void expireReconnectGrace(String sessionId, String token) {
+    PendingReconnect pending;
+    synchronized (ownershipLock) {
+      pending = pendingReconnects.get(sessionId);
+      if (pending == null || !pending.token.equals(token)) {
+        return;
+      }
+      pendingReconnects.remove(sessionId, pending);
+    }
+
+    log.info(
+        "Reconnect grace expired for debug session {} after {}; finalizing session and recording",
+        sessionId,
+        pending.cause);
+    try {
+      sessionService.finalizeSessionOnDisconnect(sessionId, pending.cause + " grace expired");
+    } catch (Exception e) {
+      log.error(
+          "Failed to finalize session {} after reconnect grace: {}", sessionId, e.getMessage(), e);
+    } finally {
+      shadowDecisionService.cleanupSession(sessionId, pending.binding.shadowRunId());
+    }
+  }
+
+  @PreDestroy
+  void shutdownReconnectScheduler() {
+    reconnectScheduler.shutdownNow();
+    frameWorker.shutdownNow();
+    for (Map.Entry<String, PendingReconnect> entry : Map.copyOf(pendingReconnects).entrySet()) {
+      expireReconnectGrace(entry.getKey(), entry.getValue().token);
+    }
+  }
+
   /**
    * Broadcast a feed control message to connected Micro6 clients.
    *
@@ -1073,6 +1767,9 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
    * @return number of clients notified
    */
   public int broadcastFeedControl(boolean enabled) {
+    frameFeedEnabled = enabled;
+    if (!enabled) frameFeedGeneration.incrementAndGet();
+    clientFrameMetrics.setEnabled(enabled);
     if (micro6Clients.isEmpty()) {
       return 0;
     }

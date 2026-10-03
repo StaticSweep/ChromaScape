@@ -163,14 +163,21 @@ public class PatchLoopEvidenceService {
    * @return time window
    */
   private TimeWindow determineTimeWindow(PatchLoopIteration iteration, int timeWindowSeconds) {
-    // Use run times if available
+    // Use the full run span when both endpoints are known.
     if (iteration.getRunStartTime() != null && iteration.getRunEndTime() != null) {
       return new TimeWindow(iteration.getRunStartTime(), iteration.getRunEndTime());
     }
 
-    // Otherwise, use configured time window before iteration creation
-    LocalDateTime end = iteration.getCreatedAt();
-    LocalDateTime start = end.minusSeconds(timeWindowSeconds);
+    // Builder-goal runs only persist the end timestamp (the builder-goal path never records a run
+    // start), so anchor the fallback at the run's creation time. Anchoring *before* creation with
+    // only the configured window would place the window outside the run and silently clip every
+    // collected evidence item away.
+    LocalDateTime end =
+        iteration.getRunEndTime() != null ? iteration.getRunEndTime() : iteration.getCreatedAt();
+    LocalDateTime start = iteration.getRunEndTime() != null ? iteration.getCreatedAt() : null;
+    if (start == null || end == null || !start.isBefore(end)) {
+      start = end.minusSeconds(timeWindowSeconds);
+    }
     return new TimeWindow(start, end);
   }
 

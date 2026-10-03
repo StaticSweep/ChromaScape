@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.patchloop.AnalysisV2ContractSerializationTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:28:18.544Z" hostname="fedora" time="0.068">
+  <properties/>
+  <testcase name="testV2RequestSerialization()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ContractSerializationTest" time="0.012"/>
+  <testcase name="sessionBoundsRoundTripsItsOwnSerializedDerivedFields()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ContractSerializationTest" time="0.002"/>
+  <testcase name="testV2ResponseSerialization()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ContractSerializationTest" time="0.01"/>
+  <testcase name="testV2ResponseWithRecommendations()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ContractSerializationTest" time="0.011"/>
+  <testcase name="testV2PatchDraftChangeTypes()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ContractSerializationTest" time="0.002"/>
+  <testcase name="testV2FailureResponse()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ContractSerializationTest" time="0.008"/>
+  <testcase name="sessionBoundsRejectsUnknownOrTypoedFields()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ContractSerializationTest" time="0.011"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

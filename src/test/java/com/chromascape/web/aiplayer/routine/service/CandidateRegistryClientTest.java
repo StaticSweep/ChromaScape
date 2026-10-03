@@ -1,8 +1,8 @@
 package com.chromascape.web.aiplayer.routine.service;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 import com.sun.net.httpserver.HttpServer;
 import java.lang.reflect.Field;
@@ -25,9 +25,10 @@ class CandidateRegistryClientTest {
   void headerless404LookupIsRejectedByStatusBeforeContentLength() throws Exception {
     CandidateRegistryClient client = clientForStatus(404);
 
-    CandidateRegistryClient.RegistryException error = assertThrows(
-        CandidateRegistryClient.RegistryException.class,
-        () -> client.lookupEvidence(CANDIDATE_ID, HASH));
+    CandidateRegistryClient.RegistryException error =
+        assertThrows(
+            CandidateRegistryClient.RegistryException.class,
+            () -> client.lookupEvidence(CANDIDATE_ID, HASH));
 
     assertEquals("REGISTRY_REJECTED_404", error.getMessage());
   }
@@ -36,9 +37,10 @@ class CandidateRegistryClientTest {
   void headerless404DownloadIsRejectedByStatusBeforeContentLength() throws Exception {
     CandidateRegistryClient client = clientForStatus(404);
 
-    CandidateRegistryClient.RegistryException error = assertThrows(
-        CandidateRegistryClient.RegistryException.class,
-        () -> client.downloadEvidence(CANDIDATE_ID));
+    CandidateRegistryClient.RegistryException error =
+        assertThrows(
+            CandidateRegistryClient.RegistryException.class,
+            () -> client.downloadEvidence(CANDIDATE_ID));
 
     assertEquals("REGISTRY_REJECTED_404", error.getMessage());
   }
@@ -47,27 +49,33 @@ class CandidateRegistryClientTest {
   void headerless2xxStillRequiresContentLength() throws Exception {
     CandidateRegistryClient client = clientForStatus(200);
 
-    CandidateRegistryClient.RegistryException error = assertThrows(
-        CandidateRegistryClient.RegistryException.class,
-        () -> client.lookupEvidence(CANDIDATE_ID, HASH));
+    CandidateRegistryClient.RegistryException error =
+        assertThrows(
+            CandidateRegistryClient.RegistryException.class,
+            () -> client.lookupEvidence(CANDIDATE_ID, HASH));
 
     assertEquals("REGISTRY_RESPONSE_LENGTH_REQUIRED", error.getMessage());
   }
 
   @Test
   void lookupReturnsLiteralRawManifestBytesAndChecksBodyHash() throws Exception {
-    byte[] raw = "{\n  \"escaped\": \"\\u00e9\",\n  \"html\": \"<>&\"\n}\r\n".getBytes(StandardCharsets.UTF_8);
+    byte[] raw =
+        "{\n  \"escaped\": \"\\u00e9\",\n  \"html\": \"<>&\"\n}\r\n"
+            .getBytes(StandardCharsets.UTF_8);
     String hash = CandidateRegistryClient.hash(raw);
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-    server.createContext("/", exchange -> {
-      exchange.getResponseHeaders().set("X-Candidate-Manifest-SHA256", hash);
-      exchange.sendResponseHeaders(200, raw.length);
-      exchange.getResponseBody().write(raw);
-      exchange.close();
-    });
+    server.createContext(
+        "/",
+        exchange -> {
+          exchange.getResponseHeaders().set("X-Candidate-Manifest-SHA256", hash);
+          exchange.sendResponseHeaders(200, raw.length);
+          exchange.getResponseBody().write(raw);
+          exchange.close();
+        });
     server.start();
     CandidateRegistryClient client = clientForServer();
-    CandidateRegistryClient.RegistryManifestResponse response = client.lookupEvidence(CANDIDATE_ID, hash);
+    CandidateRegistryClient.RegistryManifestResponse response =
+        client.lookupEvidence(CANDIDATE_ID, hash);
     assertArrayEquals(raw, response.rawManifest());
     assertEquals(hash, response.manifestHash());
   }
@@ -76,16 +84,20 @@ class CandidateRegistryClientTest {
   void bodyHashMismatchIsRejected() throws Exception {
     byte[] raw = "{\"literal\":true}".getBytes(StandardCharsets.UTF_8);
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-    server.createContext("/", exchange -> {
-      exchange.getResponseHeaders().set("X-Candidate-Manifest-SHA256", HASH);
-      exchange.sendResponseHeaders(200, raw.length);
-      exchange.getResponseBody().write(raw);
-      exchange.close();
-    });
+    server.createContext(
+        "/",
+        exchange -> {
+          exchange.getResponseHeaders().set("X-Candidate-Manifest-SHA256", HASH);
+          exchange.sendResponseHeaders(200, raw.length);
+          exchange.getResponseBody().write(raw);
+          exchange.close();
+        });
     server.start();
     CandidateRegistryClient client = clientForServer();
-    CandidateRegistryClient.RegistryException error = assertThrows(CandidateRegistryClient.RegistryException.class,
-        () -> client.lookupEvidence(CANDIDATE_ID, CandidateRegistryClient.hash(raw)));
+    CandidateRegistryClient.RegistryException error =
+        assertThrows(
+            CandidateRegistryClient.RegistryException.class,
+            () -> client.lookupEvidence(CANDIDATE_ID, CandidateRegistryClient.hash(raw)));
     assertEquals("REGISTRY_MANIFEST_HASH_HEADER_MISSING", error.getMessage());
   }
 
@@ -94,15 +106,19 @@ class CandidateRegistryClientTest {
     byte[] raw = "{\"literal\":true}".getBytes(StandardCharsets.UTF_8);
     String bodyHash = CandidateRegistryClient.hash(raw);
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-    server.createContext("/", exchange -> {
-      exchange.getResponseHeaders().set("X-Candidate-Manifest-SHA256", bodyHash);
-      exchange.sendResponseHeaders(200, raw.length);
-      exchange.getResponseBody().write(raw);
-      exchange.close();
-    });
+    server.createContext(
+        "/",
+        exchange -> {
+          exchange.getResponseHeaders().set("X-Candidate-Manifest-SHA256", bodyHash);
+          exchange.sendResponseHeaders(200, raw.length);
+          exchange.getResponseBody().write(raw);
+          exchange.close();
+        });
     server.start();
-    CandidateRegistryClient.RegistryException error = assertThrows(CandidateRegistryClient.RegistryException.class,
-        () -> clientForServer().lookupEvidence(CANDIDATE_ID, HASH));
+    CandidateRegistryClient.RegistryException error =
+        assertThrows(
+            CandidateRegistryClient.RegistryException.class,
+            () -> clientForServer().lookupEvidence(CANDIDATE_ID, HASH));
     assertEquals("REGISTRY_MANIFEST_HASH_HEADER_MISMATCH", error.getMessage());
   }
 
@@ -110,24 +126,33 @@ class CandidateRegistryClientTest {
   void truncatedBodyIsRejectedEvenWhenHashMatchesTheAvailableBytes() throws Exception {
     byte[] raw = "{\"literal\":true}".getBytes(StandardCharsets.UTF_8);
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-    server.createContext("/", exchange -> {
-      exchange.getResponseHeaders().set("X-Candidate-Manifest-SHA256", CandidateRegistryClient.hash(raw));
-      exchange.sendResponseHeaders(200, raw.length + 1L);
-      exchange.getResponseBody().write(raw);
-      exchange.close();
-    });
+    server.createContext(
+        "/",
+        exchange -> {
+          exchange
+              .getResponseHeaders()
+              .set("X-Candidate-Manifest-SHA256", CandidateRegistryClient.hash(raw));
+          exchange.sendResponseHeaders(200, raw.length + 1L);
+          exchange.getResponseBody().write(raw);
+          exchange.close();
+        });
     server.start();
-    CandidateRegistryClient.RegistryException error = assertThrows(CandidateRegistryClient.RegistryException.class,
-        () -> clientForServer().lookupEvidence(CANDIDATE_ID, CandidateRegistryClient.hash(raw)));
+    CandidateRegistryClient.RegistryException error =
+        assertThrows(
+            CandidateRegistryClient.RegistryException.class,
+            () ->
+                clientForServer().lookupEvidence(CANDIDATE_ID, CandidateRegistryClient.hash(raw)));
     assertEquals("REGISTRY_RESPONSE_LENGTH_MISMATCH", error.getMessage());
   }
 
   private CandidateRegistryClient clientForStatus(int status) throws Exception {
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-    server.createContext("/", exchange -> {
-      exchange.sendResponseHeaders(status, -1);
-      exchange.close();
-    });
+    server.createContext(
+        "/",
+        exchange -> {
+          exchange.sendResponseHeaders(status, -1);
+          exchange.close();
+        });
     server.start();
     return clientForServer();
   }

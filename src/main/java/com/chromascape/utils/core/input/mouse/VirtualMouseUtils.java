@@ -1,7 +1,9 @@
 package com.chromascape.utils.core.input.mouse;
 
 import com.chromascape.base.BaseScript;
+import com.chromascape.utils.core.input.TargetInputSession;
 import com.chromascape.utils.core.input.remoteinput.Kinput;
+import com.chromascape.utils.core.input.remoteinput.MouseButton;
 import com.chromascape.utils.core.screen.window.ScreenManager;
 import com.chromascape.utils.core.state.BotState;
 import com.chromascape.utils.core.state.StateManager;
@@ -28,7 +30,7 @@ import org.apache.logging.log4j.Logger;
  * on a background thread. This ensures that slow hardware input calls do not slow down the physics
  * calculation.
  */
-public class VirtualMouseUtils {
+public class VirtualMouseUtils implements AutoCloseable {
 
   /** The current virtual mouse position. */
   private Point currentPosition;
@@ -36,6 +38,9 @@ public class VirtualMouseUtils {
   /** Shared virtual mouse position for debug overlays. */
   private static final AtomicReference<Point> currentScreenPosition =
       new AtomicReference<>(new Point(0, 0));
+
+  /** Whether the shared position is already in client-relative coordinates. */
+  private static final AtomicBoolean sharedPositionIsClientRelative = new AtomicBoolean();
 
   /** Timestamp of the last overlay repaint to control frame rate. */
   private long lastOverlayUpdate = 0;
@@ -45,6 +50,12 @@ public class VirtualMouseUtils {
 
   /** Interface for injecting low-level mouse events independently of system mouse. */
   private final Kinput kinput;
+
+  /** Neutral target-owned backend; {@code null} on the legacy KInput path. */
+  private final TargetInputSession session;
+
+  /** Stops the consumer and prevents calls after close. */
+  private final AtomicBoolean closed = new AtomicBoolean(false);
 
   /** Random number generator. */
   private final Random random;
@@ -85,6 +96,7 @@ public class VirtualMouseUtils {
    */
   public VirtualMouseUtils(final Kinput kinput, final Rectangle bounds) {
     this.kinput = kinput;
+    this.session = null;
     overlay = new MouseOverlay();
     overlay.setSize(bounds.width, bounds.height);
 
@@ -95,6 +107,7 @@ public class VirtualMouseUtils {
     int startX = bounds.x + random.nextInt(bounds.width);
     int startY = bounds.y + random.nextInt(bounds.height);
     currentPosition = new Point(startX, startY);
+    sharedPositionIsClientRelative.set(false);
     updateSharedPosition(currentPosition);
     // Initialize atomic reference to prevent null pointer in consumer
     pendingInputPoint.set(currentPosition);
@@ -110,24 +123,79 @@ public class VirtualMouseUtils {
   }
 
   /**
+   * Constructs a mouse utility over a target-owned session.
+   *
+   * <p>Public coordinates are client-relative pixels inside {@link
+   * TargetInputSession#getTargetBounds()}; no second conversion happens anywhere in this class.
+   *
+   * @param session the attached target-owned session
+   */
+  public VirtualMouseUtils(final TargetInputSession session) {
+    this.kinput = null;
+    this.session = session;
+    Rectangle bounds = session.getTargetBounds();
+    overlay = new MouseOverlay();
+    overlay.setSize(bounds.width, bounds.height);
+    random = new Random();
+    windMouse = new WindMouse();
+    currentPosition = new Point(bounds.x, bounds.y);
+    sharedPositionIsClientRelative.set(true);
+    updateSharedPosition(currentPosition);
+    pendingInputPoint.set(currentPosition);
+    SwingUtilities.invokeLater(() -> overlay.setMousePoint(currentPosition));
+    overlay.setLocation(bounds.x, bounds.y);
+    inputConsumerThread = new Thread(this::consumeInputLoop, "VirtualMouse-Input-Consumer");
+    inputConsumerThread.setDaemon(true);
+    inputConsumerThread.start();
+  }
+
+  /**
+   * Converts a public-space point to the backend coordinate space. The legacy path translates
+   * screen coordinates to client coordinates; the session path is already client-relative.
+   *
+   * @param point the public-space point
+   * @return the backend-space point
+   */
+  private Point toBackendPoint(Point point) {
+    return session != null ? new Point(point) : ScreenManager.toClientCoords(point);
+  }
+
+  /**
+   * Sends an already backend-space point to the active backend. Never converts again: callers pass
+   * the result of {@link #toBackendPoint(Point)} exactly once.
+   *
+   * @param backendPoint the backend-space point
+   */
+  private void moveBackend(Point backendPoint) {
+    if (closed.get()) {
+      return;
+    }
+    if (session != null) {
+      session.moveMouse(backendPoint);
+    } else {
+      kinput.moveMouse(backendPoint.x, backendPoint.y);
+    }
+  }
+
+  /**
    * The loop for the background thread. Continuously checks for new points and sends them to
    * Kinput.
    */
   private void consumeInputLoop() {
     Point lastSentPoint = null;
 
-    while (true) {
+    while (!closed.get()) {
       try {
         if (isMoving.get()) {
           Point target = pendingInputPoint.get();
 
           // Only send input if the point is new (and not null)
           if (target != null && !target.equals(lastSentPoint)) {
-            Point clientPoint = ScreenManager.toClientCoords(target);
+            Point clientPoint = toBackendPoint(target);
 
             // Prevent collision with clicks or final snaps
             synchronized (kinputLock) {
-              kinput.moveMouse(clientPoint.x, clientPoint.y);
+              moveBackend(clientPoint);
             }
 
             lastSentPoint = target;
@@ -137,9 +205,10 @@ public class VirtualMouseUtils {
           BaseScript.waitMillis(5);
         }
       } catch (Exception e) {
-        // Log error but keep thread alive
-        logger.error("Error while consuming inputL {}", e.getMessage());
-        logger.error(e.getStackTrace());
+        if (!closed.get()) {
+          logger.error("Error while consuming input: {}", e.getMessage(), e);
+        }
+        break;
       }
     }
   }
@@ -191,11 +260,11 @@ public class VirtualMouseUtils {
       pendingInputPoint.set(target); // Sync consumer for safety
       updateSharedPosition(target);
 
-      Point finalClientPoint = ScreenManager.toClientCoords(target);
+      Point finalClientPoint = toBackendPoint(target);
 
       // SYNCHRONIZED: Ensure final snap doesn't crash connection
       synchronized (kinputLock) {
-        kinput.moveMouse(finalClientPoint.x, finalClientPoint.y);
+        moveBackend(finalClientPoint);
       }
 
       SwingUtilities.invokeLater(() -> overlay.setMousePoint(target));
@@ -204,6 +273,10 @@ public class VirtualMouseUtils {
 
   /** Simulates a left-click at the current virtual mouse location. */
   public void leftClick() {
+    if (session != null) {
+      clickWithSession(MouseButton.LEFT);
+      return;
+    }
     performClick(
         (p) -> {
           synchronized (kinputLock) {
@@ -216,6 +289,10 @@ public class VirtualMouseUtils {
 
   /** Simulates a right-click at the current virtual mouse location. */
   public void rightClick() {
+    if (session != null) {
+      clickWithSession(MouseButton.RIGHT);
+      return;
+    }
     performClick(
         (p) -> {
           synchronized (kinputLock) {
@@ -231,12 +308,38 @@ public class VirtualMouseUtils {
    * @param eventType The event code (501 for press, 502 for release).
    */
   public void middleClick(int eventType) {
+    if (session != null) {
+      if (eventType != 501 && eventType != 502) {
+        throw new IllegalArgumentException("Invalid mouse event: " + eventType);
+      }
+      recordInputAction();
+      if (eventType == 501) {
+        session.holdMouse(MouseButton.MIDDLE);
+      } else {
+        session.releaseMouse(MouseButton.MIDDLE);
+      }
+      return;
+    }
     performClick(
         (p) -> {
           synchronized (kinputLock) {
             kinput.middleInput(p.x, p.y, eventType);
           }
         });
+  }
+
+  private void clickWithSession(MouseButton button) {
+    recordInputAction();
+    synchronized (kinputLock) {
+      session.holdMouse(button);
+      session.releaseMouse(button);
+    }
+  }
+
+  private static void recordInputAction() {
+    BaseScript.checkInterrupted();
+    StateManager.setState(BotState.ACTING);
+    StatisticsManager.incrementInputs();
   }
 
   /**
@@ -255,10 +358,10 @@ public class VirtualMouseUtils {
 
       // We can force this update directly as jitter is a single discrete action,
       // not a high-frequency loop.
-      Point clientPoint = ScreenManager.toClientCoords(currentPosition);
+      Point clientPoint = toBackendPoint(currentPosition);
 
       synchronized (kinputLock) {
-        kinput.moveMouse(clientPoint.x, clientPoint.y);
+        moveBackend(clientPoint);
       }
     }
   }
@@ -268,7 +371,7 @@ public class VirtualMouseUtils {
     BaseScript.checkInterrupted();
     StateManager.setState(BotState.ACTING);
     StatisticsManager.incrementInputs();
-    Point clientPoint = ScreenManager.toClientCoords(currentPosition);
+    Point clientPoint = toBackendPoint(currentPosition);
     action.accept(clientPoint);
   }
 
@@ -278,7 +381,8 @@ public class VirtualMouseUtils {
     if (screenPoint == null) {
       return null;
     }
-    return ScreenManager.toClientCoords(new Point(screenPoint));
+    Point snapshot = new Point(screenPoint);
+    return sharedPositionIsClientRelative.get() ? snapshot : ScreenManager.toClientCoords(snapshot);
   }
 
   private static void updateSharedPosition(Point point) {
@@ -294,5 +398,72 @@ public class VirtualMouseUtils {
    */
   public MouseOverlay getMouseOverlay() {
     return overlay;
+  }
+
+  /**
+   * Presses and holds a mouse button on the target-owned session.
+   *
+   * @param button the button
+   * @throws IllegalStateException when this utility runs on the legacy KInput path
+   */
+  public void holdMouseButton(MouseButton button) {
+    requireSession();
+    session.holdMouse(button);
+  }
+
+  /**
+   * Releases a held mouse button on the target-owned session.
+   *
+   * @param button the button
+   * @throws IllegalStateException when this utility runs on the legacy KInput path
+   */
+  public void releaseMouseButton(MouseButton button) {
+    requireSession();
+    session.releaseMouse(button);
+  }
+
+  /**
+   * Returns whether a mouse button is currently held by the target-owned session.
+   *
+   * @param button the button
+   * @throws IllegalStateException when this utility runs on the legacy KInput path
+   */
+  public boolean isMouseButtonHeld(MouseButton button) {
+    requireSession();
+    return session.isMouseHeld(button);
+  }
+
+  /**
+   * Scrolls the mouse wheel on the target-owned session.
+   *
+   * @param notches the number of notches; positive scrolls down
+   * @throws IllegalStateException when this utility runs on the legacy KInput path
+   */
+  public void scrollMouse(int notches) {
+    requireSession();
+    session.scrollMouse(notches);
+  }
+
+  private void requireSession() {
+    if (session == null) {
+      throw new IllegalStateException("A target-owned session is required for this operation");
+    }
+  }
+
+  /** Stops this utility's consumer thread and overlay; the controller owns the shared session. */
+  @Override
+  public void close() {
+    if (!closed.compareAndSet(false, true)) {
+      return;
+    }
+    isMoving.set(false);
+    pendingInputPoint.set(null);
+    inputConsumerThread.interrupt();
+    try {
+      inputConsumerThread.join(1000);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
+    SwingUtilities.invokeLater(overlay::eraseOverlay);
   }
 }

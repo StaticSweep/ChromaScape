@@ -11,7 +11,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Files;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -104,7 +103,7 @@ class ProviderRuntimeBoundaryTest {
   }
 
   @Test
-  void processRunnerBoundsOutputAndClassifiesTimeoutAsUncertain() {
+  void processRunnerBoundsOutputAndClassifiesTimeoutAsUncertain() throws Exception {
     ProviderRuntimeProperties properties = new ProviderRuntimeProperties();
     properties.setWorkRoot(temporary.resolve("work"));
     properties.setMaxStdoutBytes(4096);
@@ -116,34 +115,48 @@ class ProviderRuntimeBoundaryTest {
         runner.run("turn-success", echo, List.of(), "decision", Instant.now().plusSeconds(10));
     assertTrue(success.submitted());
     assertTrue(success.terminal());
-    assertEquals("decision", success.stdout());
+    assertEquals("decision", success.stdout().strip(), success::toString);
 
     var overflow =
         runner.run(
-            "turn-overflow", echo, List.of(), "x".repeat(5000), Instant.now().plusSeconds(10));
+            "turn-overflow",
+            fixtureCommand("overflow"),
+            List.of(),
+            "x".repeat(5000),
+            Instant.now().plusSeconds(10));
     assertEquals(ProviderRuntimeModels.FailureCode.INVALID_OUTPUT, overflow.failureCode());
 
-    var timeout =
+    var firstEventTimeout =
         runner.run(
             "turn-timeout", fixtureCommand("sleep"), List.of(), "", Instant.now().plusMillis(100));
-    assertTrue(timeout.submitted());
-    assertEquals(ProviderRuntimeModels.FailureCode.UNKNOWN_PROVIDER_OUTCOME, timeout.failureCode());
+    assertTrue(firstEventTimeout.submitted());
+    assertEquals(
+        ProviderRuntimeModels.FailureCode.FIRST_EVENT_TIMEOUT, firstEventTimeout.failureCode());
+
+    var turnTimeout =
+        runner.run(
+            "turn-total-timeout",
+            fixtureCommand("event-then-sleep"),
+            List.of(),
+            "",
+            Instant.now().plusMillis(1_000));
+    assertTrue(turnTimeout.submitted());
+    assertEquals(
+        ProviderRuntimeModels.FailureCode.UNKNOWN_PROVIDER_OUTCOME, turnTimeout.failureCode());
   }
 
-  private List<String> fixtureCommand(String mode) {
-    List<String> command = new ArrayList<>();
-    command.add(
+  private List<String> fixtureCommand(String mode) throws Exception {
+    return List.of(
+        ProcessHandle.current().info().command().orElseThrow(),
+        "-cp",
         java.nio.file.Path.of(
-                System.getProperty("java.home"), "bin", isWindows() ? "java.exe" : "java")
-            .toString());
-    command.add("-cp");
-    command.add(System.getProperty("java.class.path"));
-    command.add(ProviderProcessFixture.class.getName());
-    command.add(mode);
-    return command;
-  }
-
-  private boolean isWindows() {
-    return System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win");
+                ProviderProcessFixture.class
+                    .getProtectionDomain()
+                    .getCodeSource()
+                    .getLocation()
+                    .toURI())
+            .toString(),
+        ProviderProcessFixture.class.getName(),
+        mode);
   }
 }

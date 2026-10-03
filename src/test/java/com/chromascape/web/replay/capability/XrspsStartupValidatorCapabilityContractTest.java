@@ -39,13 +39,14 @@ class XrspsStartupValidatorCapabilityContractTest {
           "openRuneAvailable": false,
           "certifiable": true,
           "modes": {"observedPlayback": false, "policyReplay": false, "causalSimulation": true},
-          "scenarioSchemaVersions": [1],
+          "scenarioSchemaVersions": [1, 2],
           "semanticActionVersions": [1],
           "snapshotVersions": [1],
           "projectionVersions": [1],
           "hashVersions": ["sha256-canonical-json-v1"],
-          "fidelity": "SYNTHETIC_CONTRACT",
+          "fidelity": "XRSPS_AUTHORITATIVE",
           "supportedActions": ["WAIT_UNTIL_TICK", "INTERACT_NPC"],
+          "viewerTraceSchema": "xrsps-replay-trace/v1",
           "xrsps": {
             "adapterVersion": "0.1.0",
             "buildCommit": "%s",
@@ -90,6 +91,7 @@ class XrspsStartupValidatorCapabilityContractTest {
           "hashVersions",
           "fidelity",
           "supportedActions",
+          "viewerTraceSchema",
           "xrsps"
         }) {
       ObjectNode copy = root.deepCopy();
@@ -238,10 +240,10 @@ class XrspsStartupValidatorCapabilityContractTest {
             .anyMatch(p -> p.contains("modes.causalSimulation=false is forbidden")));
 
     var extraVersions = (ObjectNode) m.readTree(valid());
-    extraVersions.set("snapshotVersions", m.createArrayNode().add(1).add(2));
+    extraVersions.set("scenarioSchemaVersions", m.createArrayNode().add(1).add(2).add(3));
     assertTrue(
         validator.validateRawDocument(extraVersions).stream()
-            .anyMatch(p -> p.contains("snapshotVersions must be exactly [1]")));
+            .anyMatch(p -> p.contains("scenarioSchemaVersions must be exactly [1, 2]")));
 
     var unknownHash = (ObjectNode) m.readTree(valid());
     unknownHash.set("hashVersions", m.createArrayNode().add("sha256-canonical-json-v2"));
@@ -289,7 +291,20 @@ class XrspsStartupValidatorCapabilityContractTest {
         "supportedActions", m.createArrayNode().add("WAIT_UNTIL_TICK").add("TELEPORT"));
     assertTrue(
         validator.validateRawDocument(unknownAction).stream()
-            .anyMatch(p -> p.contains("supportedActions must be exactly")));
+            .anyMatch(p -> p.contains("supportedActions contains an unknown action")));
+
+    var duplicateAction = (ObjectNode) m.readTree(valid());
+    duplicateAction.set(
+        "supportedActions", m.createArrayNode().add("WAIT_UNTIL_TICK").add("WAIT_UNTIL_TICK"));
+    assertTrue(
+        validator.validateRawDocument(duplicateAction).stream()
+            .anyMatch(p -> p.contains("supportedActions contains a duplicate action")));
+
+    var emptyActions = (ObjectNode) m.readTree(valid());
+    emptyActions.set("supportedActions", m.createArrayNode());
+    assertTrue(
+        validator.validateRawDocument(emptyActions).stream()
+            .anyMatch(p -> p.contains("supportedActions must contain at least one action")));
 
     var observedPlayback = (ObjectNode) m.readTree(valid());
     ((ObjectNode) observedPlayback.path("modes")).put("observedPlayback", true);

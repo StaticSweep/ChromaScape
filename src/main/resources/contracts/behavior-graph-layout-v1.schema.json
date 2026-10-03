@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.leeuwbot.dev/sc728/behavior-graph-layout/v1",
+  "$comment": "SC-728 presentation-only layout for a behavior graph. Coordinates, viewport, and display grouping are excluded from behavior-graph-definition content hashing; moving a node changes layout_hash and must not change graph_hash.",
+  "title": "behavior-graph-layout/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "schema_version", "graph_id", "layout_hash", "nodes", "viewport"],
+  "properties": {
+    "schema": { "const": "behavior-graph-layout/v1" },
+    "schema_version": { "const": "behavior-graph-layout/v1" },
+    "graph_id": { "$ref": "#/$defs/identifier" },
+    "layout_hash": { "$ref": "#/$defs/hash" },
+    "nodes": {
+      "type": "array",
+      "maxItems": 256,
+      "items": { "$ref": "#/$defs/nodePlacement" }
+    },
+    "viewport": { "$ref": "#/$defs/viewport" },
+    "groups": {
+      "type": "array",
+      "maxItems": 64,
+      "items": { "$ref": "#/$defs/group" }
+    }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "identifier": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+    "nodePlacement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "x", "y"],
+      "properties": {
+        "node_id": { "$ref": "#/$defs/identifier" },
+        "x": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "y": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "width": { "type": "number", "minimum": 1, "maximum": 10000 },
+        "height": { "type": "number", "minimum": 1, "maximum": 10000 }
+      }
+    },
+    "viewport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "zoom"],
+      "properties": {
+        "x": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "y": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "zoom": { "type": "number", "minimum": 0.1, "maximum": 4 }
+      }
+    },
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "node_ids"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "node_ids": {
+          "type": "array",
+          "maxItems": 256,
+          "items": { "$ref": "#/$defs/identifier" }
+        },
+        "collapsed": { "type": "boolean" }
+      }
+    }
+  }
+}

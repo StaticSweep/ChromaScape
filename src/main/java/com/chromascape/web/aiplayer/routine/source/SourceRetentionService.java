@@ -1,9 +1,9 @@
 package com.chromascape.web.aiplayer.routine.source;
 
-import com.chromascape.web.aiplayer.routine.source.persistence.SourceManifestReference;
-import com.chromascape.web.aiplayer.routine.source.persistence.SourceManifestReferenceRepository;
 import com.chromascape.web.aiplayer.routine.source.persistence.SourceContentObject;
 import com.chromascape.web.aiplayer.routine.source.persistence.SourceContentObjectRepository;
+import com.chromascape.web.aiplayer.routine.source.persistence.SourceManifestReference;
+import com.chromascape.web.aiplayer.routine.source.persistence.SourceManifestReferenceRepository;
 import java.time.Instant;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -26,12 +26,9 @@ public class SourceRetentionService {
     this.audit = audit;
   }
 
-  /** Compatibility constructor for focused tests that only exercise manifest retention. */
-  public SourceRetentionService(SourceManifestReferenceRepository manifests) {
-    this(manifests, null, new SourceReadAuditService());
-  }
-
-  /** Marks a manifest unavailable after retention expiry without deleting or reusing its identity. */
+  /**
+   * Marks a manifest unavailable after retention expiry without deleting or reusing its identity.
+   */
   @Transactional
   public SourceManifestReference prune(String manifestHash) {
     return prune(manifestHash, "system");
@@ -44,8 +41,15 @@ public class SourceRetentionService {
     if (transitioned) reference.setPrunedAt(Instant.now());
     SourceManifestReference result = manifests.save(reference);
     if (transitioned) {
-      audit.record(actor, "retention_prune", null, null, reference.getTaskKey(),
-          reference.getSnapshotId(), null, "SOURCE_PRUNED");
+      audit.record(
+          actor,
+          "retention_prune",
+          null,
+          null,
+          reference.getTaskKey(),
+          reference.getSnapshotId(),
+          null,
+          "SOURCE_PRUNED");
     }
     return result;
   }
@@ -63,8 +67,15 @@ public class SourceRetentionService {
     if (transitioned) reference.setRedactedAt(Instant.now());
     SourceManifestReference result = manifests.save(reference);
     if (transitioned) {
-      audit.record(actor, "retention_redact", null, null, reference.getTaskKey(),
-          reference.getSnapshotId(), null, "SOURCE_REDACTED");
+      audit.record(
+          actor,
+          "retention_redact",
+          null,
+          null,
+          reference.getTaskKey(),
+          reference.getSnapshotId(),
+          null,
+          "SOURCE_REDACTED");
     }
     return result;
   }
@@ -105,25 +116,41 @@ public class SourceRetentionService {
 
   private SourceManifestReference find(String manifestHash) {
     if (!SourceManifestContract.isHash(manifestHash)) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
-          HttpStatus.BAD_REQUEST, "manifest identity is invalid");
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
+          HttpStatus.BAD_REQUEST,
+          "manifest identity is invalid");
     }
-    return manifests.findByManifestHash(manifestHash).orElseThrow(() ->
-        new SourceManifestException(SourceManifestFailureCode.SOURCE_UNAVAILABLE,
-            HttpStatus.NOT_FOUND, "source manifest is unavailable"));
+    return manifests
+        .findByManifestHash(manifestHash)
+        .orElseThrow(
+            () ->
+                new SourceManifestException(
+                    SourceManifestFailureCode.SOURCE_UNAVAILABLE,
+                    HttpStatus.NOT_FOUND,
+                    "source manifest is unavailable"));
   }
 
   private SourceContentObject content(String contentHash) {
     if (!SourceManifestContract.isHash(contentHash)) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
-          HttpStatus.BAD_REQUEST, "content identity is invalid");
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
+          HttpStatus.BAD_REQUEST,
+          "content identity is invalid");
     }
     if (contentObjects == null) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_UNAVAILABLE,
-          HttpStatus.SERVICE_UNAVAILABLE, "source content retention is unavailable");
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_UNAVAILABLE,
+          HttpStatus.SERVICE_UNAVAILABLE,
+          "source content retention is unavailable");
     }
-    return contentObjects.findByContentHash(contentHash).orElseThrow(() ->
-        new SourceManifestException(SourceManifestFailureCode.SOURCE_UNAVAILABLE,
-            HttpStatus.NOT_FOUND, "source content is unavailable"));
+    return contentObjects
+        .findByContentHash(contentHash)
+        .orElseThrow(
+            () ->
+                new SourceManifestException(
+                    SourceManifestFailureCode.SOURCE_UNAVAILABLE,
+                    HttpStatus.NOT_FOUND,
+                    "source content is unavailable"));
   }
 }

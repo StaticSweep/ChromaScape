@@ -147,7 +147,8 @@ public class DeterministicRoutineAssistantProvider implements RoutineAssistantPr
   @SuppressWarnings("unchecked")
   private static List<Map<String, Object>> nodesOf(Map<String, Object> context) {
     Object definition = context == null ? null : context.get("graph_definition");
-    Object nodes = definition instanceof Map<?, ?> map ? ((Map<String, Object>) map).get("nodes") : null;
+    Object nodes =
+        definition instanceof Map<?, ?> map ? ((Map<String, Object>) map).get("nodes") : null;
     List<Map<String, Object>> result = new ArrayList<>();
     if (nodes instanceof List<?> list) {
       for (Object node : list) {

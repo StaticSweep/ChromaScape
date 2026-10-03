@@ -101,8 +101,7 @@ class ReplayArtifactServiceReuseTest {
     assertEquals(1, receipt.published().size());
     assertEquals(prepared.checksum(), receipt.published().get(0).checksum());
     assertEquals(
-        PublishedArtifact.PublicationDisposition.CREATED,
-        receipt.published().get(0).disposition());
+        PublishedArtifact.PublicationDisposition.CREATED, receipt.published().get(0).disposition());
     assertTrue(Files.exists(finalPathOf(prepared.checksum())));
     assertTrue(
         !Files.exists(tempRoot.resolve("staging").resolve(runId.toString())),
@@ -165,8 +164,7 @@ class ReplayArtifactServiceReuseTest {
             com.chromascape.web.replay.error.ReplayException.class,
             () -> service.readFinalized(ref));
     assertEquals(
-        com.chromascape.web.replay.error.ReplayErrorCode.CHECKSUM_MISMATCH,
-        failure.getErrorCode());
+        com.chromascape.web.replay.error.ReplayErrorCode.CHECKSUM_MISMATCH, failure.getErrorCode());
   }
 
   @Test

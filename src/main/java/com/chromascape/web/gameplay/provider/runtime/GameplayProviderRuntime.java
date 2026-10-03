@@ -29,6 +29,7 @@ public final class GameplayProviderRuntime implements ProviderDecisionHandoff {
   private final ProviderPromptBuilder promptBuilder;
   private final ProviderOutputNormalizer normalizer;
   private final RedactedTranscriptStore transcripts;
+  private final DurableProviderToolGateway toolGateway;
   private final Map<Provider, ProviderAdapter> adapters;
   private final ExecutorService executor = Executors.newFixedThreadPool(2);
 
@@ -39,6 +40,7 @@ public final class GameplayProviderRuntime implements ProviderDecisionHandoff {
       ProviderPromptBuilder promptBuilder,
       ProviderOutputNormalizer normalizer,
       RedactedTranscriptStore transcripts,
+      DurableProviderToolGateway toolGateway,
       List<ProviderAdapter> adapters) {
     this.properties = properties;
     this.validator = validator;
@@ -46,6 +48,7 @@ public final class GameplayProviderRuntime implements ProviderDecisionHandoff {
     this.promptBuilder = promptBuilder;
     this.normalizer = normalizer;
     this.transcripts = transcripts;
+    this.toolGateway = toolGateway;
     EnumMap<Provider, ProviderAdapter> byProvider = new EnumMap<>(Provider.class);
     adapters.forEach(adapter -> byProvider.put(adapter.provider(), adapter));
     this.adapters = Map.copyOf(byProvider);
@@ -150,19 +153,42 @@ public final class GameplayProviderRuntime implements ProviderDecisionHandoff {
 
   @Override
   public Optional<PersistedDecision> findValidatedDecision(String sessionId, String turnId) {
-    return store
-        .findTurn(sessionId, turnId)
-        .filter(value -> value.state() == TurnState.DECIDED && value.decision() != null)
-        .map(
-            value ->
-                new PersistedDecision(
-                    value.sessionId(),
-                    value.turnId(),
-                    value.requestId(),
-                    value.decisionDigest(),
-                    value.semanticActionDigest(),
-                    value.decision(),
-                    value.transcriptRef()));
+    Optional<TurnView> turn = store.findTurn(sessionId, turnId);
+    if (turn.isEmpty()
+        || turn.get().state() != TurnState.DECIDED
+        || turn.get().decision() == null) {
+      return Optional.empty();
+    }
+    TurnView value = turn.get();
+    SessionView session = store.findSession(sessionId).orElse(null);
+    if (session == null) {
+      return Optional.empty();
+    }
+    // The transcript artifact itself is verified here: the exact stored bytes are re-hashed and
+    // compared against the recorded reference. A transcriptSha256 value is therefore never a
+    // digest-shaped assumption; it is the verified content hash of the durable artifact.
+    RedactedTranscriptStore.Verification transcript = transcripts.verify(value.transcriptRef());
+    String transcriptSha256 = transcript.digest();
+    return Optional.of(
+        new PersistedDecision(
+            value.sessionId(),
+            value.turnId(),
+            value.requestId(),
+            value.provider(),
+            value.modelId(),
+            value.decisionDigest(),
+            value.semanticActionDigest(),
+            value.observationDigest(),
+            session.promptDigest(),
+            session.toolsetDigest(),
+            session.knowledgeDigest(),
+            session.goalPlanDigest(),
+            session.taskSkillDigests(),
+            value.transcriptRef(),
+            transcriptSha256,
+            value.state(),
+            value.failureCode(),
+            value.decision()));
   }
 
   void recoverAtStartup() {
@@ -192,21 +218,36 @@ public final class GameplayProviderRuntime implements ProviderDecisionHandoff {
                   request.turnId(),
                   session.modelId(),
                   promptBuilder.build(session, request),
-                  request.deadline()));
+                  request.deadline(),
+                  toolGateway.bind(session, request)));
       if (!result.terminal()) {
-        store.markNeedsReconciliation(request.turnId(), FailureCode.NEEDS_RECONCILIATION);
+        if (result.submitted()) {
+          store.markStreaming(request.turnId());
+          FailureCode reconciliationCode =
+              result.failureCode() == FailureCode.NONE
+                  ? FailureCode.NEEDS_RECONCILIATION
+                  : result.failureCode();
+          store.markNeedsReconciliation(request.turnId(), reconciliationCode);
+        } else {
+          store.finish(
+              request.turnId(),
+              failureState(result.failureCode()),
+              result.failureCode(),
+              null,
+              result.usage(),
+              null);
+        }
         return;
       }
       RedactedTranscriptStore.Artifact artifact = transcripts.store(result.redactedTranscript());
       store.recordTranscript(request.turnId(), artifact.reference(), artifact.byteLength());
+      if (result.submitted()) {
+        store.markStreaming(request.turnId());
+      }
       if (result.failureCode() != FailureCode.NONE) {
-        TurnState failureState =
-            result.failureCode() == FailureCode.PROVIDER_UNAVAILABLE
-                ? TurnState.PROVIDER_UNAVAILABLE
-                : TurnState.INTERNAL_FAILURE;
         store.finish(
             request.turnId(),
-            failureState,
+            failureState(result.failureCode()),
             result.failureCode(),
             null,
             result.usage(),
@@ -228,11 +269,15 @@ public final class GameplayProviderRuntime implements ProviderDecisionHandoff {
       FailureCode code = parseFailure(exception.failureCode());
       TurnView current = store.findTurn(session.sessionId(), request.turnId()).orElse(null);
       if (current != null && !current.state().terminal()) {
-        TurnState state =
-            code == FailureCode.TRANSCRIPT_PERSISTENCE_FAILED
-                ? TurnState.INTERNAL_FAILURE
-                : TurnState.INVALID_OUTPUT;
-        store.finish(request.turnId(), state, code, null, null, current.transcriptRef());
+        if (current.state() == TurnState.SUBMITTED || current.state() == TurnState.STREAMING) {
+          store.markNeedsReconciliation(request.turnId(), code);
+        } else {
+          TurnState state =
+              code == FailureCode.TRANSCRIPT_PERSISTENCE_FAILED
+                  ? TurnState.INTERNAL_FAILURE
+                  : TurnState.INVALID_OUTPUT;
+          store.finish(request.turnId(), state, code, null, null, current.transcriptRef());
+        }
       }
     } catch (RuntimeException exception) {
       TurnView current = store.findTurn(session.sessionId(), request.turnId()).orElse(null);
@@ -248,6 +293,19 @@ public final class GameplayProviderRuntime implements ProviderDecisionHandoff {
     } catch (IllegalArgumentException exception) {
       return FailureCode.INVALID_OUTPUT;
     }
+  }
+
+  private TurnState failureState(FailureCode code) {
+    return switch (code) {
+      case PROVIDER_UNAVAILABLE -> TurnState.PROVIDER_UNAVAILABLE;
+      case PROCESS_START_TIMEOUT,
+          FIRST_EVENT_TIMEOUT,
+          TOOL_RESPONSE_TIMEOUT,
+          PROCESS_TIMEOUT_BEFORE_SUBMISSION,
+          DEADLINE_EXPIRED -> TurnState.TIMEOUT;
+      case BUDGET_EXHAUSTED -> TurnState.BUDGET_EXHAUSTED;
+      default -> TurnState.INTERNAL_FAILURE;
+    };
   }
 
   private ProviderRuntimeProperties.ProviderProcess process(Provider provider) {

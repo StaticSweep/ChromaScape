@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.playback.ReplayPlaybackCursorCodecTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:41:45.949Z" hostname="fedora" time="0.007">
+  <properties/>
+  <testcase name="roundTripsUrlSafeUnpaddedCursor()" classname="com.chromascape.web.replay.playback.ReplayPlaybackCursorCodecTest" time="0.001"/>
+  <testcase name="malformedAndUnsupportedCursorsAreStableValidationErrors()" classname="com.chromascape.web.replay.playback.ReplayPlaybackCursorCodecTest" time="0.002"/>
+  <testcase name="nonPositiveIdsAndInvalidStartTimesAreRejected()" classname="com.chromascape.web.replay.playback.ReplayPlaybackCursorCodecTest" time="0.001"/>
+  <testcase name="missingCursorStartsAtTheBeginning()" classname="com.chromascape.web.replay.playback.ReplayPlaybackCursorCodecTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

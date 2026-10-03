@@ -50,6 +50,23 @@ public class RecordingConfig {
   /** Delay between initial frame-capture attempts while waiting for the canvas to become ready. */
   private long initialFrameRetryIntervalMs = 250;
 
+  /**
+   * How long the captured canvas size must remain unchanged before the recorder locks onto it.
+   *
+   * <p>RuneLite's canvas passes through transient sizes during startup; a value of {@code 0}
+   * accepts the first plausibly-sized frame (legacy behavior).
+   */
+  private long stabilityWindowMs = 1_500;
+
+  /**
+   * Minimum canvas width accepted as a stable recording size before the readiness deadline expires.
+   * Smaller stable canvases are used only as the deadline fallback.
+   */
+  private int minCaptureWidth = 640;
+
+  /** Minimum canvas height accepted as a stable recording size before the readiness deadline. */
+  private int minCaptureHeight = 400;
+
   public boolean isEnabled() {
     return enabled;
   }
@@ -144,6 +161,33 @@ public class RecordingConfig {
     this.initialFrameRetryIntervalMs = initialFrameRetryIntervalMs;
   }
 
+  /** Stability window for the captured canvas size, clamped to {@code [0, 10000]} ms. */
+  public long getStabilityWindowMs() {
+    return Math.max(0, Math.min(10_000, stabilityWindowMs));
+  }
+
+  public void setStabilityWindowMs(long stabilityWindowMs) {
+    this.stabilityWindowMs = stabilityWindowMs;
+  }
+
+  /** Minimum accepted stable canvas width, clamped to {@code [1, 7680]}. */
+  public int getMinCaptureWidth() {
+    return Math.max(1, Math.min(7_680, minCaptureWidth));
+  }
+
+  public void setMinCaptureWidth(int minCaptureWidth) {
+    this.minCaptureWidth = minCaptureWidth;
+  }
+
+  /** Minimum accepted stable canvas height, clamped to {@code [1, 4320]}. */
+  public int getMinCaptureHeight() {
+    return Math.max(1, Math.min(4_320, minCaptureHeight));
+  }
+
+  public void setMinCaptureHeight(int minCaptureHeight) {
+    this.minCaptureHeight = minCaptureHeight;
+  }
+
   @Override
   public String toString() {
     return "RecordingConfig{"
@@ -169,6 +213,12 @@ public class RecordingConfig {
         + getInitialFrameTimeoutMs()
         + ", initialFrameRetryIntervalMs="
         + getInitialFrameRetryIntervalMs()
+        + ", stabilityWindowMs="
+        + getStabilityWindowMs()
+        + ", minCaptureWidth="
+        + getMinCaptureWidth()
+        + ", minCaptureHeight="
+        + getMinCaptureHeight()
         + '}';
   }
 }

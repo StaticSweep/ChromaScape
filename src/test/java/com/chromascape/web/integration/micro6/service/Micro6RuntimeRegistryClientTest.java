@@ -9,8 +9,8 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * Focused tests for endpoint-reference hardening (SC-584A): malformed references are rejected with a
- * structured reason code before any HTTP traffic, and valid references still pass validation.
+ * Focused tests for endpoint-reference hardening (SC-584A): malformed references are rejected with
+ * a structured reason code before any HTTP traffic, and valid references still pass validation.
  */
 class Micro6RuntimeRegistryClientTest {
   private final ObjectMapper mapper = new ObjectMapper();

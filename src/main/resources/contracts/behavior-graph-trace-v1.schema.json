@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.leeuwbot.dev/sc728/behavior-graph-trace/v1",
+  "title": "behavior-graph-trace/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "schema_version", "graph_id", "graph_version", "run_id", "recording_id", "tick_range", "events", "authority", "control_allowed"],
+  "properties": {
+    "schema": { "const": "behavior-graph-trace/v1" }, "schema_version": { "const": "behavior-graph-trace/v1" },
+    "graph_id": { "$ref": "#/$defs/identifier" }, "graph_version": { "type": "integer", "minimum": 0, "maximum": 9223372036854775807 },
+    "run_id": { "$ref": "#/$defs/identifier" }, "recording_id": { "$ref": "#/$defs/identifier" }, "tick_range": { "$ref": "#/$defs/tickRange" },
+    "events": { "type": "array", "maxItems": 100000, "items": { "$ref": "#/$defs/event" } }, "authority": { "$ref": "#/$defs/authority" }, "control_allowed": { "const": false }
+  },
+  "$defs": {
+    "identifier": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,127}$" },
+    "tickRange": { "type": "object", "additionalProperties": false, "required": ["start", "end"], "properties": { "start": { "type": "integer", "minimum": 0, "maximum": 9223372036854775807 }, "end": { "type": "integer", "minimum": 0, "maximum": 9223372036854775807 } } },
+    "event": { "type": "object", "additionalProperties": false, "required": ["tick", "node_id", "outcome", "mode", "evidence_ids"], "properties": { "tick": { "type": "integer", "minimum": 0, "maximum": 9223372036854775807 }, "node_id": { "$ref": "#/$defs/identifier" }, "edge_id": { "$ref": "#/$defs/identifier" }, "outcome": { "type": "string", "minLength": 1, "maxLength": 128 }, "mode": { "enum": ["OBSERVE", "SIMULATE", "REPLAY"] }, "evidence_ids": { "type": "array", "maxItems": 64, "items": { "type": "string", "minLength": 1, "maxLength": 128 } } } },
+    "authority": { "type": "object", "additionalProperties": false, "required": ["can_write_source", "can_approve_patch", "can_publish_graph", "can_activate_model", "can_dispatch_input"], "properties": { "can_write_source": { "const": false }, "can_approve_patch": { "const": false }, "can_publish_graph": { "const": false }, "can_activate_model": { "const": false }, "can_dispatch_input": { "const": false } } }
+  }
+}

@@ -300,6 +300,9 @@ public class ReplayPlaybackService {
     frame.setCooldowns(objectOrEmpty(snapshot.getCooldowns()));
     frame.setQuest(objectOrEmpty(snapshot.getQuest()));
     frame.setQuestHelper(objectOrEmpty(snapshot.getQuestHelper()));
+    frame.setDialogue(objectOrEmpty(snapshot.getDialogue()));
+    frame.setSpells(arrayOrEmpty(snapshot.getSpells()));
+    frame.setVars(objectOrEmpty(snapshot.getVars()));
     frame.setNpcs(arrayOrEmpty(snapshot.getNpcs()));
     frame.setGameObjects(arrayOrEmpty(snapshot.getGameObjects()));
     frame.setGroundObjects(arrayOrEmpty(snapshot.getGroundObjects()));

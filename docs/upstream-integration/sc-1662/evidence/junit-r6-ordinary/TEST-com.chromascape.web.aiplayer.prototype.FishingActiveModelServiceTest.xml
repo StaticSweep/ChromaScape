@@ -1,0 +1,1202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:39:16.257Z" hostname="fedora" time="1.036">
+  <properties/>
+  <testcase name="every restore failure path clears the previously cached model" classname="com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest" time="0.111"/>
+  <testcase name="the newest model is never auto-activated" classname="com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest" time="0.015"/>
+  <testcase name="two simultaneous deactivations are safe and leave no active model" classname="com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest" time="0.038"/>
+  <testcase name="restore racing with activation and deactivation never leaves disk and cache on different models" classname="com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest" time="0.164"/>
+  <testcase name="an activation referencing a deleted model restores safely inactive" classname="com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest" time="0.005"/>
+  <testcase name="an activation referencing a model that lost replay validation restores safely" classname="com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest" time="0.023"/>
+  <testcase name="a missing, malformed, or unsupported model is rejected safely" classname="com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest" time="0.026"/>
+  <testcase name="a replay-validated model activates and survives service recreation" classname="com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest" time="0.026"/>
+  <testcase name="activate versus deactivate on the same model leaves disk and cache consistent" classname="com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest" time="0.112"/>
+  <testcase name="deactivation removes the active model and its persisted state" classname="com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest" time="0.025"/>
+  <testcase name="restore after the active model's activation file becomes corrupt clears the cache" classname="com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest" time="0.028"/>
+  <testcase name="a corrupt activation file starts safely with no active model" classname="com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest" time="0.008"/>
+  <testcase name="restore after the active model's activation file is deleted clears the cache" classname="com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest" time="0.022"/>
+  <testcase name="a failed activation retains the previous active model" classname="com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest" time="0.034"/>
+  <testcase name="a failed deactivation retains the current model and returns an error" classname="com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest" time="0.022"/>
+  <testcase name="listing models reports replay validation and active state" classname="com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest" time="0.029"/>
+  <testcase name="an unvalidated model is rejected" classname="com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest" time="0.016"/>
+  <testcase name="concurrent activation and deactivation never leaves disk and cache on different models" classname="com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest" time="0.319"/>
+  <testcase name="a missing activation file is a normal inactive state, not corruption" classname="com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest" time="0.004"/>
+  <system-out><![CDATA[12:39:16.312 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService@27a18433] or target class [class com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService] to value [/tmp/junit-4770822463882368503]
+12:39:16.342 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingActiveModelService@5ad07f8a] or target class [class com.chromascape.web.aiplayer.prototype.FishingActiveModelService] to value [/tmp/junit-4770822463882368503]
+12:39:16.359 [Test worker] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.360 [Test worker] WARN  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Could not restore active model fishing_missing: MODEL_NOT_FOUND (No model found for modelId fishing_missing)
+12:39:16.362 [Test worker] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.363 [Test worker] WARN  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Could not restore active model fishing_bad_schema: MODEL_SCHEMA_UNSUPPORTED (Model is not a supported fishing demonstration artifact)
+12:39:16.364 [Test worker] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.366 [Test worker] WARN  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Could not restore active model fishing_no_run: MODEL_NOT_REPLAY_VALIDATED (Model has no persisted PASSED held-out run and cannot be restored)
+12:39:16.367 [Test worker] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Restored active fishing model: fishing_abc
+12:39:16.372 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService@d4c6a43] or target class [class com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService] to value [/tmp/junit-17423775137695564921]
+12:39:16.383 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingActiveModelService@18bb7eca] or target class [class com.chromascape.web.aiplayer.prototype.FishingActiveModelService] to value [/tmp/junit-17423775137695564921]
+12:39:16.387 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService@546c43e0] or target class [class com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService] to value [/tmp/junit-8377657941852140805]
+12:39:16.402 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingActiveModelService@591e1df7] or target class [class com.chromascape.web.aiplayer.prototype.FishingActiveModelService] to value [/tmp/junit-8377657941852140805]
+12:39:16.418 [Test worker] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.421 [pool-4-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.421 [pool-4-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.426 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService@4bd5086d] or target class [class com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService] to value [/tmp/junit-7816075383532912023]
+12:39:16.440 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingActiveModelService@58bb50f9] or target class [class com.chromascape.web.aiplayer.prototype.FishingActiveModelService] to value [/tmp/junit-7816075383532912023]
+12:39:16.462 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.465 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.467 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.468 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.469 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.470 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.471 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.473 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.479 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.480 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.481 [pool-5-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Restored active fishing model: fishing_b
+12:39:16.482 [pool-5-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Restored active fishing model: fishing_b
+12:39:16.483 [pool-5-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Restored active fishing model: fishing_b
+12:39:16.483 [pool-5-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Restored active fishing model: fishing_b
+12:39:16.484 [pool-5-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Restored active fishing model: fishing_b
+12:39:16.488 [pool-5-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Restored active fishing model: fishing_b
+12:39:16.488 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.489 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.489 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.489 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.489 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.489 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.489 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.489 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.489 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.489 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.490 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.490 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.490 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.490 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.490 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.490 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.490 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.490 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.490 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.490 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.491 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.491 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.491 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.491 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.491 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.491 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.491 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.491 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.491 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.491 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.492 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.492 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.492 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.492 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.492 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.492 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.492 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.492 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.492 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.492 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.492 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.493 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.493 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.493 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.493 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.493 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.493 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.493 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.493 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.493 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.493 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.493 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.494 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.494 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.494 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.494 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.494 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.494 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.494 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.494 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.494 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.495 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.497 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.498 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.499 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.501 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.502 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.503 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.504 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.505 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.507 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.508 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.509 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.510 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.511 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.512 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.513 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.513 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.514 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.516 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.517 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.518 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.521 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.522 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.523 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.524 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.525 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.526 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.527 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.528 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.529 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.530 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.531 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.531 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.532 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.533 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.533 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.533 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.534 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.534 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.534 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.534 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.534 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.534 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.534 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.534 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.534 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.534 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.534 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.535 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.535 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.535 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.535 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.535 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.535 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.535 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.535 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.535 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.535 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.535 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.535 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.536 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.536 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.536 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.536 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.536 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.536 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.536 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.536 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.536 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.536 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.536 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.537 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.537 [pool-5-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.538 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.538 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.539 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.540 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.541 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.542 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.543 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.544 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.545 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.545 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.546 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.547 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.548 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.549 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.550 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.550 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.551 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.552 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.553 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.554 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.554 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.555 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.556 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.557 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.557 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.558 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.559 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.560 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.561 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.562 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.563 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.564 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.565 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.565 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.566 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.567 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.568 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.569 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.570 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.571 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.572 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.572 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.573 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.574 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.575 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.576 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.577 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.577 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.578 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.579 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.580 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.581 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.581 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.582 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.583 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:16.584 [pool-5-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:16.591 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService@59ba219d] or target class [class com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService] to value [/tmp/junit-13186205385158370997]
+12:39:16.592 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingActiveModelService@5cf69333] or target class [class com.chromascape.web.aiplayer.prototype.FishingActiveModelService] to value [/tmp/junit-13186205385158370997]
+12:39:16.593 [Test worker] WARN  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Could not restore active model fishing_deleted: MODEL_NOT_FOUND (No model found for modelId fishing_deleted)
+12:39:16.597 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService@4ed70448] or target class [class com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService] to value [/tmp/junit-7232196958999217081]
+12:39:16.607 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingActiveModelService@6aee292d] or target class [class com.chromascape.web.aiplayer.prototype.FishingActiveModelService] to value [/tmp/junit-7232196958999217081]
+12:39:16.615 [Test worker] WARN  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Could not restore active model fishing_no_run: MODEL_NOT_REPLAY_VALIDATED (Model has no persisted PASSED held-out run and cannot be restored)
+12:39:16.620 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService@299d1bd6] or target class [class com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService] to value [/tmp/junit-6863750944200656227]
+12:39:16.620 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingActiveModelService@4cecbf3e] or target class [class com.chromascape.web.aiplayer.prototype.FishingActiveModelService] to value [/tmp/junit-6863750944200656227]
+12:39:16.647 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService@15bb197] or target class [class com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService] to value [/tmp/junit-13420864018131218126]
+12:39:16.658 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingActiveModelService@27c510c5] or target class [class com.chromascape.web.aiplayer.prototype.FishingActiveModelService] to value [/tmp/junit-13420864018131218126]
+12:39:16.668 [Test worker] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.668 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingActiveModelService@3324f7fb] or target class [class com.chromascape.web.aiplayer.prototype.FishingActiveModelService] to value [/tmp/junit-13420864018131218126]
+12:39:16.669 [Test worker] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Restored active fishing model: fishing_abc
+12:39:16.673 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService@7b8247bc] or target class [class com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService] to value [/tmp/junit-6350900455881510247]
+12:39:16.685 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingActiveModelService@3a5ecb62] or target class [class com.chromascape.web.aiplayer.prototype.FishingActiveModelService] to value [/tmp/junit-6350900455881510247]
+12:39:16.701 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.702 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.703 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.703 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.703 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.703 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.703 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.703 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.703 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.703 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.703 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.703 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.703 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.704 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.704 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.704 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.704 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.704 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.704 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.704 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.704 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.704 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.704 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.704 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.704 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.704 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.705 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.706 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.706 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.706 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.706 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.707 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.707 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.707 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.707 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.707 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.707 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.707 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.707 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.707 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.707 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.707 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.707 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.707 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.707 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.707 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.708 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.708 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.708 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.708 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.708 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.708 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.708 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.708 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.709 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.710 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.710 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.711 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.713 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.714 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.714 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.715 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.715 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.715 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.715 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.716 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.716 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.716 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.716 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.716 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.716 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.716 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.716 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.716 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.716 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.716 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.717 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.717 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.717 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.717 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.718 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.718 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.719 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.720 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.720 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.721 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.722 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.723 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.724 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.724 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.725 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.726 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.727 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.727 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.728 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.729 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.730 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.730 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.731 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.732 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.732 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.733 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.734 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.735 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.735 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.736 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.737 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.737 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.738 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.739 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.739 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.740 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.741 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.741 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.742 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.743 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.744 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.744 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.745 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.746 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.746 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.747 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.748 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.749 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.749 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.750 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.751 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.751 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.751 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.751 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.751 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.751 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.751 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.751 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.751 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.751 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.751 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.751 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.751 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.752 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.752 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.752 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.752 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.752 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.752 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.752 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.752 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.752 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.752 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.752 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.752 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.752 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.752 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.752 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.752 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.753 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.753 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.753 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.753 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.753 [pool-6-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.753 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.754 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.755 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.755 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.756 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.757 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.758 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.758 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.759 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.760 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.761 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.761 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.762 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.763 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.763 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.764 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.765 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.765 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.766 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.767 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.767 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.768 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.769 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.769 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.770 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.771 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.771 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.772 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.773 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.773 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.774 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.774 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.775 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.776 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.777 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.778 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.778 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.779 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.780 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.780 [pool-6-thread-1] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.785 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService@727ed530] or target class [class com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService] to value [/tmp/junit-4495997010654543238]
+12:39:16.796 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingActiveModelService@56a640a2] or target class [class com.chromascape.web.aiplayer.prototype.FishingActiveModelService] to value [/tmp/junit-4495997010654543238]
+12:39:16.806 [Test worker] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.806 [Test worker] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:16.806 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingActiveModelService@584e4899] or target class [class com.chromascape.web.aiplayer.prototype.FishingActiveModelService] to value [/tmp/junit-4495997010654543238]
+12:39:16.811 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService@31d07dd9] or target class [class com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService] to value [/tmp/junit-5227518025037329592]
+12:39:16.821 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingActiveModelService@3335713] or target class [class com.chromascape.web.aiplayer.prototype.FishingActiveModelService] to value [/tmp/junit-5227518025037329592]
+12:39:16.832 [Test worker] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.833 [Test worker] WARN  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Failed to read activation state: Unrecognized token 'corrupt': was expecting (JSON String, Number, Array, Object or token 'null', 'true' or 'false')
+ at [Source: REDACTED (`StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION` disabled); line: 1, column: 9]
+12:39:16.843 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService@786f8cd2] or target class [class com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService] to value [/tmp/junit-1986669753601710846]
+12:39:16.843 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingActiveModelService@4b3abc1] or target class [class com.chromascape.web.aiplayer.prototype.FishingActiveModelService] to value [/tmp/junit-1986669753601710846]
+12:39:16.844 [Test worker] WARN  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Failed to read activation state: Unrecognized token 'corrupt': was expecting (JSON String, Number, Array, Object or token 'null', 'true' or 'false')
+ at [Source: REDACTED (`StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION` disabled); line: 1, column: 9]
+12:39:16.847 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService@26c8b723] or target class [class com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService] to value [/tmp/junit-8144276976866163711]
+12:39:16.857 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingActiveModelService@39ce0aba] or target class [class com.chromascape.web.aiplayer.prototype.FishingActiveModelService] to value [/tmp/junit-8144276976866163711]
+12:39:16.866 [Test worker] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.870 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService@3072b38f] or target class [class com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService] to value [/tmp/junit-5365558754644152864]
+12:39:16.886 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingActiveModelService@70fd1f5c] or target class [class com.chromascape.web.aiplayer.prototype.FishingActiveModelService] to value [/tmp/junit-5365558754644152864]
+12:39:16.895 [Test worker] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.897 [Test worker] ERROR com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Failed to persist activation state for fishing_new
+java.nio.file.FileSystemException: /tmp/junit-5365558754644152864/fishing/active-model.json.tmp -> /tmp/junit-5365558754644152864/fishing/active-model.json: Is a directory
+	at java.base/sun.nio.fs.UnixException.translateToIOException(UnixException.java:100) ~[?:?]
+	at java.base/sun.nio.fs.UnixException.rethrowAsIOException(UnixException.java:106) ~[?:?]
+	at java.base/sun.nio.fs.UnixCopyFile.move(UnixCopyFile.java:416) ~[?:?]
+	at java.base/sun.nio.fs.UnixFileSystemProvider.move(UnixFileSystemProvider.java:266) ~[?:?]
+	at java.base/java.nio.file.Files.move(Files.java:1432) ~[?:?]
+	at com.chromascape.web.aiplayer.prototype.FishingActiveModelService.writeActivationState(FishingActiveModelService.java:366) ~[main/:?]
+	at com.chromascape.web.aiplayer.prototype.FishingActiveModelService.activate(FishingActiveModelService.java:177) ~[main/:?]
+	at com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest.lambda$failedActivationRetainsPreviousModel$8(FishingActiveModelServiceTest.java:277) ~[test/:?]
+	at org.assertj.core.api.ThrowableAssert.catchThrowable(ThrowableAssert.java:63) ~[assertj-core-3.27.3.jar:?]
+	at org.assertj.core.api.AssertionsForClassTypes.catchThrowable(AssertionsForClassTypes.java:904) ~[assertj-core-3.27.3.jar:?]
+	at org.assertj.core.api.Assertions.catchThrowable(Assertions.java:1472) ~[assertj-core-3.27.3.jar:?]
+	at org.assertj.core.api.Assertions.assertThatThrownBy(Assertions.java:1315) ~[assertj-core-3.27.3.jar:?]
+	at com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest.failedActivationRetainsPreviousModel(FishingActiveModelServiceTest.java:277) ~[test/:?]
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method) ~[?:?]
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77) ~[?:?]
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43) ~[?:?]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569) ~[?:?]
+	at org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:775) ~[junit-platform-commons-1.12.2.jar:1.12.2]
+	at org.junit.platform.commons.support.ReflectionSupport.invokeMethod(ReflectionSupport.java:479) ~[junit-platform-commons-1.12.2.jar:1.12.2]
+	at org.junit.jupiter.engine.execution.MethodInvocation.proceed(MethodInvocation.java:60) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$ValidatingInvocation.proceed(InvocationInterceptorChain.java:131) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.extension.TimeoutExtension.intercept(TimeoutExtension.java:161) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestableMethod(TimeoutExtension.java:152) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestMethod(TimeoutExtension.java:91) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker$ReflectiveInterceptorCall.lambda$ofVoidMethod$0(InterceptingExecutableInvoker.java:112) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.lambda$invoke$0(InterceptingExecutableInvoker.java:94) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$InterceptedInvocation.proceed(InvocationInterceptorChain.java:106) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.proceed(InvocationInterceptorChain.java:64) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.chainAndInvoke(InvocationInterceptorChain.java:45) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.invoke(InvocationInterceptorChain.java:37) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:93) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:87) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.lambda$invokeTestMethod$7(TestMethodTestDescriptor.java:216) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.invokeTestMethod(TestMethodTestDescriptor.java:212) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:137) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:69) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:156) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511) ~[?:?]
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511) ~[?:?]
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.submit(SameThreadHierarchicalTestExecutorService.java:35) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestExecutor.execute(HierarchicalTestExecutor.java:57) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestEngine.execute(HierarchicalTestEngine.java:54) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:201) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:170) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:94) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.lambda$execute$0(EngineExecutionOrchestrator.java:59) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.withInterceptedStreams(EngineExecutionOrchestrator.java:142) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:58) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:103) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:85) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.InterceptingLauncher.lambda$execute$1(InterceptingLauncher.java:39) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.ClasspathAlignmentCheckingLauncherInterceptor.intercept(ClasspathAlignmentCheckingLauncherInterceptor.java:25) [junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.InterceptingLauncher.execute(InterceptingLauncher.java:38) [junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47) [junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.gradle.api.internal.tasks.testing.junitplatform.JUnitPlatformTestClassProcessor$CollectAllTestClassesExecutor.processAllTestClasses(JUnitPlatformTestClassProcessor.java:124) [gradle-testing-junit-platform-8.14.2.jar:8.14.2]
+	at org.gradle.api.internal.tasks.testing.junitplatform.JUnitPlatformTestClassProcessor$CollectAllTestClassesExecutor.access$000(JUnitPlatformTestClassProcessor.java:99) [gradle-testing-junit-platform-8.14.2.jar:8.14.2]
+	at org.gradle.api.internal.tasks.testing.junitplatform.JUnitPlatformTestClassProcessor.stop(JUnitPlatformTestClassProcessor.java:94) [gradle-testing-junit-platform-8.14.2.jar:8.14.2]
+	at org.gradle.api.internal.tasks.testing.SuiteTestClassProcessor.stop(SuiteTestClassProcessor.java:63) [gradle-testing-base-infrastructure-8.14.2.jar:8.14.2]
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method) ~[?:?]
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77) ~[?:?]
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43) ~[?:?]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569) ~[?:?]
+	at org.gradle.internal.dispatch.ReflectionDispatch.dispatch(ReflectionDispatch.java:36) [gradle-messaging-8.14.2.jar:8.14.2]
+	at org.gradle.internal.dispatch.ReflectionDispatch.dispatch(ReflectionDispatch.java:24) [gradle-messaging-8.14.2.jar:8.14.2]
+	at org.gradle.internal.dispatch.ContextClassLoaderDispatch.dispatch(ContextClassLoaderDispatch.java:33) [gradle-messaging-8.14.2.jar:8.14.2]
+	at org.gradle.internal.dispatch.ProxyDispatchAdapter$DispatchingInvocationHandler.invoke(ProxyDispatchAdapter.java:92) [gradle-messaging-8.14.2.jar:8.14.2]
+	at jdk.proxy1/jdk.proxy1.$Proxy4.stop(Unknown Source) [?:?]
+	at org.gradle.api.internal.tasks.testing.worker.TestWorker$3.run(TestWorker.java:200) [gradle-testing-base-infrastructure-8.14.2.jar:8.14.2]
+	at org.gradle.api.internal.tasks.testing.worker.TestWorker.executeAndMaintainThreadName(TestWorker.java:132) [gradle-testing-base-infrastructure-8.14.2.jar:8.14.2]
+	at org.gradle.api.internal.tasks.testing.worker.TestWorker.execute(TestWorker.java:103) [gradle-testing-base-infrastructure-8.14.2.jar:8.14.2]
+	at org.gradle.api.internal.tasks.testing.worker.TestWorker.execute(TestWorker.java:63) [gradle-testing-base-infrastructure-8.14.2.jar:8.14.2]
+	at org.gradle.process.internal.worker.child.ActionExecutionWorker.execute(ActionExecutionWorker.java:56) [gradle-worker-main-8.14.2.jar:8.14.2]
+	at org.gradle.process.internal.worker.child.SystemApplicationClassLoaderWorker.call(SystemApplicationClassLoaderWorker.java:122) [gradle-worker-main-8.14.2.jar:8.14.2]
+	at org.gradle.process.internal.worker.child.SystemApplicationClassLoaderWorker.call(SystemApplicationClassLoaderWorker.java:72) [gradle-worker-main-8.14.2.jar:8.14.2]
+	at worker.org.gradle.process.internal.worker.GradleWorkerMain.run(GradleWorkerMain.java:69) [gradle-worker.jar:?]
+	at worker.org.gradle.process.internal.worker.GradleWorkerMain.main(GradleWorkerMain.java:74) [gradle-worker.jar:?]
+12:39:16.904 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService@247c43c6] or target class [class com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService] to value [/tmp/junit-11548757728694529661]
+12:39:16.913 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingActiveModelService@265b52b7] or target class [class com.chromascape.web.aiplayer.prototype.FishingActiveModelService] to value [/tmp/junit-11548757728694529661]
+12:39:16.921 [Test worker] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.922 [Test worker] WARN  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Failed to delete activation state: /tmp/junit-11548757728694529661/fishing/active-model.json
+12:39:16.927 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService@3ce3b8d3] or target class [class com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService] to value [/tmp/junit-17537832005028412689]
+12:39:16.941 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingActiveModelService@6aabacb7] or target class [class com.chromascape.web.aiplayer.prototype.FishingActiveModelService] to value [/tmp/junit-17537832005028412689]
+12:39:16.950 [Test worker] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_abc
+12:39:16.957 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService@159e8432] or target class [class com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService] to value [/tmp/junit-10422676888352886398]
+12:39:16.963 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingActiveModelService@5a33ba9b] or target class [class com.chromascape.web.aiplayer.prototype.FishingActiveModelService] to value [/tmp/junit-10422676888352886398]
+12:39:16.973 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService@1236926e] or target class [class com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService] to value [/tmp/junit-15137029979156476679]
+12:39:16.987 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingActiveModelService@77e062f4] or target class [class com.chromascape.web.aiplayer.prototype.FishingActiveModelService] to value [/tmp/junit-15137029979156476679]
+12:39:17.002 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.003 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.003 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.004 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.004 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.005 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.006 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.006 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.006 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.007 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.007 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.008 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.009 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.009 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.009 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.010 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.010 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.011 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.012 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.012 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.012 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.013 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.013 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.014 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.015 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.015 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.015 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.016 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.016 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.017 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.018 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.018 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.019 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.019 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.020 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.020 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.020 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.021 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.022 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.022 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.023 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.023 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.023 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.024 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.025 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.025 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.026 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.026 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.026 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.027 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.028 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.028 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.029 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.030 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.030 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.030 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.031 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.031 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.032 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.033 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.033 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.033 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.034 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.034 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.035 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.036 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.036 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.036 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.037 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.037 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.038 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.039 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.039 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.040 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.040 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.040 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.041 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.042 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.042 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.042 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.043 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.043 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.044 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.045 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.045 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.045 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.046 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.046 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.047 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.047 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.048 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.048 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.048 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.049 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.050 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.050 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.050 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.051 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.051 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.052 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.052 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.052 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.053 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.054 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.054 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.054 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.055 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.055 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.056 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.056 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.056 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.057 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.057 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.058 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.058 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.059 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.059 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.060 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.060 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.060 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.061 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.061 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.062 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.062 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.063 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.063 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.063 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.064 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.064 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.065 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.065 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.065 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.067 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.067 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.068 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.068 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.070 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.070 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.071 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.072 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.072 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.073 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.073 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.073 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.074 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.074 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.075 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.075 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.076 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.076 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.076 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.077 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.078 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.078 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.079 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.079 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.079 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.080 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.081 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.081 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.081 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.082 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.082 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.083 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.083 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.084 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.084 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.085 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.085 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.086 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.086 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.086 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.087 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.088 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.089 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.090 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.091 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.091 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.092 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.092 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.093 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.093 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.094 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.094 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.094 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.095 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.095 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.096 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.096 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.097 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.097 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.098 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.098 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.098 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.099 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.099 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.100 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.100 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.100 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.101 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.102 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.102 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.102 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.103 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.104 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.104 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.104 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.105 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.105 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.106 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.106 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.107 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.108 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.108 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.108 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.109 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.109 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.110 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.110 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.110 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.111 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.111 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.112 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.112 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.113 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.113 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.114 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.114 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.114 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.115 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.116 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.116 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.117 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.117 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.118 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.118 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.118 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.119 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.120 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.120 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.120 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.120 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.121 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.121 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.122 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.122 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.123 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.123 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.124 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.124 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.125 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.125 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.126 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.126 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.126 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.127 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.127 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.127 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.128 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.128 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.129 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.129 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.129 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.130 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.130 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.131 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.131 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.132 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.132 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.132 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.133 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.133 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.134 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.134 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.134 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.135 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.135 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.135 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.136 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.136 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.137 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.138 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.138 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.138 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.139 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.139 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.140 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.140 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.140 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.141 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.142 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.142 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.142 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.142 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.143 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.144 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.144 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.144 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.145 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.145 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.145 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.145 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.146 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.146 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.147 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.147 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.148 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.148 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.148 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.149 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.149 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.150 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.150 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.150 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.151 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.151 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.152 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.152 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.153 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.153 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.154 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.154 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.154 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.155 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.155 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.156 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.156 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.156 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.157 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.157 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.158 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.158 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.158 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.159 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.159 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.161 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.162 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.162 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.162 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.163 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.163 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.164 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.164 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.165 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.165 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.165 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.166 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.166 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.167 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.167 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.167 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.168 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.168 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.169 [pool-7-thread-3] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.170 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.170 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.171 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.171 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.172 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.172 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.173 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.173 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.174 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.174 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.175 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.175 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.176 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.176 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.176 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.177 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.178 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.178 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.178 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.179 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.179 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.180 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.180 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.180 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.181 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.182 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.182 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.182 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.183 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.183 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.183 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.184 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.184 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.185 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.185 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.186 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.186 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.186 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.187 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.187 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.187 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.188 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.189 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.189 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.189 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.190 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.190 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.191 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.191 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.191 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.192 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.193 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.193 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.193 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.198 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.198 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.198 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.199 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.199 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.200 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.200 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.200 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.201 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.202 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.202 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.202 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.203 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.203 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.204 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.205 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.205 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.205 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.206 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.206 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.207 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.208 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.209 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.209 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.210 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.210 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.211 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.211 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.211 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.212 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.212 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.213 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.213 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.214 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.214 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.214 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.215 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.215 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.215 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.216 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.216 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.217 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.218 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.218 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.218 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.219 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.219 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.219 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.220 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.220 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.221 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.221 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.221 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.222 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.222 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.223 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.223 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.224 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.224 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.224 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.225 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.225 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.226 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.226 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.226 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.227 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.228 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.228 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.228 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.229 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.229 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.229 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.230 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.230 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.231 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.231 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.231 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.232 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.232 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.232 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.233 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.234 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.234 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.234 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.235 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.235 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.235 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.236 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.236 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.237 [pool-7-thread-4] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.239 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.240 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.240 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.241 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.241 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.241 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.242 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.242 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.243 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.243 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.243 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.244 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.244 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.245 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.246 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.246 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.248 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.249 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.249 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.249 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.250 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.251 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.251 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.251 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.252 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.252 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.253 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.253 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.253 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.254 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.254 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.255 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.255 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.256 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.256 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.256 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.257 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.257 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.259 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.260 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.260 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.261 [pool-7-thread-2] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_a
+12:39:17.261 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.261 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.262 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.263 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.263 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.263 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.264 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.264 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.264 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.265 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.265 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.265 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.266 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.266 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.267 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.267 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.267 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.268 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.268 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.269 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.269 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.270 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.270 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.270 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.271 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.271 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.272 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.272 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.272 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.273 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.273 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.273 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.274 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.275 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.275 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.275 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.276 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.276 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.277 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.277 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.277 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.278 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.278 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.278 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.279 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.280 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.280 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.281 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.281 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.281 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.282 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.283 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.283 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.283 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.284 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.285 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.286 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.287 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.287 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Deactivated fishing model
+12:39:17.287 [pool-7-thread-5] INFO  com.chromascape.web.aiplayer.prototype.FishingActiveModelService - Activated fishing model: fishing_b
+12:39:17.293 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService@692c8530] or target class [class com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderService] to value [/tmp/junit-3613616439933319960]
+12:39:17.293 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'outputDir' of type [null] on target object [com.chromascape.web.aiplayer.prototype.FishingActiveModelService@3e03037f] or target class [class com.chromascape.web.aiplayer.prototype.FishingActiveModelService] to value [/tmp/junit-3613616439933319960]
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

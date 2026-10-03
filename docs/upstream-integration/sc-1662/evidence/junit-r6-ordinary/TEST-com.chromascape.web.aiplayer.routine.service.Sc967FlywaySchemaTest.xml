@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.service.Sc967FlywaySchemaTest" tests="3" skipped="0" failures="3" errors="0" timestamp="2026-09-16T10:39:06.452Z" hostname="fedora" time="0.13">
+  <properties/>
+  <testcase name="v5UpgradeBackfillsUnfinishedCaptureOperationsWithUniqueCorrelations()" classname="com.chromascape.web.aiplayer.routine.service.Sc967FlywaySchemaTest" time="0.115">
+    <failure message="org.postgresql.util.PSQLException: Connection to localhost:5433 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections." type="org.postgresql.util.PSQLException">org.postgresql.util.PSQLException: Connection to localhost:5433 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections.
+	at app//org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:373)
+	at app//org.postgresql.core.ConnectionFactory.openConnection(ConnectionFactory.java:57)
+	at app//org.postgresql.jdbc.PgConnection.&lt;init&gt;(PgConnection.java:277)
+	at app//org.postgresql.Driver.makeConnection(Driver.java:448)
+	at app//org.postgresql.Driver.connect(Driver.java:298)
+	at platform/java.sql@17.0.20.1/java.sql.DriverManager.getConnection(DriverManager.java:681)
+	at platform/java.sql@17.0.20.1/java.sql.DriverManager.getConnection(DriverManager.java:229)
+	at app//com.chromascape.web.aiplayer.routine.service.Sc967FlywaySchemaTest.v5UpgradeBackfillsUnfinishedCaptureOperationsWithUniqueCorrelations(Sc967FlywaySchemaTest.java:217)
+	at java.base@17.0.20.1/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+Caused by: java.net.ConnectException: Connection refused
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:684)
+	at java.base/sun.nio.ch.NioSocketImpl.timedFinishConnect(NioSocketImpl.java:547)
+	at java.base/sun.nio.ch.NioSocketImpl.connect(NioSocketImpl.java:602)
+	at java.base/java.net.SocksSocketImpl.connect(SocksSocketImpl.java:327)
+	at java.base/java.net.Socket.connect(Socket.java:633)
+	at org.postgresql.core.PGStream.createSocket(PGStream.java:261)
+	at org.postgresql.core.PGStream.&lt;init&gt;(PGStream.java:122)
+	at org.postgresql.core.v3.ConnectionFactoryImpl.tryConnect(ConnectionFactoryImpl.java:146)
+	at org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:289)
+	... 10 more
+</failure>
+  </testcase>
+  <testcase name="flywayAloneCreatesValidSc967Schema()" classname="com.chromascape.web.aiplayer.routine.service.Sc967FlywaySchemaTest" time="0.009">
+    <failure message="org.postgresql.util.PSQLException: Connection to localhost:5433 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections." type="org.postgresql.util.PSQLException">org.postgresql.util.PSQLException: Connection to localhost:5433 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections.
+	at app//org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:373)
+	at app//org.postgresql.core.ConnectionFactory.openConnection(ConnectionFactory.java:57)
+	at app//org.postgresql.jdbc.PgConnection.&lt;init&gt;(PgConnection.java:277)
+	at app//org.postgresql.Driver.makeConnection(Driver.java:448)
+	at app//org.postgresql.Driver.connect(Driver.java:298)
+	at platform/java.sql@17.0.20.1/java.sql.DriverManager.getConnection(DriverManager.java:681)
+	at platform/java.sql@17.0.20.1/java.sql.DriverManager.getConnection(DriverManager.java:229)
+	at app//com.chromascape.web.aiplayer.routine.service.Sc967FlywaySchemaTest.flywayAloneCreatesValidSc967Schema(Sc967FlywaySchemaTest.java:49)
+	at java.base@17.0.20.1/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+Caused by: java.net.ConnectException: Connection refused
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:684)
+	at java.base/sun.nio.ch.NioSocketImpl.timedFinishConnect(NioSocketImpl.java:547)
+	at java.base/sun.nio.ch.NioSocketImpl.connect(NioSocketImpl.java:602)
+	at java.base/java.net.SocksSocketImpl.connect(SocksSocketImpl.java:327)
+	at java.base/java.net.Socket.connect(Socket.java:633)
+	at org.postgresql.core.PGStream.createSocket(PGStream.java:261)
+	at org.postgresql.core.PGStream.&lt;init&gt;(PGStream.java:122)
+	at org.postgresql.core.v3.ConnectionFactoryImpl.tryConnect(ConnectionFactoryImpl.java:146)
+	at org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:289)
+	... 10 more
+</failure>
+  </testcase>
+  <testcase name="executionError" classname="com.chromascape.web.aiplayer.routine.service.Sc967FlywaySchemaTest" time="0.0">
+    <failure message="org.postgresql.util.PSQLException: Connection to localhost:5433 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections." type="org.postgresql.util.PSQLException">org.postgresql.util.PSQLException: Connection to localhost:5433 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections.
+	at app//org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:373)
+	at app//org.postgresql.core.ConnectionFactory.openConnection(ConnectionFactory.java:57)
+	at app//org.postgresql.jdbc.PgConnection.&lt;init&gt;(PgConnection.java:277)
+	at app//org.postgresql.Driver.makeConnection(Driver.java:448)
+	at app//org.postgresql.Driver.connect(Driver.java:298)
+	at platform/java.sql@17.0.20.1/java.sql.DriverManager.getConnection(DriverManager.java:681)
+	at platform/java.sql@17.0.20.1/java.sql.DriverManager.getConnection(DriverManager.java:229)
+	at app//com.chromascape.web.aiplayer.routine.service.Sc967FlywaySchemaTest.dropSchema(Sc967FlywaySchemaTest.java:40)
+	at java.base@17.0.20.1/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base@17.0.20.1/java.util.Collections$UnmodifiableCollection.forEach(Collections.java:1093)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+Caused by: java.net.ConnectException: Connection refused
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:684)
+	at java.base/sun.nio.ch.NioSocketImpl.timedFinishConnect(NioSocketImpl.java:547)
+	at java.base/sun.nio.ch.NioSocketImpl.connect(NioSocketImpl.java:602)
+	at java.base/java.net.SocksSocketImpl.connect(SocksSocketImpl.java:327)
+	at java.base/java.net.Socket.connect(Socket.java:633)
+	at org.postgresql.core.PGStream.createSocket(PGStream.java:261)
+	at org.postgresql.core.PGStream.&lt;init&gt;(PGStream.java:122)
+	at org.postgresql.core.v3.ConnectionFactoryImpl.tryConnect(ConnectionFactoryImpl.java:146)
+	at org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:289)
+	... 11 more
+</failure>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

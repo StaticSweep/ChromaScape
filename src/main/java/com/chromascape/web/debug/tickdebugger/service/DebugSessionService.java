@@ -1168,6 +1168,7 @@ public class DebugSessionService {
               recSession.setDurationMs(metadata.getDuration());
               recSession.setFrameCount(metadata.getFrameCount());
               recSession.setFps(metadata.getFps());
+              recSession.setVideoCodec(metadata.getVideoCodec());
               recordingSessionRepository.save(recSession);
             });
   }
