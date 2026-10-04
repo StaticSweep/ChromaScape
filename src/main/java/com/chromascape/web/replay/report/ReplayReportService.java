@@ -462,6 +462,12 @@ public class ReplayReportService {
     report.setAttemptId(attempt != null ? attempt.getId() : null);
     report.setMode(run.getMode());
     report.setManifestChecksum(run.getManifestChecksum());
+    report.setManifestVersion(run.getManifestVersion());
+    report.setFidelity(run.getFidelity());
+    report.setConversionQuality(run.getConversionQuality());
+    report.setActionCoveragePct(run.getActionCoveragePct());
+    report.setGapCount(run.getGapCount());
+    report.setApproximationCount(run.getApproximationCount());
     report.setOutcome(prepared.outcome());
     report.setExecutedActionCount(prepared.executedActionCount());
     report.setCheckpointCount(prepared.checkpointCount());

@@ -15,6 +15,12 @@ import com.chromascape.web.replay.capability.CapabilityManifest;
 import com.chromascape.web.replay.config.ReplayProperties;
 import com.chromascape.web.replay.error.ReplayErrorCode;
 import com.chromascape.web.replay.error.ReplayException;
+import com.chromascape.web.replay.hash.CausalCanonicalJson;
+import com.chromascape.web.replay.hash.CausalInputLimits;
+import com.chromascape.web.replay.hash.CausalVersionNegotiation;
+import com.chromascape.web.replay.hash.RestoreContextValidator;
+import com.chromascape.web.replay.hash.SemanticHashV2;
+import com.chromascape.web.replay.hash.TransitionChainVerifier;
 import com.chromascape.web.replay.kernel.KernelProtocolCodec.KernelMessage;
 import com.chromascape.web.replay.kernel.XrspsKernelProcess;
 import com.chromascape.web.replay.manifest.contract.RuntimeIdentity;
@@ -321,7 +327,22 @@ public class ReplayWorker implements AutoCloseable {
       if (expectedTick < 0) {
         throw new IllegalStateException("reset returned no initialTick");
       }
-      persistence.appendEvents(fence, extractEvents(fence, resetMsg.result().path("events"), es));
+      es.causal = workerCapability.causalV2();
+      es.manifestDigest = manifestDoc.path("manifestChecksum").asText();
+      es.runtimeDigest =
+          SemanticHashV2.runtimeDigest(
+              runtimeIdentity.xrspsAdapterVersion(),
+              runtimeIdentity.xrspsBuildCommit(),
+              runtimeIdentity.cacheRevision(),
+              runtimeIdentity.contentRevision());
+      if (es.causal) {
+        es.chainHash = SemanticHashV2.genesisHash(es.manifestDigest, es.runtimeDigest);
+        StateHashSample resetSample = consumeCausalEvidence(run.getId(), resetMsg.result(), es);
+        persistence.appendActionResult(
+            fence, extractEvents(fence, resetMsg.result().path("events"), es), resetSample);
+        captureProjection(fence, resetMsg.result().path("causalProjection"), es);
+      } else
+        persistence.appendEvents(fence, extractEvents(fence, resetMsg.result().path("events"), es));
 
       // ── branch resume: restore parent checkpoint instead of tick zero ──
       int startIndex = 0;
@@ -335,7 +356,7 @@ public class ReplayWorker implements AutoCloseable {
       persistence.updatePhase(fence, ReplayRunPhase.RESET, ReplayRunPhase.EXECUTE);
 
       // ── action iteration ──
-      for (int i = startIndex; i < actions.size(); i++) {
+      for (int i = startIndex; i < actions.size() && !es.causalTerminated; i++) {
         ensureNotCancelled(run.getId());
         ensureWithinDeadline(run);
         heartbeat.assertHealthy();
@@ -350,27 +371,45 @@ public class ReplayWorker implements AutoCloseable {
         // sendWithinRunDeadline guards heartbeat + deadline BEFORE the send and rechecks the
         // database deadline IMMEDIATELY after the response.
         KernelMessage stepMsg = sendWithinRunDeadline(heartbeat, kernel, run, "step", stepParams);
+        if (es.causal
+            && stepMsg.error() != null
+            && stepMsg.result() != null
+            && stepMsg.result().has("causalFrame")) {
+          requireActionBinding(stepMsg.result(), dispatchedAction);
+          StateHashSample rejected = consumeCausalEvidence(run.getId(), stepMsg.result(), es);
+          persistence.appendActionResult(fence, List.of(), rejected);
+          captureProjection(fence, stepMsg.result().path("causalProjection"), es);
+        }
         assertStepOk(stepMsg, i);
         JsonNode result = stepMsg.result();
 
         List<ReplayEvent> events = extractEvents(fence, result.path("events"), es);
         JsonNode observation = result.path("observation");
 
-        String stateHash = projectionService.stateHash(observation);
-        es.lastStateHash = stateHash;
-        String actionDigest = projectionService.actionDigest(dispatchedAction);
-        es.chainHash = projectionService.chainHash(es.chainHash, actionDigest, stateHash);
         long tick = result.path("terminalTick").asLong(expectedTick);
-        StateHashSample sample =
-            new StateHashSample(run.getId(), tick, 0, 1, stateHash, es.chainHash);
+        StateHashSample sample;
+        if (es.causal) {
+          requireActionBinding(result, dispatchedAction);
+          sample = consumeCausalEvidence(run.getId(), result, es);
+          if (tick - es.lastProjectionTick >= 100
+              || "TERMINAL".equals(result.path("causalFrame").path("kind").asText())) {
+            captureProjection(fence, result.path("causalProjection"), es);
+          }
+        } else {
+          String stateHash = projectionService.stateHash(observation);
+          es.lastStateHash = stateHash;
+          String actionDigest = projectionService.actionDigest(dispatchedAction);
+          es.chainHash = projectionService.chainHash(es.chainHash, actionDigest, stateHash);
+          sample = new StateHashSample(run.getId(), tick, 0, 1, stateHash, es.chainHash);
+        }
         // Events and their hash sample persist atomically under one fence.
         persistence.appendActionResult(fence, events, sample);
         expectedTick = tick;
         es.executedActions++;
 
-        boolean isLast = i == actions.size() - 1;
+        boolean isLast = i == actions.size() - 1 || es.causalTerminated;
         if ((i + 1) % CHECKPOINT_INTERVAL_ACTIONS == 0 || isLast) {
-          takeCheckpoint(kernel, heartbeat, fence, run, tick, i, es);
+          takeCheckpoint(kernel, heartbeat, fence, run, tick, i, es, manifestDoc, runtimeIdentity);
           ensureNotCancelled(run.getId());
           ensureWithinDeadline(run);
         }
@@ -394,6 +433,29 @@ public class ReplayWorker implements AutoCloseable {
               run.getStopPolicy());
 
       persistence.saveMismatches(fence, comparison.candidates());
+      if (es.causal) {
+        if (!es.causalTerminated) {
+          KernelMessage terminal =
+              sendWithinRunDeadline(
+                  heartbeat,
+                  kernel,
+                  run,
+                  "finish",
+                  mapper
+                      .createObjectNode()
+                      .put(
+                          "reason",
+                          comparison.shouldStop() ? "MISMATCH_HARD_STOP" : "RUN_COMPLETE"));
+          assertOk(terminal, "finish");
+          persistence.appendActionResult(
+              fence, List.of(), consumeCausalEvidence(run.getId(), terminal.result(), es));
+          captureProjection(fence, terminal.result().path("causalProjection"), es);
+        }
+        KernelMessage terminalSnapshot =
+            sendWithinRunDeadline(heartbeat, kernel, run, "snapshot", null);
+        assertOk(terminalSnapshot, "snapshot");
+        captureProjection(fence, terminalSnapshot.result().path("causalProjection"), es);
+      }
 
       // Trace + manifest artifacts: prepare (bytes only) then fenced register.
       KernelMessage traceMsg =
@@ -482,6 +544,7 @@ public class ReplayWorker implements AutoCloseable {
           ReplayOutcome.CANCELLED,
           "CANCEL_REQUESTED");
     } catch (ReplayException e) {
+      log.warn("Run {} rejected: {} ({})", run.getId(), e.getMessage(), e.getErrorCode());
       if (e.getErrorCode() == ReplayErrorCode.ATTEMPT_STALE_FENCE) {
         heartbeat.stop();
         log.warn("Run {} lost its fence; abandoning without further writes", run.getId());
@@ -540,6 +603,115 @@ public class ReplayWorker implements AutoCloseable {
       heartbeat.stop();
       safeClose(kernel);
     }
+  }
+
+  private void requireActionBinding(JsonNode result, JsonNode action) {
+    String expected =
+        projectionService.sha256Hex(
+            CausalCanonicalJson.canonicalize(action)
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    if (!expected.equals(result.path("causalFrame").path("actionDigest").asText()))
+      throw checksumMismatch("Worker transition action binding mismatch");
+  }
+
+  /** Validates worker projection, sample and transition against the prior trusted response. */
+  StateHashSample consumeCausalEvidence(UUID runId, JsonNode result, ExecutionState es) {
+    if (es.causalTerminated) throw checksumMismatch("Worker transition after terminal");
+    JsonNode projection = result.path("causalProjection");
+    JsonNode sample = result.path("causalSample");
+    JsonNode frame = result.path("causalFrame");
+    if (!projection.path("projectionVersion").isInt()
+        || projection.path("projectionVersion").intValue() != 2
+        || !sample.path("projectionVersion").isInt()
+        || sample.path("projectionVersion").intValue() != 2
+        || !SemanticHashV2.HASH_VERSION.equals(sample.path("hashVersion").asText()))
+      throw checksumMismatch("worker causal version mismatch");
+    String stateHash = hashWorkerProjection(projection);
+    JsonNode continuation = projection.path("domains").path("restoreContext");
+    if (!continuation.path("manifestDigest").asText().equals(es.manifestDigest)
+        || !continuation.path("runtimeDigest").asText().equals(es.runtimeDigest)
+        || !continuation.path("nextTransitionOrdinal").isIntegralNumber()
+        || continuation.path("nextTransitionOrdinal").longValue() != es.nextCausalOrdinal)
+      throw checksumMismatch("Worker projection continuation binding mismatch");
+    if (!stateHash.equals(sample.path("stateHash").asText())
+        || !stateHash.equals(frame.path("stateHash").asText())
+        || !sample.path("tick").equals(frame.path("tick"))
+        || !sample.path("sequence").equals(frame.path("sequence"))
+        || !sample.path("ordinal").equals(frame.path("ordinal"))
+        || !sample.path("chainHash").equals(frame.path("chainHash"))
+        || !projection.path("tick").equals(frame.path("tick")))
+      throw checksumMismatch("Worker causal sample/projection/frame binding mismatch");
+    var anchors =
+        new TransitionChainVerifier.Anchors(
+            es.manifestDigest,
+            es.runtimeDigest,
+            SemanticHashV2.genesisHash(es.manifestDigest, es.runtimeDigest));
+    var start =
+        es.nextCausalOrdinal == 0
+            ? null
+            : new TransitionChainVerifier.SuffixStart(
+                es.nextCausalOrdinal, es.causalTick, es.causalSequence + 1, es.chainHash);
+    var verified = TransitionChainVerifier.verify(List.of(frame), anchors, start);
+    if (!verified.valid())
+      throw checksumMismatch("Worker causal transition mismatch: " + verified.reason());
+    es.causalTerminated = "TERMINAL".equals(frame.path("kind").asText());
+    es.chainHash = frame.path("chainHash").asText();
+    es.lastStateHash = stateHash;
+    es.causalTick = frame.path("tick").longValue();
+    es.causalSequence = frame.path("sequence").longValue();
+    es.nextCausalOrdinal++;
+    StateHashSample stored =
+        new StateHashSample(
+            runId, es.causalTick, Math.toIntExact(es.causalSequence), 2, stateHash, es.chainHash);
+    stored.setTransitionOrdinal(es.nextCausalOrdinal - 1);
+    return stored;
+  }
+
+  private String hashWorkerProjection(JsonNode projection) {
+    if (!projection.path("projectionVersion").isInt()
+        || projection.path("projectionVersion").intValue() != 2
+        || !projection.path("tick").isIntegralNumber()
+        || !projection.path("tick").canConvertToLong())
+      throw checksumMismatch("Invalid causal projection version/tick");
+    java.util.Map<String, JsonNode> domains = new java.util.TreeMap<>();
+    projection
+        .path("domains")
+        .fields()
+        .forEachRemaining(e -> domains.put(e.getKey(), e.getValue()));
+    try {
+      return SemanticHashV2.hashProjection(2, projection.path("tick").longValue(), domains)
+          .stateHash();
+    } catch (RuntimeException invalid) {
+      throw checksumMismatch("Invalid causal projection: " + invalid.getMessage());
+    }
+  }
+
+  private void validateBoundSnapshot(JsonNode context, JsonNode snapshot, long tick) {
+    if (!context.path("contextVersion").isInt()
+        || context.path("contextVersion").intValue() != 2
+        || !snapshot.path("snapshotVersion").isInt()
+        || snapshot.path("snapshotVersion").intValue() != 1
+        || !snapshot.path("tick").isIntegralNumber()
+        || !snapshot.path("tick").canConvertToLong()
+        || snapshot.path("tick").longValue() != tick
+        || !context.path("tick").equals(snapshot.path("tick"))) throw snapshotIncompatible();
+    CausalInputLimits.validate(snapshot);
+    String digest = projectionService.sha256Hex(projectionService.canonicalJsonBytes(snapshot));
+    if (!digest.equals(context.path("snapshotDigest").asText()))
+      throw checksumMismatch("Checkpoint snapshot/context content binding mismatch");
+  }
+
+  private void captureProjection(ReplayFence fence, JsonNode projection, ExecutionState es) {
+    hashWorkerProjection(projection);
+    byte[] bytes =
+        CausalCanonicalJson.canonicalize(projection)
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    registerUnderFence(
+        fence,
+        artifactService.prepareArtifact(
+            fence.runId(), ArtifactKind.PROJECTION, bytes, "application/json"),
+        es);
+    es.lastProjectionTick = projection.path("tick").longValue();
   }
 
   // ── lifecycle helpers ──
@@ -638,13 +810,15 @@ public class ReplayWorker implements AutoCloseable {
           // Report-contract/checksum/programming error: NOT a storage condition. Leave the run
           // reserved in FINALIZE_REPORT for lease-expiry recovery + reconciliation.
           log.warn(
-              "Run {}: failure report could not be completed ({}); leaving FINALIZE_REPORT for recovery",
+              "Run {}: failure report could not be completed ({}); leaving FINALIZE_REPORT for"
+                  + " recovery",
               run.getId(),
               e.getErrorCode());
           return;
         }
         log.warn(
-            "Run {}: REPORT artifact unavailable ({}); falling back to database-only failure report",
+            "Run {}: REPORT artifact unavailable ({}); falling back to database-only failure"
+                + " report",
             run.getId(),
             e.getErrorCode());
       } catch (RuntimeException unexpected) {
@@ -653,7 +827,8 @@ public class ReplayWorker implements AutoCloseable {
         // would silently weaken the mandatory report contract. Leave the reservation in
         // FINALIZE_REPORT so recovery/reconciliation can handle it explicitly.
         log.warn(
-            "Run {}: failure report path failed unexpectedly; leaving FINALIZE_REPORT for recovery ({})",
+            "Run {}: failure report path failed unexpectedly; leaving FINALIZE_REPORT for recovery"
+                + " ({})",
             run.getId(),
             unexpected.getClass().getSimpleName());
         return;
@@ -682,7 +857,8 @@ public class ReplayWorker implements AutoCloseable {
           throw e;
         }
         log.warn(
-            "Run {}: database-only failure report failed ({}); leaving FINALIZE_REPORT for recovery",
+            "Run {}: database-only failure report failed ({}); leaving FINALIZE_REPORT for"
+                + " recovery",
             run.getId(),
             e.getErrorCode());
       } catch (Exception e) {
@@ -831,10 +1007,84 @@ public class ReplayWorker implements AutoCloseable {
     }
     verifySnapshotRuntime(snapshot, liveIdentity);
 
+    // SC-275 bound restore: the checkpoint row carries the restore context
+    // plus the chain artifact address. Both are validated against independent
+    // anchors BEFORE the worker rebuilds any state; historical rows without
+    // bindings restore through the legacy path guard, never the v2 worker.
+    String contextText = checkpoint.getRestoreContext();
+    String chainChecksum = checkpoint.getChainArtifactChecksum();
+    if (contextText == null
+        || contextText.isBlank()
+        || chainChecksum == null
+        || chainChecksum.isBlank()) {
+      throw snapshotIncompatible();
+    }
+    JsonNode context;
+    try {
+      context = mapper.readTree(contextText);
+    } catch (Exception e) {
+      throw snapshotIncompatible();
+    }
+    String manifestDigest = manifestDoc.path("manifestChecksum").asText(null);
+    if (manifestDigest == null || manifestDigest.isBlank()) {
+      throw snapshotIncompatible();
+    }
+    String runtimeDigest =
+        SemanticHashV2.runtimeDigest(
+            liveIdentity.xrspsAdapterVersion(),
+            liveIdentity.xrspsBuildCommit(),
+            liveIdentity.cacheRevision(),
+            liveIdentity.contentRevision());
+    RestoreContextValidator.Validation contextCheck =
+        RestoreContextValidator.validate(context, manifestDigest, runtimeDigest);
+    if (!contextCheck.valid()) {
+      throw checksumMismatch(
+          "Checkpoint restore context failed anchored validation: " + contextCheck.reason());
+    }
+    validateBoundSnapshot(context, snapshot, checkpoint.getTick());
+    ArtifactRef chainRef =
+        artifactRefRepository
+            .findByRunIdAndKindAndChecksum(checkpoint.getRunId(), ArtifactKind.CHAIN, chainChecksum)
+            .filter(r -> ArtifactRef.STATE_FINALIZED.equals(r.getState()))
+            .orElseThrow(this::snapshotIncompatible);
+    byte[] chainBytes = artifactService.readFinalized(chainRef);
+    String chainRecomputed = projectionService.sha256Hex(chainBytes);
+    if (!chainRecomputed.equals(chainRef.getChecksum())) {
+      throw checksumMismatch("Chain artifact bytes failed content-address verification");
+    }
+    JsonNode priorFrames;
+    try {
+      priorFrames = mapper.readTree(chainBytes);
+    } catch (Exception e) {
+      throw checksumMismatch("Stored chain artifact is not valid JSON");
+    }
+    if (!priorFrames.isArray()
+        || priorFrames.size() != context.path("nextTransitionOrdinal").asInt(-1)) {
+      throw snapshotIncompatible();
+    }
+    List<JsonNode> frames = new ArrayList<>();
+    priorFrames.forEach(frames::add);
+    String expectedGenesis = SemanticHashV2.genesisHash(manifestDigest, runtimeDigest);
+    JsonNode predecessor = context.path("predecessorChainHash");
+    TransitionChainVerifier.Anchors anchors =
+        new TransitionChainVerifier.Anchors(
+            manifestDigest,
+            runtimeDigest,
+            expectedGenesis,
+            predecessor.isNull() || predecessor.isMissingNode() ? null : predecessor.asText(null));
+    TransitionChainVerifier.VerifyResult history = TransitionChainVerifier.verify(frames, anchors);
+    if (!history.valid()) {
+      throw checksumMismatch(
+          "Checkpoint transition history failed anchored verification: " + history.reason());
+    }
+
     // Contract: restore into the freshly reset compatible kernel. sendWithinRunDeadline guards
     // every kernel request around restore (heartbeat before/after, deadline before AND after).
     ObjectNode restoreParams = mapper.createObjectNode();
     restoreParams.set("snapshot", snapshot);
+    restoreParams.set("context", context);
+    restoreParams.set("priorFrames", priorFrames);
+    restoreParams.set("manifest", manifestDoc);
     KernelMessage restoreMsg =
         sendWithinRunDeadline(heartbeat, kernel, run, "restore", restoreParams);
     assertOk(restoreMsg, "restore");
@@ -845,7 +1095,10 @@ public class ReplayWorker implements AutoCloseable {
 
     KernelMessage postObserve = sendWithinRunDeadline(heartbeat, kernel, run, "observe", null);
     assertOk(postObserve, "observe");
-    String observedHash = projectionService.stateHash(postObserve.result().path("observation"));
+    String observedHash =
+        es.causal
+            ? hashWorkerProjection(restoreMsg.result().path("causalProjection"))
+            : projectionService.stateHash(postObserve.result().path("observation"));
     if (!observedHash.equals(checkpoint.getStateHash())) {
       throw checksumMismatch("Post-restore observation hash differs from the checkpoint record");
     }
@@ -856,6 +1109,17 @@ public class ReplayWorker implements AutoCloseable {
             ? checkpoint.getChainHash()
             : genesisChainHash;
     es.lastStateHash = checkpoint.getStateHash();
+    if (es.causal) {
+      JsonNode last = priorFrames.get(priorFrames.size() - 1);
+      es.chainHash = context.path("predecessorChainHash").asText();
+      es.nextCausalOrdinal = context.path("nextTransitionOrdinal").longValue();
+      es.causalTick = last.path("tick").longValue();
+      es.causalSequence = last.path("sequence").longValue();
+      es.causalTerminated = "TERMINAL".equals(last.path("kind").asText());
+      if (es.causalTerminated) {
+        es.lastStateHash = last.path("stateHash").asText();
+      }
+    }
 
     // Parent events belong to the parent run: skip their ordinals entirely.
     long nextOrdinal = snapshot.path("eventQueue").path("nextOrdinal").asLong(0);
@@ -964,23 +1228,106 @@ public class ReplayWorker implements AutoCloseable {
 
   // ── helpers ──
 
-  private void takeCheckpoint(
+  void takeCheckpoint(
       XrspsKernelProcess kernel,
       ReplayLeaseHeartbeat.Handle heartbeat,
       ReplayFence fence,
       ReplayRun run,
       long tick,
       int actionIndex,
-      ExecutionState es) {
+      ExecutionState es,
+      JsonNode manifestDoc,
+      RuntimeIdentity liveIdentity) {
     KernelMessage snapMsg = sendWithinRunDeadline(heartbeat, kernel, run, "snapshot", null);
     assertOk(snapMsg, "snapshot");
     JsonNode snapshot = snapMsg.result().path("snapshot");
     byte[] snapBytes = canonicalBytes(snapshot);
-    PreparedArtifact prepared =
-        artifactService.prepareArtifact(
-            fence.runId(), ArtifactKind.SNAPSHOT, snapBytes, "application/json");
+    PreparedArtifact prepared = null;
+    byte[] validatedChainBytes = null;
+    // SC-275 bound restore evidence: the worker snapshot carries the restore
+    // context plus the transition-prefix frames. Both persist atomically with
+    // the row; legacy workers omit them and their rows restore through the
+    // legacy path guard instead. V2 payloads persist as v2-canonical bytes and
+    // are anchored-validated on the write path so poisoned bindings fail the
+    // run instead of persisting a half-bound checkpoint.
+    JsonNode context = snapMsg.result().path("context");
+    JsonNode priorFrames = snapMsg.result().path("priorFrames");
+    if (!priorFrames.isMissingNode()) CausalInputLimits.validate(priorFrames);
+    PreparedArtifact preparedChain = null;
+    String restoreContextText = null;
+    boolean hasBindings = !context.isMissingNode() || !priorFrames.isMissingNode();
+    if ((es.causal || hasBindings) && (!context.isObject() || !priorFrames.isArray()))
+      throw snapshotIncompatible();
+    if (context.isObject() && priorFrames.isArray()) {
+      validateBoundSnapshot(context, snapshot, tick);
+      String manifestDigest = manifestDoc.path("manifestChecksum").asText(null);
+      if (manifestDigest == null || manifestDigest.isBlank()) {
+        throw snapshotIncompatible();
+      }
+      String runtimeDigest =
+          SemanticHashV2.runtimeDigest(
+              liveIdentity.xrspsAdapterVersion(),
+              liveIdentity.xrspsBuildCommit(),
+              liveIdentity.cacheRevision(),
+              liveIdentity.contentRevision());
+      RestoreContextValidator.Validation contextCheck;
+      try {
+        contextCheck = RestoreContextValidator.validate(context, manifestDigest, runtimeDigest);
+      } catch (RuntimeException invalid) {
+        throw checksumMismatch(
+            "Checkpoint restore context failed anchored validation: " + invalid.getMessage());
+      }
+      if (!contextCheck.valid()) {
+        throw checksumMismatch(
+            "Checkpoint restore context failed anchored validation: " + contextCheck.reason());
+      }
+      if (priorFrames.size() != context.path("nextTransitionOrdinal").asInt(-1)) {
+        throw snapshotIncompatible();
+      }
+      byte[] chainBytes;
+      try {
+        chainBytes =
+            CausalCanonicalJson.canonicalize(priorFrames)
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        restoreContextText = CausalCanonicalJson.canonicalize(context);
+      } catch (RuntimeException invalid) {
+        throw checksumMismatch(
+            "Checkpoint v2 bindings failed canonicalization: " + invalid.getMessage());
+      }
+      List<JsonNode> frames = new ArrayList<>();
+      priorFrames.forEach(frames::add);
+      String expectedGenesis = SemanticHashV2.genesisHash(manifestDigest, runtimeDigest);
+      JsonNode predecessor = context.path("predecessorChainHash");
+      TransitionChainVerifier.Anchors anchors =
+          new TransitionChainVerifier.Anchors(
+              manifestDigest,
+              runtimeDigest,
+              expectedGenesis,
+              predecessor.isNull() || predecessor.isMissingNode()
+                  ? null
+                  : predecessor.asText(null));
+      TransitionChainVerifier.VerifyResult history =
+          TransitionChainVerifier.verify(frames, anchors);
+      if (!history.valid()) {
+        throw checksumMismatch(
+            "Checkpoint transition history failed anchored verification: " + history.reason());
+      }
+      if (es.causal) {
+        String projected = hashWorkerProjection(snapMsg.result().path("causalProjection"));
+        if (!projected.equals(context.path("checkpointStateDigest").asText()))
+          throw checksumMismatch("Checkpoint projection binding mismatch");
+      }
+      validatedChainBytes = chainBytes;
+    }
     ArtifactRef ref;
     try {
+      prepared =
+          artifactService.prepareArtifact(
+              fence.runId(), ArtifactKind.SNAPSHOT, snapBytes, "application/json");
+      if (validatedChainBytes != null)
+        preparedChain =
+            artifactService.prepareArtifact(
+                fence.runId(), ArtifactKind.CHAIN, validatedChainBytes, "application/json");
       ReplayCheckpoint checkpoint =
           new ReplayCheckpoint(
               UUID.randomUUID(),
@@ -988,22 +1335,32 @@ public class ReplayWorker implements AutoCloseable {
               fence.attemptId(),
               tick,
               snapshot.path("checksum").asText(null),
-              es.lastStateHash != null ? es.lastStateHash : "",
+              es.causal
+                  ? context.path("checkpointStateDigest").asText()
+                  : es.lastStateHash != null ? es.lastStateHash : "",
               es.chainHash,
               runBranchKey(fence));
       checkpoint.setActionIndex(actionIndex + 1);
       // Full serialized artifact content address (distinct from the kernel-internal snapshot
       // checksum stored above); set inside the same transaction by registerCheckpoint.
       checkpoint.setParentCheckpointId(resolveParentCheckpointId(fence));
+      if (preparedChain != null) {
+        checkpoint.setRestoreContext(restoreContextText);
+      }
       // Reference registration + checkpoint insert commit together.
       ArtifactRegistration registration =
-          persistence.registerCheckpoint(fence, prepared, checkpoint);
+          persistence.registerCheckpoint(fence, prepared, preparedChain, checkpoint);
       ref = registration.reference();
     } catch (RuntimeException registrationFailure) {
-      artifactService.discardPrepared(prepared);
+      if (prepared != null) artifactService.discardPrepared(prepared);
+      if (preparedChain != null) {
+        artifactService.discardPrepared(preparedChain);
+      }
       throw registrationFailure;
     }
     es.artifactChecksums.add(ref.getChecksum());
+    if (preparedChain != null) es.artifactChecksums.add(preparedChain.checksum());
+    if (es.causal) captureProjection(fence, snapMsg.result().path("causalProjection"), es);
     es.checkpointCount++;
   }
 
@@ -1131,8 +1488,11 @@ public class ReplayWorker implements AutoCloseable {
             "worker supportedActions contains a duplicate action: " + action.asText());
       }
     }
-    if (advertisedActions.isEmpty()) {
-      throw capabilityIncompatible("worker supportedActions must contain at least one action");
+    if (advertisedActions.isEmpty()
+        || (capability.has("causal")
+            && !CapabilityManifest.supportedWorkerActions(
+                advertisedActions, CapabilityManifest.Fidelity.valueOf(fidelity)))) {
+      throw capabilityIncompatible("worker supportedActions must match its declared profile");
     }
     JsonNode xrsps = capability.path("xrsps");
     if (!xrsps.isObject()) {
@@ -1157,7 +1517,15 @@ public class ReplayWorker implements AutoCloseable {
         throw capabilityIncompatible("worker cache/content revision is not a sha256 address");
       }
     }
-    return new WorkerCapability(identity, Set.copyOf(advertisedActions));
+    boolean causalV2 = capability.has("causal");
+    if (causalV2) {
+      try {
+        CausalVersionNegotiation.requireCausalV2(capability.get("causal"));
+      } catch (RuntimeException incompatible) {
+        throw capabilityIncompatible(incompatible.getMessage());
+      }
+    }
+    return new WorkerCapability(identity, Set.copyOf(advertisedActions), causalV2);
   }
 
   /** Manifest action declarations must be a subset of the live worker's advertised action set. */
@@ -1214,7 +1582,8 @@ public class ReplayWorker implements AutoCloseable {
         null);
   }
 
-  private record WorkerCapability(RuntimeIdentity identity, Set<String> supportedActions) {}
+  private record WorkerCapability(
+      RuntimeIdentity identity, Set<String> supportedActions, boolean causalV2) {}
 
   /** Blank and placeholder identities never enter replay: they cannot be certified. */
   private void rejectPlaceholderIdentity(String field, String value) {
@@ -1438,6 +1807,14 @@ public class ReplayWorker implements AutoCloseable {
 
   /** Mutable per-execution accumulator. Public so the certification harness can drive it. */
   public static class ExecutionState {
+    public boolean causal;
+    public boolean causalTerminated;
+    public String manifestDigest;
+    public String runtimeDigest;
+    public long nextCausalOrdinal;
+    public long causalTick = -1;
+    public long causalSequence = -1;
+    public long lastProjectionTick = -1;
     public String chainHash;
     public String lastStateHash;
     public long lastPersistedOrdinal = -1;

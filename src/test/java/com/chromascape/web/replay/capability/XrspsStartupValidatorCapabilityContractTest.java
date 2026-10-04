@@ -376,4 +376,21 @@ class XrspsStartupValidatorCapabilityContractTest {
         service.isCausalSimulationCertifiable(),
         "observed playback must never be treated as causal simulation");
   }
+
+  @Test
+  void pinnedFishingCausalProfilePassesAndUnsupportedCombinationFails() throws Exception {
+    ObjectMapper mapper = new ObjectMapper();
+    ObjectNode document = (ObjectNode) mapper.readTree(valid());
+    document.put("fidelity", "XRSPS_AUTHORITATIVE");
+    document.set("supportedActions", mapper.createArrayNode().add("INTERACT_NPC"));
+    document.set(
+        "causal",
+        mapper.readTree(
+            "{\"projectionVersions\":[2],\"hashVersions\":[\"sha256-semantic-state-v2\"],\"traceVersions\":[2],\"snapshotVersions\":[1],\"contextVersions\":[2]}"));
+    assertTrue(validator.validateRawDocument(document).isEmpty());
+    ((ObjectNode) document.path("causal"))
+        .set("contextVersions", mapper.createArrayNode().add(999));
+    assertTrue(
+        validator.validateRawDocument(document).stream().anyMatch(p -> p.contains("causal")));
+  }
 }

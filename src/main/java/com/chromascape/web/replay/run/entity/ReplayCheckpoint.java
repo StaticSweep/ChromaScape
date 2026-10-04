@@ -46,6 +46,21 @@ public class ReplayCheckpoint {
   @Column(name = "chain_hash", nullable = false)
   private String chainHash;
 
+  /**
+   * SC-275 bound restore context document (JSON), binding snapshot digest, causal state digest,
+   * tick, ordinal, and predecessor chain hash. Null for historical rows, which restore through the
+   * legacy path guard.
+   */
+  @Column(name = "restore_context", columnDefinition = "TEXT")
+  private String restoreContext;
+
+  /**
+   * Content address of the finalized CHAIN artifact carrying the bound transition-prefix frames.
+   * Null for historical rows.
+   */
+  @Column(name = "chain_artifact_checksum", length = 71)
+  private String chainArtifactChecksum;
+
   @Column(name = "parent_checkpoint_id", columnDefinition = "uuid")
   private UUID parentCheckpointId;
 
@@ -130,6 +145,22 @@ public class ReplayCheckpoint {
   /** Legacy durability-worker alias; artifact identifiers are content checksums since V18. */
   public void setSnapshotArtifactId(String v) {
     setSnapshotArtifactChecksum(v);
+  }
+
+  public String getRestoreContext() {
+    return restoreContext;
+  }
+
+  public void setRestoreContext(String v) {
+    this.restoreContext = v;
+  }
+
+  public String getChainArtifactChecksum() {
+    return chainArtifactChecksum;
+  }
+
+  public void setChainArtifactChecksum(String v) {
+    this.chainArtifactChecksum = v;
   }
 
   public String getStateHash() {

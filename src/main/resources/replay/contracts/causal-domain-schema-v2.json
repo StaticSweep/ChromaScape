@@ -1,0 +1,674 @@
+{
+  "type": "object",
+  "fields": {
+    "playerMotion": {
+      "type": "object",
+      "fields": {
+        "position": {
+          "type": "object",
+          "fields": {
+            "x": {
+              "type": "integer"
+            },
+            "y": {
+              "type": "integer"
+            },
+            "plane": {
+              "type": "integer",
+              "min": 0
+            }
+          }
+        },
+        "animation": {
+          "type": "integer",
+          "nullable": true
+        },
+        "interaction": {
+          "type": "string",
+          "nullable": true
+        },
+        "orientation": {
+          "type": "integer",
+          "nullable": true
+        }
+      },
+      "optional": [
+        "orientation"
+      ]
+    },
+    "playerStats": {
+      "type": "object",
+      "fields": {
+        "skills": {
+          "type": "map",
+          "values": {
+            "type": "object",
+            "fields": {
+              "level": {
+                "type": "integer",
+                "min": 1
+              },
+              "xp": {
+                "type": "integer",
+                "min": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    "possessions": {
+      "type": "object",
+      "fields": {
+        "inventory": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "fields": {
+              "slot": {
+                "type": "integer",
+                "min": 0
+              },
+              "itemId": {
+                "type": "integer",
+                "min": 0
+              },
+              "quantity": {
+                "type": "integer",
+                "min": 1
+              },
+              "stableId": {
+                "type": "string",
+                "nullable": true
+              },
+              "equipmentSlot": {
+                "type": "integer",
+                "min": 0,
+                "nullable": true
+              }
+            }
+          },
+          "unique": "slot"
+        },
+        "equipment": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "fields": {
+              "slot": {
+                "type": "integer",
+                "min": 0
+              },
+              "itemId": {
+                "type": "integer",
+                "min": 0
+              },
+              "quantity": {
+                "type": "integer",
+                "min": 1
+              },
+              "stableId": {
+                "type": "string",
+                "nullable": true
+              },
+              "equipmentSlot": {
+                "type": "integer",
+                "min": 0,
+                "nullable": true
+              }
+            }
+          },
+          "unique": "slot"
+        }
+      }
+    },
+    "world": {
+      "type": "object",
+      "fields": {
+        "worldId": {
+          "type": "integer",
+          "min": 0
+        },
+        "collisionRevision": {
+          "type": "string"
+        },
+        "npcs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "fields": {
+              "stableId": {
+                "type": "string"
+              },
+              "npcId": {
+                "type": "integer",
+                "min": 0
+              },
+              "npcTypeId": {
+                "type": "integer",
+                "min": 0,
+                "nullable": true
+              },
+              "position": {
+                "type": "object",
+                "fields": {
+                  "x": {
+                    "type": "integer"
+                  },
+                  "y": {
+                    "type": "integer"
+                  },
+                  "plane": {
+                    "type": "integer",
+                    "min": 0
+                  }
+                }
+              },
+              "spotId": {
+                "type": "string",
+                "nullable": true
+              },
+              "actions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "nullable": true
+              },
+              "name": {
+                "type": "string",
+                "nullable": true
+              },
+              "spotType": {
+                "type": "string"
+              },
+              "size": {
+                "type": "integer",
+                "min": 1,
+                "nullable": true
+              },
+              "depletedUntilTick": {
+                "type": "integer",
+                "min": 0
+              },
+              "completedCatches": {
+                "type": "integer",
+                "min": 0
+              },
+              "depletionThreshold": {
+                "type": "integer",
+                "min": 0
+              }
+            }
+          },
+          "unique": "stableId"
+        },
+        "objects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "fields": {
+              "stableId": {
+                "type": "string"
+              },
+              "objectId": {
+                "type": "integer",
+                "min": 0
+              },
+              "position": {
+                "type": "object",
+                "fields": {
+                  "x": {
+                    "type": "integer"
+                  },
+                  "y": {
+                    "type": "integer"
+                  },
+                  "plane": {
+                    "type": "integer",
+                    "min": 0
+                  }
+                }
+              },
+              "actions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "state": {
+                "type": "json",
+                "nullable": true
+              },
+              "open": {
+                "type": "boolean",
+                "nullable": true
+              },
+              "properties": {
+                "type": "map",
+                "values": {
+                  "type": "json"
+                },
+                "nullable": true
+              }
+            }
+          },
+          "unique": "stableId"
+        },
+        "groundItems": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "fields": {
+              "stableId": {
+                "type": "string"
+              },
+              "itemId": {
+                "type": "integer",
+                "min": 0
+              },
+              "quantity": {
+                "type": "integer",
+                "min": 1
+              },
+              "position": {
+                "type": "object",
+                "fields": {
+                  "x": {
+                    "type": "integer"
+                  },
+                  "y": {
+                    "type": "integer"
+                  },
+                  "plane": {
+                    "type": "integer",
+                    "min": 0
+                  }
+                }
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "ownerId": {
+                "type": "integer",
+                "min": 0,
+                "nullable": true
+              },
+              "visibleFromTick": {
+                "type": "integer",
+                "min": 0,
+                "nullable": true
+              },
+              "expiresAtTick": {
+                "type": "integer",
+                "min": 0,
+                "nullable": true
+              }
+            }
+          },
+          "unique": "stableId"
+        },
+        "players": {
+          "type": "array",
+          "items": {
+            "type": "json"
+          },
+          "maxItems": 0
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "fields": {
+        "scheduler": {
+          "type": "object",
+          "fields": {
+            "nextSeq": {
+              "type": "integer",
+              "min": 0
+            },
+            "nextJobNumber": {
+              "type": "integer",
+              "min": 0
+            },
+            "pending": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "fields": {
+                  "jobId": {
+                    "type": "string"
+                  },
+                  "tick": {
+                    "type": "integer",
+                    "min": 0
+                  },
+                  "seq": {
+                    "type": "integer",
+                    "min": 0
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "data": {
+                    "type": "map",
+                    "values": {
+                      "type": "json"
+                    },
+                    "nullable": true
+                  }
+                }
+              },
+              "unique": "jobId"
+            }
+          }
+        },
+        "rng": {
+          "type": "object",
+          "fields": {
+            "seed": {
+              "type": "string"
+            },
+            "state": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "min": 0
+              },
+              "length": 4
+            }
+          }
+        },
+        "clock": {
+          "type": "object",
+          "fields": {
+            "tick": {
+              "type": "integer",
+              "min": 0
+            },
+            "origin": {
+              "type": "string"
+            },
+            "tickDurationMs": {
+              "type": "integer",
+              "enum": [
+                600
+              ]
+            }
+          }
+        },
+        "ids": {
+          "type": "object",
+          "fields": {
+            "counters": {
+              "type": "map",
+              "values": {
+                "type": "integer",
+                "min": 0
+              }
+            }
+          }
+        },
+        "movementPlan": {
+          "type": "object",
+          "fields": {
+            "targetStableId": {
+              "type": "string"
+            },
+            "remainingSteps": {
+              "type": "integer",
+              "min": 0
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "walk",
+                "fishing"
+              ]
+            },
+            "destination": {
+              "type": "object",
+              "fields": {
+                "x": {
+                  "type": "integer"
+                },
+                "y": {
+                  "type": "integer"
+                },
+                "plane": {
+                  "type": "integer",
+                  "min": 0
+                }
+              },
+              "nullable": true
+            },
+            "spotId": {
+              "type": "string",
+              "nullable": true
+            },
+            "methodId": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "nullable": true
+        },
+        "fishingSession": {
+          "type": "object",
+          "fields": {
+            "spotStableId": {
+              "type": "string"
+            },
+            "spotId": {
+              "type": "string",
+              "nullable": true
+            },
+            "methodId": {
+              "type": "string",
+              "nullable": true
+            },
+            "toolItemId": {
+              "type": "integer",
+              "min": 0,
+              "nullable": true
+            },
+            "startedTick": {
+              "type": "integer",
+              "min": 0
+            },
+            "lastRollTick": {
+              "type": "integer",
+              "min": 0
+            }
+          },
+          "nullable": true
+        }
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "fields": {
+        "vars": {
+          "type": "map",
+          "values": {
+            "type": "scalar"
+          }
+        },
+        "dialogue": {
+          "type": "object",
+          "fields": {
+            "stableId": {
+              "type": "string"
+            },
+            "widgetId": {
+              "type": "integer",
+              "min": 0,
+              "nullable": true
+            },
+            "widgetIndex": {
+              "type": "integer",
+              "min": 0,
+              "nullable": true
+            },
+            "options": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "fields": {
+                  "index": {
+                    "type": "integer",
+                    "min": 0
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "unique": "index"
+            },
+            "selectedIndex": {
+              "type": "integer",
+              "min": 0,
+              "nullable": true
+            },
+            "active": {
+              "type": "boolean"
+            }
+          },
+          "nullable": true
+        },
+        "spells": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "fields": {
+              "stableId": {
+                "type": "string"
+              },
+              "spellId": {
+                "type": "integer",
+                "min": 0
+              },
+              "widgetId": {
+                "type": "integer",
+                "min": 0,
+                "nullable": true
+              },
+              "widgetIndex": {
+                "type": "integer",
+                "min": 0,
+                "nullable": true
+              },
+              "name": {
+                "type": "string",
+                "nullable": true
+              },
+              "level": {
+                "type": "integer",
+                "min": 0,
+                "nullable": true
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "runeCosts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "fields": {
+                    "itemId": {
+                      "type": "integer",
+                      "min": 0
+                    },
+                    "quantity": {
+                      "type": "integer",
+                      "min": 1
+                    }
+                  }
+                }
+              },
+              "animation": {
+                "type": "integer",
+                "nullable": true
+              }
+            }
+          },
+          "unique": "stableId"
+        },
+        "widgets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "fields": {
+              "stableId": {
+                "type": "string"
+              },
+              "widgetId": {
+                "type": "integer",
+                "min": 0
+              },
+              "widgetIndex": {
+                "type": "integer",
+                "min": 0
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "text": {
+                "type": "string",
+                "nullable": true
+              },
+              "visible": {
+                "type": "boolean"
+              },
+              "selected": {
+                "type": "boolean",
+                "nullable": true
+              },
+              "kind": {
+                "type": "string",
+                "nullable": true
+              }
+            }
+          },
+          "unique": "stableId"
+        }
+      }
+    },
+    "restoreContext": {
+      "type": "object",
+      "fields": {
+        "manifestDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "runtimeDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "snapshotVersion": {
+          "type": "integer",
+          "enum": [
+            1
+          ]
+        },
+        "nextTransitionOrdinal": {
+          "type": "integer",
+          "min": 0
+        }
+      }
+    }
+  }
+}

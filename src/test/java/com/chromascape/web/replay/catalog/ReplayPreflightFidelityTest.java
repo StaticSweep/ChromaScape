@@ -508,12 +508,13 @@ class ReplayPreflightFidelityTest {
   }
 
   @Test
-  void initialNpcWithUnsupportedSpotTypeBlocksPostPreflight() throws Exception {
+  void referencedGenericNpcWithoutRecordedOptionBlocksPostPreflight() throws Exception {
     TickSnapshot crayfish = completeSpotSnapshot(0L);
     crayfish.setNpcs(
         mapper.readTree(
             "[{\"stableId\":\"spot:a:1\",\"npcId\":331,\"position\":{\"x\":1,\"y\":2,\"plane\":0},\"spotType\":\"crayfish\"}]"));
-    stubPublishedActions();
+    stubPublishedActions(
+        action(0L, 0, "ACCEPTED_LABEL", "INTERACT_NPC", "spot:a:1", "{\"option\":\"net\"}"));
     // Must run AFTER stubPublishedActions, which re-stubs the default snapshot pair.
     stubSnapshots(crayfish, completeSpotSnapshot(1L));
 
@@ -523,15 +524,13 @@ class ReplayPreflightFidelityTest {
 
     assertFalse(
         response.eligibility().simulationEligible(),
-        "a non-blank but unsupported initial spotType must fail, not pass");
+        "a referenced generic NPC without captured menu options must block preflight");
     assertTrue(
         response.eligibility().blockingReasons().stream()
             .anyMatch(
                 r ->
-                    r.code()
-                            == com.chromascape.web.replay.error.ReplayErrorCode
-                                .SIM_INITIAL_WORLD_INCOMPLETE
-                        && r.message().contains("crayfish")));
+                    r.code() == com.chromascape.web.replay.error.ReplayErrorCode.ACTION_UNSUPPORTED
+                        && r.message().contains("spot:a:1")));
   }
 
   @Test

@@ -234,6 +234,15 @@ public class ReplayWorkerPersistenceService {
   @Transactional
   public ArtifactRegistration registerCheckpoint(
       ReplayFence fence, PreparedArtifact preparedSnapshot, ReplayCheckpoint checkpoint) {
+    return registerCheckpoint(fence, preparedSnapshot, null, checkpoint);
+  }
+
+  @Transactional
+  public ArtifactRegistration registerCheckpoint(
+      ReplayFence fence,
+      PreparedArtifact preparedSnapshot,
+      PreparedArtifact preparedChain,
+      ReplayCheckpoint checkpoint) {
     lockedAttempt(fence);
     ReplayRun run = ownedRunForUpdate(fence);
     requireRunning(fence, run);
@@ -246,6 +255,31 @@ public class ReplayWorkerPersistenceService {
           null,
           null,
           null);
+    }
+    if (preparedChain != null) {
+      if (preparedChain.kind() != ArtifactKind.CHAIN) {
+        throw new ReplayException(
+            ReplayErrorCode.VALIDATION_ERROR,
+            org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+            false,
+            "Checkpoint chain evidence requires a CHAIN artifact",
+            null,
+            null,
+            null);
+      }
+      if (!fence.runId().equals(preparedChain.runId())) {
+        throw stale(fence);
+      }
+      if (checkpoint.getRestoreContext() == null || checkpoint.getRestoreContext().isBlank()) {
+        throw new ReplayException(
+            ReplayErrorCode.VALIDATION_ERROR,
+            org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+            false,
+            "Checkpoint chain evidence requires its bound restore context",
+            null,
+            null,
+            null);
+      }
     }
     if (!fence.runId().equals(checkpoint.getRunId())
         || !fence.attemptId().equals(checkpoint.getAttemptId())
@@ -262,11 +296,16 @@ public class ReplayWorkerPersistenceService {
           null,
           null);
     }
-    // ONE PostgreSQL timestamp for BOTH rows created at this fenced boundary.
+    // ONE PostgreSQL timestamp for ALL rows created at this fenced boundary.
     LocalDateTime dbNow = runRepository.currentTimestamp();
     java.time.Instant createdAtUtc = utcInstant(dbNow);
     ArtifactRegistration registration = registerReference(fence, preparedSnapshot, createdAtUtc);
     checkpoint.setSnapshotArtifactChecksum(registration.reference().getChecksum());
+    if (preparedChain != null) {
+      ArtifactRegistration chainRegistration =
+          registerReference(fence, preparedChain, createdAtUtc);
+      checkpoint.setChainArtifactChecksum(chainRegistration.reference().getChecksum());
+    }
     checkpoint.setCreatedAt(createdAtUtc);
     checkpointRepository.save(checkpoint);
     return registration;

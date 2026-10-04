@@ -114,6 +114,14 @@ public record CapabilityManifest(
         && actions.size() == new java.util.HashSet<>(actions).size();
   }
 
+  /** Exact supported profiles; action vocabulary alone never attests an implementation. */
+  public static boolean supportedWorkerActions(List<String> actions, Fidelity fidelity) {
+    return V1_SUPPORTED_ACTIONS.equals(actions)
+        || (fidelity == Fidelity.XRSPS_AUTHORITATIVE && List.of("INTERACT_NPC").equals(actions))
+        || (fidelity == Fidelity.SYNTHETIC_CONTRACT
+            && List.of("WAIT_UNTIL_TICK", "INTERACT_NPC").equals(actions));
+  }
+
   /** Server-produced manifest: forbidden capabilities are hardcoded off, never parameterized. */
   public static CapabilityManifest current(
       CapabilityModes modes, XrspsIdentity xrsps, boolean certifiable) {

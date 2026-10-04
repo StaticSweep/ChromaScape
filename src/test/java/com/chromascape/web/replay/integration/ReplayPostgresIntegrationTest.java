@@ -858,6 +858,102 @@ class ReplayPostgresIntegrationTest {
         "the successful checksum-A reference survives exactly once");
   }
 
+  @Test
+  void failedBoundCheckpointRollsBackSnapshotAndChainReferences() {
+    UUID[] ids = seedRunningRun();
+    ReplayFence fence = fenceOf(ids);
+    PreparedArtifactLike first =
+        stageSnapshot(ids, "snapshotA".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    var chainA =
+        artifactService.prepareArtifact(
+            ids[0],
+            com.chromascape.web.replay.api.dto.ArtifactKind.CHAIN,
+            "chainA".getBytes(java.nio.charset.StandardCharsets.UTF_8),
+            "application/json");
+    var checkpointA = checkpoint(ids, 19L, first.checksum());
+    checkpointA.setRestoreContext("{\"contextVersion\":2}");
+    persistence.registerCheckpoint(fence, first.artifact(), chainA, checkpointA);
+    var loaded = checkpointRepository.findById(checkpointA.getId()).orElseThrow();
+    assertEquals(chainA.checksum(), loaded.getChainArtifactChecksum());
+    assertEquals(checkpointA.getRestoreContext(), loaded.getRestoreContext());
+    PreparedArtifactLike second =
+        stageSnapshot(ids, "snapshotB".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    var chainB =
+        artifactService.prepareArtifact(
+            ids[0],
+            com.chromascape.web.replay.api.dto.ArtifactKind.CHAIN,
+            "chainB".getBytes(java.nio.charset.StandardCharsets.UTF_8),
+            "application/json");
+    var checkpointB = checkpoint(ids, 19L, second.checksum());
+    checkpointB.setRestoreContext(checkpointA.getRestoreContext());
+    assertThrows(
+        DataIntegrityViolationException.class,
+        () -> persistence.registerCheckpoint(fence, second.artifact(), chainB, checkpointB));
+    assertEquals(0, artifactCount(ids[0], second.checksum()));
+    assertEquals(0, artifactCount(ids[0], chainB.checksum()));
+    assertEquals(1, artifactCount(ids[0], first.checksum()));
+    assertEquals(1, artifactCount(ids[0], chainA.checksum()));
+    ReplayFence stale =
+        new ReplayFence(
+            fence.runId(),
+            fence.attemptId(),
+            fence.attemptNo(),
+            fence.fencingGeneration() + 1,
+            fence.workerIdentity());
+    assertThrows(
+        ReplayException.class,
+        () -> persistence.registerCheckpoint(stale, second.artifact(), chainB, checkpointB));
+    assertEquals(0, artifactCount(ids[0], chainB.checksum()));
+  }
+
+  @Test
+  void realCausalSamplesAndProjectionArtifactRoundTripThroughPostgres() throws Exception {
+    UUID[] ids = seedRunningRun();
+    ReplayFence fence = fenceOf(ids);
+    com.fasterxml.jackson.databind.ObjectMapper mapper =
+        new com.fasterxml.jackson.databind.ObjectMapper();
+    com.fasterxml.jackson.databind.JsonNode evidence;
+    try (var input =
+        getClass().getResourceAsStream("/replay/contracts/sc275-worker-evidence.json")) {
+      evidence = mapper.readTree(input);
+    }
+    long ordinal = 0;
+    for (String response : List.of("reset", "step", "rejected", "terminal")) {
+      var wire = evidence.path(response).path("causalSample");
+      var sample =
+          new com.chromascape.web.replay.run.entity.StateHashSample(
+              ids[0],
+              wire.path("tick").longValue(),
+              wire.path("sequence").intValue(),
+              2,
+              wire.path("stateHash").asText(),
+              wire.path("chainHash").asText());
+      sample.setTransitionOrdinal(ordinal++);
+      persistence.appendActionResult(fence, List.of(), sample);
+    }
+    var loaded = hashSampleRepository.findByIdRunIdOrderByIdTickAscIdSequenceAsc(ids[0]);
+    assertEquals(4, loaded.size());
+    for (int index = 0; index < loaded.size(); index++) {
+      assertEquals(2, loaded.get(index).getProjectionVersion());
+      assertEquals((long) index, loaded.get(index).getTransitionOrdinal());
+    }
+    byte[] bytes =
+        com.chromascape.web.replay.hash.CausalCanonicalJson.canonicalize(
+                evidence.path("step").path("causalProjection"))
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    var prepared =
+        artifactService.prepareArtifact(
+            ids[0],
+            com.chromascape.web.replay.api.dto.ArtifactKind.PROJECTION,
+            bytes,
+            "application/json");
+    var registration = persistence.registerArtifact(fence, prepared);
+    assertEquals(1, artifactCount(ids[0], prepared.checksum()));
+    assertEquals(
+        com.chromascape.web.replay.api.dto.ArtifactKind.PROJECTION,
+        registration.reference().getKind());
+  }
+
   private record PreparedArtifactLike(
       com.chromascape.web.replay.artifact.PreparedArtifact artifact, String checksum) {}
 
@@ -925,10 +1021,9 @@ class ReplayPostgresIntegrationTest {
                   status ->
                       entityManager
                           .createNativeQuery(
-                              "SELECT pid, state, wait_event_type, wait_event,"
-                                  + " left(query, 120), now() - xact_start AS tx_age"
-                                  + " FROM pg_stat_activity"
-                                  + " WHERE datname = current_database() AND pid <> pg_backend_pid()"
+                              "SELECT pid, state, wait_event_type, wait_event, left(query, 120),"
+                                  + " now() - xact_start AS tx_age FROM pg_stat_activity WHERE"
+                                  + " datname = current_database() AND pid <> pg_backend_pid()"
                                   + " ORDER BY pid")
                           .getResultList());
       for (Object row : blocked) {

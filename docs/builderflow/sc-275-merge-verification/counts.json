@@ -1,0 +1,27 @@
+{
+  "replayTest": {
+    "tests": 27,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "replayFedoraCertificationTest": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "fullReplay": {
+    "tests": 355,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "typescript": {
+    "unitPass": 142,
+    "unitSkip": 1,
+    "integrationPass": 16,
+    "failures": 0,
+    "pythonOracleChecks": 25
+  }
+}

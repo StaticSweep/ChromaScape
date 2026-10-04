@@ -51,6 +51,23 @@ class KernelProtocolCodecTest {
     assertEquals("TICK_MISMATCH", msg.error().path("code").asText());
   }
 
+  @Test
+  void rejectedCausalEvidenceIsAvailableWithoutWeakeningEnvelopeValidation() throws Exception {
+    ObjectMapper mapper = new ObjectMapper();
+    try (var input =
+        getClass().getResourceAsStream("/replay/contracts/sc275-worker-evidence.json")) {
+      var evidence = mapper.readTree(input).path("rejected");
+      var envelope = mapper.createObjectNode().put("id", "sc275").put("ok", false);
+      envelope.putObject("error").put("code", "TICK_MISMATCH").set("causalEvidence", evidence);
+      var message = codec.decode(mapper.writeValueAsString(envelope));
+      assertTrue(message.isError());
+      assertFalse(message.fatal());
+      assertEquals(evidence, message.result());
+      envelope.set("result", evidence);
+      assertTrue(codec.decode(mapper.writeValueAsString(envelope)).fatal());
+    }
+  }
+
   // ── exact TypeScript worker envelope contract ──
 
   @Test

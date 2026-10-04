@@ -312,7 +312,11 @@ public class ReplayV2RunService {
     List<StateHashSample> samples =
         hashSampleRepository.findByIdRunIdOrderByIdTickAscIdSequenceAsc(run.getId());
     ObjectNode document = mapper.createObjectNode();
-    document.put("schema", "xrsps-replay-hashes/v1");
+    document.put(
+        "schema",
+        samples.stream().anyMatch(s -> s.getProjectionVersion() == 2)
+            ? "xrsps-replay-hashes/v2"
+            : "xrsps-replay-hashes/v1");
     document.put("runId", run.getId().toString());
     ArrayNode values = document.putArray("samples");
     for (StateHashSample sample : samples) {
@@ -320,6 +324,10 @@ public class ReplayV2RunService {
       value.put("tick", sample.getId().getTick());
       value.put("sequence", sample.getId().getSequence());
       value.put("projectionVersion", sample.getProjectionVersion());
+      if (sample.getTransitionOrdinal() != null) {
+        value.put("ordinal", sample.getTransitionOrdinal());
+        value.put("hashVersion", "sha256-semantic-state-v2");
+      }
       value.put("stateHash", sample.getStateHash());
       value.put("chainHash", sample.getChainHash());
     }
