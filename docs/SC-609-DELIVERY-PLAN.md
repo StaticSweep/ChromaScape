@@ -108,3 +108,11 @@ Stable invalid provenance/context/contract/alignment/quality codes; audited acto
 - [ ] UI: Node/JSDOM cursor pagination, account/task grouping, null/empty args, XSS and video-only visibility; scoped Java compile/style/whitespace regression checks.
 ## Delivery and rollback
 Evidence notes must enumerate changed files, actual tests, remaining work; verification must enumerate acceptance results, tests, risks, rollback. Keep task and Shortcut truthful if producer integration or unauthorized checks remain. Feature rollback disables new provenance consumers/UI; additive nullable columns retained to preserve recordings. No merge/deploy/database reset.
+
+## Acceptance scope revision — 2026-10-03
+
+User instruction: Fedora is the delivery target; successful Fedora verification is sufficient. Windows qualification is outside SC-609 completion scope. This supersedes the earlier both-platform requirement. Retain all data integrity, provenance, eligibility and recovery acceptance criteria. Use the Fedora manual acceptance checklist in [SC-609-VERIFICATION.md](SC-609-VERIFICATION.md); record the live capture, reconnect/client-restart and browser results before Done. Automated Fedora suites already passed; user-provided Micro6 compile/full-suite evidence is recorded there. CI monitoring and Felix remain skipped by user instruction. Both coordinated PRs are merged; no deployment or shared database reset is implied.
+
+## Fedora acceptance closeout — 2026-10-04
+
+The user supplied Fedora 44 runtime/API PASS conditional on two fixes. Integrate the producer run-context number normalization (Micro6 #161) and local recordings principal bridge (ChromaScape #52), with boot-required migration versions isolated in #51 and the corresponding convergence-resource fix in #53. Nine focused regression tests were rerun successfully on current main. Use the user-declared runtime/API PASS for completion; preserve browser verification, video and catalog multi-page checks as follow-up gaps and do not claim they ran. Existing unrelated FishingTrainingTask/thread, connection-loss, exception-mapping and stale ignored PID issues remain outside this delivery. Felix and CI monitoring stay skipped; no Felix Done transition is claimed. Full report, changed files and rollback are in SC-609-VERIFICATION.md.
