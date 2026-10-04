@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
 @Component
 @DependsOn("entityManagerFactory")
 public class RecordingProvenanceConvergence implements ApplicationRunner {
+  static final String MIGRATION_RESOURCE = "db/migration/V62__recording_provenance.sql";
+
   private final DataSource source;
 
   public RecordingProvenanceConvergence(DataSource source) {
@@ -23,7 +25,7 @@ public class RecordingProvenanceConvergence implements ApplicationRunner {
     // PostgreSQL procedural blocks contain semicolons; use a delimiter absent from the script.
     var populator =
         new ResourceDatabasePopulator(
-            new ClassPathResource("db/migration/V33__recording_provenance.sql"));
+            new ClassPathResource(MIGRATION_RESOURCE));
     populator.setSeparator(
         org.springframework.jdbc.datasource.init.ScriptUtils.EOF_STATEMENT_SEPARATOR);
     populator.execute(source);
