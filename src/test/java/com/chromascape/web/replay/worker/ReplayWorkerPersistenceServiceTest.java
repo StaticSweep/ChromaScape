@@ -262,6 +262,89 @@ class ReplayWorkerPersistenceServiceTest {
   }
 
   @Test
+  void registerCheckpointWithChainPersistsBothReferencesAndBindsRow() {
+    PreparedArtifact prepared = snapshotPrepared();
+    PreparedArtifact chain = chainPrepared();
+    when(artifactRefRepository.findByRunIdAndKindAndChecksum(
+            runId, ArtifactKind.SNAPSHOT, prepared.checksum()))
+        .thenReturn(Optional.empty());
+    when(artifactRefRepository.findByRunIdAndKindAndChecksum(
+            runId, ArtifactKind.CHAIN, chain.checksum()))
+        .thenReturn(Optional.empty());
+    when(artifactRefRepository.save(any(ArtifactRef.class))).thenAnswer(inv -> inv.getArgument(0));
+    ReplayCheckpoint checkpoint = checkpoint();
+    checkpoint.setRestoreContext("{\"contextVersion\":2}");
+
+    ArtifactRef ref = service.registerCheckpoint(fence, prepared, chain, checkpoint).reference();
+
+    assertEquals(prepared.checksum(), ref.getChecksum());
+    assertEquals(prepared.checksum(), checkpoint.getSnapshotArtifactChecksum());
+    assertEquals(chain.checksum(), checkpoint.getChainArtifactChecksum());
+    verify(checkpointRepository).save(checkpoint);
+  }
+
+  @Test
+  void registerCheckpointRejectsNonChainKindForChainEvidence() {
+    PreparedArtifact prepared = snapshotPrepared();
+    PreparedArtifact notChain = snapshotPrepared();
+    ReplayCheckpoint checkpoint = checkpoint();
+    checkpoint.setRestoreContext("{\"contextVersion\":2}");
+
+    ReplayException e =
+        assertThrows(
+            ReplayException.class,
+            () -> service.registerCheckpoint(fence, prepared, notChain, checkpoint));
+    assertEquals(ReplayErrorCode.VALIDATION_ERROR, e.getErrorCode());
+    verify(checkpointRepository, never()).save(any());
+  }
+
+  @Test
+  void registerCheckpointRejectsChainWithoutRestoreContext() {
+    PreparedArtifact prepared = snapshotPrepared();
+    PreparedArtifact chain = chainPrepared();
+    ReplayCheckpoint missingContext = checkpoint();
+
+    ReplayException e =
+        assertThrows(
+            ReplayException.class,
+            () -> service.registerCheckpoint(fence, prepared, chain, missingContext));
+    assertEquals(ReplayErrorCode.VALIDATION_ERROR, e.getErrorCode());
+    verify(checkpointRepository, never()).save(any());
+
+    ReplayCheckpoint blankContext = checkpoint();
+    blankContext.setRestoreContext("  ");
+    ReplayException blank =
+        assertThrows(
+            ReplayException.class,
+            () -> service.registerCheckpoint(fence, prepared, chain, blankContext));
+    assertEquals(ReplayErrorCode.VALIDATION_ERROR, blank.getErrorCode());
+    verify(checkpointRepository, never()).save(any());
+  }
+
+  @Test
+  void registerCheckpointRejectsForeignChainRunId() {
+    PreparedArtifact prepared = snapshotPrepared();
+    PreparedArtifact foreignChain =
+        new PreparedArtifact(
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            ArtifactKind.CHAIN,
+            "sha256:" + "e".repeat(64),
+            64,
+            "application/json",
+            Path.of("unused"));
+    ReplayCheckpoint checkpoint = checkpoint();
+    checkpoint.setRestoreContext("{\"contextVersion\":2}");
+
+    ReplayException e =
+        assertThrows(
+            ReplayException.class,
+            () -> service.registerCheckpoint(fence, prepared, foreignChain, checkpoint));
+    assertEquals(ReplayErrorCode.ATTEMPT_STALE_FENCE, e.getErrorCode());
+    verify(checkpointRepository, never()).save(any());
+  }
+
+  @Test
   void registerArtifactInsertsStagingReferenceAndCopiesMediaType() {
     PreparedArtifact prepared = prepared();
     when(artifactRefRepository.findByRunIdAndKindAndChecksum(
@@ -904,6 +987,17 @@ class ReplayWorkerPersistenceServiceTest {
         ArtifactKind.SNAPSHOT,
         "sha256:" + "c".repeat(64),
         256,
+        "application/json",
+        Path.of("unused"));
+  }
+
+  private PreparedArtifact chainPrepared() {
+    return new PreparedArtifact(
+        UUID.randomUUID(),
+        runId,
+        ArtifactKind.CHAIN,
+        "sha256:" + "d".repeat(64),
+        128,
         "application/json",
         Path.of("unused"));
   }

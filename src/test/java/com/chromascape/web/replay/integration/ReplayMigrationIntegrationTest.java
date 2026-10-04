@@ -65,7 +65,9 @@ class ReplayMigrationIntegrationTest {
       "V30__replay_pre_execution_reports.sql",
       "V31__replay_playback_catalog_pagination.sql",
       "V25__replay_v2_metadata.sql",
-      "V26__replay_v2_request_identity.sql"
+      "V26__replay_v2_request_identity.sql",
+      "V63__sc275_causal_restore_bindings.sql",
+      "V64__sc275_causal_projection_samples.sql"
     };
     for (String script : scripts) {
       try (var in =
@@ -131,6 +133,37 @@ class ReplayMigrationIntegrationTest {
       assertFalse(
           columnNotNull(connection, "replay_reports", "attempt_id"),
           "V30 must drop NOT NULL from replay_reports.attempt_id");
+    }
+  }
+
+  @Test
+  void causalBindingsUpgradePreviousSchemaAndValidate() throws Exception {
+    try (PostgreSQLContainer<?> pg = postgres("sc275_upgrade");
+        Connection connection = connect(pg)) {
+      Flyway.configure()
+          .dataSource(pg.getJdbcUrl(), pg.getUsername(), pg.getPassword())
+          .locations(replayMigrations())
+          .target("31")
+          .load()
+          .migrate();
+      assertFalse(columnExists(connection, "replay_checkpoints", "restore_context"));
+      assertEquals(2, flyway(pg, replayMigrations()).migrate().migrationsExecuted);
+      assertDoesNotThrow(() -> flyway(pg, replayMigrations()).validate());
+      assertTrue(columnExists(connection, "replay_checkpoints", "restore_context"));
+      assertTrue(columnExists(connection, "replay_checkpoints", "chain_artifact_checksum"));
+      assertTrue(columnExists(connection, "state_hash_samples", "transition_ordinal"));
+      assertFalse(columnNotNull(connection, "replay_checkpoints", "restore_context"));
+      try (var result =
+          connection
+              .createStatement()
+              .executeQuery(
+                  "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE"
+                      + " conname='artifact_refs_kind_check'")) {
+        assertTrue(result.next());
+        String definition = result.getString(1);
+        assertTrue(definition.contains("CHAIN"));
+        assertTrue(definition.contains("PROJECTION"));
+      }
     }
   }
 
@@ -271,12 +304,12 @@ class ReplayMigrationIntegrationTest {
               + "', 'tester')");
       exec(
           connection,
-          "INSERT INTO scenario_manifests (id, curation_id, recording_id,"
-              + " debug_session_id, recording_checksum, debug_session_checksum, compiler_version,"
-              + " compiler_schema_version, xrsps_adapter_version, xrsps_build_commit, cache_revision,"
-              + " content_revision, seed, fixed_clock_origin, start_tick, end_tick, manifest_json,"
-              + " manifest_checksum, completeness, publish_state, created_at)"
-              + " VALUES (gen_random_uuid(), (SELECT id FROM recording_curations LIMIT 1), 'rec-v21',"
+          "INSERT INTO scenario_manifests (id, curation_id, recording_id, debug_session_id,"
+              + " recording_checksum, debug_session_checksum, compiler_version,"
+              + " compiler_schema_version, xrsps_adapter_version, xrsps_build_commit,"
+              + " cache_revision, content_revision, seed, fixed_clock_origin, start_tick, end_tick,"
+              + " manifest_json, manifest_checksum, completeness, publish_state, created_at) VALUES"
+              + " (gen_random_uuid(), (SELECT id FROM recording_curations LIMIT 1), 'rec-v21',"
               + " 'sess-v21', 'sha256:"
               + "a".repeat(64)
               + "', 'sha256:"
@@ -287,8 +320,8 @@ class ReplayMigrationIntegrationTest {
               + "', 'COMPLETE', 'PUBLISHED', now())");
       exec(
           connection,
-          "INSERT INTO replay_runs (id, mode, manifest_id, manifest_checksum,"
-              + " owner_id, idempotency_key, state, phase, stop_policy, control_allowed, branch_key,"
+          "INSERT INTO replay_runs (id, mode, manifest_id, manifest_checksum, owner_id,"
+              + " idempotency_key, state, phase, stop_policy, control_allowed, branch_key,"
               + " created_at) VALUES ('"
               + UUID.randomUUID()
               + "', 'CAUSAL_SIMULATION', (SELECT id FROM scenario_manifests LIMIT 1), 'sha256:"
@@ -319,8 +352,8 @@ class ReplayMigrationIntegrationTest {
       UUID secondRunId = UUID.randomUUID();
       exec(
           connection,
-          "INSERT INTO replay_runs (id, mode, manifest_id, manifest_checksum,"
-              + " owner_id, idempotency_key, state, phase, stop_policy, control_allowed, branch_key,"
+          "INSERT INTO replay_runs (id, mode, manifest_id, manifest_checksum, owner_id,"
+              + " idempotency_key, state, phase, stop_policy, control_allowed, branch_key,"
               + " created_at) VALUES ('"
               + secondRunId
               + "', 'CAUSAL_SIMULATION', (SELECT id FROM scenario_manifests LIMIT 1), 'sha256:"
@@ -334,11 +367,11 @@ class ReplayMigrationIntegrationTest {
               () ->
                   exec(
                       connection,
-                      "INSERT INTO replay_reports (id, run_id, attempt_id, mode,"
-                          + " manifest_checksum, outcome, executed_action_count, checkpoint_count,"
-                          + " mismatch_hard_count, mismatch_soft_count, mismatch_info_count, report_json,"
-                          + " report_checksum, control_allowed, finalized_at)"
-                          + " VALUES (gen_random_uuid(), '"
+                      "INSERT INTO replay_reports (id, run_id, attempt_id, mode, manifest_checksum,"
+                          + " outcome, executed_action_count, checkpoint_count,"
+                          + " mismatch_hard_count, mismatch_soft_count, mismatch_info_count,"
+                          + " report_json, report_checksum, control_allowed, finalized_at) VALUES"
+                          + " (gen_random_uuid(), '"
                           + secondRunId
                           + "', '"
                           + UUID.randomUUID()

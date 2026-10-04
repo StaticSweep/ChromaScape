@@ -294,6 +294,14 @@ public class XrspsStartupValidator {
     requireFidelity(problems, node);
     requireSupportedActionSubset(problems, node);
     requireViewerTraceSchema(problems, node);
+    if (node.has("causal")) {
+      try {
+        com.chromascape.web.replay.hash.CausalVersionNegotiation.requireCausalV2(
+            node.get("causal"));
+      } catch (RuntimeException invalid) {
+        problems.add("causal version combination unsupported");
+      }
+    }
 
     JsonNode xrsps = node.get("xrsps");
     if (xrsps == null || !xrsps.isObject()) {
@@ -356,6 +364,18 @@ public class XrspsStartupValidator {
       }
       if (!seen.add(action.asText())) {
         problems.add("supportedActions contains a duplicate action: " + action.asText());
+      }
+    }
+    if (node.has("causal")) {
+      List<String> actions = new ArrayList<>();
+      array.forEach(action -> actions.add(action.asText()));
+      try {
+        if (!CapabilityManifest.supportedWorkerActions(
+            actions, CapabilityManifest.Fidelity.valueOf(node.path("fidelity").asText()))) {
+          problems.add("supportedActions must match a pinned causal-v2 profile");
+        }
+      } catch (IllegalArgumentException invalid) {
+        problems.add("fidelity is unsupported");
       }
     }
   }

@@ -233,4 +233,24 @@ class ReplayArtifactServiceReuseTest {
         com.chromascape.web.replay.error.ReplayException.class,
         () -> service.publishArtifacts(runId));
   }
+
+  @Test
+  void prepareRejectsOversizeContent() {
+    ReplayProperties properties = new ReplayProperties();
+    properties.getArtifacts().setRoot(tempRoot.toString());
+    properties.getArtifacts().setMaxArtifactBytes(4);
+    ReplayArtifactService bounded = new ReplayArtifactService(repo, properties);
+
+    var failure =
+        assertThrows(
+            com.chromascape.web.replay.error.ReplayException.class,
+            () ->
+                bounded.prepareArtifact(
+                    UUID.randomUUID(),
+                    ArtifactKind.TRACE,
+                    "too-big".getBytes(),
+                    "application/octet-stream"));
+    assertEquals(org.springframework.http.HttpStatus.PAYLOAD_TOO_LARGE, failure.getHttpStatus());
+    verifyNoInteractions(repo);
+  }
 }

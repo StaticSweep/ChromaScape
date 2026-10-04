@@ -205,6 +205,19 @@ public class ReplayRunService {
     run.setContentRevision(manifest.getContentRevision());
   }
 
+  private void copyRunMetadata(ReplayRun run, ReplayRun parent) {
+    run.setManifestVersion(parent.getManifestVersion());
+    run.setFidelity(parent.getFidelity());
+    run.setConversionQuality(parent.getConversionQuality());
+    run.setActionCoveragePct(parent.getActionCoveragePct());
+    run.setGapCount(parent.getGapCount());
+    run.setApproximationCount(parent.getApproximationCount());
+    run.setXrspsAdapterVersion(parent.getXrspsAdapterVersion());
+    run.setXrspsBuildCommit(parent.getXrspsBuildCommit());
+    run.setCacheRevision(parent.getCacheRevision());
+    run.setContentRevision(parent.getContentRevision());
+  }
+
   // ── query ──
 
   @Transactional(readOnly = true)
@@ -325,6 +338,7 @@ public class ReplayRunService {
     retry.setControlAllowed(false);
     retry.setParentRunId(parent.getId());
     retry.setCreatedAt(LocalDateTime.now());
+    copyRunMetadata(retry, parent);
     retry = runRepository.save(retry);
     return toResponse(retry);
   }
@@ -385,6 +399,7 @@ public class ReplayRunService {
     branch.setParentRunId(parent.getId());
     branch.setParentCheckpointId(checkpoint.getId());
     branch.setCreatedAt(LocalDateTime.now());
+    copyManifestMetadata(branch, manifest);
     branch = runRepository.save(branch);
     log.info(
         "Created branch run {} from run {} checkpoint {}",

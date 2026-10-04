@@ -21,6 +21,7 @@ import com.chromascape.web.replay.artifact.repository.ArtifactRefRepository;
 import com.chromascape.web.replay.config.ReplayProperties;
 import com.chromascape.web.replay.error.ReplayErrorCode;
 import com.chromascape.web.replay.error.ReplayException;
+import com.chromascape.web.replay.hash.SemanticHashV2;
 import com.chromascape.web.replay.kernel.KernelProtocolCodec.KernelMessage;
 import com.chromascape.web.replay.kernel.XrspsKernelProcess;
 import com.chromascape.web.replay.manifest.contract.RuntimeIdentity;
@@ -142,7 +143,7 @@ class ReplayWorkerBranchRestoreTest {
 
     snapBytes = canonicalSnapshotBytes(7L);
 
-    ArtifactRef ref = finalizedSnapshotRef(snapBytes);
+    ArtifactRef ref = finalizedRef(snapBytes, ArtifactKind.SNAPSHOT);
 
     checkpoint =
         new ReplayCheckpoint(
@@ -156,6 +157,39 @@ class ReplayWorkerBranchRestoreTest {
             "main");
     checkpoint.setActionIndex(3);
     checkpoint.setSnapshotArtifactChecksum(ref.getChecksum());
+
+    // SC-275 bound restore evidence: context plus finalized CHAIN artifact.
+    String runtimeDigest =
+        SemanticHashV2.runtimeDigest(
+            liveIdentity.xrspsAdapterVersion(),
+            liveIdentity.xrspsBuildCommit(),
+            liveIdentity.cacheRevision(),
+            liveIdentity.contentRevision());
+    String genesis = SemanticHashV2.genesisHash(MANIFEST_DIGEST, runtimeDigest);
+    ObjectNode resetFrame = v2Frame(0, 0, 0, "RESET", "ABSTAINED", "no-action", genesis);
+    ObjectNode firstFrame =
+        v2Frame(1, 1, 0, "ACTION", "ACCEPTED", "applied", resetFrame.path("chainHash").asText());
+    java.util.List<JsonNode> prefixFrames = java.util.List.of(resetFrame, firstFrame);
+    ObjectNode context = mapper.createObjectNode();
+    context.put("contextVersion", 2);
+    context.put("manifestDigest", MANIFEST_DIGEST);
+    context.put("runtimeDigest", runtimeDigest);
+    context.put("snapshotVersion", 1);
+    context.put("snapshotDigest", projectionService.sha256Hex(snapBytes));
+    context.put("checkpointStateDigest", digest("checkpoint-state"));
+    context.put("tick", 42);
+    context.put("nextTransitionOrdinal", prefixFrames.size());
+    context.put("predecessorChainHash", firstFrame.path("chainHash").asText());
+    checkpoint.setRestoreContext(canonical(context));
+    chainBytes =
+        projectionService.canonicalJsonBytes(mapper.createArrayNode().addAll(prefixFrames));
+    ArtifactRef chainRef = finalizedRef(chainBytes, ArtifactKind.CHAIN);
+    checkpoint.setChainArtifactChecksum(chainRef.getChecksum());
+    lenient()
+        .when(
+            artifactRefRepository.findByRunIdAndKindAndChecksum(
+                eq(parentRunId), eq(ArtifactKind.CHAIN), anyString()))
+        .thenReturn(Optional.of(chainRef));
 
     ReplayRun childRun = childBranchRun();
 
@@ -182,6 +216,7 @@ class ReplayWorkerBranchRestoreTest {
   private byte[] canonicalSnapshotBytes(long nextOrdinal) {
     ObjectNode snapshot = mapper.createObjectNode();
     snapshot.put("snapshotVersion", 1);
+    snapshot.put("tick", 42L);
     snapshot
         .putObject("runtimeIdentity")
         .put("xrspsAdapterVersion", liveIdentity.xrspsAdapterVersion())
@@ -211,12 +246,73 @@ class ReplayWorkerBranchRestoreTest {
     }
   }
 
-  /** Published SNAPSHOT artifact content address over the complete serialized bytes. */
-  private ArtifactRef finalizedSnapshotRef(byte[] bytes) {
+  private static final String MANIFEST_DIGEST = "sha256:" + "ab".repeat(32);
+
+  private byte[] chainBytes;
+
+  /** SC-275 v2 transition frame with a recomputed chain hash. */
+  private ObjectNode v2Frame(
+      int ordinal,
+      long tick,
+      long sequence,
+      String kind,
+      String result,
+      String message,
+      String previous) {
+    ObjectNode frame = mapper.createObjectNode();
+    frame.put("traceVersion", 2);
+    frame.put("manifestDigest", MANIFEST_DIGEST);
+    String runtimeDigest =
+        SemanticHashV2.runtimeDigest(
+            liveIdentity.xrspsAdapterVersion(),
+            liveIdentity.xrspsBuildCommit(),
+            liveIdentity.cacheRevision(),
+            liveIdentity.contentRevision());
+    frame.put("runtimeDigest", runtimeDigest);
+    frame.put("tick", tick);
+    frame.put("sequence", sequence);
+    frame.put("ordinal", ordinal);
+    frame.put("kind", kind);
+    String actionDigest = SemanticHashV2.nullActionDigest();
+    String resultDigest = SemanticHashV2.resultDigest(result, message);
+    frame.put("actionDigest", actionDigest);
+    frame.put("resultDigest", resultDigest);
+    frame.put("stateHash", observationStateHash);
+    frame.put("previousChainHash", previous);
+    frame.put(
+        "chainHash",
+        SemanticHashV2.chainHash(
+            MANIFEST_DIGEST,
+            runtimeDigest,
+            previous,
+            tick,
+            sequence,
+            ordinal,
+            kind,
+            actionDigest,
+            resultDigest,
+            observationStateHash));
+    return frame;
+  }
+
+  private String canonical(JsonNode node) {
+    try {
+      return new String(
+          projectionService.canonicalJsonBytes(node), java.nio.charset.StandardCharsets.UTF_8);
+    } catch (Exception e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  private ObjectNode manifestDoc() {
+    return mapper.createObjectNode().put("manifestChecksum", MANIFEST_DIGEST);
+  }
+
+  /** Published artifact content address over the complete serialized bytes. */
+  private ArtifactRef finalizedRef(byte[] bytes, ArtifactKind kind) {
     String contentAddress = projectionService.sha256Hex(bytes);
     ArtifactRef ref =
-        new ArtifactRef(
-            UUID.randomUUID(), parentRunId, ArtifactKind.SNAPSHOT, contentAddress, bytes.length);
+        new ArtifactRef(UUID.randomUUID(), parentRunId, kind, contentAddress, bytes.length);
     ref.setMediaType("application/json");
     ref.setState(ArtifactRef.STATE_FINALIZED);
     return ref;
@@ -263,8 +359,9 @@ class ReplayWorkerBranchRestoreTest {
   void publishedCheckpointRestoresContinuesAndPreservesChainLineage() throws Exception {
     kernel = mock(XrspsKernelProcess.class);
 
-    // Step 4: the worker reads and hashes the STORED bytes through the artifact service.
-    when(artifactService.readFinalized(any(ArtifactRef.class))).thenReturn(snapBytes);
+    // Step 4: the worker reads and hashes the STORED bytes through the artifact service —
+    // snapshot bytes first, then the bound chain artifact.
+    when(artifactService.readFinalized(any(ArtifactRef.class))).thenReturn(snapBytes, chainBytes);
 
     // Step 6: fresh kernel answers restore landing exactly on the checkpoint tick…
     ObjectNode restoreResult = mapper.createObjectNode().put("restoredTick", 42L);
@@ -280,12 +377,23 @@ class ReplayWorkerBranchRestoreTest {
             heartbeatHandle(),
             kernel,
             runRepository.findById(childRunId).orElseThrow(),
-            mapper.createObjectNode(),
+            manifestDoc(),
             liveIdentity,
             es);
 
     assertEquals(42L, restored.tick());
     assertEquals(3, restored.actionIndex());
+
+    // The worker restore carries the bound context, prefix frames, and manifest.
+    org.mockito.ArgumentCaptor<JsonNode> restoreParams =
+        org.mockito.ArgumentCaptor.forClass(JsonNode.class);
+    org.mockito.Mockito.verify(kernel).send(eq("restore"), restoreParams.capture(), anyLong());
+    assertNotNull(restoreParams.getValue().path("context"));
+    assertEquals(2, restoreParams.getValue().path("context").path("contextVersion").asInt());
+    assertEquals(2, restoreParams.getValue().path("priorFrames").size());
+    assertEquals(
+        MANIFEST_DIGEST,
+        restoreParams.getValue().path("manifest").path("manifestChecksum").asText());
 
     // Chain lineage: execution continues from the PARENT chain hash, never from genesis.
     assertEquals(parentChainHash, es.chainHash, "child must inherit the parent chain hash");
@@ -416,6 +524,272 @@ class ReplayWorkerBranchRestoreTest {
                     liveIdentity,
                     new ExecutionState(genesis())));
     assertEquals(ReplayErrorCode.CHECKSUM_MISMATCH, e.getErrorCode());
+  }
+
+  @Test
+  void legacyCheckpointWithoutBindingsFailsClosedBeforeKernelRestore() throws Exception {
+    when(artifactService.readFinalized(any(ArtifactRef.class))).thenReturn(snapBytes);
+    checkpoint.setRestoreContext(null);
+    checkpoint.setChainArtifactChecksum(null);
+    kernel = mock(XrspsKernelProcess.class);
+
+    ReplayException e =
+        assertThrows(
+            ReplayException.class,
+            () ->
+                worker.restoreFromCheckpoint(
+                    heartbeatHandle(),
+                    kernel,
+                    runRepository.findById(childRunId).orElseThrow(),
+                    manifestDoc(),
+                    liveIdentity,
+                    new ExecutionState(genesis())));
+    assertEquals(ReplayErrorCode.SNAPSHOT_INCOMPATIBLE, e.getErrorCode());
+    // The kernel restore is never reached for unbound historical rows.
+    org.mockito.Mockito.verify(kernel, org.mockito.Mockito.never())
+        .send(eq("restore"), any(JsonNode.class), anyLong());
+  }
+
+  @Test
+  void substitutedRestoreContextFailsContentAddress() throws Exception {
+    when(artifactService.readFinalized(any(ArtifactRef.class))).thenReturn(snapBytes, chainBytes);
+    ObjectNode substituted;
+    try {
+      substituted = (ObjectNode) mapper.readTree(checkpoint.getRestoreContext());
+    } catch (Exception e) {
+      throw new IllegalStateException(e);
+    }
+    substituted.put("manifestDigest", "sha256:" + "ee".repeat(32));
+    checkpoint.setRestoreContext(canonical(substituted));
+    kernel = mock(XrspsKernelProcess.class);
+
+    ReplayException e =
+        assertThrows(
+            ReplayException.class,
+            () ->
+                worker.restoreFromCheckpoint(
+                    heartbeatHandle(),
+                    kernel,
+                    runRepository.findById(childRunId).orElseThrow(),
+                    manifestDoc(),
+                    liveIdentity,
+                    new ExecutionState(genesis())));
+    assertEquals(ReplayErrorCode.CHECKSUM_MISMATCH, e.getErrorCode());
+  }
+
+  @Test
+  void tamperedChainBytesFailContentAddressVerification() throws Exception {
+    byte[] tampered = chainBytes.clone();
+    tampered[tampered.length / 2] ^= 0x01;
+    when(artifactService.readFinalized(any(ArtifactRef.class))).thenReturn(snapBytes, tampered);
+    kernel = mock(XrspsKernelProcess.class);
+
+    ReplayException e =
+        assertThrows(
+            ReplayException.class,
+            () ->
+                worker.restoreFromCheckpoint(
+                    heartbeatHandle(),
+                    kernel,
+                    runRepository.findById(childRunId).orElseThrow(),
+                    manifestDoc(),
+                    liveIdentity,
+                    new ExecutionState(genesis())));
+    assertEquals(ReplayErrorCode.CHECKSUM_MISMATCH, e.getErrorCode());
+    org.mockito.Mockito.verify(kernel, org.mockito.Mockito.never())
+        .send(eq("restore"), any(JsonNode.class), anyLong());
+  }
+
+  @Test
+  void chainOrdinalMismatchFailsClosed() throws Exception {
+    when(artifactService.readFinalized(any(ArtifactRef.class))).thenReturn(snapBytes, chainBytes);
+    ObjectNode resized;
+    try {
+      resized = (ObjectNode) mapper.readTree(checkpoint.getRestoreContext());
+    } catch (Exception e) {
+      throw new IllegalStateException(e);
+    }
+    resized.put("nextTransitionOrdinal", resized.path("nextTransitionOrdinal").asInt(2) + 1);
+    checkpoint.setRestoreContext(canonical(resized));
+    kernel = mock(XrspsKernelProcess.class);
+
+    ReplayException e =
+        assertThrows(
+            ReplayException.class,
+            () ->
+                worker.restoreFromCheckpoint(
+                    heartbeatHandle(),
+                    kernel,
+                    runRepository.findById(childRunId).orElseThrow(),
+                    manifestDoc(),
+                    liveIdentity,
+                    new ExecutionState(genesis())));
+    assertEquals(ReplayErrorCode.SNAPSHOT_INCOMPATIBLE, e.getErrorCode());
+    org.mockito.Mockito.verify(kernel, org.mockito.Mockito.never())
+        .send(eq("restore"), any(JsonNode.class), anyLong());
+  }
+
+  @Test
+  void tamperedChainHistoryFailsAnchoredVerification() throws Exception {
+    com.fasterxml.jackson.databind.node.ArrayNode frames;
+    try {
+      frames = (com.fasterxml.jackson.databind.node.ArrayNode) mapper.readTree(chainBytes);
+    } catch (Exception e) {
+      throw new IllegalStateException(e);
+    }
+    ObjectNode second = (ObjectNode) frames.get(1).deepCopy();
+    second.put("stateHash", "sha256:" + "dd".repeat(32));
+    frames.set(1, second);
+    byte[] tamperedBytes = projectionService.canonicalJsonBytes(frames);
+    ArtifactRef tamperedRef = finalizedRef(tamperedBytes, ArtifactKind.CHAIN);
+    checkpoint.setChainArtifactChecksum(tamperedRef.getChecksum());
+    lenient()
+        .when(
+            artifactRefRepository.findByRunIdAndKindAndChecksum(
+                eq(parentRunId), eq(ArtifactKind.CHAIN), anyString()))
+        .thenReturn(Optional.of(tamperedRef));
+    when(artifactService.readFinalized(any(ArtifactRef.class)))
+        .thenReturn(snapBytes, tamperedBytes);
+    kernel = mock(XrspsKernelProcess.class);
+
+    ReplayException e =
+        assertThrows(
+            ReplayException.class,
+            () ->
+                worker.restoreFromCheckpoint(
+                    heartbeatHandle(),
+                    kernel,
+                    runRepository.findById(childRunId).orElseThrow(),
+                    manifestDoc(),
+                    liveIdentity,
+                    new ExecutionState(genesis())));
+    assertEquals(ReplayErrorCode.CHECKSUM_MISMATCH, e.getErrorCode());
+    org.mockito.Mockito.verify(kernel, org.mockito.Mockito.never())
+        .send(eq("restore"), any(JsonNode.class), anyLong());
+  }
+
+  @Test
+  void missingChainReferenceFailsClosed() throws Exception {
+    when(artifactService.readFinalized(any(ArtifactRef.class))).thenReturn(snapBytes);
+    lenient()
+        .when(
+            artifactRefRepository.findByRunIdAndKindAndChecksum(
+                eq(parentRunId), eq(ArtifactKind.CHAIN), anyString()))
+        .thenReturn(Optional.empty());
+    kernel = mock(XrspsKernelProcess.class);
+
+    ReplayException e =
+        assertThrows(
+            ReplayException.class,
+            () ->
+                worker.restoreFromCheckpoint(
+                    heartbeatHandle(),
+                    kernel,
+                    runRepository.findById(childRunId).orElseThrow(),
+                    manifestDoc(),
+                    liveIdentity,
+                    new ExecutionState(genesis())));
+    assertEquals(ReplayErrorCode.SNAPSHOT_INCOMPATIBLE, e.getErrorCode());
+    org.mockito.Mockito.verify(kernel, org.mockito.Mockito.never())
+        .send(eq("restore"), any(JsonNode.class), anyLong());
+  }
+
+  private JsonNode realWorkerEvidence() throws Exception {
+    try (var input =
+        getClass().getResourceAsStream("/replay/contracts/sc275-worker-evidence.json")) {
+      return mapper.readTree(input);
+    }
+  }
+
+  @Test
+  void actualWorkerSamplesVerifyAndPersistV2WithSameTickRejectionAndTerminal() throws Exception {
+    JsonNode fixture = realWorkerEvidence();
+    JsonNode context = fixture.path("snapshot").path("context");
+    ExecutionState es =
+        new ExecutionState(
+            SemanticHashV2.genesisHash(
+                context.path("manifestDigest").asText(), context.path("runtimeDigest").asText()));
+    es.causal = true;
+    es.manifestDigest = context.path("manifestDigest").asText();
+    es.runtimeDigest = context.path("runtimeDigest").asText();
+    int ordinal = 0;
+    for (String response : java.util.List.of("reset", "step", "rejected", "terminal")) {
+      var sample = worker.consumeCausalEvidence(childRunId, fixture.path(response), es);
+      assertEquals(2, sample.getProjectionVersion());
+      assertEquals((long) ordinal++, sample.getTransitionOrdinal());
+      assertEquals(
+          fixture.path(response).path("causalSample").path("stateHash").asText(),
+          sample.getStateHash());
+    }
+    assertEquals(true, es.causalTerminated);
+    assertThrows(
+        ReplayException.class,
+        () -> worker.consumeCausalEvidence(childRunId, fixture.path("step"), es));
+  }
+
+  @Test
+  void actualTakeCheckpointPersistsBoundSnapshotChainAndProjection() throws Exception {
+    JsonNode fixture = realWorkerEvidence();
+    JsonNode snapshotResponse = fixture.path("snapshot");
+    JsonNode context = snapshotResponse.path("context");
+    var identity = fixture.path("identity");
+    RuntimeIdentity live =
+        new RuntimeIdentity(
+            identity.path("adapterVersion").asText(),
+            identity.path("buildCommit").asText(),
+            identity.path("cacheRevision").asText(),
+            identity.path("contentRevision").asText());
+    ExecutionState es = new ExecutionState(context.path("predecessorChainHash").asText());
+    es.causal = true;
+    var run = runRepository.findById(childRunId).orElseThrow();
+    kernel = mock(XrspsKernelProcess.class);
+    when(kernel.send(eq("snapshot"), isNull(), anyLong())).thenReturn(ok(snapshotResponse));
+    when(artifactService.prepareArtifact(
+            eq(childRunId), any(), any(byte[].class), eq("application/json")))
+        .thenAnswer(
+            call -> {
+              byte[] bytes = call.getArgument(2);
+              return new com.chromascape.web.replay.artifact.PreparedArtifact(
+                  UUID.randomUUID(),
+                  childRunId,
+                  call.getArgument(1),
+                  projectionService.sha256Hex(bytes),
+                  bytes.length,
+                  "application/json",
+                  java.nio.file.Path.of("staged"));
+            });
+    when(persistence.registerCheckpoint(any(), any(), any(), any()))
+        .thenAnswer(
+            call -> {
+              ReplayCheckpoint stored = call.getArgument(3);
+              assertEquals(context.path("checkpointStateDigest").asText(), stored.getStateHash());
+              assertEquals(context, mapper.readTree(stored.getRestoreContext()));
+              return new com.chromascape.web.replay.artifact.ArtifactRegistration(
+                  finalizedRef(new byte[] {1}, ArtifactKind.SNAPSHOT), true);
+            });
+    when(persistence.registerArtifact(any(), any()))
+        .thenReturn(
+            new com.chromascape.web.replay.artifact.ArtifactRegistration(
+                finalizedRef(new byte[] {2}, ArtifactKind.PROJECTION), true));
+    worker.takeCheckpoint(
+        kernel, heartbeatHandle(), fence(), run, 1, 0, es, fixture.path("manifest"), live);
+    assertEquals(1, es.checkpointCount);
+    org.mockito.Mockito.verify(artifactService)
+        .prepareArtifact(
+            eq(childRunId), eq(ArtifactKind.CHAIN), any(byte[].class), eq("application/json"));
+    org.mockito.Mockito.verify(artifactService)
+        .prepareArtifact(
+            eq(childRunId), eq(ArtifactKind.PROJECTION), any(byte[].class), eq("application/json"));
+    ObjectNode corrupted = snapshotResponse.deepCopy();
+    ((ObjectNode) corrupted.path("context")).put("snapshotDigest", digest("wrong"));
+    when(kernel.send(eq("snapshot"), isNull(), anyLong())).thenReturn(ok(corrupted));
+    org.mockito.Mockito.clearInvocations(artifactService);
+    assertThrows(
+        ReplayException.class,
+        () ->
+            worker.takeCheckpoint(
+                kernel, heartbeatHandle(), fence(), run, 1, 0, es, fixture.path("manifest"), live));
+    org.mockito.Mockito.verifyNoInteractions(artifactService);
   }
 
   private ReplayException assertRestoreFails(ReplayRun run, RuntimeIdentity identity) {

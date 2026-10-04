@@ -259,6 +259,88 @@ tasks.register<Test>("replayCertificationTest") {
 	shouldRunAfter(tasks.named("replayTest"))
 }
 
+// Separate native Fedora SC-275 proof; the historical Windows gate remains unchanged.
+tasks.register<Test>("replayFedoraCertificationTest") {
+	group = "verification"
+	description =
+		"Fedora causal certification against the current production xRSPS worker, PostgreSQL, and artifact storage"
+	testClassesDirs = sourceSets["replayTest"].output.classesDirs
+	classpath = sourceSets["replayTest"].output + sourceSets.main.get().output + sourceSets["replayTest"].runtimeClasspath
+	useJUnitPlatform()
+	include("com/chromascape/web/replay/certification/Sc275CausalCertificationTest.class")
+	jvmArgs("-Djdk.attach.allowAttachSelf=true")
+	maxParallelForks = 1
+	// External worker identity/cache inputs must be interrogated on every invocation.
+	outputs.upToDateWhen { false }
+	outputs.cacheIf { false }
+	// Zero-skips requirement: the suite contains NO assumptions and every prerequisite is a hard
+	// assertion, so a missing Linux/container/worker prerequisite FAILS the gate instead of
+	// reporting a skipped certification test.
+	doFirst {
+		if (!org.gradle.internal.os.OperatingSystem.current().isLinux) {
+			throw GradleException("replayFedoraCertificationTest must run natively on a Linux/Fedora host")
+		}
+		// The suite records the worker identity + PostgreSQL image here during @BeforeAll; a stale
+		// record from a previous run must never be logged as this run's environment.
+		delete(project.layout.buildDirectory.dir("replay-fedora-certification"))
+	}
+	doLast {
+		// Execution-count gate: the task must FAIL if the filters discover or execute ZERO tests,
+		// or if anything was skipped — a silent certification is worse than a failed one.
+		val resultsDir = reports.junitXml.outputLocation.get().asFile
+		val xmlFiles = resultsDir.listFiles { file ->
+			file.isFile && file.name.startsWith("TEST-") && file.name.endsWith(".xml")
+		}
+		if (xmlFiles == null || xmlFiles.isEmpty()) {
+			throw GradleException(
+				"replayFedoraCertificationTest discovered 0 test suites; certification requires discovered > 0"
+			)
+		}
+		var discovered = 0
+		var failed = 0
+		var skipped = 0
+		val xmlFactory = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+		xmlFactory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+		for (xmlFile in xmlFiles) {
+			val suite = xmlFactory.newDocumentBuilder().parse(xmlFile).documentElement
+			discovered += suite.getAttribute("tests").ifBlank { "0" }.trim().toInt()
+			failed += suite.getAttribute("failures").ifBlank { "0" }.trim().toInt()
+			failed += suite.getAttribute("errors").ifBlank { "0" }.trim().toInt()
+			skipped += suite.getAttribute("skipped").ifBlank { "0" }.trim().toInt()
+		}
+		val executed = discovered - skipped
+		logger.lifecycle(
+			"replayFedoraCertificationTest: discovered={} executed={} skipped={} failed={}",
+			discovered,
+			executed,
+			skipped,
+			failed
+		)
+		if (discovered <= 0) {
+			throw GradleException("certification discovered $discovered tests; requires > 0")
+		}
+		if (executed <= 0) {
+			throw GradleException("certification executed $executed tests; requires > 0")
+		}
+		if (skipped != 0) {
+			throw GradleException("certification skipped $skipped tests; zero skips required")
+		}
+		if (failed != 0) {
+			throw GradleException("certification reported $failed failures")
+		}
+		// Environment record: written by the suite's @BeforeAll after the git-HEAD and strict
+		// validator proofs; its presence proves the logged environment belongs to THIS run.
+		val identityFile =
+			project.layout.buildDirectory.file("replay-fedora-certification/identity.properties").get().asFile
+		if (!identityFile.isFile) {
+			throw GradleException("certification did not record its worker identity environment")
+		}
+		logger.lifecycle("replayFedoraCertificationTest environment:")
+		identityFile.readLines().filter { it.isNotBlank() }.forEach { logger.lifecycle("  {}", it) }
+	}
+	shouldRunAfter(tasks.named("replayTest"))
+}
+
 // Separate Windows-only synthetic-harness stress battery. It is intentionally not a dependency of the
 // ordinary `check` task: the authoritative Windows gate invokes replayCertificationTest and this
 // task explicitly after the normal replay checks. Keeping the task separate prevents a Linux/WSL

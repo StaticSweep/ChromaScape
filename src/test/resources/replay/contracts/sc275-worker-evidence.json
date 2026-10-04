@@ -1,0 +1,1232 @@
+{
+  "identity": {
+    "adapterVersion": "0.1.0",
+    "buildCommit": "0123456789abcdef0123456789abcdef01234567",
+    "cacheRevision": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "contentRevision": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "certifiable": true
+  },
+  "manifest": {
+    "manifestVersion": 1,
+    "manifestId": "manifest-sc275-process",
+    "recording": {
+      "recordingId": "rec-process",
+      "recordingChecksum": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "debugSessionId": "session-process",
+      "debugSessionChecksum": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "startTick": 0,
+      "endTick": 200
+    },
+    "curation": {
+      "curationId": "cur-process",
+      "version": 1,
+      "checksum": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "compiler": {
+      "version": "test",
+      "schemaVersion": 1
+    },
+    "runtime": {
+      "xrspsAdapterVersion": "0.1.0",
+      "xrspsBuildCommit": "0123456789abcdef0123456789abcdef01234567",
+      "cacheRevision": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "contentRevision": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "determinism": {
+      "seed": "sc275-process-seed",
+      "clockOrigin": "2026-01-01T00:00:00.000Z",
+      "tickDurationMs": 600,
+      "idNamespace": "replay"
+    },
+    "initialState": {
+      "worldId": 0,
+      "player": {
+        "position": {
+          "x": 3080,
+          "y": 3227,
+          "plane": 0
+        },
+        "skills": {
+          "fishing": {
+            "level": 20,
+            "xp": 4000
+          }
+        },
+        "inventory": []
+      },
+      "npcs": [
+        {
+          "stableId": "spot:draynor:1",
+          "npcId": 1530,
+          "position": {
+            "x": 3083,
+            "y": 3228,
+            "plane": 0
+          },
+          "spotType": "net"
+        }
+      ]
+    },
+    "actions": [],
+    "expectations": [],
+    "tolerances": {},
+    "controlAllowed": false,
+    "manifestChecksum": "sha256:7d29498ceb9c30c61c06082fa919f3b698352966d663dd650d37e184eb80fdde"
+  },
+  "reset": {
+    "initialTick": 0,
+    "initialObservation": {
+      "projectionVersion": 1,
+      "tick": 0,
+      "player": {
+        "position": {
+          "x": 3080,
+          "y": 3227,
+          "plane": 0
+        },
+        "skills": {
+          "fishing": {
+            "level": 20,
+            "xp": 4000
+          }
+        },
+        "inventory": [],
+        "equipment": []
+      },
+      "npcs": [
+        {
+          "stableId": "spot:draynor:1",
+          "npcId": 1530,
+          "position": {
+            "x": 3083,
+            "y": 3228,
+            "plane": 0
+          }
+        }
+      ],
+      "objects": [],
+      "groundItems": [],
+      "widgets": [],
+      "dialogue": null,
+      "spells": [],
+      "vars": {},
+      "taskState": {
+        "fishingActive": false,
+        "nearbySpotCount": 0,
+        "groundItemCount": 0,
+        "visibleWidgetCount": 0,
+        "dialogueActive": false,
+        "lastSpellId": null,
+        "lastObjectId": null
+      }
+    },
+    "events": [
+      {
+        "eventVersion": 1,
+        "ordinal": 0,
+        "tick": 0,
+        "sequence": 0,
+        "eventType": "KERNEL_RESET",
+        "category": "LIFECYCLE",
+        "payload": {
+          "manifestId": "manifest-sc275-process",
+          "seed": "sc275-process-seed",
+          "startTick": 0,
+          "endTick": 200,
+          "npcCount": 1
+        }
+      }
+    ],
+    "causalSample": {
+      "tick": 0,
+      "sequence": 0,
+      "ordinal": 0,
+      "projectionVersion": 2,
+      "hashVersion": "sha256-semantic-state-v2",
+      "stateHash": "sha256:3e698bd9850dfdab570625494fdb79852c6bc6056565529aa419ca2338456609",
+      "chainHash": "sha256:28923bd79bbcc66e16dce4c137911672fd84727c3336ffc1391d05ddcb98e01e"
+    },
+    "causalProjection": {
+      "projectionVersion": 2,
+      "tick": 0,
+      "domains": {
+        "playerMotion": {
+          "position": {
+            "x": 3080,
+            "y": 3227,
+            "plane": 0
+          },
+          "animation": null,
+          "interaction": null
+        },
+        "playerStats": {
+          "skills": {
+            "fishing": {
+              "level": 20,
+              "xp": 4000
+            }
+          }
+        },
+        "possessions": {
+          "inventory": [],
+          "equipment": []
+        },
+        "world": {
+          "worldId": 0,
+          "collisionRevision": "initial",
+          "npcs": [
+            {
+              "stableId": "spot:draynor:1",
+              "npcId": 1530,
+              "npcTypeId": 1530,
+              "position": {
+                "x": 3083,
+                "y": 3228,
+                "plane": 0
+              },
+              "spotId": null,
+              "actions": [],
+              "name": null,
+              "spotType": "net",
+              "size": 1,
+              "depletedUntilTick": 0,
+              "completedCatches": 0,
+              "depletionThreshold": 5
+            }
+          ],
+          "objects": [],
+          "groundItems": [],
+          "players": []
+        },
+        "execution": {
+          "scheduler": {
+            "nextSeq": 0,
+            "nextJobNumber": 0,
+            "pending": []
+          },
+          "rng": {
+            "seed": "",
+            "state": [
+              3152463384,
+              1097985987,
+              3477879130,
+              1481007504
+            ]
+          },
+          "clock": {
+            "tick": 0,
+            "origin": "2026-01-01T00:00:00.000Z",
+            "tickDurationMs": 600
+          },
+          "ids": {
+            "counters": {}
+          },
+          "movementPlan": null,
+          "fishingSession": null
+        },
+        "scenario": {
+          "vars": {},
+          "dialogue": null,
+          "spells": [],
+          "widgets": []
+        },
+        "restoreContext": {
+          "manifestDigest": "sha256:7d29498ceb9c30c61c06082fa919f3b698352966d663dd650d37e184eb80fdde",
+          "runtimeDigest": "sha256:e1973fbe541be7349e14a35fb5c1c1d1aee63f0c07a219f2539864f5acf12171",
+          "snapshotVersion": 1,
+          "nextTransitionOrdinal": 0
+        }
+      }
+    },
+    "causalFrame": {
+      "traceVersion": 2,
+      "manifestDigest": "sha256:7d29498ceb9c30c61c06082fa919f3b698352966d663dd650d37e184eb80fdde",
+      "runtimeDigest": "sha256:e1973fbe541be7349e14a35fb5c1c1d1aee63f0c07a219f2539864f5acf12171",
+      "tick": 0,
+      "sequence": 0,
+      "ordinal": 0,
+      "kind": "RESET",
+      "actionDigest": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "resultDigest": "sha256:d4a0ad0073998e62235e0f6314aa15a08695623be6d49b82c654cd4d686524a7",
+      "stateHash": "sha256:3e698bd9850dfdab570625494fdb79852c6bc6056565529aa419ca2338456609",
+      "previousChainHash": "sha256:e79657ededad761d947f37809694a25b0ec64d0feaa576ebceed580d0c7e0d26",
+      "chainHash": "sha256:28923bd79bbcc66e16dce4c137911672fd84727c3336ffc1391d05ddcb98e01e"
+    }
+  },
+  "step": {
+    "terminalTick": 1,
+    "observation": {
+      "projectionVersion": 1,
+      "tick": 1,
+      "player": {
+        "position": {
+          "x": 3080,
+          "y": 3227,
+          "plane": 0
+        },
+        "skills": {
+          "fishing": {
+            "level": 20,
+            "xp": 4000
+          }
+        },
+        "inventory": [],
+        "equipment": []
+      },
+      "npcs": [
+        {
+          "stableId": "spot:draynor:1",
+          "npcId": 1530,
+          "position": {
+            "x": 3083,
+            "y": 3228,
+            "plane": 0
+          }
+        }
+      ],
+      "objects": [],
+      "groundItems": [],
+      "widgets": [],
+      "dialogue": null,
+      "spells": [],
+      "vars": {},
+      "taskState": {
+        "fishingActive": false,
+        "nearbySpotCount": 0,
+        "groundItemCount": 0,
+        "visibleWidgetCount": 0,
+        "dialogueActive": false,
+        "lastSpellId": null,
+        "lastObjectId": null
+      }
+    },
+    "events": [],
+    "actionApplied": false,
+    "causalSample": {
+      "tick": 1,
+      "sequence": 0,
+      "ordinal": 1,
+      "projectionVersion": 2,
+      "hashVersion": "sha256-semantic-state-v2",
+      "stateHash": "sha256:8fa21f9bb7820a9e148fd7e3e870739b3ef59496d090742698cc52b515c123b5",
+      "chainHash": "sha256:e17c853ee914c34011c626ecdb709894dd030e1f50148fc67e0190ade86a3687"
+    },
+    "causalProjection": {
+      "projectionVersion": 2,
+      "tick": 1,
+      "domains": {
+        "playerMotion": {
+          "position": {
+            "x": 3080,
+            "y": 3227,
+            "plane": 0
+          },
+          "animation": null,
+          "interaction": null
+        },
+        "playerStats": {
+          "skills": {
+            "fishing": {
+              "level": 20,
+              "xp": 4000
+            }
+          }
+        },
+        "possessions": {
+          "inventory": [],
+          "equipment": []
+        },
+        "world": {
+          "worldId": 0,
+          "collisionRevision": "initial",
+          "npcs": [
+            {
+              "stableId": "spot:draynor:1",
+              "npcId": 1530,
+              "npcTypeId": 1530,
+              "position": {
+                "x": 3083,
+                "y": 3228,
+                "plane": 0
+              },
+              "spotId": null,
+              "actions": [],
+              "name": null,
+              "spotType": "net",
+              "size": 1,
+              "depletedUntilTick": 0,
+              "completedCatches": 0,
+              "depletionThreshold": 5
+            }
+          ],
+          "objects": [],
+          "groundItems": [],
+          "players": []
+        },
+        "execution": {
+          "scheduler": {
+            "nextSeq": 0,
+            "nextJobNumber": 0,
+            "pending": []
+          },
+          "rng": {
+            "seed": "",
+            "state": [
+              3152463384,
+              1097985987,
+              3477879130,
+              1481007504
+            ]
+          },
+          "clock": {
+            "tick": 1,
+            "origin": "2026-01-01T00:00:00.000Z",
+            "tickDurationMs": 600
+          },
+          "ids": {
+            "counters": {}
+          },
+          "movementPlan": null,
+          "fishingSession": null
+        },
+        "scenario": {
+          "vars": {},
+          "dialogue": null,
+          "spells": [],
+          "widgets": []
+        },
+        "restoreContext": {
+          "manifestDigest": "sha256:7d29498ceb9c30c61c06082fa919f3b698352966d663dd650d37e184eb80fdde",
+          "runtimeDigest": "sha256:e1973fbe541be7349e14a35fb5c1c1d1aee63f0c07a219f2539864f5acf12171",
+          "snapshotVersion": 1,
+          "nextTransitionOrdinal": 1
+        }
+      }
+    },
+    "causalFrame": {
+      "traceVersion": 2,
+      "manifestDigest": "sha256:7d29498ceb9c30c61c06082fa919f3b698352966d663dd650d37e184eb80fdde",
+      "runtimeDigest": "sha256:e1973fbe541be7349e14a35fb5c1c1d1aee63f0c07a219f2539864f5acf12171",
+      "tick": 1,
+      "sequence": 0,
+      "ordinal": 1,
+      "kind": "ADVANCE",
+      "actionDigest": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "resultDigest": "sha256:d4a0ad0073998e62235e0f6314aa15a08695623be6d49b82c654cd4d686524a7",
+      "stateHash": "sha256:8fa21f9bb7820a9e148fd7e3e870739b3ef59496d090742698cc52b515c123b5",
+      "previousChainHash": "sha256:28923bd79bbcc66e16dce4c137911672fd84727c3336ffc1391d05ddcb98e01e",
+      "chainHash": "sha256:e17c853ee914c34011c626ecdb709894dd030e1f50148fc67e0190ade86a3687"
+    }
+  },
+  "snapshot": {
+    "snapshot": {
+      "snapshotVersion": 1,
+      "runtimeIdentity": {
+        "xrspsAdapterVersion": "0.1.0",
+        "xrspsBuildCommit": "0123456789abcdef0123456789abcdef01234567",
+        "cacheRevision": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "contentRevision": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "tick": 1,
+      "clock": {
+        "currentTick": 1,
+        "startTime": "2026-01-01T00:00:00.000Z"
+      },
+      "random": {
+        "seed": "",
+        "state": [
+          3152463384,
+          1097985987,
+          3477879130,
+          1481007504
+        ]
+      },
+      "ids": {
+        "counters": {}
+      },
+      "world": {
+        "worldId": 0,
+        "collisionRevision": "initial",
+        "player": {
+          "position": {
+            "x": 3080,
+            "y": 3227,
+            "plane": 0
+          },
+          "animation": null,
+          "orientation": 1024,
+          "skills": {
+            "fishing": {
+              "level": 20,
+              "xp": 4000
+            }
+          },
+          "inventory": [],
+          "equipment": []
+        },
+        "npcs": [
+          {
+            "stableId": "spot:draynor:1",
+            "npcId": 1530,
+            "npcTypeId": 1530,
+            "position": {
+              "x": 3083,
+              "y": 3228,
+              "plane": 0
+            },
+            "spotType": "net",
+            "actions": [],
+            "size": 1,
+            "depletedUntilTick": 0,
+            "completedCatches": 0,
+            "depletionThreshold": 5
+          }
+        ],
+        "objects": [],
+        "groundItems": [],
+        "widgets": [],
+        "dialogue": null,
+        "spells": [],
+        "vars": {},
+        "players": []
+      },
+      "players": [],
+      "npcs": [],
+      "objects": [],
+      "groundItems": [],
+      "scheduler": {
+        "nextSeq": 0,
+        "nextJobNumber": 0,
+        "pending": []
+      },
+      "timers": [],
+      "pendingActions": [],
+      "pendingMovement": [],
+      "pendingInteractions": [],
+      "contentState": [],
+      "scriptState": [],
+      "eventQueue": {
+        "nextOrdinal": 1,
+        "events": [
+          {
+            "eventVersion": 1,
+            "ordinal": 0,
+            "tick": 0,
+            "sequence": 0,
+            "eventType": "KERNEL_RESET",
+            "category": "LIFECYCLE",
+            "payload": {
+              "manifestId": "manifest-sc275-process",
+              "seed": "sc275-process-seed",
+              "startTick": 0,
+              "endTick": 200,
+              "npcCount": 1
+            }
+          }
+        ]
+      },
+      "replayTrace": {
+        "nextFrameOrdinal": 2,
+        "chainHash": "sha256:9eaa7b4dd932f959c50917a4f7eb6776fce76bb2d5c013558cd3d9b7738ac48c",
+        "frames": [
+          {
+            "actionDigest": null,
+            "actionHash": null,
+            "animations": {
+              "player": null
+            },
+            "chainHash": "sha256:9eaa7b4dd932f959c50917a4f7eb6776fce76bb2d5c013558cd3d9b7738ac48c",
+            "dialogue": [],
+            "entityDeltas": {
+              "npcs": [
+                {
+                  "npcId": 1530,
+                  "position": {
+                    "plane": 0,
+                    "x": 3083,
+                    "y": 3228
+                  },
+                  "stableId": "spot:draynor:1"
+                }
+              ],
+              "objects": []
+            },
+            "equipment": [],
+            "events": [
+              {
+                "category": "LIFECYCLE",
+                "eventType": "KERNEL_RESET",
+                "eventVersion": 1,
+                "ordinal": 0,
+                "payload": {
+                  "endTick": 200,
+                  "manifestId": "manifest-sc275-process",
+                  "npcCount": 1,
+                  "seed": "sc275-process-seed",
+                  "startTick": 0
+                },
+                "sequence": 0,
+                "tick": 0
+              }
+            ],
+            "frameOrdinal": 0,
+            "frameVersion": 1,
+            "graphics": [],
+            "interfaces": [],
+            "inventory": [],
+            "movementPath": [
+              {
+                "plane": 0,
+                "x": 3080,
+                "y": 3227
+              }
+            ],
+            "npcs": [
+              {
+                "npcId": 1530,
+                "position": {
+                  "plane": 0,
+                  "x": 3083,
+                  "y": 3228
+                },
+                "stableId": "spot:draynor:1"
+              }
+            ],
+            "objects": [],
+            "observation": {
+              "dialogue": null,
+              "groundItems": [],
+              "npcs": [
+                {
+                  "npcId": 1530,
+                  "position": {
+                    "plane": 0,
+                    "x": 3083,
+                    "y": 3228
+                  },
+                  "stableId": "spot:draynor:1"
+                }
+              ],
+              "objects": [],
+              "player": {
+                "equipment": [],
+                "inventory": [],
+                "position": {
+                  "plane": 0,
+                  "x": 3080,
+                  "y": 3227
+                },
+                "skills": {
+                  "fishing": {
+                    "level": 20,
+                    "xp": 4000
+                  }
+                }
+              },
+              "projectionVersion": 1,
+              "spells": [],
+              "taskState": {
+                "dialogueActive": false,
+                "fishingActive": false,
+                "groundItemCount": 0,
+                "lastObjectId": null,
+                "lastSpellId": null,
+                "nearbySpotCount": 0,
+                "visibleWidgetCount": 0
+              },
+              "tick": 0,
+              "vars": {},
+              "widgets": []
+            },
+            "ordinal": 0,
+            "player": {
+              "equipment": [],
+              "inventory": [],
+              "position": {
+                "plane": 0,
+                "x": 3080,
+                "y": 3227
+              },
+              "skills": {
+                "fishing": {
+                  "level": 20,
+                  "xp": 4000
+                }
+              }
+            },
+            "playerRenderState": {
+              "equipment": [],
+              "inventory": [],
+              "position": {
+                "plane": 0,
+                "x": 3080,
+                "y": 3227
+              },
+              "skills": {
+                "fishing": {
+                  "level": 20,
+                  "xp": 4000
+                }
+              }
+            },
+            "previousChainHash": "sha256:9eaa7b4dd932f959c50917a4f7eb6776fce76bb2d5c013558cd3d9b7738ac48c",
+            "projectiles": [],
+            "semanticEffects": [],
+            "skills": {
+              "fishing": {
+                "level": 20,
+                "xp": 4000
+              }
+            },
+            "sourceActionIndex": null,
+            "stateHash": "sha256:9dc7883c73697514689d20a6e8cb88bed9724641fc7cd21fa9ddd6a09f302eac",
+            "taskState": {
+              "dialogueActive": false,
+              "fishingActive": false,
+              "groundItemCount": 0,
+              "lastObjectId": null,
+              "lastSpellId": null,
+              "nearbySpotCount": 0,
+              "visibleWidgetCount": 0
+            },
+            "tick": 0,
+            "vars": {
+              "dialogueActive": false,
+              "fishingActive": false,
+              "groundItemCount": 0,
+              "lastObjectId": null,
+              "lastSpellId": null,
+              "nearbySpotCount": 0,
+              "visibleWidgetCount": 0
+            }
+          },
+          {
+            "actionDigest": null,
+            "actionHash": null,
+            "animations": {
+              "player": null
+            },
+            "chainHash": "sha256:9eaa7b4dd932f959c50917a4f7eb6776fce76bb2d5c013558cd3d9b7738ac48c",
+            "dialogue": [],
+            "entityDeltas": {
+              "npcs": [
+                {
+                  "npcId": 1530,
+                  "position": {
+                    "plane": 0,
+                    "x": 3083,
+                    "y": 3228
+                  },
+                  "stableId": "spot:draynor:1"
+                }
+              ],
+              "objects": []
+            },
+            "equipment": [],
+            "events": [],
+            "frameOrdinal": 1,
+            "frameVersion": 1,
+            "graphics": [],
+            "interfaces": [],
+            "inventory": [],
+            "movementPath": [
+              {
+                "plane": 0,
+                "x": 3080,
+                "y": 3227
+              }
+            ],
+            "npcs": [
+              {
+                "npcId": 1530,
+                "position": {
+                  "plane": 0,
+                  "x": 3083,
+                  "y": 3228
+                },
+                "stableId": "spot:draynor:1"
+              }
+            ],
+            "objects": [],
+            "observation": {
+              "dialogue": null,
+              "groundItems": [],
+              "npcs": [
+                {
+                  "npcId": 1530,
+                  "position": {
+                    "plane": 0,
+                    "x": 3083,
+                    "y": 3228
+                  },
+                  "stableId": "spot:draynor:1"
+                }
+              ],
+              "objects": [],
+              "player": {
+                "equipment": [],
+                "inventory": [],
+                "position": {
+                  "plane": 0,
+                  "x": 3080,
+                  "y": 3227
+                },
+                "skills": {
+                  "fishing": {
+                    "level": 20,
+                    "xp": 4000
+                  }
+                }
+              },
+              "projectionVersion": 1,
+              "spells": [],
+              "taskState": {
+                "dialogueActive": false,
+                "fishingActive": false,
+                "groundItemCount": 0,
+                "lastObjectId": null,
+                "lastSpellId": null,
+                "nearbySpotCount": 0,
+                "visibleWidgetCount": 0
+              },
+              "tick": 1,
+              "vars": {},
+              "widgets": []
+            },
+            "ordinal": 1,
+            "player": {
+              "equipment": [],
+              "inventory": [],
+              "position": {
+                "plane": 0,
+                "x": 3080,
+                "y": 3227
+              },
+              "skills": {
+                "fishing": {
+                  "level": 20,
+                  "xp": 4000
+                }
+              }
+            },
+            "playerRenderState": {
+              "equipment": [],
+              "inventory": [],
+              "position": {
+                "plane": 0,
+                "x": 3080,
+                "y": 3227
+              },
+              "skills": {
+                "fishing": {
+                  "level": 20,
+                  "xp": 4000
+                }
+              }
+            },
+            "previousChainHash": "sha256:9eaa7b4dd932f959c50917a4f7eb6776fce76bb2d5c013558cd3d9b7738ac48c",
+            "projectiles": [],
+            "semanticEffects": [],
+            "skills": {
+              "fishing": {
+                "level": 20,
+                "xp": 4000
+              }
+            },
+            "sourceActionIndex": null,
+            "stateHash": "sha256:da80699ec6cc10d2f73b6c24910da4c2f9054b441b72c67ff9545b4b1ed1f441",
+            "taskState": {
+              "dialogueActive": false,
+              "fishingActive": false,
+              "groundItemCount": 0,
+              "lastObjectId": null,
+              "lastSpellId": null,
+              "nearbySpotCount": 0,
+              "visibleWidgetCount": 0
+            },
+            "tick": 1,
+            "vars": {
+              "dialogueActive": false,
+              "fishingActive": false,
+              "groundItemCount": 0,
+              "lastObjectId": null,
+              "lastSpellId": null,
+              "nearbySpotCount": 0,
+              "visibleWidgetCount": 0
+            }
+          }
+        ]
+      },
+      "canonicalStateHash": "sha256:da80699ec6cc10d2f73b6c24910da4c2f9054b441b72c67ff9545b4b1ed1f441",
+      "checksum": "sha256:6ed730a4b66b0ecbcf3b67180728c8905be9d10003a1d267ca97b71468b756a2"
+    },
+    "context": {
+      "contextVersion": 2,
+      "manifestDigest": "sha256:7d29498ceb9c30c61c06082fa919f3b698352966d663dd650d37e184eb80fdde",
+      "runtimeDigest": "sha256:e1973fbe541be7349e14a35fb5c1c1d1aee63f0c07a219f2539864f5acf12171",
+      "snapshotVersion": 1,
+      "snapshotDigest": "sha256:252d67b31c7b014d377b5f1c88e8369c6ec5e7d56e76a9d5696bb1e6e02003f0",
+      "checkpointStateDigest": "sha256:880d34fb89afc00bdf2217dbffd1dc677d3054cc8db88b56a804331deab78897",
+      "tick": 1,
+      "nextTransitionOrdinal": 2,
+      "predecessorChainHash": "sha256:e17c853ee914c34011c626ecdb709894dd030e1f50148fc67e0190ade86a3687"
+    },
+    "priorFrames": [
+      {
+        "traceVersion": 2,
+        "manifestDigest": "sha256:7d29498ceb9c30c61c06082fa919f3b698352966d663dd650d37e184eb80fdde",
+        "runtimeDigest": "sha256:e1973fbe541be7349e14a35fb5c1c1d1aee63f0c07a219f2539864f5acf12171",
+        "tick": 0,
+        "sequence": 0,
+        "ordinal": 0,
+        "kind": "RESET",
+        "actionDigest": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "resultDigest": "sha256:d4a0ad0073998e62235e0f6314aa15a08695623be6d49b82c654cd4d686524a7",
+        "stateHash": "sha256:3e698bd9850dfdab570625494fdb79852c6bc6056565529aa419ca2338456609",
+        "previousChainHash": "sha256:e79657ededad761d947f37809694a25b0ec64d0feaa576ebceed580d0c7e0d26",
+        "chainHash": "sha256:28923bd79bbcc66e16dce4c137911672fd84727c3336ffc1391d05ddcb98e01e"
+      },
+      {
+        "traceVersion": 2,
+        "manifestDigest": "sha256:7d29498ceb9c30c61c06082fa919f3b698352966d663dd650d37e184eb80fdde",
+        "runtimeDigest": "sha256:e1973fbe541be7349e14a35fb5c1c1d1aee63f0c07a219f2539864f5acf12171",
+        "tick": 1,
+        "sequence": 0,
+        "ordinal": 1,
+        "kind": "ADVANCE",
+        "actionDigest": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "resultDigest": "sha256:d4a0ad0073998e62235e0f6314aa15a08695623be6d49b82c654cd4d686524a7",
+        "stateHash": "sha256:8fa21f9bb7820a9e148fd7e3e870739b3ef59496d090742698cc52b515c123b5",
+        "previousChainHash": "sha256:28923bd79bbcc66e16dce4c137911672fd84727c3336ffc1391d05ddcb98e01e",
+        "chainHash": "sha256:e17c853ee914c34011c626ecdb709894dd030e1f50148fc67e0190ade86a3687"
+      }
+    ],
+    "causalProjection": {
+      "projectionVersion": 2,
+      "tick": 1,
+      "domains": {
+        "playerMotion": {
+          "position": {
+            "x": 3080,
+            "y": 3227,
+            "plane": 0
+          },
+          "animation": null,
+          "interaction": null
+        },
+        "playerStats": {
+          "skills": {
+            "fishing": {
+              "level": 20,
+              "xp": 4000
+            }
+          }
+        },
+        "possessions": {
+          "inventory": [],
+          "equipment": []
+        },
+        "world": {
+          "worldId": 0,
+          "collisionRevision": "initial",
+          "npcs": [
+            {
+              "stableId": "spot:draynor:1",
+              "npcId": 1530,
+              "npcTypeId": 1530,
+              "position": {
+                "x": 3083,
+                "y": 3228,
+                "plane": 0
+              },
+              "spotId": null,
+              "actions": [],
+              "name": null,
+              "spotType": "net",
+              "size": 1,
+              "depletedUntilTick": 0,
+              "completedCatches": 0,
+              "depletionThreshold": 5
+            }
+          ],
+          "objects": [],
+          "groundItems": [],
+          "players": []
+        },
+        "execution": {
+          "scheduler": {
+            "nextSeq": 0,
+            "nextJobNumber": 0,
+            "pending": []
+          },
+          "rng": {
+            "seed": "",
+            "state": [
+              3152463384,
+              1097985987,
+              3477879130,
+              1481007504
+            ]
+          },
+          "clock": {
+            "tick": 1,
+            "origin": "2026-01-01T00:00:00.000Z",
+            "tickDurationMs": 600
+          },
+          "ids": {
+            "counters": {}
+          },
+          "movementPlan": null,
+          "fishingSession": null
+        },
+        "scenario": {
+          "vars": {},
+          "dialogue": null,
+          "spells": [],
+          "widgets": []
+        },
+        "restoreContext": {
+          "manifestDigest": "sha256:7d29498ceb9c30c61c06082fa919f3b698352966d663dd650d37e184eb80fdde",
+          "runtimeDigest": "sha256:e1973fbe541be7349e14a35fb5c1c1d1aee63f0c07a219f2539864f5acf12171",
+          "snapshotVersion": 1,
+          "nextTransitionOrdinal": 2
+        }
+      }
+    }
+  },
+  "rejected": {
+    "causalSample": {
+      "tick": 1,
+      "sequence": 1,
+      "ordinal": 2,
+      "projectionVersion": 2,
+      "hashVersion": "sha256-semantic-state-v2",
+      "stateHash": "sha256:880d34fb89afc00bdf2217dbffd1dc677d3054cc8db88b56a804331deab78897",
+      "chainHash": "sha256:75237a5fb25393d22725cb71b534b39a65179d2fff5bc6a8b85079c789c64a5f"
+    },
+    "causalProjection": {
+      "projectionVersion": 2,
+      "tick": 1,
+      "domains": {
+        "playerMotion": {
+          "position": {
+            "x": 3080,
+            "y": 3227,
+            "plane": 0
+          },
+          "animation": null,
+          "interaction": null
+        },
+        "playerStats": {
+          "skills": {
+            "fishing": {
+              "level": 20,
+              "xp": 4000
+            }
+          }
+        },
+        "possessions": {
+          "inventory": [],
+          "equipment": []
+        },
+        "world": {
+          "worldId": 0,
+          "collisionRevision": "initial",
+          "npcs": [
+            {
+              "stableId": "spot:draynor:1",
+              "npcId": 1530,
+              "npcTypeId": 1530,
+              "position": {
+                "x": 3083,
+                "y": 3228,
+                "plane": 0
+              },
+              "spotId": null,
+              "actions": [],
+              "name": null,
+              "spotType": "net",
+              "size": 1,
+              "depletedUntilTick": 0,
+              "completedCatches": 0,
+              "depletionThreshold": 5
+            }
+          ],
+          "objects": [],
+          "groundItems": [],
+          "players": []
+        },
+        "execution": {
+          "scheduler": {
+            "nextSeq": 0,
+            "nextJobNumber": 0,
+            "pending": []
+          },
+          "rng": {
+            "seed": "",
+            "state": [
+              3152463384,
+              1097985987,
+              3477879130,
+              1481007504
+            ]
+          },
+          "clock": {
+            "tick": 1,
+            "origin": "2026-01-01T00:00:00.000Z",
+            "tickDurationMs": 600
+          },
+          "ids": {
+            "counters": {}
+          },
+          "movementPlan": null,
+          "fishingSession": null
+        },
+        "scenario": {
+          "vars": {},
+          "dialogue": null,
+          "spells": [],
+          "widgets": []
+        },
+        "restoreContext": {
+          "manifestDigest": "sha256:7d29498ceb9c30c61c06082fa919f3b698352966d663dd650d37e184eb80fdde",
+          "runtimeDigest": "sha256:e1973fbe541be7349e14a35fb5c1c1d1aee63f0c07a219f2539864f5acf12171",
+          "snapshotVersion": 1,
+          "nextTransitionOrdinal": 2
+        }
+      }
+    },
+    "causalFrame": {
+      "traceVersion": 2,
+      "manifestDigest": "sha256:7d29498ceb9c30c61c06082fa919f3b698352966d663dd650d37e184eb80fdde",
+      "runtimeDigest": "sha256:e1973fbe541be7349e14a35fb5c1c1d1aee63f0c07a219f2539864f5acf12171",
+      "tick": 1,
+      "sequence": 1,
+      "ordinal": 2,
+      "kind": "ACTION",
+      "actionDigest": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "resultDigest": "sha256:f75d5e210d8fc0b70c2d7d1d5f9c6712df146c4f99459439eb912a7128d655e0",
+      "stateHash": "sha256:880d34fb89afc00bdf2217dbffd1dc677d3054cc8db88b56a804331deab78897",
+      "previousChainHash": "sha256:e17c853ee914c34011c626ecdb709894dd030e1f50148fc67e0190ade86a3687",
+      "chainHash": "sha256:75237a5fb25393d22725cb71b534b39a65179d2fff5bc6a8b85079c789c64a5f"
+    }
+  },
+  "terminal": {
+    "terminalTick": 1,
+    "causalSample": {
+      "tick": 1,
+      "sequence": 2,
+      "ordinal": 3,
+      "projectionVersion": 2,
+      "hashVersion": "sha256-semantic-state-v2",
+      "stateHash": "sha256:a3e3c90d2bb79a5806cf470d6db34a32e78c471c55e76a448bb9c4e685370756",
+      "chainHash": "sha256:778590523eca26323820f0f35fe6657dd73ef810789ccdd7065b9fb34b6952cb"
+    },
+    "causalProjection": {
+      "projectionVersion": 2,
+      "tick": 1,
+      "domains": {
+        "playerMotion": {
+          "position": {
+            "x": 3080,
+            "y": 3227,
+            "plane": 0
+          },
+          "animation": null,
+          "interaction": null
+        },
+        "playerStats": {
+          "skills": {
+            "fishing": {
+              "level": 20,
+              "xp": 4000
+            }
+          }
+        },
+        "possessions": {
+          "inventory": [],
+          "equipment": []
+        },
+        "world": {
+          "worldId": 0,
+          "collisionRevision": "initial",
+          "npcs": [
+            {
+              "stableId": "spot:draynor:1",
+              "npcId": 1530,
+              "npcTypeId": 1530,
+              "position": {
+                "x": 3083,
+                "y": 3228,
+                "plane": 0
+              },
+              "spotId": null,
+              "actions": [],
+              "name": null,
+              "spotType": "net",
+              "size": 1,
+              "depletedUntilTick": 0,
+              "completedCatches": 0,
+              "depletionThreshold": 5
+            }
+          ],
+          "objects": [],
+          "groundItems": [],
+          "players": []
+        },
+        "execution": {
+          "scheduler": {
+            "nextSeq": 0,
+            "nextJobNumber": 0,
+            "pending": []
+          },
+          "rng": {
+            "seed": "",
+            "state": [
+              3152463384,
+              1097985987,
+              3477879130,
+              1481007504
+            ]
+          },
+          "clock": {
+            "tick": 1,
+            "origin": "2026-01-01T00:00:00.000Z",
+            "tickDurationMs": 600
+          },
+          "ids": {
+            "counters": {}
+          },
+          "movementPlan": null,
+          "fishingSession": null
+        },
+        "scenario": {
+          "vars": {},
+          "dialogue": null,
+          "spells": [],
+          "widgets": []
+        },
+        "restoreContext": {
+          "manifestDigest": "sha256:7d29498ceb9c30c61c06082fa919f3b698352966d663dd650d37e184eb80fdde",
+          "runtimeDigest": "sha256:e1973fbe541be7349e14a35fb5c1c1d1aee63f0c07a219f2539864f5acf12171",
+          "snapshotVersion": 1,
+          "nextTransitionOrdinal": 3
+        }
+      }
+    },
+    "causalFrame": {
+      "traceVersion": 2,
+      "manifestDigest": "sha256:7d29498ceb9c30c61c06082fa919f3b698352966d663dd650d37e184eb80fdde",
+      "runtimeDigest": "sha256:e1973fbe541be7349e14a35fb5c1c1d1aee63f0c07a219f2539864f5acf12171",
+      "tick": 1,
+      "sequence": 2,
+      "ordinal": 3,
+      "kind": "TERMINAL",
+      "actionDigest": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "resultDigest": "sha256:4a981a0a783d849a9657b28b2b393df4f76c6808ab108fc3eedaa9adc2a8b5bf",
+      "stateHash": "sha256:a3e3c90d2bb79a5806cf470d6db34a32e78c471c55e76a448bb9c4e685370756",
+      "previousChainHash": "sha256:75237a5fb25393d22725cb71b534b39a65179d2fff5bc6a8b85079c789c64a5f",
+      "chainHash": "sha256:778590523eca26323820f0f35fe6657dd73ef810789ccdd7065b9fb34b6952cb"
+    }
+  }
+}
