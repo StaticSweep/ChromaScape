@@ -34,6 +34,8 @@ Worker merge branch: unit142 pass/1 existing skip, integration16/16, typecheck, 
 
 Fresh identity: worker buildCommit/git HEAD 09ab7e3d6f4132e6143f156192ce5c41e3c998ff; adapter0.1.0; cache sha256:53ee414fabbb30e68ef2a17d391981bf8c94a6a8f2d86ab60bc66af56c0a12fe; content sha256:a581bd449251108c9deeb436a27ef62125f40e2f5b7439f890e26b32169a8daf; fidelity XRSPS_AUTHORITATIVE, actions [INTERACT_NPC], PostgreSQL16-alpine. Exact counts and lossless XML/log/identity/style evidence are adjacent.
 
+GitHub workflow run37225503716 failed before code checks because repository secret CONTRACTS_READ_TOKEN is absent (requires read-only Contents access to ikiddoi/contracts). Local spotlessCheck additionally reports four pre-existing formatting failures: RecordingProvenanceConvergence.java, TickStreamWebSocketHandlerTest.java, ReplayTemplateRenderingTest.java and LocalReplayPrincipalConfigTest.java. All four Git blobs are identical to origin/main; no SC-275 file is reported. No CI success or complete repository check success is claimed.
+
 The initial certification attempt failed before any scenario ran because V31 required debug_sessions and the slice omitted V10/V24; the corrected fresh run passed all five tests. No failed run is reported as successful.
 
 ## Remaining work
