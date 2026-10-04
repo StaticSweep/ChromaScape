@@ -253,4 +253,22 @@ class ReplayArtifactServiceReuseTest {
     assertEquals(org.springframework.http.HttpStatus.PAYLOAD_TOO_LARGE, failure.getHttpStatus());
     verifyNoInteractions(repo);
   }
+
+  @Test
+  void rejectedReusedPreparationPreservesRegisteredWinner() throws IOException {
+    UUID runId = UUID.randomUUID();
+    byte[] content = "shared-frame".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    PreparedArtifact winner =
+        service.prepareArtifact(runId, ArtifactKind.TRACE, content, "application/json");
+    ArtifactRef registered = refFor(winner);
+    when(repo.findByRunIdAndState(runId, ArtifactRef.STATE_STAGING))
+        .thenReturn(List.of(registered));
+    PreparedArtifact loser =
+        service.prepareArtifact(runId, ArtifactKind.TRACE, content, "application/json");
+    assertEquals(winner.stagingPath(), loser.stagingPath());
+    service.discardPrepared(loser);
+    assertTrue(Files.exists(winner.stagingPath()));
+    assertEquals(1, service.publishArtifacts(runId).published().size());
+    assertArrayEquals(content, Files.readAllBytes(finalPathOf(winner.checksum())));
+  }
 }
