@@ -14,7 +14,7 @@ public class LocalReplayPrincipalConfig {
     FilterRegistrationBean<LocalReplayPrincipalFilter> registration =
         new FilterRegistrationBean<>();
     registration.setFilter(filter);
-    registration.addUrlPatterns("/api/replay/*");
+    registration.addUrlPatterns("/api/replay/*", "/api/recordings/*");
     registration.setName("localReplayPrincipalFilter");
     registration.setOrder(1);
     return registration;
