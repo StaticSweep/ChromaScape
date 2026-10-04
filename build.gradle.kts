@@ -1576,3 +1576,24 @@ val fedora03LiveQualificationTests by tasks.registering(Exec::class) {
 	)
 	outputs.upToDateWhen { false }
 }
+
+// SC-754 immutable artifact registry and current Fishing publication closure.
+sourceSets.create("artifactCompletionTest") {
+    compileClasspath += sourceSets.main.get().output
+    runtimeClasspath += sourceSets.main.get().output
+    java.srcDir("src/test/java")
+    java.include("com/chromascape/web/artifact/**")
+    java.include("com/chromascape/web/aiplayer/prototype/FishingArtifactRegistryIntegrationTest.java")
+    java.include("com/chromascape/web/replay/artifact/**")
+    java.include("com/chromascape/web/replay/worker/ReplayWorkerPersistenceServiceTest.java")
+    resources.srcDir("src/test/resources")
+}
+configurations.named("artifactCompletionTestImplementation") { extendsFrom(configurations.testImplementation.get()) }
+configurations.named("artifactCompletionTestRuntimeOnly") { extendsFrom(configurations.testRuntimeOnly.get()) }
+tasks.register<Test>("artifactCompletionTest") {
+    group = "verification"
+    description = "Verify SC-754 immutable artifact publication, access, limits, lineage and Fishing wiring."
+    testClassesDirs = sourceSets["artifactCompletionTest"].output.classesDirs
+    classpath = sourceSets["artifactCompletionTest"].runtimeClasspath
+    useJUnitPlatform()
+}

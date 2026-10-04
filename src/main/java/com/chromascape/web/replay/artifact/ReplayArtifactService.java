@@ -138,11 +138,14 @@ public class ReplayArtifactService {
   }
 
   /**
-   * Deletes a prepared staging file after a failed registration attempt. Best effort: retention
-   * cleanup removes any remaining orphan.
+   * Retains deterministic staged evidence after a rejected preparation/registration. A preparation
+   * does not own this shared path; deleting it can destroy another attempt's bytes.
    */
   public void discardPrepared(PreparedArtifact prepared) {
-    deleteQuietly(prepared.stagingPath());
+    // The deterministic path can already belong to a successfully registered attempt.
+    // A rejected/stale fence cannot authorize deleting that shared evidence. Keep it for
+    // publication or terminal-run reconciliation; temporary siblings are cleaned on prepare.
+    java.util.Objects.requireNonNull(prepared, "prepared");
   }
 
   /**

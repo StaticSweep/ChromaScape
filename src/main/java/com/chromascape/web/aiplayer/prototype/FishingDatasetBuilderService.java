@@ -3,6 +3,7 @@ package com.chromascape.web.aiplayer.prototype;
 import com.chromascape.web.aiplayer.prototype.FishingRecordingLoader.AlignedAction;
 import com.chromascape.web.aiplayer.prototype.FishingRecordingLoader.RecordingContext;
 import com.chromascape.web.aiplayer.prototype.PreflightReport.PreflightIssue;
+import com.chromascape.web.artifact.ImmutableArtifactStore;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedWriter;
@@ -39,6 +40,17 @@ public class FishingDatasetBuilderService {
   private final FishingPreflightService preflightService;
   private final FishingRecordingLoader loader;
   private final ObjectMapper objectMapper;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  private ImmutableArtifactStore artifactStore;
+
+  @Value("${artifacts.max-artifact-bytes:104857600}")
+  private long maxArtifactBytes = 104857600;
+
+  @Value("${artifacts.quota-bytes:1073741824}")
+  private long artifactQuotaBytes = 1073741824;
+
+  private static final String ARTIFACT_OWNER = "fishing-prototype";
 
   @org.springframework.beans.factory.annotation.Autowired
   private com.chromascape.web.recording.provenance.BehaviorRunContextService runContexts;
@@ -110,8 +122,32 @@ public class FishingDatasetBuilderService {
 
     List<DatasetExample> examples = buildExamples(ctx, recordingId);
     List<SemanticAction> vocabulary = buildVocabulary(examples);
-    Path datasetPath = writeDataset(datasetId, ctx, examples);
-    Path manifestPath = writeManifest(datasetId, ctx, examples, vocabulary);
+    Map<String, String> lineage = artifactLineage(ctx);
+    var source = objectMapper.createObjectNode();
+    source.put("recordingId", recordingId);
+    source.put("sessionId", session.getSessionId());
+    source.set("runContext", runContexts.requireTrainingContext(recordingId));
+    source.set(
+        "frameDigests",
+        objectMapper.valueToTree(examples.stream().map(DatasetExample::frameDigest).toList()));
+    byte[] sourceBytes;
+    try {
+      sourceBytes = objectMapper.writeValueAsBytes(source);
+    } catch (IOException e) {
+      throw new IllegalStateException(e);
+    }
+    String sourceId = "recording_" + ImmutableArtifactStore.checksum(sourceBytes).substring(7);
+    store()
+        .put(
+            ARTIFACT_OWNER,
+            sourceId,
+            ImmutableArtifactStore.Kind.RECORDING,
+            sourceBytes,
+            "application/json",
+            lineage,
+            Map.of());
+    Path datasetPath = writeDataset(datasetId, ctx, examples, sourceId);
+    Path manifestPath = writeManifest(datasetId, ctx, examples, vocabulary, sourceId);
     Path modelPath = writeModel(modelId, datasetId, ctx, vocabulary, examples, required);
 
     log.info(
@@ -190,16 +226,25 @@ public class FishingDatasetBuilderService {
     return vocabulary;
   }
 
-  private Path writeDataset(String datasetId, RecordingContext ctx, List<DatasetExample> examples) {
+  private Path writeDataset(
+      String datasetId, RecordingContext ctx, List<DatasetExample> examples, String sourceId) {
     Path outputPath = datasetsDir().resolve(datasetId + ".jsonl");
     try {
-      Files.createDirectories(outputPath.getParent());
-      try (BufferedWriter writer = Files.newBufferedWriter(outputPath)) {
+      var buffer = new java.io.StringWriter();
+      try (BufferedWriter writer = new BufferedWriter(buffer)) {
         for (DatasetExample example : examples) {
           writer.write(objectMapper.writeValueAsString(example));
           writer.newLine();
         }
       }
+      publishArtifact(
+          datasetId,
+          ImmutableArtifactStore.Kind.DATASET,
+          buffer.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),
+          "application/x-ndjson",
+          ctx,
+          Map.of("recording", sourceId),
+          outputPath);
     } catch (IOException e) {
       throw new PrototypeApiException(
           HttpStatus.INTERNAL_SERVER_ERROR,
@@ -214,7 +259,8 @@ public class FishingDatasetBuilderService {
       String datasetId,
       RecordingContext ctx,
       List<DatasetExample> examples,
-      List<SemanticAction> vocabulary) {
+      List<SemanticAction> vocabulary,
+      String sourceId) {
     Map<String, Object> manifest = new LinkedHashMap<>();
     manifest.put("datasetId", datasetId);
     manifest.put("schemaVersion", 1);
@@ -249,8 +295,14 @@ public class FishingDatasetBuilderService {
 
     Path manifestPath = datasetsDir().resolve(datasetId + ".manifest.json");
     try {
-      Files.createDirectories(manifestPath.getParent());
-      objectMapper.writerWithDefaultPrettyPrinter().writeValue(manifestPath.toFile(), manifest);
+      publishArtifact(
+          datasetId + "_manifest",
+          ImmutableArtifactStore.Kind.DATASET_MANIFEST,
+          objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(manifest),
+          "application/json",
+          ctx,
+          Map.of("recording", sourceId, "dataset", datasetId),
+          manifestPath);
     } catch (IOException e) {
       throw new PrototypeApiException(
           HttpStatus.INTERNAL_SERVER_ERROR,
@@ -290,8 +342,14 @@ public class FishingDatasetBuilderService {
 
     Path modelPath = modelsDir().resolve(modelId + ".json");
     try {
-      Files.createDirectories(modelPath.getParent());
-      objectMapper.writerWithDefaultPrettyPrinter().writeValue(modelPath.toFile(), model);
+      publishArtifact(
+          modelId,
+          ImmutableArtifactStore.Kind.MODEL,
+          objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(model),
+          "application/json",
+          ctx,
+          Map.of("dataset", datasetId, "manifest", datasetId + "_manifest"),
+          modelPath);
     } catch (IOException e) {
       throw new PrototypeApiException(
           HttpStatus.INTERNAL_SERVER_ERROR,
@@ -315,22 +373,67 @@ public class FishingDatasetBuilderService {
           "modelId must contain only letters, numbers, '_' or '-'",
           Map.of("modelId", modelId));
     }
-    Path modelPath = modelsDir().resolve(modelId + ".json");
-    if (!Files.exists(modelPath)) {
-      throw new PrototypeApiException(
-          HttpStatus.NOT_FOUND,
-          "MODEL_NOT_FOUND",
-          "No model found for modelId " + modelId,
-          Map.of("modelId", modelId));
-    }
     try {
-      return objectMapper.readValue(modelPath.toFile(), FishingModel.class);
+      var manifest = store().get(ARTIFACT_OWNER, modelId);
+      if (manifest.kind() != ImmutableArtifactStore.Kind.MODEL)
+        throw new PrototypeApiException(
+            HttpStatus.CONFLICT, "MODEL_ARTIFACT_INVALID", "Artifact is not a model");
+      return objectMapper.readValue(store().read(ARTIFACT_OWNER, modelId), FishingModel.class);
     } catch (IOException e) {
       throw new PrototypeApiException(
           HttpStatus.INTERNAL_SERVER_ERROR,
           "MODEL_LOAD_FAILED",
           "Failed to read model artifact for modelId " + modelId,
           Map.of("modelId", modelId));
+    }
+  }
+
+  private ImmutableArtifactStore store() {
+    return artifactStore != null
+        ? artifactStore
+        : new ImmutableArtifactStore(
+            Path.of(outputDir).resolve("artifacts"),
+            maxArtifactBytes,
+            artifactQuotaBytes,
+            objectMapper);
+  }
+
+  private Map<String, String> artifactLineage(RecordingContext ctx) {
+    var context = runContexts.requireTrainingContext(ctx.session().getRecordingId());
+    return Map.of(
+        "recordingId",
+        ctx.session().getRecordingId(),
+        "sessionId",
+        ctx.session().getSessionId(),
+        "runContext",
+        context.toString(),
+        "semanticContract",
+        com.chromascape.web.recording.provenance.BehaviorSemanticContract.digest());
+  }
+
+  private void publishArtifact(
+      String id,
+      ImmutableArtifactStore.Kind kind,
+      byte[] content,
+      String mediaType,
+      RecordingContext ctx,
+      Map<String, String> dependencies,
+      Path compatibilityPath)
+      throws IOException {
+    var manifest =
+        store()
+            .put(ARTIFACT_OWNER, id, kind, content, mediaType, artifactLineage(ctx), dependencies);
+    Files.createDirectories(compatibilityPath.getParent());
+    try {
+      Files.createLink(compatibilityPath, store().contentPath(manifest));
+    } catch (java.nio.file.FileAlreadyExistsException exists) {
+      // Never overwrite a mutable alias; verify it before accepting an identical retry.
+      if (!Files.isRegularFile(compatibilityPath, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+          || Files.size(compatibilityPath) != content.length
+          || !ImmutableArtifactStore.checksum(Files.readAllBytes(compatibilityPath))
+              .equals(manifest.checksum()))
+        throw new PrototypeApiException(
+            HttpStatus.CONFLICT, "ARTIFACT_ALIAS_CONFLICT", "Artifact alias conflicts");
     }
   }
 
