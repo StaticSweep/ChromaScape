@@ -113,6 +113,13 @@ public class BuilderGoalRunnerService {
   private static final String TASK_METADATA_PUBLISH_ONLY = "publish_only";
   private static final String TASK_METADATA_LAUNCH_FALLBACK_ALLOWED = "launch_fallback_allowed";
 
+  /**
+   * SC-666: client-supplied idempotency key persisted on the run's task metadata. A retried start
+   * carrying the same request id reuses the existing recoverable run (same task iteration and bound
+   * recording) instead of creating a duplicate run.
+   */
+  private static final String TASK_METADATA_REQUEST_ID = "request_id";
+
   private static final Map<String, Object> PROVENANCE_AUTOMATION =
       Map.of(
           "initiated_by",
@@ -157,6 +164,9 @@ public class BuilderGoalRunnerService {
   private final Set<String> pendingLaunchIterations = ConcurrentHashMap.newKeySet();
   private final ConcurrentHashMap<String, ActiveLaunchWork> activeLaunchWork =
       new ConcurrentHashMap<>();
+
+  @org.springframework.beans.factory.annotation.Autowired
+  private BuilderGoalStartRequestService startRequestService;
 
   /**
    * Tracks an active launch worker so the watchdog and operator stop can cancel and interrupt it.
@@ -755,8 +765,24 @@ public class BuilderGoalRunnerService {
               normalized.settings(),
               normalized.world());
     }
-    BuilderGoalAccountCatalogService.AccountDefinition selectedAccount =
-        resolveSelectedAccount(accountId);
+    String requestId = BuilderGoalStartRequestService.requestId(payload);
+    if (requestId != null) {
+      Map<String, Object> identity = new LinkedHashMap<>();
+      identity.put("accountId", normalizeOptionalString(accountId));
+      identity.put("machineUuid", normalizeOptionalString(launcherMachineUuid));
+      identity.put("taskKey", normalized.taskKey());
+      identity.put("settings", normalized.settings());
+      identity.put("world", normalized.world());
+      identity.put("provenance", provenance != null ? provenance : PROVENANCE_AUTOMATION);
+      String existingId =
+          startRequestService.reserve(
+              requestId, BuilderGoalStartRequestService.fingerprint(objectMapper, identity));
+      if (existingId != null) return buildDeduplicatedStartResponse(loadBuilderRun(existingId));
+    }
+    PatchLoopIteration iteration;
+    CatalogValidationResult catalogValidation;
+    BuilderGoalAccountCatalogService.AccountDefinition selectedAccount;
+    selectedAccount = resolveSelectedAccount(accountId);
     if (selectedAccount == null) {
       throw new IllegalArgumentException("Select a launcher account first");
     }
@@ -775,7 +801,7 @@ public class BuilderGoalRunnerService {
         resolveSelectedMachine(selectedMachineUuid);
     requireLaunchReadyAccount(selectedAccount);
     requireLaunchableMachine(selectedMachine, selectedMachineUuid);
-    CatalogValidationResult catalogValidation =
+    catalogValidation =
         canonicalCatalogTask != null
             ? CatalogValidationResult.validated("VALIDATED_LIVE", canonicalCatalogTask)
             : CatalogValidationResult.skipped("SKIPPED_CATALOG_MISS");
@@ -785,7 +811,7 @@ public class BuilderGoalRunnerService {
 
     Map<String, Object> initialTargetMetadata =
         buildRequestedTargetMetadataFromAccount(selectedAccount, selectedMachine);
-    PatchLoopIteration iteration =
+    iteration =
         createRunIteration(
             normalized,
             payload,
@@ -798,6 +824,9 @@ public class BuilderGoalRunnerService {
 
     Map<String, Object> taskMetadata = readTaskMetadata(iteration);
     taskMetadata.put("mule_account", buildAccountMetadata(selectedAccount, selectedMachine));
+    if (requestId != null) {
+      taskMetadata.put(TASK_METADATA_REQUEST_ID, requestId);
+    }
     iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
     persistenceService.saveIteration(iteration);
 
@@ -806,6 +835,7 @@ public class BuilderGoalRunnerService {
         taskMetadata,
         PREPARATION_STATE_PREPARING_TARGET,
         "Launch accepted. Waiting for the local Micro6 workspace and executor readiness.");
+    if (requestId != null) startRequestService.bind(requestId, iteration.getIterationId());
     queuePendingLaunch(iteration.getIterationId());
 
     iteration = iterationRepository.findByIterationId(iteration.getIterationId()).orElse(iteration);
@@ -842,6 +872,25 @@ public class BuilderGoalRunnerService {
       String displayName,
       Integer world,
       Map<String, Object> provenance) {
+    return startCatalogTaskRun(
+        accountId, launcherMachineUuid, taskKey, settings, displayName, world, provenance, null);
+  }
+
+  /**
+   * SC-666: catalog-task start with a client-supplied request id. When the id matches a previously
+   * committed run, including its terminal outcome, the retry reuses that run's task iteration and
+   * bound recording instead of creating a duplicate run.
+   */
+  @Transactional
+  public Map<String, Object> startCatalogTaskRun(
+      String accountId,
+      String launcherMachineUuid,
+      String taskKey,
+      Map<String, Object> settings,
+      String displayName,
+      Integer world,
+      Map<String, Object> provenance,
+      String requestId) {
     if (accountId == null || accountId.isBlank()) {
       throw new IllegalArgumentException("accountId is required");
     }
@@ -865,6 +914,9 @@ public class BuilderGoalRunnerService {
     payload.put("account_id", accountId);
     if (world != null) {
       payload.put("world", world);
+    }
+    if (requestId != null && !requestId.isBlank()) {
+      payload.put(TASK_METADATA_REQUEST_ID, requestId.trim());
     }
     return startRun(
         objectMapper.valueToTree(payload),
@@ -2410,6 +2462,35 @@ public class BuilderGoalRunnerService {
       return false;
     }
     return mutationService.failStaleLaunchIfActive(iteration.getIterationId());
+  }
+
+  /**
+   * SC-666: builds the start response for a deduplicated retry. The run summary is read from the
+   * existing recoverable run, so the retry observes the same task iteration and bound recording as
+   * the original request.
+   */
+  private Map<String, Object> buildDeduplicatedStartResponse(PatchLoopIteration existing) {
+    Map<String, Object> run = toRunSummary(existing);
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("run", run);
+    response.put("statusUrl", "/api/debug/builder-goals/runs/" + existing.getIterationId());
+    response.put("accepted", true);
+    response.put("deduplicated", true);
+    response.put("terminal", existing.getStatus() != null && existing.getStatus().isTerminal());
+    response.put("published", null);
+    response.put("entryId", run.get("publishEntryId"));
+    response.put("targetClientId", run.get("targetClientId"));
+    response.put("targetAccountName", run.get("targetAccountName"));
+    response.put("accountId", run.get("accountId"));
+    response.put("accountHash", run.get("accountHash"));
+    response.put("accountName", run.get("accountName"));
+    response.put("publishStatus", run.get("publishStatus"));
+    response.put("publishError", run.get("publishError"));
+    response.put(
+        "message",
+        "Duplicate start deduplicated to the existing recoverable run "
+            + existing.getIterationId());
+    return response;
   }
 
   private String findActiveLaunchConflictReason(String accountId, String taskKey) {

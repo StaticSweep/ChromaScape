@@ -69,6 +69,23 @@ public class BuilderGoalCodexController {
   public ResponseEntity<Object> startRun(
       @PathVariable String sessionId, @RequestBody(required = false) JsonNode payload) {
     try {
+      // SC-666: a retried AI-bot request carries the original request id so the retry
+      // reuses the recoverable run instead of creating a duplicate.
+      String requestId =
+          com.chromascape.web.debug.buildergoal.service.BuilderGoalStartRequestService.requestId(
+              payload);
+      if (requestId != null) {
+        return ResponseEntity.ok(
+            orchestrationService.startRun(
+                sessionId,
+                textValue(payload, "accountId"),
+                textValue(payload, "launcherMachineUuid"),
+                textValue(payload, "taskKey"),
+                intValue(payload, "world"),
+                textValue(payload, "displayName"),
+                mapValue(payload, "settings"),
+                requestId));
+      }
       return ResponseEntity.ok(
           orchestrationService.startRun(
               sessionId,
@@ -78,6 +95,8 @@ public class BuilderGoalCodexController {
               intValue(payload, "world"),
               textValue(payload, "displayName"),
               mapValue(payload, "settings")));
+    } catch (com.chromascape.web.debug.buildergoal.service.BuilderGoalStartException e) {
+      return ResponseEntity.status(e.getStatus()).body(e.toResponse());
     } catch (IllegalArgumentException e) {
       return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
     } catch (IllegalStateException e) {

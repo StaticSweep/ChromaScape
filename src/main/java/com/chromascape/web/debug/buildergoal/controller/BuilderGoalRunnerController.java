@@ -279,6 +279,23 @@ public class BuilderGoalRunnerController {
                 ? objectMapper.convertValue(payload.get("settings"), Map.class)
                 : Map.of();
         String displayName = textValue(payload.path("displayName"));
+        // SC-666: a retried AI-bot request carries the original request id so the retry
+        // reuses the recoverable run instead of creating a duplicate.
+        String requestId =
+            com.chromascape.web.debug.buildergoal.service.BuilderGoalStartRequestService.requestId(
+                payload);
+        if (requestId != null) {
+          return ResponseEntity.ok(
+              builderGoalRunnerService.startCatalogTaskRun(
+                  accountId,
+                  launcherMachineUuid,
+                  taskKey,
+                  settings,
+                  displayName,
+                  world,
+                  provenance,
+                  requestId));
+        }
         return ResponseEntity.ok(
             builderGoalRunnerService.startCatalogTaskRun(
                 accountId, launcherMachineUuid, taskKey, settings, displayName, world, provenance));
@@ -286,6 +303,21 @@ public class BuilderGoalRunnerController {
 
       JsonNode builderPayload =
           payload.path("builderPayload").isObject() ? payload.path("builderPayload") : payload;
+      String outerRequestId =
+          com.chromascape.web.debug.buildergoal.service.BuilderGoalStartRequestService.requestId(
+              payload);
+      String innerRequestId =
+          com.chromascape.web.debug.buildergoal.service.BuilderGoalStartRequestService.requestId(
+              builderPayload);
+      if (outerRequestId != null
+          && innerRequestId != null
+          && !outerRequestId.equals(innerRequestId))
+        throw new IllegalArgumentException("REQUEST_ID_ALIAS_CONFLICT");
+      if (outerRequestId != null && innerRequestId == null && builderPayload.isObject()) {
+        builderPayload = builderPayload.deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) builderPayload)
+            .put("request_id", outerRequestId);
+      }
       return ResponseEntity.ok(
           builderGoalRunnerService.startRun(
               builderPayload, accountId, null, null, null, launcherMachineUuid, world, provenance));
