@@ -6,7 +6,7 @@ Complete implemented plan: [SC-609-DELIVERY-PLAN.md](SC-609-DELIVERY-PLAN.md). O
 
 Micro6 PR #160 is merged into main at `77c758e91dda00fef16e3984cdb676d1741e5e63`; it includes #159's AccountBuilder lifecycle fixes. ChromaScape dependencies #44 (SC-260), #42 (SC-665) and #43 (SC-641) are merged. PR #45 is reconciled with their resulting main revision `5050b79d`, and merged as PR #45 at `48caed2b5b8501cc8a7cce41aa9d88e775456540`.
 
-Felix task `task_1790971893615_dult4y03` was previously recorded in review. Felix writes and CI monitoring are skipped at the user's request; no new Felix state or synchronization success is claimed. The user revised the acceptance target to Fedora only. A passing Fedora live capture/recovery and browser check is sufficient for SC-609 completion; Windows qualification is outside this delivery scope. SC-609 remains In Review until that Fedora check is recorded.
+Felix task `task_1790971893615_dult4y03` was previously recorded in review. Felix writes and CI monitoring are skipped at the user's request; no new Felix state or synchronization success is claimed. The user revised the acceptance target to Fedora only. A passing Fedora live capture/recovery and browser check is sufficient for SC-609 completion; Windows qualification is outside this delivery scope. The user supplied Fedora 44 conditional PASS on 2026-10-04, conditional on integrating the two acceptance fixes; integration and focused regression results are recorded below. The user-declared PASS is used for runtime/API acceptance, with the explicitly unrun browser/video/multi-page checks retained as follow-up.
 
 ## Acceptance results
 
@@ -16,7 +16,7 @@ Felix task `task_1790971893615_dult4y03` was previously recorded in review. Feli
 - Two added WebSocket regressions verify exactly one durable ACK, retention of the original wire document, and preservation of the committed ACK when legacy projection fails.
 - Current development-schema convergence includes six migrations and inherited V6 mappings for main's entities, columns and integrity constraints; no released legacy migration was edited in this reconciliation.
 - Catalog pagination, authoritative recording identity, video-only access, cursor loading, safe settings text and null/empty behavior: passed backend and Node/JSDOM tests.
-- Fedora live capture/recovery and browser acceptance: awaiting the user-run check below. Windows qualification is outside the revised acceptance scope. Automated tests do not claim physical power-loss certification.
+- Fedora live runtime/API capture and recovery: user-reported PASS on the acceptance fixes. Browser cross-check unrun; video and catalog multi-page tests N/A for the test dataset. These limits remain follow-up evidence gaps. Windows qualification is outside the revised acceptance scope; no physical power-loss certification is claimed.
 
 ## Tests
 
@@ -40,7 +40,7 @@ The successful final runs follow integration fixes for schema mappings, catalog 
 
 ## Risks
 
-Fedora real browser acceptance and live coordinated recovery remain outstanding. Windows qualification is outside the revised delivery scope. Current producer origin/script-intent/transition telemetry remains UNKNOWN or unsupported where not observed, keeping incomplete evidence training-ineligible. Scoped tests do not claim the full backend test tree passes. Existing disposable development databases may require an explicitly authorized reset to adopt changed development migration history; no such user database operation was performed.
+Fedora live coordinated recovery passed in the user report; real browser verification remains a follow-up gap. Windows qualification is outside the revised delivery scope. Current producer origin/script-intent/transition telemetry remains UNKNOWN or unsupported where not observed, keeping incomplete evidence training-ineligible. Scoped tests do not claim the full backend test tree passes. Existing disposable development databases may require an explicitly authorized reset to adopt changed development migration history; no such user database operation was performed.
 
 ## Rollback
 
@@ -48,7 +48,31 @@ Revert the coordinated merge commits with the correct mainline while preserving 
 
 ## Remaining work
 
-Complete the Fedora checklist below and record its results before marking SC-609 Done. A passing Fedora result satisfies the revised platform acceptance; no Windows test is required for this delivery. The Fedora automated checks above are complete. Downstream telemetry adapters must supply observed completeness before canonical training can be enabled. Felix remains untouched at the user's request.
+The user-declared Fedora runtime/API PASS and integration of the acceptance fixes satisfy the revised delivery acceptance. Browser display, video and catalog multi-page verification remain explicit follow-up checks, not claimed passes. Windows is outside scope. The Fedora automated checks above are complete. Downstream telemetry adapters must supply observed completeness before canonical training can be enabled. Felix remains untouched at the user's request.
+
+## Fedora live acceptance report — 2026-10-04
+
+The user supplied conditional PASS evidence from Fedora 44 on pushed fix branches, not unmodified main. Task `FISHING_TRAINING`, profile `49efbd1c-813a-4b12-af15-72f698db02b0` version 1; settings hash prefix `sha256:6999`, semantic contract `sha256:6d94`, catalog `sha256:d11f`. Preserve complete hashes in the capture evidence; these abbreviations are not standalone identity proof.
+
+| Step | Reported result | Evidence / limit |
+| --- | --- | --- |
+| Stack startup | PASS | Runbooks; backend on port 18090 and fixed-build client on Fedora 44. |
+| Profile-bound capture | PASS | Run `bcfa520b`, entry 609005, session `de80bbd8`, recording `capture_26d689d9` (row 1); profile/hashes match dispatch. v3/ACK1 inferred from enforced profile-bound construction, not a captured negotiation response. |
+| Recording discovery | API PASS | Correct account/task/settings/hash; 306/306 frames paged. Video unavailable, video behavior N/A; catalog multi-page N/A with three rows. Browser display was not checked. |
+| Connection and client restart | PASS | Run `de9292c0`, session `194d5521`, recording `capture_2f191913` (row 3); server interruption recovered 360→518 contiguous frames. Client restart and same-reference redispatch retained original identity and 1…527 contiguous frames, without duplicate frames or extra video. |
+| Finalization / eligibility | PASS | First run explicit stop finalized; recovery run finalized on transport-error grace expiry. EXPLICIT_STOP/DISCONNECT, dropped 0, no gaps; CAPTURE_INCOMPLETE remains training-ineligible. |
+| Provenance and frame APIs | API PASS | Provenance 8/8 and 5/5 field checks, origin CAPTURED; ordered 306/306 and 527/527 frame traversal. Browser cross-check unrun. |
+
+Acceptance-found fixes:
+
+- Micro6 `a186070b1f`: normalize Gson integral doubles in forwarded run context so profile version 1 is not rejected as 1.0. User reported four unit tests passed. Applied without code changes to current main as `a2ef08df9c` in PR #161; four focused client tests actually rerun here passed, including production/test compilation.
+- ChromaScape `8f03213f`: register the existing local-development principal filter for recording APIs. Isolated from migration changes in PR #52. Four focused config/filter tests actually rerun here passed with zero failures/errors/skips.
+- Separate PR #51 resolves duplicate V32/V33 versions by renaming the catalog/provenance resources to V61/V62. SQL bytes are unchanged and version scan found no duplicates. Existing Flyway history must be reviewed; no repair or database reset was performed.
+- PR #53 updates the startup convergence resource reference to V62; one focused classpath-resource regression actually rerun here passed and verifies the packaged startup SQL. Together with four producer and four principal/config/filter tests, nine focused regressions passed with zero failures/errors/skips.
+
+Reported unrelated issues remain: FishingTrainingTask off-client-thread AssertionError after approximately three minutes, five connection losses, ReplayException mapped to HTTP 500, and an ignored Fedora environment file containing a stale client PID. These are not reported as fixed by SC-609. The testing session restored the client profile and retained test-state evidence. The backend was left on the fix branch at port 18090 and the client logged out. This closeout does not restart or alter those processes/configurations.
+
+The automated suites above plus this report establish Fedora runtime/API recovery on the fixes. Browser verification remains explicitly unrun; no blanket six-step browser PASS is claimed. The user explicitly declared Fedora acceptance PASS conditional on the two fixes, while identifying the API-only checks and N/A cases. That declared result is the runtime/API acceptance basis; browser verification remains follow-up rather than an asserted pass. Windows remains outside this delivery scope. CI monitoring and Felix remain skipped.
 
 ## Fedora manual acceptance
 
@@ -61,7 +85,7 @@ Use the merged `main` revisions of ChromaScape and Micro6 on Fedora, your normal
 5. Stop the capture. Confirm it finalizes. After the interruption, quality remains incomplete and training-ineligible; missing telemetry stays unknown. Recovery must not turn the interrupted recording into complete training evidence.
 6. Inspect `GET /api/recordings/v1/sessions/{recordingId}/provenance` and `GET /api/recordings/v1/sessions/{recordingId}/frames?afterSequence=0&limit=200` using your normal authenticated access. Confirm immutable task/settings/context and ordered frame sequences agree with the UI. Save relevant logs and any failure codes.
 
-Report PASS/FAIL for each step, both main commit IDs, the Fedora version, recording/session IDs and log references. If all applicable steps pass, Fedora acceptance is complete and SC-609 can be marked Done. If a step fails or is untested, retain In Review and report that step. This is a controlled connection/process-restart check; it does not require a machine power cut.
+Report PASS/FAIL for each step, both main commit IDs, the Fedora version, recording/session IDs and log references. For future reruns, report any failed/untested step explicitly. The 2026-10-04 user-declared PASS accepts runtime/API results with browser/video/multi-page limits documented above. This is a controlled connection/process-restart check; it does not require a machine power cut.
 
 ## Changed files
 
