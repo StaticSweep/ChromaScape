@@ -94,7 +94,11 @@ public class KernelProtocolCodec {
       return fatal(
           id, PROTOCOL_ERROR_CODE, "ok=false response must carry an error object and no result");
     }
-    return new KernelMessage(id, null, null, error, false, false);
+    JsonNode causalEvidence =
+        error.has("causalEvidence") && error.get("causalEvidence").isObject()
+            ? error.get("causalEvidence")
+            : null;
+    return new KernelMessage(id, null, causalEvidence, error, false, false);
   }
 
   private static KernelMessage fatal(String code, String message) {

@@ -55,6 +55,10 @@ Verified on Fedora with JDK 17.0.20.1:
 
 The Fishing test executes the real training writer and model reader against a fresh filesystem, with mocked eligible canonical frames/run-context services. The HTTP test uses Spring MockMvc. This is not live-game, PostgreSQL-backed or power-loss qualification. Earlier reviewer evidence (42 tests in the dirty source checkout plus an expected failing race reproducer) remains separate.
 
+### Current-main reconciliation (2026-10-04)
+
+Reconciled with `origin/main` at `99b36071` (SC-275, PR #56). The sole conflict was the appended replay reuse regression; retained that test alongside main's oversize test. Reran the same focused lane, production compilation and scoped formatting: **61 tests, 0 failures/errors/skips** (worker persistence increased from 30 to 34 with SC-275). `git diff --check` passed. CI monitoring and Felix remain skipped.
+
 ## Acceptance results
 
 1. PASS in integration harness: clean storage receives recording-source/dataset/manifest/model artifacts and reloads the model; canonical inputs are mocked, live training unrun.

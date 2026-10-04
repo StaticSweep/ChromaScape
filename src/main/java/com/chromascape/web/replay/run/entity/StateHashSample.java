@@ -19,6 +19,17 @@ public class StateHashSample {
   @Column(name = "chain_hash", nullable = false)
   private String chainHash;
 
+  @Column(name = "transition_ordinal")
+  private Long transitionOrdinal;
+
+  public Long getTransitionOrdinal() {
+    return transitionOrdinal;
+  }
+
+  public void setTransitionOrdinal(Long ordinal) {
+    this.transitionOrdinal = ordinal;
+  }
+
   protected StateHashSample() {}
 
   public StateHashSample(

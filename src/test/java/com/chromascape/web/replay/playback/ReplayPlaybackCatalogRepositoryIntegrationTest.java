@@ -146,10 +146,10 @@ class ReplayPlaybackCatalogRepositoryIntegrationTest {
   @Test
   void equalStartTimesUseDescendingDatabaseIdOrder() {
     LocalDateTime start = LocalDateTime.of(2026, 8, 28, 3, 0);
-    persistRecording("recording-first", "account-a", start);
-    DebugSession first = persistDebugSession("debug-first", "recording-first", start);
-    persistRecording("recording-second", "account-a", start);
-    DebugSession second = persistDebugSession("debug-second", "recording-second", start);
+    RecordingSession first = persistRecording("recording-first", "account-a", start);
+    persistDebugSession("debug-first", "recording-first", start);
+    RecordingSession second = persistRecording("recording-second", "account-a", start);
+    persistDebugSession("debug-second", "recording-second", start);
     entityManager.flush();
 
     List<Object[]> rows = catalogRepository.findCatalogRows(null, null, null, 10, 0);
@@ -163,9 +163,8 @@ class ReplayPlaybackCatalogRepositoryIntegrationTest {
   void committedNewerSessionDoesNotShiftCursorContinuation() {
     LocalDateTime firstPageTime = LocalDateTime.of(2026, 8, 28, 3, 0);
     LocalDateTime olderTime = firstPageTime.minusMinutes(1);
-    persistRecording("recording-page-one", "account-a", firstPageTime);
-    DebugSession pageOne =
-        persistDebugSession("debug-page-one", "recording-page-one", firstPageTime);
+    RecordingSession pageOne = persistRecording("recording-page-one", "account-a", firstPageTime);
+    persistDebugSession("debug-page-one", "recording-page-one", firstPageTime);
     persistRecording("recording-older", "account-a", olderTime);
     persistDebugSession("debug-older", "recording-older", olderTime);
     entityManager.flush();
@@ -210,16 +209,20 @@ class ReplayPlaybackCatalogRepositoryIntegrationTest {
     assertTrue(tableExists("tick_logs"));
 
     assertEquals(
-        "CREATE INDEX idx_debug_sessions_playback_keyset ON public.debug_sessions USING btree (start_time DESC, id DESC) WHERE (recording_id IS NOT NULL)",
+        "CREATE INDEX idx_debug_sessions_playback_keyset ON public.debug_sessions USING btree"
+            + " (start_time DESC, id DESC) WHERE (recording_id IS NOT NULL)",
         indexDefinition("idx_debug_sessions_playback_keyset"));
     assertEquals(
-        "CREATE INDEX idx_debug_sessions_playback_account_keyset ON public.debug_sessions USING btree (account_name, start_time DESC, id DESC) WHERE (recording_id IS NOT NULL)",
+        "CREATE INDEX idx_debug_sessions_playback_account_keyset ON public.debug_sessions USING"
+            + " btree (account_name, start_time DESC, id DESC) WHERE (recording_id IS NOT NULL)",
         indexDefinition("idx_debug_sessions_playback_account_keyset"));
     assertEquals(
-        "CREATE INDEX idx_tick_snapshots_playback_session_tick_id ON public.tick_snapshots USING btree (session_id, tick, id)",
+        "CREATE INDEX idx_tick_snapshots_playback_session_tick_id ON public.tick_snapshots USING"
+            + " btree (session_id, tick, id)",
         indexDefinition("idx_tick_snapshots_playback_session_tick_id"));
     assertEquals(
-        "CREATE INDEX idx_tick_logs_playback_session_tick_id ON public.tick_logs USING btree (session_id, tick, id)",
+        "CREATE INDEX idx_tick_logs_playback_session_tick_id ON public.tick_logs USING btree"
+            + " (session_id, tick, id)",
         indexDefinition("idx_tick_logs_playback_session_tick_id"));
   }
 
@@ -245,7 +248,8 @@ class ReplayPlaybackCatalogRepositoryIntegrationTest {
     assertEquals(1, indexCount("idx_tick_snapshots_playback_session_tick_id"));
     assertEquals(1, indexCount("idx_tick_logs_playback_session_tick_id"));
     assertEquals(
-        "CREATE INDEX idx_debug_sessions_playback_keyset ON public.debug_sessions USING btree (start_time DESC, id DESC) WHERE (recording_id IS NOT NULL)",
+        "CREATE INDEX idx_debug_sessions_playback_keyset ON public.debug_sessions USING btree"
+            + " (start_time DESC, id DESC) WHERE (recording_id IS NOT NULL)",
         indexDefinition("idx_debug_sessions_playback_keyset"));
   }
 

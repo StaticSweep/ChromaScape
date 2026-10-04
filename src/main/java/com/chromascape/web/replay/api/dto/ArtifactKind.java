@@ -5,5 +5,9 @@ public enum ArtifactKind {
   MANIFEST,
   SNAPSHOT,
   TRACE,
-  REPORT
+  REPORT,
+  /** SC-275 bound transition-prefix frames for one checkpoint. */
+  CHAIN,
+  /** Complete versioned causal projection, captured periodically and at boundaries. */
+  PROJECTION
 }
