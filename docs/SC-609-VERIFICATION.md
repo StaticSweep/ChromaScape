@@ -165,3 +165,15 @@ Coordinated Micro6 project:
 - `C:\Dev\IdeaProjects\micro6\runelite-client\src\main\resources\contracts\behavior-semantic-v1.json`
 - `C:\Dev\IdeaProjects\micro6\runelite-client\src\test\java\net\runelite\client\plugins\debugrecorder\BehaviorCaptureOutboxTest.java`
 - `C:\Dev\IdeaProjects\micro6\runelite-client\src\test\java\net\runelite\client\plugins\debugrecorder\BehaviorSessionStartProvenanceTest.java`
+
+## Closeout changed files
+
+In addition to the original implementation inventory above:
+
+- `C:\Dev\IdeaProjects\micro6\runelite-client\src\main\java\net\runelite\client\plugins\microbot\accountbuilder\integration\builder\Micro6BuilderExecutorServer.java` and companion `Micro6RunContextNumberNormalizationTest.java`.
+- `C:\Dev\IdeaProjects\ChromaScape\src\main\java\com\chromascape\web\replay\security\LocalReplayPrincipalConfig.java` and companion `LocalReplayPrincipalConfigTest.java`.
+- `C:\Dev\IdeaProjects\ChromaScape\src\main\resources\db\migration\V61__sc641_catalog_profiles.sql` and `V62__recording_provenance.sql`, renamed without SQL changes from V32/V33.
+- `C:\Dev\IdeaProjects\ChromaScape\src\main\java\com\chromascape\web\recording\provenance\RecordingProvenanceConvergence.java` and companion `RecordingProvenanceConvergenceResourceTest.java`.
+- The delivery plan, capture operations and verification documents under `C:\Dev\IdeaProjects\ChromaScape\docs`.
+
+Merged corrective revisions: Micro6 #161 `ee00d8da7af49f0efb0699959be19a5f6dae21aa`; ChromaScape #51 `daa2b98227bdb671777c7cf666fb4a3e6a32ae8a`, #52 `086088773067088e87b540327dcd9805d1996ede`, and #53 `41ad26d4cf116f7f1e2f64877b9f502d3871a888`. These integrations do not certify an unrun live acceptance rerun against the final merged main tree; the supplied live evidence covers the fix branches and the focused regressions cover their integration.
