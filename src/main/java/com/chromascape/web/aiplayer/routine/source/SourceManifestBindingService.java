@@ -326,6 +326,18 @@ public class SourceManifestBindingService {
                     new SourceManifestException(
                         SourceManifestFailureCode.SOURCE_UNAVAILABLE,
                         "source binding is unavailable"));
+    return bindingView(binding);
+  }
+
+  /**
+   * An absent optional binding is data, not an exception that can poison a caller's transaction.
+   */
+  @Transactional(readOnly = true)
+  public Map<String, Object> findBinding(String runId) {
+    return bindings.findByRunId(runId).map(this::bindingView).orElse(null);
+  }
+
+  private Map<String, Object> bindingView(SourceRunBinding binding) {
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("run_id", binding.getRunId());
     result.put("recording_id", binding.getRecordingId());

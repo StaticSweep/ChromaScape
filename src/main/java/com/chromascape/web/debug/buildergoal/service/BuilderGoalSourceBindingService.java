@@ -201,7 +201,7 @@ public class BuilderGoalSourceBindingService {
   public Map<String, Object> binding(String runId) {
     if (runId == null || runId.isBlank()) return null;
     try {
-      return bindings.binding(runId);
+      return bindings.findBinding(runId);
     } catch (SourceManifestException exception) {
       return null;
     }
