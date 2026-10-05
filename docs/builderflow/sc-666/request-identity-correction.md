@@ -71,3 +71,17 @@ Revert application changes without dropping `builder_goal_start_request` or dele
 ## Remaining work and tracker reconciliation
 
 Review/integrate this corrective branch and apply V65 on deployment. Complete the cross-plane/live SC-666 qualification once SC-798/SC-800 are implemented and verified. Reconcile the earlier Felix Done claim against the full current story when Felix work is authorized; do not post a done marker based only on this correction. Shortcut remains unchanged by this run.
+
+## Fedora deployment follow-up (2026-10-05)
+
+PR #57 merged as `2353219811eb924696624c5646369689a39b02c0`. A clean native Fedora deployment started through the repository wrapper; normal Flyway startup successfully applied V63, V64 and V65. The debugger returned HTTP 200. Existing dirty checkouts and application data were preserved.
+
+A synthetic terminal request fixture exposed HTTP 500 on matching retries: strict source-binding lookup threw for absent optional evidence, its caller caught the exception, and Spring nevertheless marked the surrounding transaction rollback-only. No gameplay or recording was dispatched.
+
+### Changed files
+
+`SourceManifestBindingService.java` adds nullable optional lookup while retaining the strict evidence API. `BuilderGoalSourceBindingService.java` uses that optional read for run summaries. `BuilderGoalStartRequestPostgresTest.java` adds real Spring transaction proxy regressions proving absent optional evidence permits commit and strict lookup still rejects missing evidence.
+
+### Tests
+
+The same focused command above passed **220 tests, zero failures/errors/skips**, including seven actual PostgreSQL tests. Scoped Spotless passed. Runtime verification after deployment will be recorded separately; complete cross-plane/live qualification remains outstanding.

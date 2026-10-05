@@ -174,4 +174,60 @@ class BuilderGoalStartRequestPostgresTest {
         BuilderGoalStartRequestService.fingerprint(
             mapper, Map.of("account", "b", "settings", Map.of("a", 1, "b", 2))));
   }
+
+  private com.chromascape.web.aiplayer.routine.source.SourceManifestBindingService
+      sourceBindingProxy() {
+    var target =
+        new com.chromascape.web.aiplayer.routine.source.SourceManifestBindingService(
+            new ObjectMapper(),
+            org.mockito.Mockito.mock(
+                com.chromascape.web.aiplayer.routine.source.persistence
+                    .SourceManifestReferenceRepository.class),
+            org.mockito.Mockito.mock(
+                com.chromascape.web.aiplayer.routine.source.persistence.SourceRunBindingRepository
+                    .class),
+            org.mockito.Mockito.mock(
+                com.chromascape.web.aiplayer.routine.source.persistence
+                    .SourceContentObjectRepository.class),
+            new com.chromascape.web.aiplayer.routine.source.VerifiedSourceContentCache(10000),
+            org.mockito.Mockito.mock(
+                com.chromascape.web.aiplayer.routine.service.CurrentSliceRunService.class),
+            org.mockito.Mockito.mock(
+                com.chromascape.web.aiplayer.contract.CurrentSliceIdentityValidator.class),
+            new com.chromascape.web.config.SourceTrustProperties());
+    var proxy = new org.springframework.aop.framework.ProxyFactory(target);
+    proxy.setProxyTargetClass(true);
+    proxy.addAdvice(
+        new org.springframework.transaction.interceptor.TransactionInterceptor(
+            new JdbcTransactionManager(dataSource),
+            new org.springframework.transaction.annotation.AnnotationTransactionAttributeSource()));
+    return (com.chromascape.web.aiplayer.routine.source.SourceManifestBindingService)
+        proxy.getProxy();
+  }
+
+  @Test
+  void missingOptionalSourceBindingDoesNotRollBackTheAcceptedRequest() {
+    var adapter =
+        new BuilderGoalSourceBindingService(
+            null,
+            sourceBindingProxy(),
+            new com.chromascape.web.config.SourceTrustProperties(),
+            new JdbcTransactionManager(dataSource));
+    tx.execute(
+        status -> {
+          bind(service, "request", "digest", "original");
+          assertNull(adapter.binding("original"));
+          return null;
+        });
+    assertEquals("original", tx.execute(status -> service.reserve("request", "digest")));
+  }
+
+  @Test
+  void strictSourceBindingLookupStillRejectsMissingEvidence() {
+    var exception =
+        assertThrows(
+            com.chromascape.web.aiplayer.routine.source.SourceManifestException.class,
+            () -> sourceBindingProxy().binding("missing"));
+    assertEquals(org.springframework.http.HttpStatus.NOT_FOUND, exception.status());
+  }
 }
