@@ -56,6 +56,17 @@ class BuilderGoalRunnerControllerTest {
   }
 
   @Test
+  void unauthorizedHeartbeatNeverMutatesRegistry() {
+    assertThat(
+            controller
+                .recordClientHeartbeat(objectMapper.createObjectNode(), null)
+                .getStatusCode()
+                .value())
+        .isEqualTo(401);
+    org.mockito.Mockito.verifyNoInteractions(clientRegistryService);
+  }
+
+  @Test
   void launchAccount_packetCaptureMustBeBooleanAndIsForwarded() throws Exception {
     assertThat(
             controller

@@ -186,6 +186,10 @@ public class Micro6TargetRelaunchService {
   private final HttpClient httpClient;
   private final String micro6ProjectDir;
   private final String gradleRunTask;
+
+  @org.springframework.beans.factory.annotation.Value("${builder-goal.local-launch.enabled:true}")
+  private boolean localLaunchEnabled = true;
+
   private final String launchCommandTemplate;
   private final String extraRunArgs;
   private final int defaultWorld;
@@ -345,6 +349,7 @@ public class Micro6TargetRelaunchService {
       boolean forceRelaunch,
       boolean packetCapture)
       throws Exception {
+    if (!localLaunchEnabled) throw new IllegalStateException("DIRECT_LOCAL_LAUNCH_DISABLED");
     try (RsproxLaunchSession capture = packetCapture ? RsproxLaunchSession.connect() : null) {
       RelaunchResult result =
           restartTargetWithCapture(

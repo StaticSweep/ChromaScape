@@ -57,6 +57,10 @@ public class Micro6ExecutorCatalogService {
   private final Micro6Config config;
   private final ObjectMapper objectMapper;
   private final HttpClient httpClient;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.chromascape.web.debug.buildergoal.service.BuilderGoalTopologyGuard topologyGuard;
+
   private final Micro6RuntimeRegistryClient registryClient;
 
   private final AtomicReference<JsonNode> cache = new AtomicReference<>();
@@ -123,7 +127,7 @@ public class Micro6ExecutorCatalogService {
         "last_heartbeat_at",
         runtime.lastHeartbeatAt() != null ? runtime.lastHeartbeatAt().toString() : null);
     node.put("expires_at", runtime.expiresAt() != null ? runtime.expiresAt().toString() : null);
-    node.put("advertised_base_url", runtime.advertisedBaseUrl());
+    node.putNull("advertised_base_url");
     node.put("selectable", "ONLINE".equalsIgnoreCase(runtime.runtimeState()));
     ArrayNode reasons = objectMapper.createArrayNode();
     if (runtime.reasons() != null) {
@@ -1157,7 +1161,40 @@ public class Micro6ExecutorCatalogService {
     return cached != null ? cached.payload() : null;
   }
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.chromascape.web.debug.buildergoal.service.BuilderGoalEndpointAuthority
+      endpointAuthority;
+
+  public JsonNode getCatalogForIdentity(Map<String, Object> identity, boolean forceRefresh) {
+    String route =
+        endpointAuthority == null
+            ? null
+            : endpointAuthority.resolve(objectMapper.valueToTree(identity));
+    if (route == null)
+      return objectMapper.createObjectNode().put("reason_code", "ENDPOINT_UNTRUSTED");
+    JsonNode result = fetchCatalogForOrigin(route, true);
+    if (!route.equals(endpointAuthority.resolve(objectMapper.valueToTree(identity)))) {
+      cacheByBaseUrl.remove(route);
+      if (route.equals(normalizeBaseUrl(config.getExecutorCatalog().getBaseUrl()))) cache.set(null);
+      return objectMapper.createObjectNode().put("reason_code", "ENDPOINT_FENCED");
+    }
+    return result;
+  }
+
+  @Deprecated
   public JsonNode getCatalogForBaseUrl(String baseUrl, boolean forceRefresh) {
+    if (endpointAuthority != null)
+      return objectMapper.createObjectNode().put("reason_code", "RAW_ENDPOINT_AUTHORITY_FORBIDDEN");
+    return fetchCatalogForOrigin(baseUrl, forceRefresh);
+  }
+
+  private JsonNode fetchCatalogForOrigin(String baseUrl, boolean forceRefresh) {
+    String safeOrigin =
+        com.chromascape.web.debug.buildergoal.service.BuilderGoalEndpointAuthority.normalize(
+            baseUrl);
+    if (safeOrigin == null)
+      return objectMapper.createObjectNode().put("reason_code", "ENDPOINT_UNTRUSTED");
+    baseUrl = safeOrigin;
     if (!config.getExecutorCatalog().isEnabled()) {
       return objectMapper.valueToTree(Map.of("enabled", false, "tasks", List.of()));
     }
@@ -1191,7 +1228,14 @@ public class Micro6ExecutorCatalogService {
               .GET()
               .build();
       HttpResponse<String> response =
-          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+          httpClient.send(
+              topologyGuard == null
+                  ? request
+                  : HttpRequest.newBuilder(
+                          request, (name, value) -> !name.equalsIgnoreCase("Authorization"))
+                      .header("Authorization", topologyGuard.executorAuthorization())
+                      .build(),
+              com.chromascape.web.http.BoundedJsonResponse.handler(8 * 1024 * 1024));
       if (response.statusCode() >= 400) {
         throw new IllegalStateException("Catalog fetch failed: HTTP " + response.statusCode());
       }
@@ -1205,7 +1249,9 @@ public class Micro6ExecutorCatalogService {
       }
       return parsed;
     } catch (Exception e) {
-      log.warn("Failed to fetch Micro6 catalog from {}: {}", normalizedBaseUrl, e.getMessage());
+      log.warn("Micro6 catalog fetch failed: {}", e.getClass().getSimpleName());
+      if (endpointAuthority != null)
+        return objectMapper.createObjectNode().put("reason_code", "ENDPOINT_UNAVAILABLE");
       if (normalizedBaseUrl.equals(normalizeBaseUrl(config.getExecutorCatalog().getBaseUrl()))
           && cache.get() != null) {
         return cache.get();
@@ -1216,8 +1262,8 @@ public class Micro6ExecutorCatalogService {
       }
       Map<String, Object> fallback = new LinkedHashMap<>();
       fallback.put("enabled", true);
-      fallback.put("baseUrl", normalizedBaseUrl);
-      fallback.put("error", e.getMessage());
+
+      fallback.put("error", "Executor catalog unavailable");
       fallback.put("tasks", List.of());
       return objectMapper.valueToTree(fallback);
     }

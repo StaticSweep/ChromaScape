@@ -22,6 +22,9 @@ public class Micro6TaskSourcePatchService {
   private final HttpClient httpClient;
   private final String micro6BaseUrl;
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private BuilderGoalTopologyGuard topologyGuard;
+
   public Micro6TaskSourcePatchService(
       ObjectMapper objectMapper,
       @Value("${micro6.executor-catalog.base-url:http://127.0.0.1:8098}") String micro6BaseUrl) {
@@ -30,6 +33,22 @@ public class Micro6TaskSourcePatchService {
     this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
   }
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private BuilderGoalEndpointAuthority endpointAuthority;
+
+  public PatchApplyResult applyAllocatedPatch(
+      Map<String, Object> identity,
+      String taskKey,
+      String sourceRunId,
+      AnalysisV2PatchDraft patchDraft)
+      throws Exception {
+    if (endpointAuthority == null) throw new IllegalStateException("ENDPOINT_AUTHORITY_REQUIRED");
+    String route = endpointAuthority.resolve(objectMapper.valueToTree(identity));
+    if (route == null) throw new IllegalStateException("ENDPOINT_UNTRUSTED");
+    return sendPatch(route, taskKey, sourceRunId, patchDraft, identity);
+  }
+
+  @Deprecated
   public PatchApplyResult applyPatch(
       String taskKey, String sourceRunId, AnalysisV2PatchDraft patchDraft) throws Exception {
     return applyPatch(micro6BaseUrl, taskKey, sourceRunId, patchDraft);
@@ -38,13 +57,27 @@ public class Micro6TaskSourcePatchService {
   public PatchApplyResult applyPatch(
       String targetBaseUrl, String taskKey, String sourceRunId, AnalysisV2PatchDraft patchDraft)
       throws Exception {
+    if (endpointAuthority != null)
+      throw new IllegalStateException("RAW_ENDPOINT_AUTHORITY_FORBIDDEN");
+    return sendPatch(targetBaseUrl, taskKey, sourceRunId, patchDraft, null);
+  }
+
+  private PatchApplyResult sendPatch(
+      String targetBaseUrl,
+      String taskKey,
+      String sourceRunId,
+      AnalysisV2PatchDraft patchDraft,
+      Map<String, Object> identity)
+      throws Exception {
     if (taskKey == null || taskKey.isBlank()) {
       throw new IllegalArgumentException("taskKey is required");
     }
     if (patchDraft == null) {
       throw new IllegalArgumentException("patchDraft is required");
     }
-    String resolvedBaseUrl = normalizeBaseUrl(targetBaseUrl);
+    String resolvedBaseUrl =
+        com.chromascape.web.debug.buildergoal.service.BuilderGoalEndpointAuthority.normalize(
+            targetBaseUrl);
     if (resolvedBaseUrl == null) {
       throw new IllegalArgumentException("Micro6 target base URL is required");
     }
@@ -67,7 +100,15 @@ public class Micro6TaskSourcePatchService {
             .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
             .build();
 
-    HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    request = ExecutorAllocationHeaders.apply(request, objectMapper.valueToTree(identity));
+    if (topologyGuard != null)
+      request =
+          HttpRequest.newBuilder(request, (name, value) -> !name.equalsIgnoreCase("Authorization"))
+              .header("Authorization", topologyGuard.executorAuthorization())
+              .build();
+    HttpResponse<String> response =
+        httpClient.send(
+            request, com.chromascape.web.http.BoundedJsonResponse.handler(8 * 1024 * 1024));
     if (response.statusCode() >= 400) {
       throw new IllegalStateException(
           "Micro6 patch apply failed (HTTP " + response.statusCode() + "): " + response.body());

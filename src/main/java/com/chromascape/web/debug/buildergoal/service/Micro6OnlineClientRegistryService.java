@@ -10,8 +10,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -20,7 +23,57 @@ public class Micro6OnlineClientRegistryService {
   private static final Duration STALE_AFTER = Duration.ofSeconds(30);
   private static final Duration EXPIRE_AFTER = Duration.ofMinutes(2);
 
+  @Autowired private BuilderGoalEndpointAuthority endpointAuthority;
   private final ConcurrentHashMap<String, ClientState> clients = new ConcurrentHashMap<>();
+  private final Set<String> trustedExecutorHosts;
+
+  /**
+   * Default construction trusts loopback endpoints only. Tests declare any additional topology host
+   * explicitly through {@link #Micro6OnlineClientRegistryService(Set)}.
+   */
+  public Micro6OnlineClientRegistryService() {
+    this(Set.of());
+  }
+
+  @Autowired
+  public Micro6OnlineClientRegistryService(
+      @Value("${builder-goal.launcher.base-url:http://192.168.1.6:8084}") String launcherBaseUrl,
+      @Value("${builder-goal.executor.trusted-origins:}") String extraTrustedHosts,
+      @Value("${chromascape.patchloop.micro6-executor.base-url:http://127.0.0.1:8098}")
+          String executorBaseUrl) {
+    this(
+        TrustedExecutorEndpoint.buildTrustedHosts(
+            TrustedExecutorEndpoint.trustedHostsFromBaseUrls(executorBaseUrl),
+            java.util.Arrays.stream(extraTrustedHosts.split(","))
+                .map(BuilderGoalEndpointAuthority::normalize)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet())));
+  }
+
+  Micro6OnlineClientRegistryService(Set<String> trustedExecutorHosts) {
+    this.trustedExecutorHosts =
+        TrustedExecutorEndpoint.buildTrustedHosts(Set.of(), trustedExecutorHosts);
+  }
+
+  /**
+   * Evaluates one endpoint URL against the trusted deployment topology. Heartbeat-advertised URLs
+   * are observational metadata; only a trusted verdict makes a client dispatchable.
+   */
+  public TrustedExecutorEndpoint.Verdict trustedEndpointVerdict(String rawUrl) {
+    return TrustedExecutorEndpoint.evaluate(rawUrl, trustedExecutorHosts);
+  }
+
+  private String safeObservedUrl(String raw) {
+    if (raw == null) return null;
+    try {
+      var uri = java.net.URI.create(raw.trim());
+      if (uri.getUserInfo() != null || uri.getRawQuery() != null || uri.getRawFragment() != null)
+        return null;
+      return normalizeBaseUrl(raw);
+    } catch (RuntimeException invalid) {
+      return null;
+    }
+  }
 
   public Map<String, Object> recordHeartbeat(JsonNode payload) {
     String clientId = textValue(payload.path("executor_instance_id"));
@@ -28,6 +81,9 @@ public class Micro6OnlineClientRegistryService {
       throw new IllegalArgumentException("executor_instance_id is required");
     }
 
+    pruneExpired();
+    if (!clients.containsKey(clientId) && clients.size() >= 1024)
+      throw new IllegalArgumentException("EXECUTOR_REGISTRY_CAPACITY");
     ClientState state = new ClientState();
     state.clientId = clientId;
     state.machineUuid = textValue(payload.path("machine_uuid"));
@@ -40,7 +96,19 @@ public class Micro6OnlineClientRegistryService {
             textValue(payload.path(AccountIdentityContract.EXPECTED_ACCOUNT_HASH_FIELD)),
             textValue(payload.path(AccountIdentityContract.LEGACY_EXPECTED_ACCOUNT_HASH_FIELD)));
     state.accountHashScheme = textValue(payload.path("account_hash_scheme"));
-    state.advertisedBaseUrl = normalizeBaseUrl(textValue(payload.path("advertised_base_url")));
+    state.advertisedBaseUrl =
+        endpointAuthority != null
+            ? endpointAuthority.resolve(payload)
+            : safeObservedUrl(textValue(payload.path("advertised_base_url")));
+    // The advertised URL is observational metadata: record the trust verdict at ingest, but never
+    // reject the heartbeat for it. Dispatch selection requires a trusted verdict (SC-802).
+    TrustedExecutorEndpoint.Verdict endpointVerdict =
+        TrustedExecutorEndpoint.evaluate(state.advertisedBaseUrl, trustedExecutorHosts);
+    state.endpointTrusted = endpointVerdict.trusted();
+    state.endpointTrustReason =
+        endpointVerdict.trusted()
+            ? null
+            : endpointVerdict.reasonCode() + ": " + endpointVerdict.reason();
     state.executorBindAddr = textValue(payload.path("executor_bind_addr"));
     state.sourceClientType = textValue(payload.path("source_client_type"));
     state.executorProfile = textValue(payload.path("executor_profile"));
@@ -70,10 +138,36 @@ public class Micro6OnlineClientRegistryService {
             : null;
     state.launchAttemptId = textValue(payload.path("launch_attempt_id"));
     state.processId = intValue(payload.path("process_id"));
+    state.identity = payload.deepCopy();
     state.lastSeenAt = Instant.now();
 
     clients.put(clientId, state);
     return toSummary(state, false);
+  }
+
+  public Map<String, Object> routeIdentity(String clientId) {
+    ClientState state = clients.get(clientId);
+    Map<String, Object> result = new LinkedHashMap<>();
+    if (state != null && state.identity != null) {
+      for (String key :
+          List.of(
+              "endpoint_ref",
+              "allocation_id",
+              "artifact_sha256",
+              "machine_uuid",
+              "launcher_session_id",
+              "executor_instance_id",
+              "account_hash",
+              "route_source")) {
+        String value = textValue(state.identity.path(key));
+        if (value != null) result.put(key, value);
+      }
+    }
+    if (state != null
+        && state.identity != null
+        && state.identity.path("fencing_generation").isIntegralNumber())
+      result.put("fencing_generation", state.identity.path("fencing_generation").asLong());
+    return result;
   }
 
   public boolean belongsToMachine(TargetClient target, String machineUuid) {
@@ -123,9 +217,20 @@ public class Micro6OnlineClientRegistryService {
    * Canonical generic executor readiness check; selected-account identity is checked separately.
    */
   public boolean isDispatchReady(TargetClient client) {
+    if (endpointAuthority != null) {
+      ClientState current = client == null ? null : clients.get(client.clientId());
+      if (current == null
+          || !java.util.Objects.equals(
+              client.advertisedBaseUrl(), endpointAuthority.resolve(current.identity)))
+        return false;
+    }
     if (client == null
         || client.advertisedBaseUrl() == null
         || client.advertisedBaseUrl().isBlank()) {
+      return false;
+    }
+    if (!TrustedExecutorEndpoint.evaluate(client.advertisedBaseUrl(), trustedExecutorHosts)
+        .trusted()) {
       return false;
     }
     boolean worldMatched =
@@ -164,6 +269,7 @@ public class Micro6OnlineClientRegistryService {
   }
 
   public boolean isSelectedAccountEligible(TargetClient client, String expectedAccountHash) {
+    // isDispatchReady already requires a trusted endpoint verdict (SC-802).
     return isDispatchReady(client)
         && AccountIdentityContract.hasRequiredScheme(client.accountHashScheme())
         && AccountIdentityContract.isCanonicalHash(client.accountHash())
@@ -267,6 +373,7 @@ public class Micro6OnlineClientRegistryService {
                             state.requestedAccountHash, accountHash)))
         .filter(state -> state.clientId != null && !state.clientId.isBlank())
         .filter(state -> state.advertisedBaseUrl != null && !state.advertisedBaseUrl.isBlank())
+        .filter(state -> state.endpointTrusted)
         .filter(state -> state.launchAttemptId != null && !state.launchAttemptId.isBlank())
         .filter(state -> state.processId != null && state.processId > 0)
         .sorted(
@@ -374,8 +481,46 @@ public class Micro6OnlineClientRegistryService {
     summary.put("machineUuid", state.machineUuid);
     summary.put("requestedAccountHash", state.requestedAccountHash);
     summary.put("accountHashScheme", state.accountHashScheme);
-    summary.put("advertisedBaseUrl", state.advertisedBaseUrl);
-    summary.put("executorBindAddr", state.executorBindAddr);
+    summary.put("advertisedBaseUrl", endpointAuthority == null ? state.advertisedBaseUrl : null);
+    if (state.identity != null) {
+      summary.put("endpointRef", textValue(state.identity.path("endpoint_ref")));
+      summary.put("routeSource", textValue(state.identity.path("route_source")));
+    }
+    boolean currentTrust =
+        state.endpointTrusted
+            && !stale
+            && (endpointAuthority == null
+                || java.util.Objects.equals(
+                    state.advertisedBaseUrl, endpointAuthority.resolve(state.identity)));
+    summary.put("endpointTrusted", currentTrust);
+    summary.put("endpointTrustReason", state.endpointTrustReason);
+    summary.put(
+        "environment",
+        endpointAuthority == null ? "DEV_TEST_FIXTURE" : endpointAuthority.environment());
+    summary.put("routeContractVersion", 1);
+    summary.put("certificateExpiryClass", "NOT_OBSERVED");
+    summary.put(
+        "executorInstanceId",
+        state.identity == null ? null : textValue(state.identity.path("executor_instance_id")));
+    summary.put(
+        "launcherSessionId",
+        state.identity == null ? null : textValue(state.identity.path("launcher_session_id")));
+    summary.put("freshness", stale ? "STALE" : "FRESH");
+    summary.put("topologyState", stale ? "DEGRADED" : currentTrust ? "READY" : "BLOCKED");
+    summary.put("lastValidationAt", Instant.now().toString());
+    summary.put(
+        "remediation",
+        currentTrust
+            ? null
+            : "Verify issuer grant, allocation generation, account/session/build identity, freshness, and configured exact origin");
+    if (state.identity != null) {
+      summary.put(
+          "fencingGeneration",
+          state.identity.path("fencing_generation").isIntegralNumber()
+              ? state.identity.path("fencing_generation").asLong()
+              : null);
+    }
+    summary.put("executorBindAddr", endpointAuthority == null ? state.executorBindAddr : null);
     summary.put("sourceClientType", state.sourceClientType);
     summary.put("executorProfile", state.executorProfile);
     summary.put("status", normalizedStatus(state, stale));
@@ -421,6 +566,11 @@ public class Micro6OnlineClientRegistryService {
       return null;
     }
     if (!dispatchReady) {
+      if (!state.endpointTrusted) {
+        return firstNonBlank(
+            state.endpointTrustReason,
+            "Executor endpoint is outside the trusted deployment topology");
+      }
       return "Executor is not generically dispatch-ready";
     }
     if (state.requestedAccountHash == null || state.requestedAccountHash.isBlank()) {
@@ -457,7 +607,13 @@ public class Micro6OnlineClientRegistryService {
   }
 
   private boolean isDispatchReady(ClientState state) {
+    if (endpointAuthority != null
+        && !java.util.Objects.equals(
+            state.advertisedBaseUrl, endpointAuthority.resolve(state.identity))) return false;
     if (!isOnline(state)) {
+      return false;
+    }
+    if (!state.endpointTrusted) {
       return false;
     }
     boolean worldMatched =
@@ -785,6 +941,7 @@ public class Micro6OnlineClientRegistryService {
   }
 
   private static class ClientState {
+    private JsonNode identity;
     private String machineUuid;
     private String clientId;
     private String accountName;
@@ -792,6 +949,8 @@ public class Micro6OnlineClientRegistryService {
     private String requestedAccountHash;
     private String accountHashScheme;
     private String advertisedBaseUrl;
+    private boolean endpointTrusted;
+    private String endpointTrustReason;
     private String executorBindAddr;
     private String sourceClientType;
     private String executorProfile;

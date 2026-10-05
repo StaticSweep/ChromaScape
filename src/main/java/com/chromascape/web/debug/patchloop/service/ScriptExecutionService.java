@@ -3,6 +3,7 @@ package com.chromascape.web.debug.patchloop.service;
 import com.chromascape.web.debug.buildergoal.service.AccountIdentityContract;
 import com.chromascape.web.debug.buildergoal.service.CanonicalSettingsHasher;
 import com.chromascape.web.debug.buildergoal.service.Micro6ExecutorReadinessEvaluator;
+import com.chromascape.web.debug.buildergoal.service.TrustedExecutorEndpoint;
 import com.chromascape.web.instance.RunConfig;
 import com.chromascape.web.instance.ScriptInstance;
 import com.chromascape.web.instance.ScriptInstanceManager;
@@ -19,6 +20,7 @@ import java.time.Duration;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -52,6 +54,17 @@ public class ScriptExecutionService {
   private final HttpClient httpClient;
   private final String executionBackend;
   private final String micro6ExecutorBaseUrl;
+
+  /** Trusted deployment-topology hosts for executor dial-out (SC-802). */
+  private final Set<String> trustedExecutorHosts;
+
+  @Autowired
+  private com.chromascape.web.debug.buildergoal.service.BuilderGoalEndpointAuthority
+      endpointAuthority;
+
+  @Autowired
+  private com.chromascape.web.debug.buildergoal.service.BuilderGoalTopologyGuard topologyGuard;
+
   private final AtomicInteger micro6EntryIdSeq = new AtomicInteger(1000);
   private final Map<Integer, String> micro6EntryToScript = new ConcurrentHashMap<>();
   private final AtomicReference<Integer> activeMicro6EntryId = new AtomicReference<>();
@@ -76,6 +89,7 @@ public class ScriptExecutionService {
     final Integer micro6EntryId;
     final ScriptInstance localInstance;
     final String micro6BaseUrl;
+    Map<String, Object> routeIdentity;
 
     ActiveRun(
         String backend, Integer micro6EntryId, ScriptInstance localInstance, String micro6BaseUrl) {
@@ -94,14 +108,22 @@ public class ScriptExecutionService {
       @Value("${chromascape.patchloop.execution-backend:micro6_local_executor}")
           String executionBackend,
       @Value("${chromascape.patchloop.micro6-executor.base-url:http://127.0.0.1:8098}")
-          String micro6ExecutorBaseUrl) {
+          String micro6ExecutorBaseUrl,
+      @Value("${builder-goal.launcher.base-url:http://192.168.1.6:8084}") String launcherBaseUrl,
+      @Value("${builder-goal.executor.trusted-origins:}") String extraTrustedHosts) {
     this(
         stateHandler,
         taskDetectionService,
         objectMapper,
         executionBackend,
         micro6ExecutorBaseUrl,
-        HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build());
+        HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build(),
+        TrustedExecutorEndpoint.buildTrustedHosts(
+            TrustedExecutorEndpoint.trustedHostsFromBaseUrls(micro6ExecutorBaseUrl),
+            java.util.Arrays.stream(extraTrustedHosts.split(","))
+                .map(String::trim)
+                .filter(v -> !v.isEmpty())
+                .collect(java.util.stream.Collectors.toSet())));
   }
 
   ScriptExecutionService(
@@ -119,6 +141,26 @@ public class ScriptExecutionService {
         micro6ExecutorBaseUrl,
         httpClient,
         15_000L);
+  }
+
+  ScriptExecutionService(
+      WebSocketStateHandler stateHandler,
+      TaskDetectionService taskDetectionService,
+      ObjectMapper objectMapper,
+      String executionBackend,
+      String micro6ExecutorBaseUrl,
+      HttpClient httpClient,
+      Set<String> trustedExecutorHosts) {
+    this(
+        stateHandler,
+        taskDetectionService,
+        objectMapper,
+        executionBackend,
+        micro6ExecutorBaseUrl,
+        httpClient,
+        15_000L,
+        null,
+        trustedExecutorHosts);
   }
 
   ScriptExecutionService(
@@ -149,6 +191,28 @@ public class ScriptExecutionService {
       HttpClient httpClient,
       long micro6TimeoutRecoveryProbeMs,
       java.util.function.Function<String, String> displayNameToTaskKeyResolver) {
+    this(
+        stateHandler,
+        taskDetectionService,
+        objectMapper,
+        executionBackend,
+        micro6ExecutorBaseUrl,
+        httpClient,
+        micro6TimeoutRecoveryProbeMs,
+        displayNameToTaskKeyResolver,
+        defaultTrustedHosts(micro6ExecutorBaseUrl));
+  }
+
+  ScriptExecutionService(
+      WebSocketStateHandler stateHandler,
+      TaskDetectionService taskDetectionService,
+      ObjectMapper objectMapper,
+      String executionBackend,
+      String micro6ExecutorBaseUrl,
+      HttpClient httpClient,
+      long micro6TimeoutRecoveryProbeMs,
+      java.util.function.Function<String, String> displayNameToTaskKeyResolver,
+      Set<String> trustedExecutorHosts) {
     this.instanceManager = ScriptInstanceManager.getInstance();
     this.stateHandler = stateHandler;
     this.taskDetectionService = taskDetectionService;
@@ -159,6 +223,55 @@ public class ScriptExecutionService {
     this.micro6TimeoutRecoveryProbeMs = Math.max(0L, micro6TimeoutRecoveryProbeMs);
     this.displayNameToTaskKeyResolver =
         displayNameToTaskKeyResolver != null ? displayNameToTaskKeyResolver : candidate -> null;
+    this.trustedExecutorHosts =
+        TrustedExecutorEndpoint.buildTrustedHosts(Set.of(), trustedExecutorHosts);
+  }
+
+  /**
+   * Default trusted topology for non-Spring construction (tests, tools): loopback plus the hosts of
+   * the default launcher URL and the given executor base URL. Spring wires the configured topology
+   * instead.
+   */
+  private static Set<String> defaultTrustedHosts(String executorBaseUrl) {
+    return TrustedExecutorEndpoint.buildTrustedHosts(
+        TrustedExecutorEndpoint.trustedHostsFromBaseUrls(executorBaseUrl), Set.of());
+  }
+
+  /** Evaluates one endpoint URL against the trusted deployment topology. Exposed for tests. */
+  TrustedExecutorEndpoint.Verdict trustedEndpointVerdict(String rawUrl) {
+    return TrustedExecutorEndpoint.evaluate(rawUrl, trustedExecutorHosts);
+  }
+
+  private HttpResponse<String> sendExecutor(
+      HttpRequest request, HttpResponse.BodyHandler<String> handler)
+      throws java.io.IOException, InterruptedException {
+    return sendExecutor(request, handler, null);
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> selectedIdentity(Map<String, Object> metadata) {
+    return metadata != null && metadata.get("micro6_target") instanceof Map<?, ?> target
+        ? (Map<String, Object>) target
+        : null;
+  }
+
+  private HttpResponse<String> sendExecutor(
+      HttpRequest request, HttpResponse.BodyHandler<String> handler, Map<String, Object> identity)
+      throws java.io.IOException, InterruptedException {
+    if (endpointAuthority != null && identity == null)
+      throw new java.io.IOException("ENDPOINT_CONTEXT_REQUIRED");
+    if (endpointAuthority != null)
+      request =
+          com.chromascape.web.debug.buildergoal.service.ExecutorAllocationHeaders.apply(
+              request, objectMapper.valueToTree(identity));
+    if (topologyGuard != null) {
+      request =
+          HttpRequest.newBuilder(request, (name, value) -> !name.equalsIgnoreCase("Authorization"))
+              .header("Authorization", topologyGuard.executorAuthorization())
+              .build();
+    }
+    return httpClient.send(
+        request, com.chromascape.web.http.BoundedJsonResponse.handler(8 * 1024 * 1024));
   }
 
   /** Result of a script execution. */
@@ -523,8 +636,7 @@ public class ScriptExecutionService {
     activeMicro6EntryId.set(entryId);
 
     if (executionId != null) {
-      activeRuns.put(
-          executionId, new ActiveRun(BACKEND_MICRO6_LOCAL_EXECUTOR, entryId, null, targetBaseUrl));
+      activeRuns.put(executionId, boundRun(entryId, targetBaseUrl, taskMetadata));
     }
 
     try {
@@ -549,9 +661,7 @@ public class ScriptExecutionService {
         micro6EntryToScript.put(trackedEntryId, scriptName);
         activeMicro6EntryId.set(trackedEntryId);
         if (executionId != null) {
-          activeRuns.put(
-              executionId,
-              new ActiveRun(BACKEND_MICRO6_LOCAL_EXECUTOR, trackedEntryId, null, targetBaseUrl));
+          activeRuns.put(executionId, boundRun(trackedEntryId, targetBaseUrl, taskMetadata));
         }
       }
 
@@ -585,7 +695,12 @@ public class ScriptExecutionService {
         Thread.sleep(1000);
       }
 
-      stopMicro6Run(targetBaseUrl, trackedEntryId, "Timed out while waiting for completion");
+      controlMicro6Run(
+          targetBaseUrl,
+          trackedEntryId,
+          "stop",
+          "Timed out while waiting for completion",
+          selectedIdentity(taskMetadata));
       return ScriptExecutionResult.timeout(BACKEND_MICRO6_LOCAL_EXECUTOR);
 
     } catch (InterruptedException e) {
@@ -658,7 +773,9 @@ public class ScriptExecutionService {
 
     HttpResponse<String> executeResponse;
     try {
-      executeResponse = httpClient.send(executeRequest, HttpResponse.BodyHandlers.ofString());
+      executeResponse =
+          sendExecutor(
+              executeRequest, HttpResponse.BodyHandlers.ofString(), selectedIdentity(taskMetadata));
     } catch (HttpTimeoutException timeoutException) {
       logger.warn(
           "Micro6 publish request timed out for task {} on {}; probing executor status before retry",
@@ -675,7 +792,11 @@ public class ScriptExecutionService {
           entryId,
           scriptName);
       try {
-        executeResponse = httpClient.send(executeRequest, HttpResponse.BodyHandlers.ofString());
+        executeResponse =
+            sendExecutor(
+                executeRequest,
+                HttpResponse.BodyHandlers.ofString(),
+                selectedIdentity(taskMetadata));
       } catch (HttpTimeoutException retryTimeoutException) {
         Micro6PublishResult retryRecoveredPublish =
             recoverAcceptedPublishAfterTimeout(
@@ -1509,7 +1630,8 @@ public class ScriptExecutionService {
       return;
     }
     if (BACKEND_MICRO6_LOCAL_EXECUTOR.equalsIgnoreCase(run.backend) && run.micro6EntryId != null) {
-      controlMicro6Run(resolveRunMicro6BaseUrl(run), run.micro6EntryId, "pause");
+      controlMicro6Run(
+          resolveRunMicro6BaseUrl(run), run.micro6EntryId, "pause", null, run.routeIdentity);
     } else {
       logger.info(
           "pauseScript: pause not supported for backend={}, executionId={}",
@@ -1526,7 +1648,8 @@ public class ScriptExecutionService {
       return;
     }
     if (BACKEND_MICRO6_LOCAL_EXECUTOR.equalsIgnoreCase(run.backend) && run.micro6EntryId != null) {
-      controlMicro6Run(resolveRunMicro6BaseUrl(run), run.micro6EntryId, "resume");
+      controlMicro6Run(
+          resolveRunMicro6BaseUrl(run), run.micro6EntryId, "resume", null, run.routeIdentity);
     } else {
       logger.info(
           "resumeScript: resume not supported for backend={}, executionId={}",
@@ -1543,7 +1666,8 @@ public class ScriptExecutionService {
       return;
     }
     if (BACKEND_MICRO6_LOCAL_EXECUTOR.equalsIgnoreCase(run.backend) && run.micro6EntryId != null) {
-      stopMicro6Run(resolveRunMicro6BaseUrl(run), run.micro6EntryId, reason);
+      controlMicro6Run(
+          resolveRunMicro6BaseUrl(run), run.micro6EntryId, "stop", reason, run.routeIdentity);
     } else if (run.localInstance != null) {
       try {
         run.localInstance.stop();
@@ -1645,6 +1769,10 @@ public class ScriptExecutionService {
             && (taskMetadata.containsKey("micro6_target")
                 || Boolean.TRUE.equals(taskMetadata.get("publish_only"))
                 || taskMetadata.containsKey("builder_goal_iteration_id"));
+    if (endpointAuthority != null) {
+      Object target = taskMetadata == null ? null : taskMetadata.get("micro6_target");
+      return endpointAuthority.resolve(objectMapper.valueToTree(target));
+    }
     if (taskMetadata != null) {
       Object target = taskMetadata.get("micro6_target");
       if (target instanceof Map<?, ?> targetMap) {
@@ -1663,7 +1791,18 @@ public class ScriptExecutionService {
       if (target instanceof Map<?, ?> targetMap) {
         Object value = ((Map<String, Object>) targetMap).get("advertised_base_url");
         if (value != null && !value.toString().isBlank()) {
-          return normalizeBaseUrl(value.toString());
+          // SC-802: the persisted advertised URL is observational metadata. Dial it only when it
+          // validates against the trusted deployment topology; otherwise fail closed without
+          // substituting the configured default.
+          TrustedExecutorEndpoint.Verdict verdict =
+              TrustedExecutorEndpoint.evaluate(value.toString(), trustedExecutorHosts);
+          if (verdict.trusted()) {
+            return verdict.normalizedUrl();
+          }
+          logger.warn(
+              "Refusing to dial untrusted executor endpoint from task metadata: {}",
+              verdict.reason());
+          return null;
         }
       }
     }
@@ -1672,15 +1811,57 @@ public class ScriptExecutionService {
     return selectedTargetRequired ? null : normalizeBaseUrl(micro6ExecutorBaseUrl);
   }
 
+  /**
+   * Reports whether task metadata carries a registry-selected target whose endpoint fails the
+   * trusted deployment-topology policy. Callers use this to fail closed with an explicit
+   * endpoint-trust error instead of a generic resolution failure.
+   */
+  boolean hasUntrustedSelectedTarget(Map<String, Object> taskMetadata) {
+    if (taskMetadata == null || !taskMetadata.containsKey("micro6_target")) {
+      return false;
+    }
+    Object target = taskMetadata.get("micro6_target");
+    if (!(target instanceof Map<?, ?> targetMap)) {
+      return false;
+    }
+    Object value = ((Map<String, Object>) targetMap).get("advertised_base_url");
+    if (value == null || value.toString().isBlank()) {
+      return false;
+    }
+    return !TrustedExecutorEndpoint.evaluate(value.toString(), trustedExecutorHosts).trusted();
+  }
+
+  private ActiveRun boundRun(Integer entryId, String url, Map<String, Object> metadata) {
+    ActiveRun run = new ActiveRun(BACKEND_MICRO6_LOCAL_EXECUTOR, entryId, null, url);
+    if (metadata != null && metadata.get("micro6_target") instanceof Map<?, ?> target)
+      run.routeIdentity =
+          objectMapper.convertValue(
+              target, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+    return run;
+  }
+
   private String resolveRunMicro6BaseUrl(ActiveRun run) {
+    if (endpointAuthority != null)
+      return run == null
+          ? null
+          : endpointAuthority.resolve(objectMapper.valueToTree(run.routeIdentity));
     if (run != null && run.micro6BaseUrl != null && !run.micro6BaseUrl.isBlank()) {
-      return normalizeBaseUrl(run.micro6BaseUrl);
+      // SC-802: a tracked run may predate the trust policy. Never dial its stored URL when it
+      // falls outside the trusted deployment topology.
+      TrustedExecutorEndpoint.Verdict verdict =
+          TrustedExecutorEndpoint.evaluate(run.micro6BaseUrl, trustedExecutorHosts);
+      if (verdict.trusted()) {
+        return verdict.normalizedUrl();
+      }
+      logger.warn(
+          "Refusing to dial untrusted executor endpoint from tracked run: {}", verdict.reason());
+      return null;
     }
     return normalizeBaseUrl(micro6ExecutorBaseUrl);
   }
 
-  private HttpResponse<String> queryMicro6Status(String micro6BaseUrl, int entryId)
-      throws Exception {
+  private HttpResponse<String> queryMicro6Status(
+      String micro6BaseUrl, int entryId, Map<String, Object> identity) throws Exception {
     HttpRequest statusRequest =
         HttpRequest.newBuilder()
             .uri(URI.create(micro6BaseUrl + "/api/v1/runs/" + entryId + "/status"))
@@ -1688,7 +1869,7 @@ public class ScriptExecutionService {
             .GET()
             .build();
     HttpResponse<String> response =
-        httpClient.send(statusRequest, HttpResponse.BodyHandlers.ofString());
+        sendExecutor(statusRequest, HttpResponse.BodyHandlers.ofString(), identity);
     if (response.statusCode() == 404) {
       HttpRequest fallback =
           HttpRequest.newBuilder()
@@ -1696,7 +1877,7 @@ public class ScriptExecutionService {
               .timeout(Duration.ofSeconds(10))
               .GET()
               .build();
-      return httpClient.send(fallback, HttpResponse.BodyHandlers.ofString());
+      return sendExecutor(fallback, HttpResponse.BodyHandlers.ofString(), identity);
     }
     return response;
   }
@@ -1710,6 +1891,15 @@ public class ScriptExecutionService {
   }
 
   private void controlMicro6Run(String micro6BaseUrl, int entryId, String action, String reason) {
+    controlMicro6Run(micro6BaseUrl, entryId, action, reason, null);
+  }
+
+  private void controlMicro6Run(
+      String micro6BaseUrl,
+      int entryId,
+      String action,
+      String reason,
+      Map<String, Object> identity) {
     try {
       String body =
           reason == null || reason.isBlank()
@@ -1723,7 +1913,7 @@ public class ScriptExecutionService {
               .POST(HttpRequest.BodyPublishers.ofString(body))
               .build();
       HttpResponse<String> response =
-          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+          sendExecutor(request, HttpResponse.BodyHandlers.ofString(), identity);
       if (response.statusCode() >= 400) {
         logger.warn(
             "Micro6 run control '{}' failed for entry {} (HTTP {}): {}",
@@ -1762,8 +1952,7 @@ public class ScriptExecutionService {
               .timeout(Duration.ofSeconds(10))
               .POST(HttpRequest.BodyPublishers.ofString(body))
               .build();
-      HttpResponse<String> response =
-          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      HttpResponse<String> response = sendExecutor(request, HttpResponse.BodyHandlers.ofString());
       if (response.statusCode() >= 400) {
         logger.warn(
             "Micro6 run control '{}' failed for entry {} (HTTP {}): {}",
@@ -1807,6 +1996,15 @@ public class ScriptExecutionService {
             ? reservedEntryId
             : micro6EntryIdSeq.incrementAndGet();
     final String targetBaseUrl = resolveMicro6BaseUrl(taskMetadata);
+    if (targetBaseUrl == null && hasUntrustedSelectedTarget(taskMetadata)) {
+      // SC-802: fail closed with an explicit endpoint-trust error instead of a generic
+      // resolution failure. No executor interaction was attempted.
+      return Micro6PublishResult.failure(
+          "Micro6 executor endpoint is outside the trusted deployment topology ("
+              + TrustedExecutorEndpoint.REASON_UNTRUSTED
+              + ")",
+          null);
+    }
     try {
       return publishMicro6TaskInternal(normalizedScript, taskMetadata, entryId, targetBaseUrl, 0);
     } catch (Exception e) {
@@ -1824,7 +2022,8 @@ public class ScriptExecutionService {
     }
 
     try {
-      HttpResponse<String> response = queryMicro6Status(targetBaseUrl, entryId);
+      HttpResponse<String> response =
+          queryMicro6Status(targetBaseUrl, entryId, selectedIdentity(taskMetadata));
       if (response.statusCode() == 404) {
         return new Micro6RunStatusResult(
             false, "UNKNOWN", "entry_id not tracked", null, targetBaseUrl, entryId);
@@ -1986,7 +2185,8 @@ public class ScriptExecutionService {
               .GET()
               .build();
       HttpResponse<String> response =
-          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+          sendExecutor(
+              request, HttpResponse.BodyHandlers.ofString(), selectedIdentity(taskMetadata));
       if (response.statusCode() >= 400) {
         return new Micro6ExecutorHealthResult(
             false,
@@ -2250,7 +2450,8 @@ public class ScriptExecutionService {
               .POST(HttpRequest.BodyPublishers.ofString(body))
               .build();
       HttpResponse<String> response =
-          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+          sendExecutor(
+              request, HttpResponse.BodyHandlers.ofString(), selectedIdentity(taskMetadata));
       if (response.statusCode() >= 400) {
         return new Micro6ControlResult(
             false,

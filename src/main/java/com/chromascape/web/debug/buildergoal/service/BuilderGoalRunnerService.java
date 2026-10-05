@@ -161,6 +161,8 @@ public class BuilderGoalRunnerService {
   private final long statusFailureGraceMs;
   private final String localExecutorBaseUrl;
   private final int executorPort;
+  private final Set<String> trustedExecutorHosts;
+  @Autowired private BuilderGoalEndpointAuthority endpointAuthority;
   private final Set<String> pendingLaunchIterations = ConcurrentHashMap.newKeySet();
   private final ConcurrentHashMap<String, ActiveLaunchWork> activeLaunchWork =
       new ConcurrentHashMap<>();
@@ -231,7 +233,9 @@ public class BuilderGoalRunnerService {
       @Value("${builder-goal.run-timeout-ms:300000}") long runTimeoutMs,
       @Value("${builder-goal.status-sync-max-consecutive-failures:3}")
           int maxConsecutiveStatusFailures,
-      @Value("${builder-goal.status-sync-failure-grace-ms:15000}") long statusFailureGraceMs) {
+      @Value("${builder-goal.status-sync-failure-grace-ms:15000}") long statusFailureGraceMs,
+      @Value("${builder-goal.launcher.base-url:http://192.168.1.6:8084}") String launcherBaseUrl,
+      @Value("${builder-goal.executor.trusted-origins:}") String extraTrustedHosts) {
     this.iterationRepository = iterationRepository;
     this.persistenceService = persistenceService;
     this.evidenceService = evidenceService;
@@ -259,6 +263,13 @@ public class BuilderGoalRunnerService {
     this.runTimeoutMs = runTimeoutMs;
     this.maxConsecutiveStatusFailures = maxConsecutiveStatusFailures;
     this.statusFailureGraceMs = statusFailureGraceMs;
+    this.trustedExecutorHosts =
+        TrustedExecutorEndpoint.buildTrustedHosts(
+            TrustedExecutorEndpoint.trustedHostsFromBaseUrls(micro6ExecutorBaseUrl),
+            java.util.Arrays.stream(extraTrustedHosts.split(","))
+                .map(BuilderGoalEndpointAuthority::normalize)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet()));
   }
 
   public Map<String, Object> importPayload(JsonNode payload) {
@@ -1045,7 +1056,7 @@ public class BuilderGoalRunnerService {
         matchingClient != null
             && selectedMachine != null
             && launcherControlService.isLocalMachine(selectedMachine);
-    if (localTarget) {
+    if (localTarget && endpointAuthority == null) {
       effectiveTargetBaseUrl = localExecutorBaseUrl;
     }
     // A publish without exactly one registry-selected target is deferred before any executor
@@ -1058,7 +1069,11 @@ public class BuilderGoalRunnerService {
       catalogTask = null;
     } else {
       catalogValidation =
-          resolvePublishCatalogValidation(taskKey, effectiveTargetBaseUrl, acceptedSettings);
+          resolvePublishCatalogValidation(
+              taskKey,
+              effectiveTargetBaseUrl,
+              acceptedSettings,
+              clientRegistryService.routeIdentity(matchingClient.clientId()));
       if (catalogValidation.rejectPublish()) {
         throw new IllegalArgumentException(catalogValidation.errorMessage());
       }
@@ -1082,7 +1097,8 @@ public class BuilderGoalRunnerService {
     Map<String, Object> initialTargetMetadata =
         buildRequestedTargetMetadataFromAccount(selectedAccount, selectedMachine);
     if (effectiveTargetBaseUrl != null && !effectiveTargetBaseUrl.isBlank()) {
-      initialTargetMetadata.put("advertised_base_url", effectiveTargetBaseUrl);
+      if (endpointAuthority == null)
+        initialTargetMetadata.put("advertised_base_url", effectiveTargetBaseUrl);
     }
     if (matchingClient != null) {
       initialTargetMetadata.putAll(buildTargetMetadata(matchingClient));
@@ -1347,7 +1363,10 @@ public class BuilderGoalRunnerService {
           firstNonBlank(stringValue(taskMetadata.get("task_key")), iteration.getScriptName());
       CatalogValidationResult asyncCatalogValidation =
           resolvePublishCatalogValidation(
-              storedTaskKey, resolveTargetBaseUrl(taskMetadata), storedSettings);
+              storedTaskKey,
+              resolveTargetBaseUrl(taskMetadata),
+              storedSettings,
+              readTargetMetadata(taskMetadata));
       if (asyncCatalogValidation.rejectPublish()) {
         applyCatalogValidationMetadata(iteration, asyncCatalogValidation);
         Map<String, Object> invalidPublish = readPublishMetadata(taskMetadata);
@@ -2072,8 +2091,14 @@ public class BuilderGoalRunnerService {
       updateRecoveryState(
           iteration, taskMetadata, RECOVERY_APPLYING_PATCH, "Applying patch to Micro6 task source");
       Micro6TaskSourcePatchService.PatchApplyResult patchResult =
-          micro6TaskSourcePatchService.applyPatch(
-              resolveTargetBaseUrl(taskMetadata), taskKey, iteration.getIterationId(), patchDraft);
+          endpointAuthority != null
+              ? micro6TaskSourcePatchService.applyAllocatedPatch(
+                  readTargetMetadata(taskMetadata), taskKey, iteration.getIterationId(), patchDraft)
+              : micro6TaskSourcePatchService.applyPatch(
+                  resolveTargetBaseUrl(taskMetadata),
+                  taskKey,
+                  iteration.getIterationId(),
+                  patchDraft);
       iteration.setMicro6RevisionId(patchResult.revisionId());
       iteration.setMicro6PatchedAt(LocalDateTime.now());
       persistenceService.saveIteration(iteration);
@@ -2772,7 +2797,7 @@ public class BuilderGoalRunnerService {
     publish.put("status", "RECONCILING");
     publish.put("published_at", publishedAt.toString());
     publish.put("attached_to_existing", publishResult.attachedToExisting());
-    publish.put("micro6_base_url", publishResult.micro6BaseUrl());
+    if (endpointAuthority == null) publish.put("micro6_base_url", publishResult.micro6BaseUrl());
     publish.put(
         "last_error",
         firstNonBlank(
@@ -3721,11 +3746,10 @@ public class BuilderGoalRunnerService {
   }
 
   private CatalogValidationResult resolvePublishCatalogValidation(
-      String taskKey, String targetBaseUrl, Map<String, Object> settings) {
-    JsonNode targetCatalog =
-        targetBaseUrl != null && !targetBaseUrl.isBlank()
-            ? micro6ExecutorCatalogService.getCatalogForBaseUrl(targetBaseUrl, true)
-            : null;
+      String taskKey,
+      String targetBaseUrl,
+      Map<String, Object> settings,
+      Map<String, Object> identity) {
     if (targetBaseUrl == null || targetBaseUrl.isBlank()) {
       return settings != null && !settings.isEmpty()
           ? CatalogValidationResult.reject(
@@ -3733,6 +3757,29 @@ public class BuilderGoalRunnerService {
               "A canonical executor settings schema is required for non-empty settings",
               null)
           : CatalogValidationResult.skipped("SKIPPED_NO_TARGET");
+    }
+    // SC-802: never fetch a catalog from an endpoint outside the trusted deployment topology.
+    TrustedExecutorEndpoint.Verdict endpointVerdict =
+        endpointAuthority == null
+            ? TrustedExecutorEndpoint.evaluate(targetBaseUrl, trustedExecutorHosts)
+            : new TrustedExecutorEndpoint.Verdict(true, targetBaseUrl, null, null);
+    if (!endpointVerdict.trusted()) {
+      return CatalogValidationResult.reject(
+          "REJECTED_UNTRUSTED_ENDPOINT",
+          "The selected executor endpoint is outside the trusted deployment topology: "
+              + endpointVerdict.reason(),
+          null);
+    }
+    JsonNode targetCatalog =
+        endpointAuthority != null
+            ? micro6ExecutorCatalogService.getCatalogForIdentity(identity, true)
+            : micro6ExecutorCatalogService.getCatalogForBaseUrl(
+                endpointVerdict.normalizedUrl(), true);
+    if (endpointAuthority != null && targetCatalog != null && targetCatalog.has("reason_code")) {
+      return CatalogValidationResult.reject(
+          "REJECTED_UNTRUSTED_ENDPOINT",
+          "The allocated catalog route is unavailable or untrusted",
+          null);
     }
     JsonNode targetTask = findTaskInCatalog(taskKey, targetCatalog);
     if (targetTask != null) {
@@ -4651,7 +4698,8 @@ public class BuilderGoalRunnerService {
     response.put("rerunBlockedReason", rerunBlockedReason);
     response.put("targetClientId", stringValue(targetMetadata.get("client_id")));
     response.put("targetAccountName", stringValue(targetMetadata.get("account_name")));
-    response.put("targetBaseUrl", stringValue(targetMetadata.get("advertised_base_url")));
+    response.put("targetBaseUrl", null);
+    response.put("endpointRef", stringValue(targetMetadata.get("endpoint_ref")));
     response.put("targetStatus", stringValue(targetMetadata.get("status")));
     response.put(
         "micro6ResolvedAccountName",
@@ -5719,7 +5767,10 @@ public class BuilderGoalRunnerService {
     target.put("world_matched", targetClient.worldMatched());
     target.put("launch_attempt_id", targetClient.launchAttemptId());
     target.put("process_id", targetClient.processId());
-    target.put("advertised_base_url", targetClient.advertisedBaseUrl());
+    if (endpointAuthority == null)
+      target.put("advertised_base_url", targetClient.advertisedBaseUrl());
+    if (clientRegistryService != null)
+      target.putAll(clientRegistryService.routeIdentity(targetClient.clientId()));
     target.put("executor_bind_addr", targetClient.executorBindAddr());
     target.put("source_client_type", targetClient.sourceClientType());
     target.put("executor_profile", targetClient.executorProfile());
@@ -6193,6 +6244,8 @@ public class BuilderGoalRunnerService {
             ? taskMetadata
             : readTargetMetadata(taskMetadata);
     Map<String, Object> targetPreparationMetadata = readTargetPreparationMetadata(taskMetadata);
+    if (endpointAuthority != null)
+      return endpointAuthority.resolve(objectMapper.valueToTree(targetMetadata));
     String value =
         firstNonBlank(
             stringValue(targetMetadata.get("local_executor_base_url")),
@@ -6201,10 +6254,22 @@ public class BuilderGoalRunnerService {
     if (value == null) {
       return null;
     }
-    while (value.endsWith("/")) {
-      value = value.substring(0, value.length() - 1);
+    // SC-802: persisted legacy metadata may carry an endpoint outside the trusted deployment
+    // topology. Fail closed (null defers/fails the caller) instead of dialing it.
+    TrustedExecutorEndpoint.Verdict endpointVerdict =
+        TrustedExecutorEndpoint.evaluate(value, trustedExecutorHosts);
+    if (!endpointVerdict.trusted()) {
+      logger.warn(
+          "Refusing to resolve untrusted persisted executor endpoint: {}",
+          endpointVerdict.reason());
+      return null;
     }
-    return value.isBlank() ? null : value;
+    return endpointVerdict.normalizedUrl();
+  }
+
+  /** Evaluates one endpoint URL against the trusted deployment topology. Exposed for tests. */
+  TrustedExecutorEndpoint.Verdict trustedEndpointVerdict(String rawUrl) {
+    return TrustedExecutorEndpoint.evaluate(rawUrl, trustedExecutorHosts);
   }
 
   private String normalizeBaseUrl(String value) {
@@ -6225,7 +6290,7 @@ public class BuilderGoalRunnerService {
     publish.put("status", firstNonBlank(publishResult.publishStatus(), "PUBLISHED"));
     publish.put("published_at", publishedAt.toString());
     publish.put("attached_to_existing", publishResult.attachedToExisting());
-    publish.put("micro6_base_url", publishResult.micro6BaseUrl());
+    if (endpointAuthority == null) publish.put("micro6_base_url", publishResult.micro6BaseUrl());
     return publish;
   }
 

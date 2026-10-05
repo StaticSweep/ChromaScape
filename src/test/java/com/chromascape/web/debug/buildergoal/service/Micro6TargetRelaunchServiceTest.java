@@ -488,6 +488,30 @@ class Micro6TargetRelaunchServiceTest {
   }
 
   @Test
+  void localLaunchDisabledFailsBeforeCaptureOrProcessWork() throws Exception {
+    Micro6TargetRelaunchService service =
+        org.mockito.Mockito.mock(
+            Micro6TargetRelaunchService.class, org.mockito.Mockito.CALLS_REAL_METHODS);
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        service, "localLaunchEnabled", false);
+    assertThatThrownBy(
+            () ->
+                service.restartTarget(
+                    "account",
+                    "hash",
+                    null,
+                    null,
+                    360,
+                    "http://127.0.0.1:8098",
+                    null,
+                    null,
+                    false,
+                    false))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("DIRECT_LOCAL_LAUNCH_DISABLED");
+  }
+
+  @Test
   void applyBuilderGoalEnvironmentSetsLeeuwbotApiUrlAndExecutorFlags() throws Exception {
     Micro6TargetRelaunchService service =
         new Micro6TargetRelaunchService(

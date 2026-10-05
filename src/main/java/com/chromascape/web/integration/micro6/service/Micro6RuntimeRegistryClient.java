@@ -85,6 +85,10 @@ public class Micro6RuntimeRegistryClient {
     return runtimes;
   }
 
+  public JsonNode resolveEndpointDocument(String endpointRef) {
+    return sendGet("/api/v1/launcher/runtimes/micro6/" + encodePath(endpointRef));
+  }
+
   public Micro6Runtime resolveRuntime(String endpointRef) {
     JsonNode node = sendGet("/api/v1/launcher/runtimes/micro6/" + encodePath(endpointRef));
     return parseRuntime(node);
@@ -108,7 +112,9 @@ public class Micro6RuntimeRegistryClient {
     applyAuth(builder);
     try {
       HttpResponse<String> response =
-          httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+          httpClient.send(
+              builder.build(),
+              com.chromascape.web.http.BoundedJsonResponse.handler(8 * 1024 * 1024));
       JsonNode body = null;
       try {
         body = objectMapper.readTree(response.body());
@@ -117,13 +123,13 @@ public class Micro6RuntimeRegistryClient {
             "[Micro6Registry] catalog response was not JSON from ref={} mode={}: {}",
             endpointRef,
             mode,
-            parseError.getMessage());
+            parseError.getClass().getSimpleName());
       }
       ResponseIdentity identity = ResponseIdentity.from(response.headers());
       return new CatalogFetch(response.statusCode(), body, response.body(), identity);
     } catch (Exception e) {
       throw new Micro6RegistryException(
-          "registry_unreachable", "Failed to reach Micro6 runtime registry: " + e.getMessage(), e);
+          "registry_unreachable", "Micro6 runtime registry unavailable", e);
     }
   }
 
@@ -304,7 +310,9 @@ public class Micro6RuntimeRegistryClient {
     applyAuth(builder);
     try {
       HttpResponse<String> response =
-          httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+          httpClient.send(
+              builder.build(),
+              com.chromascape.web.http.BoundedJsonResponse.handler(8 * 1024 * 1024));
       if (response.statusCode() >= 400) {
         throw new Micro6RegistryException(
             "registry_http_" + response.statusCode(),
@@ -316,8 +324,12 @@ public class Micro6RuntimeRegistryClient {
       throw e;
     } catch (Exception e) {
       throw new Micro6RegistryException(
-          "registry_unreachable", "Failed to reach Micro6 runtime registry: " + e.getMessage(), e);
+          "registry_unreachable", "Micro6 runtime registry unavailable", e);
     }
+  }
+
+  public Micro6Runtime parseEndpointDocument(JsonNode node) {
+    return parseRuntime(node);
   }
 
   private Micro6Runtime parseRuntime(JsonNode node) {
@@ -439,8 +451,7 @@ public class Micro6RuntimeRegistryClient {
     try {
       return new URI(base.getScheme(), null, base.getHost(), base.getPort(), fullPath, query, null);
     } catch (java.net.URISyntaxException e) {
-      throw new Micro6RegistryException(
-          "endpoint_ref_invalid", "failed to construct registry request URI: " + e.getMessage(), e);
+      throw new Micro6RegistryException("endpoint_ref_invalid", "Invalid endpoint reference", e);
     }
   }
 
