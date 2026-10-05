@@ -1036,4 +1036,35 @@ class BuilderGoalRunnerControllerTest {
     Map<String, Object> body = (Map<String, Object>) response.getBody();
     assertThat(String.valueOf(body.get("error"))).doesNotContain("leaked-secret");
   }
+
+  @Test
+  void runPayload_preservesOuterRequestIdForNestedBuilderPayload() throws Exception {
+    JsonNode payload =
+        objectMapper.readTree(
+            "{\"accountId\":\"a\",\"launcherMachineUuid\":\"m\",\"requestId\":\"stable\",\"builderPayload\":{\"task_key\":\"fishing\",\"settings\":{}}}");
+    controller.runPayload(payload);
+    var captured = org.mockito.ArgumentCaptor.forClass(JsonNode.class);
+    verify(builderGoalRunnerService)
+        .startRun(
+            captured.capture(),
+            eq("a"),
+            org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.isNull(),
+            eq("m"),
+            org.mockito.ArgumentMatchers.isNull(),
+            any());
+    assertThat(captured.getValue().path("request_id").asText()).isEqualTo("stable");
+    assertThat(payload.path("builderPayload").has("request_id")).isFalse();
+  }
+
+  @Test
+  void runPayload_rejectsConflictingRequestAliasesBeforeDispatch() throws Exception {
+    var response =
+        controller.runPayload(
+            objectMapper.readTree(
+                "{\"accountId\":\"a\",\"taskKey\":\"fishing\",\"requestId\":\"a\",\"request_id\":\"b\"}"));
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    org.mockito.Mockito.verifyNoInteractions(builderGoalRunnerService);
+  }
 }

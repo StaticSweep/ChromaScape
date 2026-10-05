@@ -106,10 +106,28 @@ public class BuilderGoalCodexOrchestrationService {
       Integer world,
       String displayName,
       Map<String, Object> settings) {
+    return startRun(
+        sessionId, accountId, launcherMachineUuid, taskKey, world, displayName, settings, null);
+  }
+
+  /**
+   * SC-666: session start with a client-supplied request id. A retried AI-bot request carrying the
+   * original id reuses the recoverable run (same task iteration and bound recording) instead of
+   * creating a duplicate run.
+   */
+  public Map<String, Object> startRun(
+      String sessionId,
+      String accountId,
+      String launcherMachineUuid,
+      String taskKey,
+      Integer world,
+      String displayName,
+      Map<String, Object> settings,
+      String requestId) {
     CodexSession session = requireSession(sessionId);
     Map<String, Object> result =
         builderGoalRunnerService.startCatalogTaskRun(
-            accountId, launcherMachineUuid, taskKey, settings, displayName, world, null);
+            accountId, launcherMachineUuid, taskKey, settings, displayName, world, null, requestId);
     @SuppressWarnings("unchecked")
     Map<String, Object> run = (Map<String, Object>) result.get("run");
     if (run != null) {

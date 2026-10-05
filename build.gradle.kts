@@ -1679,3 +1679,27 @@ tasks.register<Test>("artifactCompletionTest") {
     classpath = sourceSets["artifactCompletionTest"].runtimeClasspath
     useJUnitPlatform()
 }
+
+// SC-666 requests use actual PostgreSQL commit visibility, never an embedded DB or skipped lane.
+sourceSets.create("sc666CompletionTest") {
+    compileClasspath += sourceSets.main.get().output
+    runtimeClasspath += sourceSets.main.get().output
+    java.srcDir("src/test/java")
+    java.include("com/chromascape/web/debug/buildergoal/service/BuilderGoalRunnerServiceTest.java")
+    java.include("com/chromascape/web/debug/buildergoal/service/BuilderGoalCodexOrchestrationServiceTest.java")
+    java.include("com/chromascape/web/debug/buildergoal/service/BuilderGoalStartRequestPostgresTest.java")
+    java.include("com/chromascape/web/debug/buildergoal/service/BuilderGoalRunStateMutationServiceTest.java")
+    java.include("com/chromascape/web/debug/buildergoal/controller/BuilderGoalRunnerControllerTest.java")
+    java.include("com/chromascape/web/debug/buildergoal/controller/BuilderGoalCodexControllerTest.java")
+    resources.srcDir("src/test/resources")
+}
+configurations.named("sc666CompletionTestImplementation") { extendsFrom(configurations.testImplementation.get()) }
+configurations.named("sc666CompletionTestRuntimeOnly") { extendsFrom(configurations.testRuntimeOnly.get()) }
+tasks.test { exclude("**/BuilderGoalStartRequestPostgresTest.class") }
+tasks.register<Test>("sc666CompletionTest") {
+    group = "verification"
+    testClassesDirs = sourceSets["sc666CompletionTest"].output.classesDirs
+    classpath = sourceSets["sc666CompletionTest"].runtimeClasspath
+    useJUnitPlatform()
+    systemProperty("sc666.test.jdbc.url", providers.gradleProperty("sc666TestJdbcUrl").getOrElse(""))
+}

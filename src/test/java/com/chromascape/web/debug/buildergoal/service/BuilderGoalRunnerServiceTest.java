@@ -72,6 +72,9 @@ class BuilderGoalRunnerServiceTest {
   @Mock private Micro6TargetPreparationService targetPreparationService;
   @Mock private BuilderGoalRunStateMutationService mutationService;
   @Mock private BuilderGoalRunEventService runEventService;
+  @Mock private BuilderGoalStartRequestService startRequests;
+  private final Map<String, String> requestFingerprints = new ConcurrentHashMap<>();
+  private final Map<String, String> requestBindings = new ConcurrentHashMap<>();
 
   private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
   private final Map<String, PatchLoopIteration> savedIterations = new ConcurrentHashMap<>();
@@ -84,39 +87,76 @@ class BuilderGoalRunnerServiceTest {
       BuilderGoalLaunchOperationService launchOperations,
       BuilderGoalLocalLaunchCoordinatorService coordinator,
       Executor launchExecutor) {
-    return new BuilderGoalRunnerService(
-        iterationRepository,
-        persistenceService,
-        evidenceService,
-        sessionResolverService,
-        scriptExecutionService,
-        analysisProvider,
-        micro6ExecutorCatalogService,
-        logRepository,
-        launcherControlService,
-        accountCatalogService,
-        clientRegistryService,
-        micro6TaskSourcePatchService,
-        micro6TargetRelaunchService,
-        targetPreparationService,
-        mutationService,
-        runEventService,
-        launchOperations,
-        coordinator,
-        // Source binding is exercised by BuilderGoalSourceBindingWiringTest; this focused test
-        // covers dispatch behaviour and passes null, which the response path renders as no binding.
-        null,
-        objectMapper,
-        Runnable::run,
-        launchExecutor,
-        "http://127.0.0.1:8098",
-        300000L,
-        3,
-        15000L);
+    var created =
+        new BuilderGoalRunnerService(
+            iterationRepository,
+            persistenceService,
+            evidenceService,
+            sessionResolverService,
+            scriptExecutionService,
+            analysisProvider,
+            micro6ExecutorCatalogService,
+            logRepository,
+            launcherControlService,
+            accountCatalogService,
+            clientRegistryService,
+            micro6TaskSourcePatchService,
+            micro6TargetRelaunchService,
+            targetPreparationService,
+            mutationService,
+            runEventService,
+            launchOperations,
+            coordinator,
+            // Source binding is exercised by BuilderGoalSourceBindingWiringTest; this focused test
+            // covers dispatch behaviour and passes null, which the response path renders as no
+            // binding.
+            null,
+            objectMapper,
+            Runnable::run,
+            launchExecutor,
+            "http://127.0.0.1:8098",
+            300000L,
+            3,
+            15000L);
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        created, "startRequestService", startRequests);
+    return created;
   }
 
   @BeforeEach
   void setUp() {
+    requestFingerprints.clear();
+    requestBindings.clear();
+    lenient()
+        .when(startRequests.reserve(anyString(), anyString()))
+        .thenAnswer(
+            inv -> {
+              String id = inv.getArgument(0), fingerprint = inv.getArgument(1);
+              String prior = requestFingerprints.putIfAbsent(id, fingerprint);
+              if (prior != null && !prior.equals(fingerprint))
+                throw new BuilderGoalStartException(
+                    org.springframework.http.HttpStatus.CONFLICT,
+                    "REQUEST_IDENTITY_CONFLICT",
+                    "REQUEST_RESERVATION",
+                    "Conflicting request",
+                    null,
+                    null,
+                    null,
+                    null);
+              return requestBindings.get(id);
+            });
+    lenient()
+        .doAnswer(
+            inv -> {
+              String id = inv.getArgument(0), iterationId = inv.getArgument(1);
+              requestBindings.put(id, iterationId);
+              lenient()
+                  .when(iterationRepository.findByIterationId(iterationId))
+                  .thenAnswer(unused -> Optional.ofNullable(savedIterations.get(iterationId)));
+              return null;
+            })
+        .when(startRequests)
+        .bind(anyString(), anyString());
     lenient().when(launcherControlService.isLocalMachine(any())).thenReturn(true);
     savedIterations.clear();
     mutationDelegate =
@@ -1640,6 +1680,135 @@ class BuilderGoalRunnerServiceTest {
     assertThat(run.get("taskKey")).isEqualTo("configurable_woodcutting");
     assertThat(run.get("accountId")).isEqualTo("1111111111111111");
     assertThat(run.get("launcherMachineUuid")).isEqualTo("machine-1");
+  }
+
+  private BuilderGoalAccountCatalogService.AccountDefinition sc666Account() {
+    return new BuilderGoalAccountCatalogService.AccountDefinition(
+        "1111111111111111",
+        "1111111111111111",
+        "bigGreenMeat",
+        "bigGreenMeat",
+        "bigGreenMeat",
+        AccountIdentityContract.HASH_SCHEME,
+        "IlaWalter280@outlook.com",
+        "launcher",
+        true,
+        "ready",
+        Map.of("password", "s3cret"));
+  }
+
+  private Map<String, Object> sc666Start(
+      String taskKey, String requestId, Map<String, Object> settings) throws Exception {
+    return service.startRun(
+        objectMapper.valueToTree(
+            Map.of(
+                "task_key",
+                taskKey,
+                "settings",
+                settings,
+                "request_id",
+                requestId == null ? "" : requestId)),
+        "1111111111111111",
+        null,
+        null,
+        null,
+        "machine-1",
+        null,
+        null);
+  }
+
+  @Test
+  void startRun_deduplicatesRetryWithSameRequestId() throws Exception {
+    when(accountCatalogService.findAccount("1111111111111111"))
+        .thenReturn(Optional.of(sc666Account()));
+    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+
+    Map<String, Object> first = sc666Start("configurable_woodcutting", "sc666-req-1", Map.of());
+    assertThat(first.get("accepted")).isEqualTo(true);
+    assertThat(first.get("deduplicated")).isNull();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> firstRun = (Map<String, Object>) first.get("run");
+    String iterationId = (String) firstRun.get("iterationId");
+    assertThat(iterationId).isNotBlank();
+
+    // Simulate the persisted state a retry observes after a client timeout or restart.
+    PatchLoopIteration saved = savedIterations.get(iterationId);
+    assertThat(saved).isNotNull();
+    lenient()
+        .when(
+            iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+                BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+        .thenReturn(List.of(saved));
+
+    Map<String, Object> retry = sc666Start("configurable_woodcutting", "sc666-req-1", Map.of());
+    assertThat(retry.get("accepted")).isEqualTo(true);
+    assertThat(retry.get("deduplicated")).isEqualTo(true);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> retryRun = (Map<String, Object>) retry.get("run");
+    assertThat(retryRun.get("iterationId")).isEqualTo(iterationId);
+    assertThat(retryRun.get("runRecordingId")).isEqualTo(firstRun.get("runRecordingId"));
+    assertThat(retryRun.get("runSessionId")).isEqualTo(firstRun.get("runSessionId"));
+    assertThat(savedIterations).hasSize(1);
+  }
+
+  @Test
+  void startRun_createsNewRunWhenRequestIdIsNew() throws Exception {
+    when(accountCatalogService.findAccount("1111111111111111"))
+        .thenReturn(Optional.of(sc666Account()));
+    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+
+    Map<String, Object> first = sc666Start("configurable_woodcutting", "sc666-req-1", Map.of());
+    @SuppressWarnings("unchecked")
+    Map<String, Object> firstRun = (Map<String, Object>) first.get("run");
+    String firstIterationId = (String) firstRun.get("iterationId");
+
+    PatchLoopIteration saved = savedIterations.get(firstIterationId);
+    assertThat(saved).isNotNull();
+    lenient()
+        .when(
+            iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+                BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+        .thenReturn(List.of(saved));
+
+    Map<String, Object> second = sc666Start("configurable_fishing", "sc666-req-2", Map.of());
+    assertThat(second.get("accepted")).isEqualTo(true);
+    assertThat(second.get("deduplicated")).isNull();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> secondRun = (Map<String, Object>) second.get("run");
+    assertThat((String) secondRun.get("iterationId")).isNotBlank();
+    assertThat(secondRun.get("iterationId")).isNotEqualTo(firstIterationId);
+    assertThat(savedIterations).hasSize(2);
+  }
+
+  @Test
+  void startRun_reusesTerminalRunWithSameRequestId() throws Exception {
+    when(accountCatalogService.findAccount("1111111111111111"))
+        .thenReturn(Optional.of(sc666Account()));
+    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+
+    Map<String, Object> first = sc666Start("configurable_woodcutting", "sc666-req-1", Map.of());
+    @SuppressWarnings("unchecked")
+    Map<String, Object> firstRun = (Map<String, Object>) first.get("run");
+    String firstIterationId = (String) firstRun.get("iterationId");
+
+    // Terminal outcomes remain attached to the same logical request; explicit rerun is separate.
+    PatchLoopIteration saved = savedIterations.get(firstIterationId);
+    assertThat(saved).isNotNull();
+    saved.setStatus(PatchLoopStatus.FAILED);
+    lenient()
+        .when(
+            iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+                BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+        .thenReturn(List.of(saved));
+
+    Map<String, Object> retry = sc666Start("configurable_woodcutting", "sc666-req-1", Map.of());
+    assertThat(retry.get("accepted")).isEqualTo(true);
+    assertThat(retry.get("deduplicated")).isEqualTo(true);
+    assertThat(retry.get("terminal")).isEqualTo(true);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> retryRun = (Map<String, Object>) retry.get("run");
+    assertThat(retryRun.get("iterationId")).isEqualTo(firstIterationId);
+    assertThat(savedIterations).hasSize(1);
   }
 
   @Test
@@ -5110,5 +5279,84 @@ class BuilderGoalRunnerServiceTest {
                 .tryAcquire("machine-1", 8098, "1111111111111111", "after-launch")
                 .isSuccess())
         .isTrue();
+  }
+
+  @Test
+  void startRun_rejectsConflictingIdentityFields() throws Exception {
+    when(accountCatalogService.findAccount("1111111111111111"))
+        .thenReturn(Optional.of(sc666Account()));
+    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+    sc666Start("configurable_woodcutting", "stable-request", Map.of());
+    java.util.List<java.util.concurrent.Callable<Map<String, Object>>> conflicts =
+        List.of(
+            () -> sc666Start("configurable_fishing", "stable-request", Map.of()),
+            () -> sc666Start("configurable_woodcutting", "stable-request", Map.of("changed", true)),
+            () ->
+                service.startCatalogTaskRun(
+                    "different-account",
+                    "machine-1",
+                    "configurable_woodcutting",
+                    Map.of(),
+                    null,
+                    null,
+                    null,
+                    "stable-request"),
+            () ->
+                service.startCatalogTaskRun(
+                    "1111111111111111",
+                    "different-machine",
+                    "configurable_woodcutting",
+                    Map.of(),
+                    null,
+                    null,
+                    null,
+                    "stable-request"),
+            () ->
+                service.startCatalogTaskRun(
+                    "1111111111111111",
+                    "machine-1",
+                    "configurable_woodcutting",
+                    Map.of(),
+                    null,
+                    301,
+                    null,
+                    "stable-request"),
+            () ->
+                service.startCatalogTaskRun(
+                    "1111111111111111",
+                    "machine-1",
+                    "configurable_woodcutting",
+                    Map.of(),
+                    null,
+                    null,
+                    Map.of("profile", "changed"),
+                    "stable-request"));
+    for (var conflict : conflicts) {
+      assertThatThrownBy(conflict::call)
+          .isInstanceOf(BuilderGoalStartException.class)
+          .satisfies(
+              e ->
+                  assertThat(((BuilderGoalStartException) e).getStatus())
+                      .isEqualTo(org.springframework.http.HttpStatus.CONFLICT));
+    }
+    assertThat(savedIterations).hasSize(1);
+  }
+
+  @Test
+  void startRun_afterServiceRestartRetainsActualBoundSessionAndRecording() throws Exception {
+    when(accountCatalogService.findAccount("1111111111111111"))
+        .thenReturn(Optional.of(sc666Account()));
+    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+    var first = sc666Start("configurable_woodcutting", "stable-request", Map.of());
+    var run = (Map<String, Object>) first.get("run");
+    var saved = savedIterations.get((String) run.get("iterationId"));
+    saved.setRunSessionId("confirmed-session");
+    saved.setRunRecordingId("confirmed-recording");
+    service = createService(launchOperationService, localLaunchCoordinator, task -> {});
+    var retry = sc666Start("configurable_woodcutting", "stable-request", Map.of());
+    var retryRun = (Map<String, Object>) retry.get("run");
+    assertThat(retryRun.get("runSessionId")).isEqualTo("confirmed-session");
+    assertThat(retryRun.get("runRecordingId")).isEqualTo("confirmed-recording");
+    assertThat(savedIterations).hasSize(1);
   }
 }

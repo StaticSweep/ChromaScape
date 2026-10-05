@@ -126,4 +126,46 @@ class BuilderGoalCodexControllerTest {
     Map<String, Object> body = (Map<String, Object>) response.getBody();
     assertThat(body.get("error")).isEqualTo("Codex session not found: codex_bg_1");
   }
+
+  @Test
+  void startRun_preservesRequestIdAndReturnsStableConflict() throws Exception {
+    var payload =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .readTree(
+                "{\"accountId\":\"a\",\"launcherMachineUuid\":\"m\",\"taskKey\":\"fishing\",\"requestId\":\"stable\"}");
+    when(orchestrationService.startRun(
+            eq("session"),
+            eq("a"),
+            eq("m"),
+            eq("fishing"),
+            org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.isNull(),
+            any(),
+            eq("stable")))
+        .thenThrow(
+            new com.chromascape.web.debug.buildergoal.service.BuilderGoalStartException(
+                HttpStatus.CONFLICT,
+                "REQUEST_IDENTITY_CONFLICT",
+                "REQUEST_RESERVATION",
+                "Conflict",
+                null,
+                null,
+                null,
+                null));
+    var response = controller.startRun("session", payload);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    assertThat(
+            ((com.chromascape.web.debug.buildergoal.dto.BuilderGoalStartFailureResponse)
+                    response.getBody())
+                .code())
+        .isEqualTo("REQUEST_IDENTITY_CONFLICT");
+  }
+
+  @Test
+  void startRun_rejectsNonStringRequestIdBeforeDispatch() throws Exception {
+    var payload = new com.fasterxml.jackson.databind.ObjectMapper().readTree("{\"requestId\":42}");
+    assertThat(controller.startRun("session", payload).getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    org.mockito.Mockito.verifyNoInteractions(orchestrationService);
+  }
 }
