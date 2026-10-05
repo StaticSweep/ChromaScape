@@ -510,6 +510,12 @@ public class TickStreamIngestionService {
     JsonNode spells =
         batch.getSpells() != null ? objectMapper.valueToTree(batch.getSpells()) : null;
     JsonNode vars = batch.getVars() != null ? objectMapper.valueToTree(batch.getVars()) : null;
+    JsonNode inputs =
+        batch.getInputs() != null ? objectMapper.valueToTree(batch.getInputs()) : null;
+    JsonNode tiles = batch.getTiles() != null ? objectMapper.valueToTree(batch.getTiles()) : null;
+    JsonNode hazards =
+        batch.getHazards() != null ? objectMapper.valueToTree(batch.getHazards()) : null;
+    JsonNode phase = batch.getPhase() != null ? objectMapper.valueToTree(batch.getPhase()) : null;
 
     // NEW: Convert expanded world state to JSON
     JsonNode npcs = batch.getNpcs() != null ? objectMapper.valueToTree(batch.getNpcs()) : null;
@@ -549,6 +555,10 @@ public class TickStreamIngestionService {
     if (batch.getDialogue() == null) missingSections.add("dialogue");
     if (batch.getSpells() == null) missingSections.add("spells");
     if (batch.getVars() == null) missingSections.add("vars");
+    if (batch.getInputs() == null) missingSections.add("inputs");
+    if (batch.getTiles() == null) missingSections.add("tiles");
+    if (batch.getHazards() == null) missingSections.add("hazards");
+    if (batch.getPhase() == null) missingSections.add("phase");
 
     if (!missingSections.isEmpty()) {
       log.debug(
@@ -568,6 +578,11 @@ public class TickStreamIngestionService {
     snapshot.setDialogue(dialogue);
     snapshot.setSpells(spells);
     snapshot.setVars(vars);
+    snapshot.setInputs(inputs);
+    snapshot.setTiles(tiles);
+    snapshot.setHazards(hazards);
+    snapshot.setPhase(phase);
+
     snapshot.setNpcs(npcs);
     snapshot.setGameObjects(gameObjects);
     snapshot.setGroundObjects(groundObjects);
@@ -586,8 +601,10 @@ public class TickStreamIngestionService {
       return;
 
     if (batch.getSchemaVersion() == null
-        || (batch.getSchemaVersion() != 2 && batch.getSchemaVersion() != 3)) {
-      throw new IllegalArgumentException("Unsupported schemaVersion; expected 2 or 3");
+        || (batch.getSchemaVersion() != 2
+            && batch.getSchemaVersion() != 3
+            && batch.getSchemaVersion() != 4)) {
+      throw new IllegalArgumentException("Unsupported schemaVersion; expected 2, 3, or 4");
     }
     if (batch.getSchemaVersion() == 2
         && batch.getPackets() != null
@@ -719,7 +736,7 @@ public class TickStreamIngestionService {
     if (packets == null || packets.isEmpty()) {
       return;
     }
-    if (batch.getSchemaVersion() != 3) {
+    if (batch.getSchemaVersion() != 3 && batch.getSchemaVersion() != 4) {
       throw new IllegalArgumentException("SCHEMA_V2_PACKETS_UNSUPPORTED");
     }
     if (packets.size() > MAX_PACKETS_PER_BATCH) {

@@ -418,13 +418,13 @@ class TickStreamIngestionServiceTest {
     String sessionId = "packet-future-schema";
     stubPacketSession(sessionId);
     TickBatchMessage batch = strictV2Batch(sessionId, 100L);
-    batch.setSchemaVersion(4);
+    batch.setSchemaVersion(5);
     batch.setBatchId("00000000-0000-4000-8000-000000000212");
     applyBatchChecksum(batch);
 
     IllegalArgumentException failure =
         assertThrows(IllegalArgumentException.class, () -> service.processTickBatch(batch));
-    assertEquals("Unsupported schemaVersion; expected 2 or 3", failure.getMessage());
+    assertEquals("Unsupported schemaVersion; expected 2, 3, or 4", failure.getMessage());
   }
 
   @Test

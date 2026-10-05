@@ -1,0 +1,101 @@
+{
+  "comment": "SC-1976 golden fixture: micro6 schema-4 combat tick. Same fight as fixture v1 plus schema-4 collectors (specialAttack, prayersActive, tiles, hazards, phase, inputs). fps=30, startTick=100.",
+  "tick": 110,
+  "timestamp": "2026-10-05T14:00:01Z",
+  "startTick": 100,
+  "fps": 30,
+  "playerState": {
+    "schemaVersion": 1,
+    "position": { "x": 3200, "y": 3205, "plane": 0 },
+    "worldX": 3200,
+    "worldY": 3205,
+    "plane": 0,
+    "hp": { "current": 87, "max": 99 },
+    "prayer": { "current": 40, "max": 99 },
+    "energy": 65,
+    "runEnergy": 65,
+    "specialAttack": 50,
+    "specialAttackEnabled": true,
+    "specialAttackPercent": 50,
+    "prayersActive": ["PROTECT_FROM_MELEE"],
+    "animation": 5816,
+    "animationId": 5816,
+    "interacting": { "type": "NPC", "id": 415, "index": 0, "name": "Abyssal demon" }
+  },
+  "npcs": [
+    {
+      "index": 0,
+      "id": 415,
+      "name": "Abyssal demon",
+      "healthRatio": 204,
+      "healthScale": 255,
+      "animation": 1537,
+      "x": 3202,
+      "y": 3206,
+      "plane": 0
+    }
+  ],
+  "inventory": [
+    { "slot": 0, "itemId": 385, "quantity": 3 },
+    { "slot": 2, "itemId": 4151, "quantity": 1 }
+  ],
+  "equipment": [
+    { "slot": 3, "itemId": 4151, "quantity": 1 }
+  ],
+  "projectiles": [],
+  "gameObjects": [],
+  "groundObjects": [],
+  "groundItems": [],
+  "players": [],
+  "widgets": [],
+  "quest": { "active": false },
+  "cooldowns": { "damageDealtThisTick": 12, "damageTakenThisTick": 0, "killCount": 0 },
+  "tiles": [
+    { "x": 3199, "y": 3204, "plane": 0, "flags": 0, "blocked": false },
+    { "x": 3200, "y": 3205, "plane": 0, "flags": 0, "blocked": false },
+    { "x": 3201, "y": 3205, "plane": 0, "flags": 256, "blocked": true }
+  ],
+  "hazards": [
+    {
+      "kind": "NPC_ATTACKER",
+      "npcIndex": 0,
+      "npcId": 415,
+      "name": "Abyssal demon",
+      "x": 3202,
+      "y": 3206,
+      "plane": 0,
+      "animation": 1537
+    }
+  ],
+  "phase": {
+    "encounter": "Abyssal demon",
+    "npcIndex": 0,
+    "npcId": 415,
+    "hpRatio": 204,
+    "hpScale": 255,
+    "phaseIndex": null,
+    "source": "hp-signal-only"
+  },
+  "inputs": {
+    "mouseX": 640,
+    "mouseY": 380,
+    "mouseButton": 1,
+    "lastPress": { "x": 640, "y": 380, "button": 1 },
+    "lastClick": { "x": 640, "y": 380, "button": 1, "clickCount": 1 },
+    "menuOption": "Attack",
+    "clickedEntity": "npc:415:0",
+    "clickedTile": null
+  },
+  "action": {
+    "schema": "recording-action/v1",
+    "sessionId": "debug_combat_1",
+    "tick": 110,
+    "sequence": 0,
+    "actionType": "INTERACT_NPC",
+    "target": { "kind": "NPC", "stableId": "npc:415:0" },
+    "arguments": { "option": "Attack" },
+    "source": "MICRO6_SEMANTIC_DISPATCH",
+    "confidence": 1,
+    "capturedAt": "2026-10-05T14:00:01Z"
+  }
+}
