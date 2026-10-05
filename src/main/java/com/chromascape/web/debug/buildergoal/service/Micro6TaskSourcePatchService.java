@@ -109,6 +109,7 @@ public class Micro6TaskSourcePatchService {
     HttpResponse<String> response =
         httpClient.send(
             request, com.chromascape.web.http.BoundedJsonResponse.handler(8 * 1024 * 1024));
+    if (endpointAuthority != null) endpointAuthority.observeCertificate(response);
     if (response.statusCode() >= 400) {
       throw new IllegalStateException(
           "Micro6 patch apply failed (HTTP " + response.statusCode() + "): " + response.body());

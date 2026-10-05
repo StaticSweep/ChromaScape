@@ -270,8 +270,11 @@ public class ScriptExecutionService {
               .header("Authorization", topologyGuard.executorAuthorization())
               .build();
     }
-    return httpClient.send(
-        request, com.chromascape.web.http.BoundedJsonResponse.handler(8 * 1024 * 1024));
+    HttpResponse<String> response =
+        httpClient.send(
+            request, com.chromascape.web.http.BoundedJsonResponse.handler(8 * 1024 * 1024));
+    if (endpointAuthority != null) endpointAuthority.observeCertificate(response);
+    return response;
   }
 
   /** Result of a script execution. */

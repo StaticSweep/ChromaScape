@@ -18,6 +18,7 @@ public class BuilderGoalEndpointAuthority {
   private final java.util.concurrent.atomic.AtomicInteger failures =
       new java.util.concurrent.atomic.AtomicInteger();
   private final Micro6RuntimeRegistryClient registry;
+  private final ExecutorCertificateTelemetry certificates = new ExecutorCertificateTelemetry();
   private final Set<String> origins;
   private final String devOrigin;
   private final boolean development;
@@ -54,6 +55,32 @@ public class BuilderGoalEndpointAuthority {
             .collect(java.util.stream.Collectors.toUnmodifiableSet());
     if (!development && this.origins.isEmpty())
       throw new IllegalStateException("TOPOLOGY_ORIGIN_POLICY_REQUIRED");
+  }
+
+  /** Capture peer dates only for a provisioned origin after the normal TLS handshake succeeds. */
+  public void observeCertificate(java.net.http.HttpResponse<?> response) {
+    if (response == null || response.uri() == null) return;
+    var uri = response.uri();
+    String origin;
+    try {
+      origin =
+          normalize(
+              new URI(uri.getScheme(), null, uri.getHost(), uri.getPort(), null, null, null)
+                  .toString());
+    } catch (Exception invalid) {
+      return;
+    }
+    if (approvedCertificateOrigin(origin)) certificates.observe(origin, response);
+  }
+
+  public java.util.Map<String, Object> certificateSummary(String origin) {
+    String normalized = normalize(origin);
+    return certificates.summary(approvedCertificateOrigin(normalized) ? normalized : null);
+  }
+
+  private boolean approvedCertificateOrigin(String origin) {
+    return origin != null
+        && (origins.contains(origin) || (development && staticEnabled && origin.equals(devOrigin)));
   }
 
   public String environment() {

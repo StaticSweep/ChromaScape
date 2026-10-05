@@ -499,6 +499,10 @@ public class Micro6OnlineClientRegistryService {
         endpointAuthority == null ? "DEV_TEST_FIXTURE" : endpointAuthority.environment());
     summary.put("routeContractVersion", 1);
     summary.put("certificateExpiryClass", "NOT_OBSERVED");
+    if (endpointAuthority != null) {
+      var certificate = endpointAuthority.certificateSummary(state.advertisedBaseUrl);
+      if (certificate != null) summary.putAll(certificate);
+    }
     summary.put(
         "executorInstanceId",
         state.identity == null ? null : textValue(state.identity.path("executor_instance_id")));
@@ -513,6 +517,13 @@ public class Micro6OnlineClientRegistryService {
         currentTrust
             ? null
             : "Verify issuer grant, allocation generation, account/session/build identity, freshness, and configured exact origin");
+    if ("EXPIRED".equals(summary.get("certificateExpiryClass"))
+        || "NOT_YET_VALID".equals(summary.get("certificateExpiryClass"))) {
+      summary.put("topologyState", "DEGRADED");
+      summary.put(
+          "remediation",
+          "Rotate the executor certificate and verify a new authenticated TLS connection");
+    }
     if (state.identity != null) {
       summary.put(
           "fencingGeneration",

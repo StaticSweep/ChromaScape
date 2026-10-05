@@ -1236,6 +1236,7 @@ public class Micro6ExecutorCatalogService {
                       .header("Authorization", topologyGuard.executorAuthorization())
                       .build(),
               com.chromascape.web.http.BoundedJsonResponse.handler(8 * 1024 * 1024));
+      if (endpointAuthority != null) endpointAuthority.observeCertificate(response);
       if (response.statusCode() >= 400) {
         throw new IllegalStateException("Catalog fetch failed: HTTP " + response.statusCode());
       }

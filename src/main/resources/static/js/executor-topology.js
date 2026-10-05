@@ -20,10 +20,13 @@
             const fragment = document.createDocumentFragment();
             for (const client of clients) {
                 const row = document.createElement('tr');
-                const trust = client.online === false ? 'OFFLINE' : client.stale ? 'STALE' : client.endpointTrusted ? 'TRUSTED' : 'BLOCKED';
+                const trust = client.certificateExpiryClass === 'EXPIRED' ? 'TLS EXPIRED' : client.certificateExpiryClass === 'NOT_YET_VALID' ? 'TLS NOT YET VALID' : client.online === false ? 'OFFLINE' : client.stale ? 'STALE' : client.endpointTrusted ? 'TRUSTED' : 'BLOCKED';
                 const values = [client.clientId, client.environment, client.endpointRef, client.fencingGeneration, trust, client.machineUuid, client.launcherSessionId, client.freshness, client.certificateExpiryClass, client.lastValidationAt, client.remediation || client.endpointTrustReason || 'No remediation reported'];
-                for (const value of values) {
+                for (const [index, value] of values.entries()) {
                     const cell = document.createElement('td');
+                    if (index === 8 && client.certificateObservedAt) {
+                        cell.title = `Verified TLS observation: ${client.certificateObservedAt}; valid from ${client.certificateNotBefore}; expires ${client.certificateNotAfter}`;
+                    }
                     cell.textContent = value == null ? 'Not available' : String(value);
                     row.appendChild(cell);
                 }

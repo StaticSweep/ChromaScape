@@ -14,7 +14,8 @@
     "source/patch route enforcement",
     "adversarial and cross-service fixtures",
     "Authenticated Launcher executor health probes and allocation metadata forwarding",
-    "Offline simulator worker user/PID/mount/network namespaces with credential-free environment"
+    "Offline simulator worker user/PID/mount/network namespaces with credential-free environment",
+    "Verified TLS peer certificate expiry observation with real Fedora expiry and rotation fixture"
   ],
   "exclusions": [
     "live gameplay",
@@ -80,6 +81,10 @@
     },
     {
       "item": "Mule catalog proxy requires provisioned outbound TLS 1.3 CA/client identity in non-DEV, retaining pinned IP transport",
+      "implemented": true
+    },
+    {
+      "item": "Observe approved executor TLS peer chain dates, bounded cache, passive expiry/staleness classes, safe diagnostics and expired-certificate remediation",
       "implemented": true
     }
   ],
@@ -159,7 +164,6 @@
   ],
   "remainingAcceptance": [
     "Live all-service SC-671 qualification including Launcher allocation enrollment, renewal and TLS/mTLS rotation",
-    "Actual certificate expiry observation (diagnostics currently truthfully say NOT_OBSERVED)",
     "dev-MCP adapter task 910 has no enabled allocation route; remains fail-closed until a pinned local-adapter identity and qualification are implemented"
   ],
   "simulatorIsolation": {
@@ -205,19 +209,27 @@
       "failed": 0,
       "skipped": 0,
       "scope": "executor authorization and HTTP executor server suites; isolated pinned shared contracts 7f4fa47"
+    },
+    "certificateTelemetry": {
+      "regressionTests": 111,
+      "finalTelemetryTests": 3,
+      "failures": 0,
+      "skips": 0,
+      "evidence": "docs/builderflow/sc-802/certificate-telemetry-evidence.json"
     }
   },
   "risks": [
     "Live SC-671 qualification and real renewal/rotation not performed",
-    "Certificate expiry telemetry remains NOT_OBSERVED",
     "Read-only dev-MCP allocation adapter task 910 remains unimplemented and fail-closed",
     "Linux sandbox needs bubblewrap; Windows worker isolation unqualified",
-    "No automatic allocator grant issuance/renewal added; SC-800 owns allocator producer"
+    "No automatic allocator grant issuance/renewal added; SC-800 owns allocator producer",
+    "Certificate telemetry is passive and in-memory; it does not invalidate already-established TLS sessions. Expired certificate rejection verified on a fresh handshake, not pooled-session revalidation."
   ],
   "rollback": "Revert these four isolated branch commits together; retain durable allocation fencing state and issuer keys. Reverting trust gates reopens previously unsafe routes and needs review.",
   "changedFiles": {
     "ChromaScape": [
       ".env.example",
+      "docs/builderflow/sc-802/certificate-telemetry-evidence.json",
       "docs/builderflow/sc-802/route-remediation-plan.json",
       "src/main/java/com/chromascape/web/debug/buildergoal/controller/BuilderGoalRunnerController.java",
       "src/main/java/com/chromascape/web/debug/buildergoal/controller/BuilderGoalTopologyPageController.java",
@@ -225,6 +237,7 @@
       "src/main/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalRunnerService.java",
       "src/main/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalTopologyGuard.java",
       "src/main/java/com/chromascape/web/debug/buildergoal/service/ExecutorAllocationHeaders.java",
+      "src/main/java/com/chromascape/web/debug/buildergoal/service/ExecutorCertificateTelemetry.java",
       "src/main/java/com/chromascape/web/debug/buildergoal/service/ExecutorEndpointRef.java",
       "src/main/java/com/chromascape/web/debug/buildergoal/service/Micro6OnlineClientRegistryService.java",
       "src/main/java/com/chromascape/web/debug/buildergoal/service/Micro6TargetRelaunchService.java",
@@ -246,6 +259,7 @@
       "src/test/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalRunnerServiceTest.java",
       "src/test/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalTopologyGuardTest.java",
       "src/test/java/com/chromascape/web/debug/buildergoal/service/ExecutorAllocationHeadersTest.java",
+      "src/test/java/com/chromascape/web/debug/buildergoal/service/ExecutorCertificateTelemetryTest.java",
       "src/test/java/com/chromascape/web/debug/buildergoal/service/Micro6OnlineClientRegistryServiceTest.java",
       "src/test/java/com/chromascape/web/debug/buildergoal/service/Micro6TargetRelaunchServiceTest.java",
       "src/test/java/com/chromascape/web/debug/buildergoal/service/Micro6TaskSourcePatchAuthorityTest.java",
