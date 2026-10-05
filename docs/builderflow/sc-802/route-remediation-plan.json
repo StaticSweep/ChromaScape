@@ -1,0 +1,301 @@
+{
+  "story": 802,
+  "project": "C:\\Dev\\IdeaProjects\\ChromaScape",
+  "felixTask": "task_1791197839439_8munzct5",
+  "scope": [
+    "port-bound endpoint authority",
+    "IPv6 normalization",
+    "credential redaction",
+    "authenticated heartbeat gate",
+    "authenticated runtime binding",
+    "expiry and replacement fencing",
+    "non-development startup enforcement",
+    "bounded requests and responses",
+    "source/patch route enforcement",
+    "adversarial and cross-service fixtures",
+    "Authenticated Launcher executor health probes and allocation metadata forwarding",
+    "Offline simulator worker user/PID/mount/network namespaces with credential-free environment",
+    "Verified TLS peer certificate expiry observation with real Fedora expiry and rotation fixture"
+  ],
+  "exclusions": [
+    "live gameplay",
+    "unrelated dirty changes"
+  ],
+  "acceptance": [
+    "Unauthenticated heartbeat cannot mutate ready registry state or trigger dial-out",
+    "Advertised URL cannot authorize a route",
+    "Only configured development origins or authenticated allocation-bound references can dial",
+    "Expiry, identity drift, unsafe addresses and redirects fail closed",
+    "Non-development rejects unsafe defaults",
+    "No credentials in diagnostics",
+    "Runtime integration tests run against fake authenticated registry/executor; no gameplay"
+  ],
+  "implementationChecklist": [
+    {
+      "item": "Resolve routes through authenticated registry with allocation/session/executor/artifact/environment binding",
+      "implemented": true
+    },
+    {
+      "item": "Fence signed grants durably across service restart",
+      "implemented": true
+    },
+    {
+      "item": "Authenticate observations and all executor API contexts",
+      "implemented": true
+    },
+    {
+      "item": "Close raw dispatch/catalog/patch fallbacks",
+      "implemented": true
+    },
+    {
+      "item": "Reject unsafe origins, preserve IPv6, redact sensitive topology",
+      "implemented": true
+    },
+    {
+      "item": "Bound requests, response size/content type, body idle deadline and registry probes",
+      "implemented": true
+    },
+    {
+      "item": "Fail non-development startup on unsafe topology defaults",
+      "implemented": true
+    },
+    {
+      "item": "Provide safe read-only diagnostics and operational grant publication tool",
+      "implemented": true
+    },
+    {
+      "item": "Launcher health probes authenticate and refuse redirects; forward allocation metadata only from current validated observations",
+      "implemented": true
+    },
+    {
+      "item": "Offline simulator launches use bubblewrap with isolated network/filesystem and read-only approved roots; no unsandboxed fallback",
+      "implemented": true
+    },
+    {
+      "item": "Mule rejects unsafe non-DEV startup before DB/listener; native mutual TLS 1.3 and verified client CA; Launcher non-DEV probes require CA and client identity",
+      "implemented": true
+    },
+    {
+      "item": "Carry allocation/ref/generation/instance/artifact headers on control calls and reject mismatched allocation at Micro6 before handler",
+      "implemented": true
+    },
+    {
+      "item": "Mule catalog proxy requires provisioned outbound TLS 1.3 CA/client identity in non-DEV, retaining pinned IP transport",
+      "implemented": true
+    },
+    {
+      "item": "Observe approved executor TLS peer chain dates, bounded cache, passive expiry/staleness classes, safe diagnostics and expired-certificate remediation",
+      "implemented": true
+    }
+  ],
+  "testChecklist": [
+    "current-main regression suite",
+    "forged heartbeat, wrong port, IPv6, secret redaction",
+    "stale/rotated registry reference",
+    "startup environment matrix",
+    "bounded transport fixture"
+  ],
+  "tracker": "No Felix/Shortcut writes per standing skip preference. SC-802 cannot be called Done while remaining acceptance is unverified.",
+  "classification": "change:multi-repo",
+  "repositories": [
+    "C:\\Dev\\IdeaProjects\\ChromaScape",
+    "C:\\Dev\\IdeaProjects\\micro6",
+    "C:\\Dev\\IdeaProjects\\leeuwbotbackend",
+    "C:\\Dev\\IdeaProjects\\sarububotlauncher-win"
+  ],
+  "environmentProfiles": {
+    "DEV": {
+      "contractVersion": 1,
+      "services": [
+        "ChromaScape",
+        "Mule/Launcher registry",
+        "Micro6"
+      ],
+      "directLocalLaunch": "explicit server configuration",
+      "http": "explicit static route or signed DEV allocation only",
+      "zone": "loopback/private/Tailnet, explicitly configured origins",
+      "evidenceClass": "DEV, never production qualification"
+    },
+    "STAGING": {
+      "contractVersion": 1,
+      "services": [
+        "ChromaScape",
+        "authenticated Mule/Launcher registry",
+        "allocated Micro6"
+      ],
+      "directLocalLaunch": false,
+      "http": false,
+      "zone": "explicit literal private/Tailnet HTTPS origins; no loopback/link-local/public/wildcard/DNS authority",
+      "tls": "JVM trustStore+keyStore required, peer hostname validation; deployment must configure requiring client certificates",
+      "credentials": "separate strong heartbeat, executor, registry, Launcher and allocation-issuer credentials"
+    },
+    "PRODUCTION": {
+      "contractVersion": 1,
+      "samePolicyAs": "STAGING",
+      "evidenceClass": "requires cross-service qualification; DEV fixtures cannot qualify"
+    }
+  },
+  "allowedDirections": [
+    "ChromaScape -> authenticated Mule/Launcher registry (endpoint resolution)",
+    "Mule registry -> granted Micro6 catalog via existing DNS/IP-pinned proxy",
+    "ChromaScape -> exact granted Micro6 fixed executor/source API",
+    "Micro6 -> authenticated ChromaScape heartbeat (observations only)"
+  ],
+  "grantProtocol": {
+    "issuer": "leeuwbotapi allocation issuer",
+    "audience": "chromascape",
+    "clientType": "micro6",
+    "contractVersion": 1,
+    "maxLifetimeSeconds": 120,
+    "futureSkewSeconds": 30,
+    "maxHeartbeatAgeSeconds": 30,
+    "proof": "HMAC-SHA256 of Go encoding/json EndpointGrant with signature empty; registry authenticates proof before returning contract",
+    "fencing": "durable per-allocation high-water; changed identity requires greater generation/new reference",
+    "renewal": "atomically replace issuer snapshot before expiry; preserve generation only when bound identity unchanged",
+    "outage": "fail closed; no cross-target fallback; semaphore 8; exception backoff max 30 seconds",
+    "referenceRotation": "alloc-micro6 reference includes a hash of allocation/session/generation; exact current-reference matching rejects reconnect/replacement references"
+  },
+  "operationalPrerequisites": [
+    "Operator provisions exact executor origins and matching distinct credentials on both services",
+    "Authorized SC-800 allocator supplies signed grants and renews them before expiry using backend issuer adapter",
+    "Provision HTTPS and client-certificate enforcement for non-DEV deployments",
+    "Keep server-owned durable fence directory across upgrades/restarts; never restore older state",
+    "Deployment and SC-671 all-service qualification remain separate from unit/HTTP fixture evidence"
+  ],
+  "remainingAcceptance": [
+    "Live all-service SC-671 qualification including Launcher allocation enrollment, renewal and TLS/mTLS rotation",
+    "dev-MCP adapter task 910 has no enabled allocation route; remains fail-closed until a pinned local-adapter identity and qualification are implemented"
+  ],
+  "simulatorIsolation": {
+    "workerClass": "SIMULATOR_WORKER",
+    "controlAllowed": false,
+    "platform": "Linux with /usr/bin/bwrap and unprivileged namespaces",
+    "namespace": "fresh user, PID, network and mount namespace per process",
+    "network": "no interfaces/routes; no outbound DNS, loopback, LAN or metadata",
+    "filesystem": "read-only /usr runtime libraries and server-configured approved code/staging roots; fresh /tmp and /proc; no host home or sockets",
+    "ipc": "stdin/stdout/stderr only; existing line/queue/deadline bounds",
+    "credentials": "existing child environment allowlist strips all service tokens and endpoint references",
+    "failure": "unsupported platform or denied sandbox launch prevents worker readiness; no unsandboxed fallback",
+    "artifactPrerequisite": "stage integrity-checked packages/cache/content in the approved root before worker startup"
+  },
+  "testResults": {
+    "ChromaScape": {
+      "total": 630,
+      "passed": 619,
+      "failed": 0,
+      "skipped": 11,
+      "format": "scoped spotlessJavaCheck passed",
+      "liveSandbox": "Java-launched bubblewrap worker denied host-home/credential, TCP and UDP DNS access",
+      "latestTransportRerun": {
+        "tests": 63,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    "Launcher": {
+      "passed": 58,
+      "failed": 0,
+      "skipped": 0,
+      "format": "scoped Prettier applied/checked"
+    },
+    "backend": {
+      "passed": 90,
+      "skipped": 2,
+      "failed": 0,
+      "scope": "endpoint grants/runtime/catalog, allocation reference, grant issuer, topology TLS; PostgreSQL ownership/revocation tests skipped"
+    },
+    "Micro6": {
+      "passed": 109,
+      "failed": 0,
+      "skipped": 0,
+      "scope": "executor authorization and HTTP executor server suites; isolated pinned shared contracts 7f4fa47"
+    },
+    "certificateTelemetry": {
+      "regressionTests": 111,
+      "finalTelemetryTests": 3,
+      "failures": 0,
+      "skips": 0,
+      "evidence": "docs/builderflow/sc-802/certificate-telemetry-evidence.json"
+    }
+  },
+  "risks": [
+    "Live SC-671 qualification and real renewal/rotation not performed",
+    "Read-only dev-MCP allocation adapter task 910 remains unimplemented and fail-closed",
+    "Linux sandbox needs bubblewrap; Windows worker isolation unqualified",
+    "No automatic allocator grant issuance/renewal added; SC-800 owns allocator producer",
+    "Certificate telemetry is passive and in-memory; it does not invalidate already-established TLS sessions. Expired certificate rejection verified on a fresh handshake, not pooled-session revalidation."
+  ],
+  "rollback": "Revert these four isolated branch commits together; retain durable allocation fencing state and issuer keys. Reverting trust gates reopens previously unsafe routes and needs review.",
+  "changedFiles": {
+    "ChromaScape": [
+      ".env.example",
+      "docs/builderflow/sc-802/certificate-telemetry-evidence.json",
+      "docs/builderflow/sc-802/route-remediation-plan.json",
+      "src/main/java/com/chromascape/web/debug/buildergoal/controller/BuilderGoalRunnerController.java",
+      "src/main/java/com/chromascape/web/debug/buildergoal/controller/BuilderGoalTopologyPageController.java",
+      "src/main/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalEndpointAuthority.java",
+      "src/main/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalRunnerService.java",
+      "src/main/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalTopologyGuard.java",
+      "src/main/java/com/chromascape/web/debug/buildergoal/service/ExecutorAllocationHeaders.java",
+      "src/main/java/com/chromascape/web/debug/buildergoal/service/ExecutorCertificateTelemetry.java",
+      "src/main/java/com/chromascape/web/debug/buildergoal/service/ExecutorEndpointRef.java",
+      "src/main/java/com/chromascape/web/debug/buildergoal/service/Micro6OnlineClientRegistryService.java",
+      "src/main/java/com/chromascape/web/debug/buildergoal/service/Micro6TargetRelaunchService.java",
+      "src/main/java/com/chromascape/web/debug/buildergoal/service/Micro6TaskSourcePatchService.java",
+      "src/main/java/com/chromascape/web/debug/buildergoal/service/TrustedExecutorEndpoint.java",
+      "src/main/java/com/chromascape/web/debug/patchloop/service/ScriptExecutionService.java",
+      "src/main/java/com/chromascape/web/http/BoundedJsonResponse.java",
+      "src/main/java/com/chromascape/web/integration/micro6/service/Micro6ExecutorCatalogService.java",
+      "src/main/java/com/chromascape/web/integration/micro6/service/Micro6RuntimeRegistryClient.java",
+      "src/main/java/com/chromascape/web/replay/capability/CapabilityManifest.java",
+      "src/main/java/com/chromascape/web/replay/kernel/XrspsProcessBuilderFactory.java",
+      "src/main/resources/application.yml",
+      "src/main/resources/static/css/executor-topology.css",
+      "src/main/resources/static/js/executor-topology.js",
+      "src/main/resources/templates/builder-goal-topology.html",
+      "src/main/resources/templates/debugger.html",
+      "src/test/java/com/chromascape/web/debug/buildergoal/controller/BuilderGoalRunnerControllerTest.java",
+      "src/test/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalEndpointAuthorityTest.java",
+      "src/test/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalRunnerServiceTest.java",
+      "src/test/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalTopologyGuardTest.java",
+      "src/test/java/com/chromascape/web/debug/buildergoal/service/ExecutorAllocationHeadersTest.java",
+      "src/test/java/com/chromascape/web/debug/buildergoal/service/ExecutorCertificateTelemetryTest.java",
+      "src/test/java/com/chromascape/web/debug/buildergoal/service/Micro6OnlineClientRegistryServiceTest.java",
+      "src/test/java/com/chromascape/web/debug/buildergoal/service/Micro6TargetRelaunchServiceTest.java",
+      "src/test/java/com/chromascape/web/debug/buildergoal/service/Micro6TaskSourcePatchAuthorityTest.java",
+      "src/test/java/com/chromascape/web/debug/buildergoal/service/TrustedExecutorEndpointTest.java",
+      "src/test/java/com/chromascape/web/debug/patchloop/service/ScriptExecutionServiceTest.java",
+      "src/test/java/com/chromascape/web/http/BoundedJsonResponseTest.java",
+      "src/test/java/com/chromascape/web/replay/kernel/XrspsNetworkIsolationTest.java"
+    ],
+    "micro6": [
+      ".env.example",
+      "runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/integration/builder/ExecutorTransportAuthorization.java",
+      "runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/integration/builder/Micro6BuilderExecutorServer.java",
+      "runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/integration/builder/ExecutorTransportAuthorizationTest.java",
+      "runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/integration/builder/Micro6BuilderExecutorServerTest.java"
+    ],
+    "leeuwbotbackend": [
+      "leeuwbotapi/mule-service/cmd/endpoint-grants/main.go",
+      "leeuwbotapi/mule-service/cmd/endpoint-grants/main_test.go",
+      "leeuwbotapi/mule-service/docs/sc802/grant-operations.json",
+      "leeuwbotapi/mule-service/docs/sc802/topology.env.example",
+      "leeuwbotapi/mule-service/handlers/micro6_endpoint_grants.go",
+      "leeuwbotapi/mule-service/handlers/micro6_endpoint_grants_test.go",
+      "leeuwbotapi/mule-service/handlers/micro6_runtime.go",
+      "leeuwbotapi/mule-service/handlers/micro6_runtime_persistent_test.go",
+      "leeuwbotapi/mule-service/handlers/micro6_runtime_test.go",
+      "leeuwbotapi/mule-service/internal/launcher/micro6_runtime.go",
+      "leeuwbotapi/mule-service/internal/topology/topology.go",
+      "leeuwbotapi/mule-service/internal/topology/topology_test.go",
+      "leeuwbotapi/mule-service/main.go"
+    ],
+    "sarububotlauncher-win": [
+      ".env.example",
+      "package.json",
+      "public/services/micro6/Micro6ExecutorProbe.js",
+      "public/services/micro6/__tests__/Micro6ExecutorProbe.test.js",
+      "public/services/micro6/__tests__/Micro6HealthFixtures.test.js"
+    ]
+  }
+}

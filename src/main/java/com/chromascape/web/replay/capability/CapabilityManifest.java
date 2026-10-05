@@ -31,6 +31,11 @@ public record CapabilityManifest(
     List<String> supportedActions,
     String viewerTraceSchema) {
 
+  @com.fasterxml.jackson.annotation.JsonProperty("workerClass")
+  public String workerClass() {
+    return "SIMULATOR_WORKER";
+  }
+
   /** Compatibility constructor for pre-observer capability callers. */
   public CapabilityManifest(
       int schemaVersion,

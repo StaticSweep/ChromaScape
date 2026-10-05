@@ -117,7 +117,9 @@ class BuilderGoalRunnerServiceTest {
             "http://127.0.0.1:8098",
             300000L,
             3,
-            15000L);
+            15000L,
+            "http://192.168.1.6:8084",
+            "");
     org.springframework.test.util.ReflectionTestUtils.setField(
         created, "startRequestService", startRequests);
     return created;

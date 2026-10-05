@@ -2,6 +2,7 @@ package com.chromascape.web.debug.patchloop.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -18,6 +19,7 @@ import java.net.http.HttpTimeoutException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
@@ -74,6 +76,23 @@ class ScriptExecutionServiceTest {
         "http://127.0.0.1:8098",
         httpClient,
         probeMs);
+  }
+
+  /**
+   * Test topology trusts the given fixture hosts explicitly; the default service trusts loopback
+   * plus the default launcher/executor hosts only.
+   */
+  private ScriptExecutionService serviceTrusting(String... hosts) {
+    return new ScriptExecutionService(
+        stateHandler,
+        taskDetectionService,
+        new ObjectMapper(),
+        "micro6_local_executor",
+        "http://127.0.0.1:8098",
+        httpClient,
+        0L,
+        null,
+        Set.of(hosts));
   }
 
   @Test
@@ -212,6 +231,7 @@ class ScriptExecutionServiceTest {
   @DisplayName("Micro6 backend dispatches to targeted advertised base URL when provided")
   @SuppressWarnings("unchecked")
   void runScriptAndWait_micro6UsesTargetBaseUrl() throws Exception {
+    ScriptExecutionService lanService = serviceTrusting("192.168.1.77");
     when(executeResponse.statusCode()).thenReturn(200);
     when(executeResponse.body()).thenReturn(acceptedBody(1001, "configurable_woodcutting"));
     when(statusResponse.statusCode()).thenReturn(200);
@@ -230,7 +250,7 @@ class ScriptExecutionServiceTest {
             Map.of("advertised_base_url", "http://192.168.1.77:8098"));
 
     ScriptExecutionService.ScriptExecutionResult result =
-        service.runScriptAndWait(
+        lanService.runScriptAndWait(
             "execution-1", "micro6:configurable_woodcutting", 1000, taskMetadata);
 
     ArgumentCaptor<HttpRequest> requestCaptor = ArgumentCaptor.forClass(HttpRequest.class);
@@ -676,13 +696,14 @@ class ScriptExecutionServiceTest {
   @DisplayName("Micro6 status polling resolves target-specific run status")
   @SuppressWarnings("unchecked")
   void getMicro6RunStatus_readsTargetedStatus() throws Exception {
+    ScriptExecutionService lanService = serviceTrusting("192.168.1.55");
     when(statusResponse.statusCode()).thenReturn(200);
     when(statusResponse.body()).thenReturn("{\"status\":\"RUNNING\",\"entry_id\":1337}");
     when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
         .thenReturn(statusResponse);
 
     ScriptExecutionService.Micro6RunStatusResult result =
-        service.getMicro6RunStatus(
+        lanService.getMicro6RunStatus(
             Map.of("micro6_target", Map.of("advertised_base_url", "http://192.168.1.55:8098")),
             1337);
 
@@ -698,6 +719,7 @@ class ScriptExecutionServiceTest {
   @Test
   @DisplayName("Micro6 status polling requires the exact task and iteration identity")
   void getMicro6RunStatus_acceptsMatchingTaskAndIterationIdentity() throws Exception {
+    ScriptExecutionService lanService = serviceTrusting("192.168.1.55");
     when(statusResponse.statusCode()).thenReturn(200);
     when(statusResponse.body())
         .thenReturn(
@@ -707,7 +729,7 @@ class ScriptExecutionServiceTest {
         .thenReturn(statusResponse);
 
     ScriptExecutionService.Micro6RunStatusResult result =
-        service.getMicro6RunStatus(
+        lanService.getMicro6RunStatus(
             Map.of(
                 "task_key", "FISHING_TRAINING",
                 "iteration_id", "iter-1",
@@ -721,6 +743,7 @@ class ScriptExecutionServiceTest {
   @Test
   @DisplayName("Micro6 status polling rejects a confirmed task identity mismatch")
   void getMicro6RunStatus_rejectsMismatchedTaskIdentity() throws Exception {
+    ScriptExecutionService lanService = serviceTrusting("192.168.1.55");
     when(statusResponse.statusCode()).thenReturn(200);
     when(statusResponse.body())
         .thenReturn(
@@ -730,7 +753,7 @@ class ScriptExecutionServiceTest {
         .thenReturn(statusResponse);
 
     ScriptExecutionService.Micro6RunStatusResult result =
-        service.getMicro6RunStatus(
+        lanService.getMicro6RunStatus(
             Map.of(
                 "task_key", "FISHING_TRAINING",
                 "iteration_id", "iter-1",
@@ -745,6 +768,7 @@ class ScriptExecutionServiceTest {
   @Test
   @DisplayName("Micro6 status polling fails closed when iteration identity is missing")
   void getMicro6RunStatus_rejectsMissingIterationIdentity() throws Exception {
+    ScriptExecutionService lanService = serviceTrusting("192.168.1.55");
     when(statusResponse.statusCode()).thenReturn(200);
     when(statusResponse.body())
         .thenReturn(
@@ -753,7 +777,7 @@ class ScriptExecutionServiceTest {
         .thenReturn(statusResponse);
 
     ScriptExecutionService.Micro6RunStatusResult result =
-        service.getMicro6RunStatus(
+        lanService.getMicro6RunStatus(
             Map.of(
                 "task_key", "FISHING_TRAINING",
                 "iteration_id", "iter-1",
@@ -770,6 +794,7 @@ class ScriptExecutionServiceTest {
       "Micro6 executor health reports publish-ready when logged in and AccountBuilder is ready")
   @SuppressWarnings("unchecked")
   void getMicro6ExecutorHealth_reportsPublishReady() throws Exception {
+    ScriptExecutionService lanService = serviceTrusting("192.168.1.77");
     when(statusResponse.statusCode()).thenReturn(200);
     when(statusResponse.body())
         .thenReturn(
@@ -793,7 +818,7 @@ class ScriptExecutionServiceTest {
         .thenReturn(statusResponse);
 
     ScriptExecutionService.Micro6ExecutorHealthResult result =
-        service.getMicro6ExecutorHealth(
+        lanService.getMicro6ExecutorHealth(
             Map.of(
                 "world",
                 360,
@@ -812,6 +837,7 @@ class ScriptExecutionServiceTest {
       "Micro6 executor health reports concrete dispatch reason when logged in but startup is incomplete")
   @SuppressWarnings("unchecked")
   void getMicro6ExecutorHealth_reportsDispatchReason() throws Exception {
+    ScriptExecutionService lanService = serviceTrusting("192.168.1.77");
     when(statusResponse.statusCode()).thenReturn(200);
     when(statusResponse.body())
         .thenReturn(
@@ -835,7 +861,7 @@ class ScriptExecutionServiceTest {
         .thenReturn(statusResponse);
 
     ScriptExecutionService.Micro6ExecutorHealthResult result =
-        service.getMicro6ExecutorHealth(
+        lanService.getMicro6ExecutorHealth(
             Map.of(
                 "world",
                 360,
@@ -852,6 +878,7 @@ class ScriptExecutionServiceTest {
   @DisplayName("Micro6 health uses account name fallback only with canonical actual identity")
   @SuppressWarnings("unchecked")
   void getMicro6ExecutorHealth_nameFallbackRequiresExactSelectedName() throws Exception {
+    ScriptExecutionService lanService = serviceTrusting("192.168.1.77");
     when(statusResponse.statusCode()).thenReturn(200);
     when(statusResponse.body())
         .thenReturn(
@@ -873,7 +900,7 @@ class ScriptExecutionServiceTest {
         .thenReturn(statusResponse);
 
     ScriptExecutionService.Micro6ExecutorHealthResult matching =
-        service.getMicro6ExecutorHealth(
+        lanService.getMicro6ExecutorHealth(
             Map.of(
                 "world",
                 360,
@@ -903,7 +930,7 @@ class ScriptExecutionServiceTest {
             """);
 
     ScriptExecutionService.Micro6ExecutorHealthResult malformedHash =
-        service.getMicro6ExecutorHealth(
+        lanService.getMicro6ExecutorHealth(
             Map.of(
                 "world",
                 360,
@@ -935,7 +962,7 @@ class ScriptExecutionServiceTest {
             """);
 
     ScriptExecutionService.Micro6ExecutorHealthResult mismatching =
-        service.getMicro6ExecutorHealth(
+        lanService.getMicro6ExecutorHealth(
             Map.of(
                 "world",
                 360,
@@ -1129,5 +1156,64 @@ class ScriptExecutionServiceTest {
         });
     assertThat(completed.await(1, TimeUnit.SECONDS)).isTrue();
     return output.toString(StandardCharsets.UTF_8);
+  }
+
+  @Test
+  @DisplayName("Micro6 publish fails closed on untrusted selected target without dialing")
+  void publishMicro6Task_failsClosedOnUntrustedSelectedTargetWithoutDialing() throws Exception {
+    Map<String, Object> taskMetadata =
+        Map.of(
+            "task_key",
+            "configurable_woodcutting",
+            "micro6_target",
+            Map.of("advertised_base_url", "http://203.0.113.7:8098"));
+
+    ScriptExecutionService.Micro6PublishResult result =
+        service.publishMicro6Task("micro6:configurable_woodcutting", taskMetadata, 1001);
+
+    assertThat(result.published()).isFalse();
+    assertThat(result.errorMessage()).contains("ENDPOINT_UNTRUSTED");
+    verify(httpClient, never()).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+  }
+
+  @Test
+  @DisplayName("Micro6 status lookup never dials an untrusted selected target")
+  void getMicro6RunStatus_neverDialsUntrustedSelectedTarget() throws Exception {
+    Map<String, Object> taskMetadata =
+        Map.of(
+            "task_key",
+            "configurable_woodcutting",
+            "micro6_target",
+            Map.of("advertised_base_url", "http://user:pass@127.0.0.1:8098"));
+
+    ScriptExecutionService.Micro6RunStatusResult result =
+        service.getMicro6RunStatus(taskMetadata, 1337);
+
+    assertThat(result.found()).isFalse();
+    verify(httpClient, never()).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+  }
+
+  @Test
+  void productionAuthorityPreventsLegacyDefaultRouteFallback() throws Exception {
+    var authority =
+        org.mockito.Mockito.mock(
+            com.chromascape.web.debug.buildergoal.service.BuilderGoalEndpointAuthority.class);
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        service, "endpointAuthority", authority);
+    var result =
+        service.publishMicro6Task(
+            "micro6:configurable_woodcutting",
+            Map.of("task_key", "configurable_woodcutting"),
+            1001);
+    assertThat(result.published()).isFalse();
+    verify(httpClient, never()).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+  }
+
+  @Test
+  @DisplayName("Trusted endpoint verdict is exposed for callers")
+  void trustedEndpointVerdictIsExposedForCallers() {
+    assertThat(service.trustedEndpointVerdict("http://127.0.0.1:8098").trusted()).isTrue();
+    assertThat(service.trustedEndpointVerdict("http://192.168.1.6:8098").trusted()).isFalse();
+    assertThat(service.trustedEndpointVerdict("http://203.0.113.7:8098").trusted()).isFalse();
   }
 }
