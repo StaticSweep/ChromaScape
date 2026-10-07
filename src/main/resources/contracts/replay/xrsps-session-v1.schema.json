@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chromascape.dev/replay/xrsps-session-v1.schema.json",
+  "title": "xRSPS Session",
+  "description": "ChromaScape-owned xRSPS scenario session: one worker, one mutable scenario world, one execution mode. The real client attaches as an observer; it never creates a second player or world.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^[0-9a-fA-F-]{36}$" },
+    "mode": { "type": "string", "enum": ["RECORDED_ACTIONS", "AI_TASK"] },
+    "status": {
+      "type": "string",
+      "enum": [
+        "CREATING",
+        "READY",
+        "RUNNING",
+        "PAUSED",
+        "RECONCILING",
+        "SUCCEEDED",
+        "FAILED",
+        "CANCELLED"
+      ]
+    },
+    "tick": { "type": "integer", "minimum": 0 },
+    "observationRevision": { "type": "integer", "minimum": 0 },
+    "epoch": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Bumped on checkpoint recovery; invalidates all prior viewer packets"
+    },
+    "idempotencyKey": { "type": "string", "minLength": 8, "maxLength": 128, "pattern": "^[A-Za-z0-9._:-]+$" },
+    "scenarioRef": { "type": "string", "minLength": 1 },
+    "leaseId": { "type": "string", "pattern": "^[0-9a-fA-F-]{36}$" },
+    "terminalReason": { "type": ["string", "null"] }
+  },
+  "required": [
+    "id",
+    "mode",
+    "status",
+    "tick",
+    "observationRevision",
+    "epoch",
+    "idempotencyKey",
+    "scenarioRef",
+    "leaseId"
+  ]
+}
