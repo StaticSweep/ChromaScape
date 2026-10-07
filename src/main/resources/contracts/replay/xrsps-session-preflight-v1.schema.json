@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chromascape.dev/replay/xrsps-session-preflight-v1.schema.json",
+  "title": "xRSPS Session Preflight",
+  "description": "Eligibility verdict for creating an xRSPS session from a recording. A coverage percentage over captured typed actions never cancels an incomplete-stream warning.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "recordingId": { "type": "string", "minLength": 1 },
+    "eligible": { "type": "boolean" },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "TYPED_ACTION_STREAM_INCOMPLETE",
+              "UNRESOLVED_TARGET",
+              "NO_SUPPORTED_FISHING_NPC",
+              "INITIAL_WORLD_INCOMPLETE",
+              "UNSUPPORTED_ACTION"
+            ]
+          },
+          "detail": { "type": "string", "minLength": 1 },
+          "sourceRef": { "type": "string" }
+        },
+        "required": ["code", "detail"]
+      }
+    }
+  },
+  "required": ["recordingId", "eligible", "reasons"]
+}
