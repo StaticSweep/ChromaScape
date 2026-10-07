@@ -210,6 +210,48 @@ public class XrspsSession {
     transitionTo(XrspsSessionStatus.PAUSED, null);
   }
 
+  /** Persisted lifecycle coordinates, separate from the authoritative worker snapshot. */
+  public record Snapshot(
+      UUID id,
+      XrspsSessionMode mode,
+      String idempotencyKey,
+      String scenarioRef,
+      XrspsSessionStatus status,
+      long tick,
+      long observationRevision,
+      long epoch,
+      String leaseId,
+      String terminalReason,
+      Instant updatedAt) {}
+
+  public synchronized Snapshot snapshot() {
+    return new Snapshot(
+        id,
+        mode,
+        idempotencyKey,
+        scenarioRef,
+        status,
+        tick,
+        observationRevision,
+        epoch,
+        leaseId,
+        terminalReason,
+        updatedAt);
+  }
+
+  public static XrspsSession restore(Snapshot saved) {
+    XrspsSession session =
+        new XrspsSession(saved.id(), saved.mode(), saved.idempotencyKey(), saved.scenarioRef());
+    session.status = saved.status();
+    session.tick = saved.tick();
+    session.observationRevision = saved.observationRevision();
+    session.epoch = saved.epoch();
+    session.leaseId = saved.leaseId();
+    session.terminalReason = saved.terminalReason();
+    session.updatedAt = saved.updatedAt();
+    return session;
+  }
+
   private void transitionTo(XrspsSessionStatus next, String reason) {
     if (!status.canTransitionTo(next)) {
       throw illegalTransition(status, next);

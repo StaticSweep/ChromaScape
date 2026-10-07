@@ -20,13 +20,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Session lifecycle and headless recorded-action execution.
- *
- * <p>Presentation gateways stay outside the certified offline worker: this surface consumes
- * synchronization from the same authoritative session state the worker would drive. External
- * callers never supply a lease; the service fills the current session lease on every submission.
- * Journal backing is in-memory with lease fencing in this slice; durable database backing, client
- * attachment, provider auth and multi-operator ownership arrive in later phases.
+ * Session lifecycle and recorded execution; production commits authoritative checkpoints
+ * atomically.
  */
 @RestController
 @RequestMapping("/api/xrsps/sessions")
@@ -41,9 +36,10 @@ public class XrspsSessionsController {
 
   @PostMapping
   public ResponseEntity<SessionView> create(@Valid @RequestBody CreateSessionRequest request) {
-    XrspsSession session =
-        service.createAndReady(request.mode(), request.idempotencyKey(), request.scenarioRef());
-    return ResponseEntity.status(HttpStatus.CREATED).body(SessionView.of(session));
+    var result =
+        service.createResult(request.mode(), request.idempotencyKey(), request.scenarioRef());
+    return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
+        .body(SessionView.of(result.session()));
   }
 
   @GetMapping("/{id}")
@@ -106,7 +102,9 @@ public class XrspsSessionsController {
             observation.tick(),
             observation.observationRevision(),
             observation.epoch(),
-            observation.legalActions()));
+            observation.legalActions(),
+            observation.domainState(),
+            observation.durable()));
   }
 
   public record CreateSessionRequest(
@@ -123,10 +121,11 @@ public class XrspsSessionsController {
       @NotBlank @Pattern(regexp = "^[0-9a-fA-F-]{36}$") String commandId,
       @NotBlank String actionType,
       @NotBlank String payloadHash,
-      @Min(0) long expectedRevision) {
+      @Min(0) long expectedRevision,
+      com.fasterxml.jackson.databind.JsonNode payload) {
     XrspsRecordedAction toAction() {
       return new XrspsRecordedAction(
-          relativeTick, commandId, actionType, payloadHash, expectedRevision);
+          relativeTick, commandId, actionType, payloadHash, expectedRevision, payload);
     }
   }
 
@@ -215,5 +214,7 @@ public class XrspsSessionsController {
       long tick,
       long observationRevision,
       long epoch,
-      List<String> legalActions) {}
+      List<String> legalActions,
+      com.fasterxml.jackson.databind.JsonNode domainState,
+      boolean durable) {}
 }

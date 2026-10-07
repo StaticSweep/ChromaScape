@@ -25,7 +25,7 @@ class XrspsSessionExecutionServiceTest {
   }
 
   private XrspsRecordedAction action(long tick, String id, long expectedRevision) {
-    return new XrspsRecordedAction(tick, id, "INTERACT_FISHING_SPOT", "hash", expectedRevision);
+    return new XrspsRecordedAction(tick, id, "INTERACT_NPC", "hash", expectedRevision);
   }
 
   @Test
@@ -88,7 +88,7 @@ class XrspsSessionExecutionServiceTest {
     List<XrspsRecordedAction> journal =
         List.of(
             action(0, UUID.randomUUID().toString(), 0),
-            new XrspsRecordedAction(1, failedId, "INTERACT_FISHING_SPOT", "hash", 0),
+            new XrspsRecordedAction(1, failedId, "INTERACT_NPC", "hash", 0),
             action(2, UUID.randomUUID().toString(), 2, "hash"));
 
     XrspsRecordedRunReport first = service.runJournal(session.getId(), journal);
@@ -102,7 +102,7 @@ class XrspsSessionExecutionServiceTest {
   }
 
   private XrspsRecordedAction action(long tick, String id, long expectedRevision, String hash) {
-    return new XrspsRecordedAction(tick, id, "INTERACT_FISHING_SPOT", hash, expectedRevision);
+    return new XrspsRecordedAction(tick, id, "INTERACT_NPC", hash, expectedRevision);
   }
 
   @Test
@@ -116,7 +116,7 @@ class XrspsSessionExecutionServiceTest {
     assertEquals(XrspsSessionStatus.RUNNING, observation.status());
     assertEquals(0L, observation.tick());
     assertEquals(1L, observation.observationRevision());
-    assertTrue(observation.legalActions().contains("INTERACT_FISHING_SPOT"));
+    assertTrue(observation.legalActions().contains("INTERACT_NPC"));
   }
 
   @Test
@@ -151,7 +151,7 @@ class XrspsSessionExecutionServiceTest {
 
     List<XrspsRecordedAction> full =
         List.of(
-            new XrspsRecordedAction(0, firstId, "INTERACT_FISHING_SPOT", "hash", 0),
+            new XrspsRecordedAction(0, firstId, "INTERACT_NPC", "hash", 0),
             action(4, UUID.randomUUID().toString(), 1),
             action(6, UUID.randomUUID().toString(), 2));
     XrspsRecordedRunReport halted = service.runJournal(session.getId(), full);
