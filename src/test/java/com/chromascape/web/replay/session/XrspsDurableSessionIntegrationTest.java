@@ -67,6 +67,15 @@ class XrspsDurableSessionIntegrationTest {
     properties.setEnabled(true);
     properties.getXrsps().setExecutable("/usr/bin/node");
     properties.getXrsps().setEntrypoint(System.getenv("SC1991_WORKER_ENTRYPOINT"));
+    properties
+        .getXrsps()
+        .setWorkingDirectory(
+            java.nio.file.Path.of(System.getenv("SC1991_WORKER_ENTRYPOINT"))
+                .getParent()
+                .getParent()
+                .getParent()
+                .getParent()
+                .toString());
     properties.getXrsps().setRequestTimeoutMs(60000);
     properties.getXrsps().setMaxStderrBytes(4194304);
     try (var worker = new XrspsKernelProcess(properties.getXrsps(), MAPPER)) {
