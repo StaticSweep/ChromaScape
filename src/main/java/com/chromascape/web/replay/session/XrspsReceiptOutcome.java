@@ -13,5 +13,7 @@ public enum XrspsReceiptOutcome {
   /** Session is not running: rejected before mutation. */
   REJECTED_SESSION_NOT_RUNNING,
   /** Command lease does not match the session lease: rejected before mutation. */
-  REJECTED_STALE_LEASE
+  REJECTED_STALE_LEASE,
+  /** Native domain validation refused the action. */
+  REJECTED_SEMANTIC_ACTION
 }

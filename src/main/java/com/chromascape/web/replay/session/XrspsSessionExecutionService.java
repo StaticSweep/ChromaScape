@@ -5,25 +5,29 @@ import com.chromascape.web.replay.error.ReplayErrorCode;
 import com.chromascape.web.replay.error.ReplayException;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Service;
 
 /**
- * In-memory session lifecycle and recorded-journal scheduling. This slice neither loads a scenario
- * nor dispatches game actions to the xRSPS kernel. Counter/receipt acceptance is not Fishing proof.
- * Database durability, kernel dispatch and verified world recovery remain separate delivery work.
+ * Session API facade. Spring uses durable production execution. The explicit store/no-argument
+ * constructors retain the counter-only diagnostic fixture for isolated lifecycle tests; they never
+ * provide evidence of Fishing effects or authoritative world state.
  */
 @Service
 public class XrspsSessionExecutionService {
 
-  // Model-only alias admission does not expand any worker's attested capability profile.
-  private static final List<String> ADMITTED_ACTIONS =
-      java.util.stream.Stream.concat(
-              CapabilityManifest.V1_SUPPORTED_ACTIONS.stream(),
-              java.util.stream.Stream.of("INTERACT_FISHING_SPOT"))
-          .distinct()
-          .toList();
-
   private final XrspsSessionStore store;
+  private final XrspsDurableSessionService durable;
+
+  /** Production always uses the database and the pinned real-service worker. */
+  @org.springframework.beans.factory.annotation.Autowired
+  public XrspsSessionExecutionService(XrspsDurableSessionService durable) {
+    this.durable = durable;
+    this.store = null;
+  }
+
+  private final ConcurrentHashMap<UUID, List<XrspsRecordedAction>> journals =
+      new ConcurrentHashMap<>();
 
   public XrspsSessionExecutionService() {
     this(new XrspsSessionStore());
@@ -39,77 +43,102 @@ public class XrspsSessionExecutionService {
           "Provide the session store");
     }
     this.store = store;
+    this.durable = null;
   }
 
-  /** Registers an in-memory scenario reference; no runtime scenario validation is claimed. */
+  /** Creates a session and moves it to READY after scenario validation. */
   public XrspsSession createAndReady(
       XrspsSessionMode mode, String idempotencyKey, String scenarioRef) {
-    return createAndReady(mode, idempotencyKey, scenarioRef, null);
-  }
-
-  public XrspsSession createAndReady(
-      XrspsSessionMode mode, String idempotencyKey, String scenarioRef, String ownerId) {
-    XrspsSession session = store.create(mode, idempotencyKey, scenarioRef, ownerId);
-    synchronized (session) {
-      if (session.getStatus() == XrspsSessionStatus.CREATING) session.markReady();
+    if (durable != null) return durable.create(mode, idempotencyKey, scenarioRef).session();
+    XrspsSession session = store.create(mode, idempotencyKey, scenarioRef);
+    if (session.getStatus() == XrspsSessionStatus.CREATING) {
+      session.markReady();
     }
     return session;
   }
 
-  /** Missing and foreign sessions use the same 404 response. */
-  public XrspsSession getOwned(UUID sessionId, String ownerId) {
-    return store.getOwned(sessionId, ownerId);
+  public XrspsSessionRepository.Creation createResult(
+      XrspsSessionMode mode, String key, String scenario) {
+    if (durable != null) return durable.create(mode, key, scenario);
+    XrspsSession session = store.create(mode, key, scenario);
+    boolean created = session.getStatus() == XrspsSessionStatus.CREATING;
+    if (created) session.markReady();
+    return new XrspsSessionRepository.Creation(session, created);
   }
 
   public XrspsSession get(UUID sessionId) {
-    return store.get(sessionId);
+    return durable != null ? durable.get(sessionId) : store.get(sessionId);
   }
 
   public XrspsSession start(UUID sessionId) {
+    if (durable != null) return durable.transition(sessionId, XrspsSession::start);
     XrspsSession session = store.get(sessionId);
     session.start();
     return session;
   }
 
   public XrspsSession pause(UUID sessionId) {
+    if (durable != null) return durable.transition(sessionId, XrspsSession::pause);
     XrspsSession session = store.get(sessionId);
     session.pause();
     return session;
   }
 
   public XrspsSession resume(UUID sessionId) {
+    if (durable != null) return durable.transition(sessionId, XrspsSession::resume);
     XrspsSession session = store.get(sessionId);
     session.resume();
     return session;
   }
 
   public XrspsSession cancel(UUID sessionId, String reason) {
+    if (durable != null) return durable.transition(sessionId, s -> s.cancel(reason));
     XrspsSession session = store.get(sessionId);
     session.cancel(reason);
     return session;
   }
 
   public XrspsSession stepTicks(UUID sessionId, int ticks) {
+    if (durable != null) {
+      durable.step(sessionId, ticks);
+      return durable.get(sessionId);
+    }
     XrspsSession session = store.get(sessionId);
     session.stepTicks(ticks);
     return session;
   }
 
-  /** Binds a fully validated immutable journal once and retains its cursor and first mismatch. */
+  /**
+   * Runs one Fishing journal headlessly to completion, mismatch, or session halt. The journal is
+   * cached per session so a later {@link #stepJournal} can continue it while paused.
+   */
   public XrspsRecordedRunReport runJournal(UUID sessionId, List<XrspsRecordedAction> journal) {
-    store.get(sessionId);
+    if (durable != null) return durable.run(sessionId, journal);
     requireDispatchable(journal);
-    // Binding releases the lifecycle monitor before the runner monitor is acquired.
-    return store.bindRecordedJournal(sessionId, journal).runRemaining();
+    journals.put(sessionId, List.copyOf(journal));
+    XrspsSession session = store.get(sessionId);
+    XrspsRecordedActionRunner runner =
+        new XrspsRecordedActionRunner(store, session.getId(), journal);
+    return runner.runRemaining();
   }
 
-  /** Continues the session's retained runner through the coordinated paused-step path. */
+  /** Continues the cached journal with coordinated single-step execution while paused. */
   public XrspsRecordedRunReport stepJournal(UUID sessionId, int ticks) {
-    return store.recordedRunner(sessionId).stepPaused(ticks);
+    if (durable != null) return durable.step(sessionId, ticks);
+    List<XrspsRecordedAction> journal = journals.get(sessionId);
+    if (journal == null) {
+      throw ReplayException.invalid(
+          ReplayErrorCode.VALIDATION_ERROR, "No journal has been run for this session");
+    }
+    XrspsSession session = store.get(sessionId);
+    XrspsRecordedActionRunner runner =
+        new XrspsRecordedActionRunner(store, session.getId(), journal);
+    return runner.stepPaused(ticks);
   }
 
-  /** Session counters and admitted action vocabulary; not an authoritative game observation. */
+  /** Authoritative observation: tick, revision, epoch, lifecycle and the legal action surface. */
   public Observation observe(UUID sessionId) {
+    if (durable != null) return durable.observe(sessionId);
     XrspsSession session = store.get(sessionId);
     return new Observation(
         session.getId(),
@@ -118,7 +147,9 @@ public class XrspsSessionExecutionService {
         session.getTick(),
         session.getObservationRevision(),
         session.getEpoch(),
-        ADMITTED_ACTIONS);
+        CapabilityManifest.V1_SUPPORTED_ACTIONS,
+        null,
+        false);
   }
 
   private static void requireDispatchable(List<XrspsRecordedAction> journal) {
@@ -129,7 +160,7 @@ public class XrspsSessionExecutionService {
     for (XrspsRecordedAction action : journal) {
       if (action == null
           || action.actionType() == null
-          || !ADMITTED_ACTIONS.contains(action.actionType())) {
+          || !CapabilityManifest.V1_SUPPORTED_ACTIONS.contains(action.actionType())) {
         throw ReplayException.invalid(
             ReplayErrorCode.ACTION_UNSUPPORTED,
             "Unsupported action type " + (action == null ? "null" : action.actionType()));
@@ -137,7 +168,7 @@ public class XrspsSessionExecutionService {
     }
   }
 
-  /** In-memory session observation. */
+  /** Authoritative observation for one session. */
   public record Observation(
       UUID sessionId,
       XrspsSessionMode mode,
@@ -145,5 +176,7 @@ public class XrspsSessionExecutionService {
       long tick,
       long observationRevision,
       long epoch,
-      List<String> legalActions) {}
+      List<String> legalActions,
+      com.fasterxml.jackson.databind.JsonNode domainState,
+      boolean durable) {}
 }

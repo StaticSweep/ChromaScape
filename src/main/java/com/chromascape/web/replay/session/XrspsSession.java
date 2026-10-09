@@ -24,7 +24,6 @@ public class XrspsSession {
   private final XrspsSessionMode mode;
   private final String idempotencyKey;
   private final String scenarioRef;
-  private final String ownerId;
   private XrspsSessionStatus status;
   private long tick;
   private long observationRevision;
@@ -34,12 +33,6 @@ public class XrspsSession {
   private Instant updatedAt;
 
   public XrspsSession(UUID id, XrspsSessionMode mode, String idempotencyKey, String scenarioRef) {
-    this(id, mode, idempotencyKey, scenarioRef, null);
-  }
-
-  public XrspsSession(
-      UUID id, XrspsSessionMode mode, String idempotencyKey, String scenarioRef, String ownerId) {
-    this.ownerId = ownerId;
     this.id = id;
     this.mode = mode;
     this.idempotencyKey = idempotencyKey;
@@ -50,10 +43,6 @@ public class XrspsSession {
     this.epoch = 0L;
     this.leaseId = UUID.randomUUID().toString();
     this.updatedAt = Instant.now();
-  }
-
-  public String getOwnerId() {
-    return ownerId;
   }
 
   public UUID getId() {
@@ -216,13 +205,51 @@ public class XrspsSession {
           "Lease fencing violated",
           "Recover only with the exact lease that was active when the worker was lost");
     }
-    if (newLeaseId == null || newLeaseId.isBlank() || newLeaseId.equals(leaseId)) {
-      throw ReplayException.conflict(
-          ReplayErrorCode.VALIDATION_ERROR, "Recovery requires a distinct non-empty lease");
-    }
     leaseId = newLeaseId;
     epoch += 1;
     transitionTo(XrspsSessionStatus.PAUSED, null);
+  }
+
+  /** Persisted lifecycle coordinates, separate from the authoritative worker snapshot. */
+  public record Snapshot(
+      UUID id,
+      XrspsSessionMode mode,
+      String idempotencyKey,
+      String scenarioRef,
+      XrspsSessionStatus status,
+      long tick,
+      long observationRevision,
+      long epoch,
+      String leaseId,
+      String terminalReason,
+      Instant updatedAt) {}
+
+  public synchronized Snapshot snapshot() {
+    return new Snapshot(
+        id,
+        mode,
+        idempotencyKey,
+        scenarioRef,
+        status,
+        tick,
+        observationRevision,
+        epoch,
+        leaseId,
+        terminalReason,
+        updatedAt);
+  }
+
+  public static XrspsSession restore(Snapshot saved) {
+    XrspsSession session =
+        new XrspsSession(saved.id(), saved.mode(), saved.idempotencyKey(), saved.scenarioRef());
+    session.status = saved.status();
+    session.tick = saved.tick();
+    session.observationRevision = saved.observationRevision();
+    session.epoch = saved.epoch();
+    session.leaseId = saved.leaseId();
+    session.terminalReason = saved.terminalReason();
+    session.updatedAt = saved.updatedAt();
+    return session;
   }
 
   private void transitionTo(XrspsSessionStatus next, String reason) {

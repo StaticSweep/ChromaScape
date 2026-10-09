@@ -1,6 +1,5 @@
 package com.chromascape.web.replay.session;
 
-import com.chromascape.web.replay.security.ReplayPrincipalService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -8,7 +7,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
-import java.security.Principal;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -21,78 +19,65 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Authenticated, owner-scoped in-memory session lifecycle and recorded-journal scheduling. */
+/**
+ * Session lifecycle and recorded execution; production commits authoritative checkpoints
+ * atomically.
+ */
 @RestController
 @RequestMapping("/api/xrsps/sessions")
 @Validated
 public class XrspsSessionsController {
 
   private final XrspsSessionExecutionService service;
-  private final ReplayPrincipalService principals;
 
-  public XrspsSessionsController(
-      XrspsSessionExecutionService service, ReplayPrincipalService principals) {
+  public XrspsSessionsController(XrspsSessionExecutionService service) {
     this.service = service;
-    this.principals = principals;
   }
 
   @PostMapping
-  public ResponseEntity<SessionView> create(
-      @Valid @RequestBody CreateSessionRequest request, Principal principal) {
-    XrspsSession session =
-        service.createAndReady(
-            request.mode(),
-            request.idempotencyKey(),
-            request.scenarioRef(),
-            principals.requirePrincipal(principal));
-    return ResponseEntity.status(HttpStatus.CREATED).body(SessionView.of(session));
+  public ResponseEntity<SessionView> create(@Valid @RequestBody CreateSessionRequest request) {
+    var result =
+        service.createResult(request.mode(), request.idempotencyKey(), request.scenarioRef());
+    return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
+        .body(SessionView.of(result.session()));
   }
 
   @GetMapping("/{id}")
-  public ResponseEntity<SessionView> inspect(@PathVariable UUID id, Principal principal) {
-    service.getOwned(id, principals.requirePrincipal(principal));
+  public ResponseEntity<SessionView> inspect(@PathVariable UUID id) {
     return ResponseEntity.ok(SessionView.of(service.get(id)));
   }
 
   @PostMapping("/{id}/start")
-  public ResponseEntity<SessionView> start(@PathVariable UUID id, Principal principal) {
-    service.getOwned(id, principals.requirePrincipal(principal));
+  public ResponseEntity<SessionView> start(@PathVariable UUID id) {
     return ResponseEntity.ok(SessionView.of(service.start(id)));
   }
 
   @PostMapping("/{id}/pause")
-  public ResponseEntity<SessionView> pause(@PathVariable UUID id, Principal principal) {
-    service.getOwned(id, principals.requirePrincipal(principal));
+  public ResponseEntity<SessionView> pause(@PathVariable UUID id) {
     return ResponseEntity.ok(SessionView.of(service.pause(id)));
   }
 
   @PostMapping("/{id}/resume")
-  public ResponseEntity<SessionView> resume(@PathVariable UUID id, Principal principal) {
-    service.getOwned(id, principals.requirePrincipal(principal));
+  public ResponseEntity<SessionView> resume(@PathVariable UUID id) {
     return ResponseEntity.ok(SessionView.of(service.resume(id)));
   }
 
   @PostMapping("/{id}/cancel")
   public ResponseEntity<SessionView> cancel(
-      @PathVariable UUID id,
-      @Valid @RequestBody(required = false) CancelRequest request,
-      Principal principal) {
-    service.getOwned(id, principals.requirePrincipal(principal));
+      @PathVariable UUID id, @Valid @RequestBody(required = false) CancelRequest request) {
     String reason = request == null ? null : request.reason();
     return ResponseEntity.ok(SessionView.of(service.cancel(id, reason)));
   }
 
   @PostMapping("/{id}/step")
   public ResponseEntity<SessionView> step(
-      @PathVariable UUID id, @Valid @RequestBody StepRequest request, Principal principal) {
-    service.getOwned(id, principals.requirePrincipal(principal));
+      @PathVariable UUID id, @Valid @RequestBody StepRequest request) {
     return ResponseEntity.ok(SessionView.of(service.stepTicks(id, request.ticks())));
   }
 
   @PostMapping("/{id}/run")
   public ResponseEntity<RunReportView> run(
-      @PathVariable UUID id, @Valid @RequestBody RunJournalRequest request, Principal principal) {
-    service.getOwned(id, principals.requirePrincipal(principal));
+      @PathVariable UUID id, @Valid @RequestBody RunJournalRequest request) {
     List<XrspsRecordedAction> journal =
         request.actions().stream().map(RecordedActionBody::toAction).toList();
     XrspsRecordedRunReport report = service.runJournal(id, journal);
@@ -101,15 +86,13 @@ public class XrspsSessionsController {
 
   @PostMapping("/{id}/step-run")
   public ResponseEntity<RunReportView> stepRun(
-      @PathVariable UUID id, @Valid @RequestBody StepRequest request, Principal principal) {
-    service.getOwned(id, principals.requirePrincipal(principal));
+      @PathVariable UUID id, @Valid @RequestBody StepRequest request) {
     XrspsRecordedRunReport report = service.stepJournal(id, request.ticks());
     return ResponseEntity.ok(RunReportView.of(id, report));
   }
 
   @GetMapping("/{id}/observation")
-  public ResponseEntity<ObservationView> observation(@PathVariable UUID id, Principal principal) {
-    service.getOwned(id, principals.requirePrincipal(principal));
+  public ResponseEntity<ObservationView> observation(@PathVariable UUID id) {
     XrspsSessionExecutionService.Observation observation = service.observe(id);
     return ResponseEntity.ok(
         new ObservationView(
@@ -119,7 +102,9 @@ public class XrspsSessionsController {
             observation.tick(),
             observation.observationRevision(),
             observation.epoch(),
-            observation.legalActions()));
+            observation.legalActions(),
+            observation.domainState(),
+            observation.durable()));
   }
 
   public record CreateSessionRequest(
@@ -136,14 +121,15 @@ public class XrspsSessionsController {
       @NotBlank @Pattern(regexp = "^[0-9a-fA-F-]{36}$") String commandId,
       @NotBlank String actionType,
       @NotBlank String payloadHash,
-      @Min(0) long expectedRevision) {
+      @Min(0) long expectedRevision,
+      com.fasterxml.jackson.databind.JsonNode payload) {
     XrspsRecordedAction toAction() {
       return new XrspsRecordedAction(
-          relativeTick, commandId, actionType, payloadHash, expectedRevision);
+          relativeTick, commandId, actionType, payloadHash, expectedRevision, payload);
     }
   }
 
-  public record RunJournalRequest(@NotEmpty @Valid List<@NotNull RecordedActionBody> actions) {}
+  public record RunJournalRequest(@NotEmpty @Valid List<RecordedActionBody> actions) {}
 
   public record SessionView(
       UUID id,
@@ -228,5 +214,7 @@ public class XrspsSessionsController {
       long tick,
       long observationRevision,
       long epoch,
-      List<String> legalActions) {}
+      List<String> legalActions,
+      com.fasterxml.jackson.databind.JsonNode domainState,
+      boolean durable) {}
 }

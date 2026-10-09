@@ -3,7 +3,6 @@ package com.chromascape.web.replay.session;
 import com.chromascape.web.replay.error.ReplayErrorCode;
 import com.chromascape.web.replay.error.ReplayException;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -30,8 +29,6 @@ public class XrspsSessionStore {
   private static final class SessionEntry {
     final XrspsSession session;
     final Map<String, JournalEntry> journal = new HashMap<>();
-    List<XrspsRecordedAction> recordedJournal;
-    XrspsRecordedActionRunner recordedRunner;
 
     SessionEntry(XrspsSession session) {
       this.session = session;
@@ -39,10 +36,7 @@ public class XrspsSessionStore {
   }
 
   private final Map<UUID, SessionEntry> sessions = new ConcurrentHashMap<>();
-
-  private record CreationKey(String ownerId, String idempotencyKey) {}
-
-  private final Map<CreationKey, UUID> sessionsByIdempotencyKey = new ConcurrentHashMap<>();
+  private final Map<String, UUID> sessionsByIdempotencyKey = new ConcurrentHashMap<>();
 
   /**
    * Reserves one session for {@code idempotencyKey}. A known key with identical mode and scenario
@@ -51,13 +45,7 @@ public class XrspsSessionStore {
    */
   public synchronized XrspsSession create(
       XrspsSessionMode mode, String idempotencyKey, String scenarioRef) {
-    return create(mode, idempotencyKey, scenarioRef, null);
-  }
-
-  public synchronized XrspsSession create(
-      XrspsSessionMode mode, String idempotencyKey, String scenarioRef, String ownerId) {
     requireKey(idempotencyKey);
-    CreationKey key = new CreationKey(ownerId, idempotencyKey);
     if (mode == null || scenarioRef == null || scenarioRef.isBlank()) {
       throw new ReplayException(
           ReplayErrorCode.VALIDATION_ERROR,
@@ -66,7 +54,7 @@ public class XrspsSessionStore {
           "Session mode and scenario reference are required",
           "Provide the execution mode and the scenario or task identity");
     }
-    UUID existingId = sessionsByIdempotencyKey.get(key);
+    UUID existingId = sessionsByIdempotencyKey.get(idempotencyKey);
     if (existingId != null) {
       SessionEntry existing = sessions.get(existingId);
       if (existing != null
@@ -81,10 +69,9 @@ public class XrspsSessionStore {
           "Idempotency key reused with different content",
           "Reuse the identical mode and scenario reference, or use a new idempotency key");
     }
-    XrspsSession session =
-        new XrspsSession(UUID.randomUUID(), mode, idempotencyKey, scenarioRef, ownerId);
+    XrspsSession session = new XrspsSession(UUID.randomUUID(), mode, idempotencyKey, scenarioRef);
     sessions.put(session.getId(), new SessionEntry(session));
-    sessionsByIdempotencyKey.put(key, session.getId());
+    sessionsByIdempotencyKey.put(idempotencyKey, session.getId());
     return session;
   }
 
@@ -101,47 +88,6 @@ public class XrspsSessionStore {
     return entry.session;
   }
 
-  /** Hides foreign-session existence using the exact same error as a missing owned session. */
-  public XrspsSession getOwned(UUID sessionId, String ownerId) {
-    SessionEntry entry = sessions.get(sessionId);
-    if (entry == null || ownerId == null || !ownerId.equals(entry.session.getOwnerId())) {
-      throw ReplayException.notFound(
-          ReplayErrorCode.RECORDING_NOT_FOUND, "xRSPS session not found");
-    }
-    return entry.session;
-  }
-
-  /** Validates before binding one immutable journal and runner to this in-memory session. */
-  public XrspsRecordedActionRunner bindRecordedJournal(
-      UUID sessionId, List<XrspsRecordedAction> journal) {
-    XrspsSession session = get(sessionId);
-    synchronized (session) {
-      XrspsRecordedActionRunner candidate = new XrspsRecordedActionRunner(this, sessionId, journal);
-      List<XrspsRecordedAction> validated = List.copyOf(journal);
-      SessionEntry entry = sessions.get(sessionId);
-      if (entry.recordedRunner == null) {
-        entry.recordedJournal = validated;
-        entry.recordedRunner = candidate;
-      } else if (!entry.recordedJournal.equals(validated)) {
-        throw ReplayException.conflict(
-            ReplayErrorCode.VALIDATION_ERROR,
-            "Session journal is immutable; create another session for changed actions");
-      }
-      return entry.recordedRunner;
-    }
-  }
-
-  public XrspsRecordedActionRunner recordedRunner(UUID sessionId) {
-    XrspsSession session = get(sessionId);
-    synchronized (session) {
-      XrspsRecordedActionRunner runner = sessions.get(sessionId).recordedRunner;
-      if (runner == null)
-        throw ReplayException.invalid(
-            ReplayErrorCode.VALIDATION_ERROR, "No journal has been run for this session");
-      return runner;
-    }
-  }
-
   /**
    * Submits one semantic action. The decision order is fixed: session liveness, lease fence,
    * duplicate identity, revision match, then apply. Rejections never mutate the session.
@@ -156,7 +102,7 @@ public class XrspsSessionStore {
           "xRSPS session not found",
           "Create the session before submitting commands");
     }
-    synchronized (entry.session) {
+    synchronized (entry) {
       XrspsSession session = entry.session;
       if (session.getStatus() != XrspsSessionStatus.RUNNING) {
         return new XrspsSessionReceipt(
@@ -234,7 +180,7 @@ public class XrspsSessionStore {
           "xRSPS session not found",
           "Create the session before submitting commands");
     }
-    synchronized (entry.session) {
+    synchronized (entry) {
       XrspsSession session = entry.session;
       if (session.getStatus() != XrspsSessionStatus.PAUSED) {
         return new XrspsSessionReceipt(
@@ -312,7 +258,7 @@ public class XrspsSessionStore {
     if (entry == null || commandId == null) {
       return false;
     }
-    synchronized (entry.session) {
+    synchronized (entry) {
       JournalEntry prior = entry.journal.get(commandId);
       return prior != null
           && prior.actionType().equals(actionType)
