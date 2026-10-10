@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.chromascape.web.replay.error.ReplayExceptionHandler;
+import com.chromascape.web.replay.security.ReplayPrincipalService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
@@ -25,9 +26,11 @@ class XrspsSessionsControllerTest {
   @BeforeEach
   void setUp() {
     XrspsSessionsController controller =
-        new XrspsSessionsController(new XrspsSessionExecutionService());
+        new XrspsSessionsController(
+            new XrspsSessionExecutionService(), new ReplayPrincipalService());
     mvc =
         MockMvcBuilders.standaloneSetup(controller)
+            .defaultRequest(get("/").principal(() -> "alice"))
             .setControllerAdvice(new ReplayExceptionHandler())
             .build();
   }
@@ -53,7 +56,7 @@ class XrspsSessionsControllerTest {
                     "commandId",
                     first,
                     "actionType",
-                    "INTERACT_NPC",
+                    "INTERACT_FISHING_SPOT",
                     "payloadHash",
                     "hash-a",
                     "expectedRevision",
@@ -64,7 +67,7 @@ class XrspsSessionsControllerTest {
                     "commandId",
                     second,
                     "actionType",
-                    "INTERACT_NPC",
+                    "INTERACT_FISHING_SPOT",
                     "payloadHash",
                     "hash-b",
                     "expectedRevision",
@@ -182,5 +185,150 @@ class XrspsSessionsControllerTest {
     UUID unknown = UUID.randomUUID();
     mvc.perform(get("/api/xrsps/sessions/" + unknown)).andExpect(status().isNotFound());
     mvc.perform(post("/api/xrsps/sessions/" + unknown + "/start")).andExpect(status().isNotFound());
+  }
+
+  private String createSessionId(String key) throws Exception {
+    return mapper
+        .readTree(
+            mvc.perform(
+                    post("/api/xrsps/sessions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody(key)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString())
+        .path("id")
+        .asText();
+  }
+
+  @Test
+  void everySessionRouteRequiresAuthenticationAndOwner() throws Exception {
+    String id = createSessionId("auth-key-001");
+    for (String caller : List.of("anonymous", "bob")) {
+      java.security.Principal principal = caller.equals("anonymous") ? null : () -> caller;
+      var expected = caller.equals("anonymous") ? status().isUnauthorized() : status().isNotFound();
+      for (String suffix : List.of("", "/observation"))
+        mvc.perform(
+                get("/api/xrsps/sessions/" + id + suffix)
+                    .with(
+                        request -> {
+                          request.setUserPrincipal(principal);
+                          return request;
+                        }))
+            .andExpect(expected);
+      for (String suffix :
+          List.of("/start", "/pause", "/resume", "/cancel", "/step", "/run", "/step-run")) {
+        String body =
+            suffix.equals("/run") ? runBody() : suffix.contains("step") ? "{\"ticks\":1}" : "{}";
+        mvc.perform(
+                post("/api/xrsps/sessions/" + id + suffix)
+                    .with(
+                        request -> {
+                          request.setUserPrincipal(principal);
+                          return request;
+                        })
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body))
+            .andExpect(expected);
+      }
+    }
+    mvc.perform(
+            post("/api/xrsps/sessions")
+                .with(
+                    request -> {
+                      request.setUserPrincipal(null);
+                      return request;
+                    })
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createBody("auth-key-002")))
+        .andExpect(status().isUnauthorized());
+    mvc.perform(get("/api/xrsps/sessions/" + id))
+        .andExpect(jsonPath("$.status").value("READY"))
+        .andExpect(jsonPath("$.tick").value(0));
+  }
+
+  @Test
+  void httpMismatchStaysLatchedAndChangedJournalConflicts() throws Exception {
+    String id = createSessionId("http-latch-001");
+    mvc.perform(post("/api/xrsps/sessions/" + id + "/start")).andExpect(status().isOk());
+    String bad = runBody().replace("\"expectedRevision\":1", "\"expectedRevision\":0");
+    String first =
+        mvc.perform(
+                post("/api/xrsps/sessions/" + id + "/run")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(bad))
+            .andExpect(jsonPath("$.haltReason").value("MISMATCH"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    String retried =
+        mvc.perform(
+                post("/api/xrsps/sessions/" + id + "/run")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(bad))
+            .andExpect(jsonPath("$.submitted").value(0))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    org.junit.jupiter.api.Assertions.assertEquals(
+        mapper.readTree(first).path("firstMismatch"),
+        mapper.readTree(retried).path("firstMismatch"));
+    mvc.perform(
+            post("/api/xrsps/sessions/" + id + "/run")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(bad.replace("\"expectedRevision\":0", "\"expectedRevision\":1")))
+        .andExpect(status().isConflict());
+    mvc.perform(post("/api/xrsps/sessions/" + id + "/pause")).andExpect(status().isOk());
+    mvc.perform(
+            post("/api/xrsps/sessions/" + id + "/step-run")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"ticks\":1}"))
+        .andExpect(jsonPath("$.haltReason").value("MISMATCH"))
+        .andExpect(jsonPath("$.submitted").value(0));
+  }
+
+  @Test
+  void nullActionsAreRejectedBeforeJournalInstallation() throws Exception {
+    String id = createSessionId("null-action-001");
+    mvc.perform(
+            post("/api/xrsps/sessions/" + id + "/run")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"actions\":[null]}"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void ownersHaveIndependentCreateKeysAndUniformNotFoundResponses() throws Exception {
+    String alice = createSessionId("shared-http-key");
+    String bobJson =
+        mvc.perform(
+                post("/api/xrsps/sessions")
+                    .principal(() -> "bob")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(createBody("shared-http-key")))
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    org.junit.jupiter.api.Assertions.assertNotEquals(
+        alice, mapper.readTree(bobJson).path("id").asText());
+    String foreign =
+        mvc.perform(get("/api/xrsps/sessions/" + alice).principal(() -> "bob"))
+            .andExpect(status().isNotFound())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    String missing =
+        mvc.perform(get("/api/xrsps/sessions/" + UUID.randomUUID()).principal(() -> "bob"))
+            .andExpect(status().isNotFound())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    var foreignError = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(foreign);
+    var missingError = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(missing);
+    foreignError.remove("correlationId");
+    missingError.remove("correlationId");
+    org.junit.jupiter.api.Assertions.assertEquals(missingError, foreignError);
   }
 }

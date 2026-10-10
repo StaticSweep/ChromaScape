@@ -63,6 +63,12 @@ class XrspsDurableSessionIntegrationTest {
       assertNotNull(input);
       jdbc.execute(new String(input.readAllBytes(), StandardCharsets.UTF_8));
     }
+    try (var input =
+        XrspsDurableSessionIntegrationTest.class.getResourceAsStream(
+            "/db/migration/V67__sc1991_session_ownership.sql")) {
+      assertNotNull(input);
+      jdbc.execute(new String(input.readAllBytes(), StandardCharsets.UTF_8));
+    }
     properties = new ReplayProperties();
     properties.setEnabled(true);
     properties.getXrsps().setExecutable("/usr/bin/node");
@@ -115,7 +121,17 @@ class XrspsDurableSessionIntegrationTest {
         manifests,
         new XrspsSessionWorker(properties, MAPPER),
         MAPPER,
-        CANONICAL);
+        CANONICAL,
+        new com.chromascape.web.replay.security.ReplayOwnershipService(curations()));
+  }
+
+  private com.chromascape.web.replay.curation.repository.RecordingCurationRepository curations() {
+    var curations =
+        mock(com.chromascape.web.replay.curation.repository.RecordingCurationRepository.class);
+    var curation = new com.chromascape.web.replay.curation.entity.RecordingCuration();
+    curation.setCreatedBy("diagnostic");
+    when(curations.findById(any())).thenReturn(Optional.of(curation));
+    return curations;
   }
 
   private JsonNode manifest() throws Exception {
@@ -218,12 +234,37 @@ class XrspsDurableSessionIntegrationTest {
   }
 
   @Test
+  void finishRecordingAdvancesNativeFishingToEndAndRemainsIdempotent() {
+    UUID id = running("native-finish-001");
+    service.run(id, List.of(action(0, 0, "spot:sc1991:1")));
+    assertEquals(0, service.get(id).getTick());
+    var result = service.finishRecording(id);
+    assertEquals(200, result.tick());
+    assertTrue(result.recordingExecuted());
+    assertFalse(result.taskVerified());
+    assertEquals(XrspsSessionStatus.SUCCEEDED, service.get(id).getStatus());
+    assertTrue(
+        service
+                .observe(id)
+                .domainState()
+                .path("player")
+                .path("skills")
+                .path("fishing")
+                .path("xp")
+                .asLong()
+            > 4470);
+    assertEquals(result, newService().finishRecording(id));
+    assertEquals(1, repository.get(id).receipts.size());
+  }
+
+  @Test
   void nativeMismatchLatchesDurablyAndLaterActionsNeverExecute() {
     UUID id = running("native-mismatch-001");
     var bad = action(0, 0, "spot:missing");
     var later = action(1, 1, "spot:sc1991:1");
     var first = service.run(id, List.of(bad, later));
     assertEquals(XrspsRunHaltReason.MISMATCH, first.haltReason());
+    assertEquals(XrspsSessionStatus.FAILED, service.get(id).getStatus());
     assertEquals(XrspsReceiptOutcome.REJECTED_SEMANTIC_ACTION, first.firstMismatch().outcome());
     var second = newService().run(id, List.of(bad, later));
     assertEquals(first.firstMismatch(), second.firstMismatch());
@@ -272,7 +313,9 @@ class XrspsDurableSessionIntegrationTest {
   void httpRetriesReturnExistingSessionAndExposeRealDomainState() throws Exception {
     var facade = new XrspsSessionExecutionService(service);
     var mvc =
-        MockMvcBuilders.standaloneSetup(new XrspsSessionsController(facade))
+        MockMvcBuilders.standaloneSetup(
+                new XrspsSessionsController(
+                    facade, new com.chromascape.web.replay.security.ReplayPrincipalService()))
             .setControllerAdvice(new ReplayExceptionHandler())
             .build();
     String body =
@@ -286,15 +329,22 @@ class XrspsDurableSessionIntegrationTest {
                 scenarioId.toString()));
     var response =
         mvc.perform(
-                post("/api/xrsps/sessions").contentType(MediaType.APPLICATION_JSON).content(body))
+                post("/api/xrsps/sessions")
+                    .principal(() -> "diagnostic")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body))
             .andExpect(status().isCreated())
             .andReturn()
             .getResponse();
     String id = MAPPER.readTree(response.getContentAsString()).path("id").asText();
-    mvc.perform(post("/api/xrsps/sessions").contentType(MediaType.APPLICATION_JSON).content(body))
+    mvc.perform(
+            post("/api/xrsps/sessions")
+                .principal(() -> "diagnostic")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(id));
-    mvc.perform(get("/api/xrsps/sessions/" + id + "/observation"))
+    mvc.perform(get("/api/xrsps/sessions/" + id + "/observation").principal(() -> "diagnostic"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.durable").value(true))
         .andExpect(jsonPath("$.domainState.player.skills.fishing.xp").value(4470));

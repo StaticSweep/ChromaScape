@@ -36,22 +36,30 @@ public class XrspsDurableSessionService {
   private final XrspsSessionWorker workers;
   private final ObjectMapper mapper;
   private final CanonicalProjectionService canonical;
+  private final com.chromascape.web.replay.security.ReplayOwnershipService ownership;
 
   public XrspsDurableSessionService(
       XrspsSessionRepository repository,
       ScenarioManifestRepository manifests,
       XrspsSessionWorker workers,
       ObjectMapper mapper,
-      CanonicalProjectionService canonical) {
+      CanonicalProjectionService canonical,
+      com.chromascape.web.replay.security.ReplayOwnershipService ownership) {
     this.repository = repository;
     this.manifests = manifests;
     this.workers = workers;
     this.mapper = mapper;
     this.canonical = canonical;
+    this.ownership = ownership;
   }
 
   public XrspsSessionRepository.Creation create(
       XrspsSessionMode mode, String key, String scenario) {
+    return create(mode, key, scenario, "diagnostic");
+  }
+
+  public XrspsSessionRepository.Creation create(
+      XrspsSessionMode mode, String key, String scenario, String ownerId) {
     if (mode != XrspsSessionMode.RECORDED_ACTIONS)
       throw ReplayException.invalid(
           ReplayErrorCode.ACTION_UNSUPPORTED, "AI session execution is not available yet");
@@ -59,6 +67,7 @@ public class XrspsDurableSessionService {
         mode,
         key,
         scenario,
+        ownerId,
         session -> {
           UUID manifestId;
           try {
@@ -75,6 +84,7 @@ public class XrspsDurableSessionService {
                       () ->
                           ReplayException.notFound(
                               ReplayErrorCode.CURATION_REQUIRED, "Scenario manifest not found"));
+          ownership.requireOwnedManifest(source, ownerId);
           if (!"PUBLISHED".equals(source.getPublishState())
               || source.getGapCount() != 0
               || !"COMPLETE".equals(source.getCompleteness())
@@ -97,6 +107,10 @@ public class XrspsDurableSessionService {
 
   public XrspsSession get(UUID id) {
     return XrspsSession.restore(repository.get(id).lifecycle);
+  }
+
+  public XrspsSession getOwned(UUID id, String ownerId) {
+    return XrspsSession.restore(repository.getOwned(id, ownerId).lifecycle);
   }
 
   public XrspsSession transition(UUID id, Consumer<XrspsSession> change) {
@@ -126,6 +140,7 @@ public class XrspsDurableSessionService {
   }
 
   public XrspsRecordedRunReport run(UUID id, List<XrspsRecordedAction> journal) {
+    journal = snapshotJournal(journal);
     installJournal(id, journal);
     List<XrspsSessionReceipt> receipts = new ArrayList<>();
     for (XrspsRecordedAction action : journal) {
@@ -137,6 +152,106 @@ public class XrspsDurableSessionService {
     }
     return report(repository.get(id), receipts, XrspsRunHaltReason.COMPLETED);
   }
+
+  private static List<XrspsRecordedAction> snapshotJournal(List<XrspsRecordedAction> journal) {
+    if (journal == null || journal.isEmpty() || journal.size() > MAX_JOURNAL_ACTIONS)
+      throw ReplayException.badRequest(
+          ReplayErrorCode.VALIDATION_ERROR, "Journal must contain 1-1000 actions");
+    return journal.stream()
+        .map(
+            a -> {
+              if (a == null)
+                throw ReplayException.badRequest(
+                    ReplayErrorCode.VALIDATION_ERROR, "Journal actions cannot be null");
+              return new XrspsRecordedAction(
+                  a.relativeTick(),
+                  a.commandId(),
+                  a.actionType(),
+                  a.payloadHash(),
+                  a.expectedRevision(),
+                  a.payload() == null ? null : a.payload().deepCopy());
+            })
+        .toList();
+  }
+
+  /** Finish execution of the complete pinned recording, distinct from accepting its commands. */
+  public RecordingCompletion finishRecording(UUID id) {
+    repository.update(
+        id,
+        doc -> {
+          requireCompleteRecordingJournal(doc);
+          return null;
+        });
+    while (true) {
+      var result =
+          repository.update(
+              id,
+              doc -> {
+                requireCompleteRecordingJournal(doc);
+                var s = XrspsSession.restore(doc.lifecycle);
+                if (s.getStatus() != XrspsSessionStatus.RUNNING) return completion(doc);
+                long end =
+                    doc.manifest.path("recording").path("endTick").asLong()
+                        - doc.manifest.path("recording").path("startTick").asLong();
+                // Commit bounded segments so pause/cancel can win between segments. No viewer
+                // packets
+                // are sent before commit; this endpoint does not claim paced presentation.
+                advance(doc, Math.min(end, s.getTick() + 100), false);
+                s = XrspsSession.restore(doc.lifecycle);
+                if (s.getTick() == end) {
+                  s.complete("Recording executed to its end tick; task outcome is not certified");
+                  doc.lifecycle = s.snapshot();
+                }
+                return completion(doc);
+              });
+      if (result.status() != XrspsSessionStatus.RUNNING) return result;
+    }
+  }
+
+  private void requireCompleteRecordingJournal(XrspsSessionDocument doc) {
+    var actions = doc.manifest.path("actions");
+    if (!actions.isArray()
+        || actions.isEmpty()
+        || actions.size() != doc.journal.size()
+        || doc.mismatch != null
+        || doc.receipts.size() != doc.journal.size())
+      throw ReplayException.conflict(
+          ReplayErrorCode.ACTION_SEQUENCE_INVALID,
+          "Every pinned recording action needs an accepted receipt before finishing");
+    long start = doc.manifest.path("recording").path("startTick").asLong();
+    for (int i = 0; i < actions.size(); i++) {
+      var action = doc.journal.get(i);
+      var source = actions.get(i);
+      var receipt = doc.receipts.get(action.commandId());
+      if (!canonical.actionDigest(source).equals(action.payloadHash())
+          || receipt == null
+          || receipt.outcome() != XrspsReceiptOutcome.ACCEPTED
+          || (source.has("sourceActionTick")
+              && source.path("sourceActionTick").asLong() - start != action.relativeTick()))
+        throw ReplayException.conflict(
+            ReplayErrorCode.ACTION_SEQUENCE_INVALID,
+            "Recorded journal does not match the complete pinned action order and timing");
+    }
+  }
+
+  private RecordingCompletion completion(XrspsSessionDocument doc) {
+    var s = doc.lifecycle;
+    return new RecordingCompletion(
+        s.id(),
+        s.status(),
+        s.tick(),
+        canonical.stateHash(doc.observation),
+        s.status() == XrspsSessionStatus.SUCCEEDED,
+        false);
+  }
+
+  public record RecordingCompletion(
+      UUID sessionId,
+      XrspsSessionStatus status,
+      long tick,
+      String domainStateHash,
+      boolean recordingExecuted,
+      boolean taskVerified) {}
 
   public XrspsRecordedRunReport step(UUID id, int ticks) {
     if (ticks < 1 || ticks > XrspsSession.MAX_STEP_TICKS)
@@ -216,6 +331,9 @@ public class XrspsDurableSessionService {
             throw ReplayException.conflict(
                 ReplayErrorCode.RUN_IDEMPOTENCY_CONFLICT,
                 "A committed journal cannot be shortened");
+          if (doc.lifecycle.status().isTerminal() && journal.size() != doc.journal.size())
+            throw ReplayException.conflict(
+                ReplayErrorCode.RUN_STATE_INVALID, "A terminal journal cannot be extended");
           for (int i = 0; i < doc.journal.size(); i++)
             if (!doc.journal.get(i).equals(journal.get(i)))
               throw ReplayException.conflict(
@@ -337,6 +455,9 @@ public class XrspsDurableSessionService {
             s.observationRevision(),
             outcome,
             detail);
+    var failed = XrspsSession.restore(doc.lifecycle);
+    failed.fail("Recorded action mismatch: " + detail);
+    doc.lifecycle = failed.snapshot();
     return outcome == null
         ? null
         : new XrspsSessionReceipt(

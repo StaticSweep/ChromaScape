@@ -32,16 +32,29 @@ public class XrspsSessionRepository {
       String key,
       String scenario,
       Function<XrspsSession, XrspsSessionDocument> initialize) {
+    return create(mode, key, scenario, "diagnostic", initialize);
+  }
+
+  public Creation create(
+      XrspsSessionMode mode,
+      String key,
+      String scenario,
+      String ownerId,
+      Function<XrspsSession, XrspsSessionDocument> initialize) {
+    if (ownerId == null || ownerId.isBlank())
+      throw ReplayException.badRequest(
+          ReplayErrorCode.VALIDATION_ERROR, "Session owner is required");
     // Reuse the exact key/mode/scenario validation without allocating a second world.
-    XrspsSession candidate = new XrspsSessionStore().create(mode, key, scenario);
+    XrspsSession candidate = new XrspsSessionStore().create(mode, key, scenario, ownerId);
     return transactions.execute(
         tx -> {
           jdbc.execute("SET LOCAL lock_timeout = '5s'");
           int inserted =
               jdbc.update(
-                  "INSERT INTO xrsps_sessions(id,idempotency_key,document) VALUES (?, ?, '{}'::jsonb) ON CONFLICT (idempotency_key) DO NOTHING",
+                  "INSERT INTO xrsps_sessions(id,idempotency_key,owner_id,document) VALUES (?, ?, ?, '{}'::jsonb) ON CONFLICT (owner_id,idempotency_key) DO NOTHING",
                   candidate.getId(),
-                  key);
+                  key,
+                  ownerId);
           if (inserted == 1) {
             XrspsSessionDocument doc = initialize.apply(candidate);
             save(candidate.getId(), doc);
@@ -49,8 +62,9 @@ public class XrspsSessionRepository {
           }
           XrspsSessionDocument existing =
               read(
-                  "SELECT document::text FROM xrsps_sessions WHERE idempotency_key=? FOR UPDATE",
-                  key);
+                  "SELECT document::text FROM xrsps_sessions WHERE idempotency_key=? AND owner_id=? FOR UPDATE",
+                  key,
+                  ownerId);
           if (existing.lifecycle.mode() != mode
               || !existing.lifecycle.scenarioRef().equals(scenario)) {
             throw ReplayException.conflict(
@@ -77,8 +91,12 @@ public class XrspsSessionRepository {
     return read("SELECT document::text FROM xrsps_sessions WHERE id=?", id);
   }
 
-  private XrspsSessionDocument read(String sql, Object key) {
-    var rows = jdbc.query(sql, (rs, n) -> rs.getString(1), key);
+  public XrspsSessionDocument getOwned(UUID id, String ownerId) {
+    return read("SELECT document::text FROM xrsps_sessions WHERE id=? AND owner_id=?", id, ownerId);
+  }
+
+  private XrspsSessionDocument read(String sql, Object... keys) {
+    var rows = jdbc.query(sql, (rs, n) -> rs.getString(1), keys);
     if (rows.isEmpty())
       throw ReplayException.notFound(ReplayErrorCode.RUN_NOT_FOUND, "xRSPS session not found");
     try {

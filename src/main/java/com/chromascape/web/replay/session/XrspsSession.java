@@ -24,6 +24,7 @@ public class XrspsSession {
   private final XrspsSessionMode mode;
   private final String idempotencyKey;
   private final String scenarioRef;
+  private final String ownerId;
   private XrspsSessionStatus status;
   private long tick;
   private long observationRevision;
@@ -33,6 +34,12 @@ public class XrspsSession {
   private Instant updatedAt;
 
   public XrspsSession(UUID id, XrspsSessionMode mode, String idempotencyKey, String scenarioRef) {
+    this(id, mode, idempotencyKey, scenarioRef, null);
+  }
+
+  public XrspsSession(
+      UUID id, XrspsSessionMode mode, String idempotencyKey, String scenarioRef, String ownerId) {
+    this.ownerId = ownerId;
     this.id = id;
     this.mode = mode;
     this.idempotencyKey = idempotencyKey;
@@ -47,6 +54,10 @@ public class XrspsSession {
 
   public UUID getId() {
     return id;
+  }
+
+  public String getOwnerId() {
+    return ownerId;
   }
 
   public XrspsSessionMode getMode() {
@@ -216,6 +227,7 @@ public class XrspsSession {
       XrspsSessionMode mode,
       String idempotencyKey,
       String scenarioRef,
+      String ownerId,
       XrspsSessionStatus status,
       long tick,
       long observationRevision,
@@ -230,6 +242,7 @@ public class XrspsSession {
         mode,
         idempotencyKey,
         scenarioRef,
+        ownerId,
         status,
         tick,
         observationRevision,
@@ -241,7 +254,8 @@ public class XrspsSession {
 
   public static XrspsSession restore(Snapshot saved) {
     XrspsSession session =
-        new XrspsSession(saved.id(), saved.mode(), saved.idempotencyKey(), saved.scenarioRef());
+        new XrspsSession(
+            saved.id(), saved.mode(), saved.idempotencyKey(), saved.scenarioRef(), saved.ownerId());
     session.status = saved.status();
     session.tick = saved.tick();
     session.observationRevision = saved.observationRevision();

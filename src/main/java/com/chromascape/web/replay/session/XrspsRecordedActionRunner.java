@@ -7,22 +7,12 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 
-/**
- * Submits a compiled recorded-action journal against one session in stable source order at relative
- * ticks. Ticks only move forward; a rejection or a late action latches a first-mismatch and halts
- * instead of skipping ahead. A latched mismatch stays latched: later {@link #runRemaining()} calls
- * return the same mismatch with no new submissions and never execute later actions. Leaving RUNNING
- * (pause, cancel, worker loss) halts submission so lifecycle controls always win over the journal;
- * the caller resumes by calling {@link #runRemaining()} again. Duplicate retries are benign and
- * never a mismatch. Single-step while paused must go through {@link #stepPaused(int)} so due
- * actions execute during the step; stepping the session directly past a pending action leaves it
- * late on the next running pass by design.
- */
+/** In-memory ordered journal scheduler. Acceptance is not proof of kernel/gameplay execution. */
 public class XrspsRecordedActionRunner {
-
   private final XrspsSessionStore store;
   private final UUID sessionId;
   private final List<XrspsRecordedAction> journal;
+  private final String leaseId;
   private int cursor;
   private XrspsActionMismatch latchedMismatch;
 
@@ -73,214 +63,168 @@ public class XrspsRecordedActionRunner {
     this.store = store;
     this.sessionId = sessionId;
     this.journal = List.copyOf(journal);
-    this.cursor = 0;
+    this.leaseId = store.get(sessionId).getLeaseId();
+  }
+
+  /** Keeps cursor and first mismatch across calls; a completed retry returns duplicate receipts. */
+  public synchronized XrspsRecordedRunReport runRemaining() {
+    XrspsSession session = store.get(sessionId);
+    if (latchedMismatch != null) return report(session, List.of(), XrspsRunHaltReason.MISMATCH);
+    if (cursor == journal.size()) cursor = 0;
+    List<XrspsSessionReceipt> receipts = new ArrayList<>();
+    while (cursor < journal.size()) {
+      // Fence, tick, revision and journal checks share the lifecycle monitor. Release between
+      // actions.
+      synchronized (session) {
+        if (session.getStatus() != XrspsSessionStatus.RUNNING)
+          return report(session, receipts, XrspsRunHaltReason.SESSION_HALTED);
+        if (!leaseId.equals(session.getLeaseId())) {
+          latch(
+              session,
+              journal.get(cursor),
+              XrspsReceiptOutcome.REJECTED_STALE_LEASE,
+              "Runner lease is stale");
+          return report(session, receipts, XrspsRunHaltReason.MISMATCH);
+        }
+        XrspsRecordedAction action = journal.get(cursor);
+        if (isUnappliedLate(session, action)) {
+          latch(
+              session,
+              action,
+              null,
+              "Action tick "
+                  + action.relativeTick()
+                  + " is behind session tick "
+                  + session.getTick());
+          return report(session, receipts, XrspsRunHaltReason.MISMATCH);
+        }
+        if (action.relativeTick() > session.getTick())
+          session.advanceTicks(action.relativeTick() - session.getTick());
+        if (!submit(session, action, false, receipts))
+          return report(session, receipts, XrspsRunHaltReason.MISMATCH);
+      }
+    }
+    return report(session, receipts, XrspsRunHaltReason.COMPLETED);
   }
 
   /**
-   * Submits remaining actions until the journal ends, a mismatch latches, or the session halts. A
-   * latched mismatch is returned again with no new submissions.
+   * Executes due actions at their ticks; never-applied overdue actions mismatch before mutation.
    */
-  public XrspsRecordedRunReport runRemaining() {
+  public synchronized XrspsRecordedRunReport stepPaused(int ticks) {
     XrspsSession session = store.get(sessionId);
-    if (latchedMismatch != null) {
-      return report(session, List.of(), latchedMismatch, XrspsRunHaltReason.MISMATCH);
-    }
+    if (ticks < 1 || ticks > XrspsSession.MAX_STEP_TICKS)
+      throw ReplayException.badRequest(
+          ReplayErrorCode.VALIDATION_ERROR, "Step tick count out of range");
+    if (latchedMismatch != null) return report(session, List.of(), XrspsRunHaltReason.MISMATCH);
     List<XrspsSessionReceipt> receipts = new ArrayList<>();
-    while (cursor < journal.size()) {
-      if (session.getStatus() != XrspsSessionStatus.RUNNING) {
-        return report(session, receipts, null, XrspsRunHaltReason.SESSION_HALTED);
-      }
-      XrspsRecordedAction action = journal.get(cursor);
-      if (action.relativeTick() < session.getTick()) {
-        if (store.isJournaledIdentical(
-            sessionId,
-            action.commandId(),
-            action.actionType(),
-            XrspsCommandSource.RECORDED_ACTION,
-            action.payloadHash())) {
-          XrspsSessionReceipt replayed =
-              store.submit(
-                  new XrspsSessionCommand(
-                      action.commandId(),
-                      sessionId,
-                      action.expectedRevision(),
-                      action.actionType(),
-                      action.payloadHash(),
-                      XrspsCommandSource.RECORDED_ACTION,
-                      session.getLeaseId()));
-          if (replayed.outcome() == XrspsReceiptOutcome.DUPLICATE) {
-            receipts.add(replayed);
-            cursor += 1;
-            continue;
-          }
+    for (int advanced = 0; advanced <= ticks; advanced++) {
+      synchronized (session) {
+        if (session.getStatus() != XrspsSessionStatus.PAUSED) {
+          if (advanced == 0)
+            throw ReplayException.conflict(
+                ReplayErrorCode.VALIDATION_ERROR, "Session must be PAUSED to step");
+          return report(session, receipts, XrspsRunHaltReason.SESSION_HALTED);
         }
-        XrspsActionMismatch mismatch =
-            new XrspsActionMismatch(
-                sessionId,
-                action.commandId(),
-                action.relativeTick(),
-                action.expectedRevision(),
-                session.getTick(),
-                session.getObservationRevision(),
+        if (!leaseId.equals(session.getLeaseId())) {
+          // Even a completed stale runner cannot advance ticks.
+          latch(
+              session,
+              journal.get(Math.min(cursor, journal.size() - 1)),
+              XrspsReceiptOutcome.REJECTED_STALE_LEASE,
+              "Runner lease is stale");
+          return report(session, receipts, XrspsRunHaltReason.MISMATCH);
+        }
+        while (cursor < journal.size() && journal.get(cursor).relativeTick() <= session.getTick()) {
+          XrspsRecordedAction action = journal.get(cursor);
+          if (isUnappliedLate(session, action)) {
+            latch(
+                session,
+                action,
                 null,
                 "Action tick "
                     + action.relativeTick()
                     + " is behind session tick "
                     + session.getTick());
-        latchedMismatch = mismatch;
-        return report(session, receipts, mismatch, XrspsRunHaltReason.MISMATCH);
+            return report(session, receipts, XrspsRunHaltReason.MISMATCH);
+          }
+          if (!submit(session, action, true, receipts))
+            return report(session, receipts, XrspsRunHaltReason.MISMATCH);
+        }
+        if (cursor == journal.size())
+          return report(session, receipts, XrspsRunHaltReason.COMPLETED);
+        if (advanced < ticks) session.stepTicks(1);
       }
-      if (action.relativeTick() > session.getTick()) {
-        session.advanceTicks(action.relativeTick() - session.getTick());
-      }
-      XrspsSessionReceipt receipt =
-          store.submit(
-              new XrspsSessionCommand(
-                  action.commandId(),
-                  sessionId,
-                  action.expectedRevision(),
-                  action.actionType(),
-                  action.payloadHash(),
-                  XrspsCommandSource.RECORDED_ACTION,
-                  session.getLeaseId()));
-      if (receipt.outcome() == XrspsReceiptOutcome.REJECTED_SESSION_NOT_RUNNING) {
-        return report(session, receipts, null, XrspsRunHaltReason.SESSION_HALTED);
-      }
-      receipts.add(receipt);
-      if (receipt.outcome() == XrspsReceiptOutcome.ACCEPTED
-          || receipt.outcome() == XrspsReceiptOutcome.DUPLICATE) {
-        cursor += 1;
-        continue;
-      }
-      XrspsActionMismatch mismatch =
-          new XrspsActionMismatch(
-              sessionId,
-              action.commandId(),
-              action.relativeTick(),
-              action.expectedRevision(),
-              receipt.tick(),
-              receipt.revision(),
-              receipt.outcome(),
-              receipt.reason());
-      latchedMismatch = mismatch;
-      return report(session, receipts, mismatch, XrspsRunHaltReason.MISMATCH);
     }
-    return report(session, receipts, null, XrspsRunHaltReason.COMPLETED);
+    return report(session, receipts, XrspsRunHaltReason.SESSION_HALTED);
   }
 
-  /**
-   * Advances a paused session by up to {@code ticks} ticks, executing every due journaled action
-   * during the step via the paused-submit path. Due means {@code relativeTick <= session tick}:
-   * overdue actions at step start execute first, then each single tick advance executes newly due
-   * actions in journal order. A rejection latches a first-mismatch like {@link #runRemaining()}.
-   * Returns {@code SESSION_HALTED} when steps are exhausted with journal remaining, {@code
-   * COMPLETED} when the journal ends, or {@code MISMATCH} on rejection.
-   */
-  public XrspsRecordedRunReport stepPaused(int ticks) {
-    XrspsSession session = store.get(sessionId);
-    if (latchedMismatch != null) {
-      return report(session, List.of(), latchedMismatch, XrspsRunHaltReason.MISMATCH);
-    }
-    if (session.getStatus() != XrspsSessionStatus.PAUSED) {
-      throw new ReplayException(
-          ReplayErrorCode.VALIDATION_ERROR,
-          HttpStatus.CONFLICT,
-          false,
-          "Session cannot step while " + session.getStatus(),
-          "Move the session to PAUSED first");
-    }
-    if (ticks < 1 || ticks > XrspsSession.MAX_STEP_TICKS) {
-      throw new ReplayException(
-          ReplayErrorCode.VALIDATION_ERROR,
-          HttpStatus.BAD_REQUEST,
-          false,
-          "Step tick count out of range",
-          "Request between 1 and " + XrspsSession.MAX_STEP_TICKS + " ticks while paused");
-    }
-    List<XrspsSessionReceipt> receipts = new ArrayList<>();
-    XrspsActionMismatch mismatch = submitDueWhilePaused(session, receipts);
-    if (mismatch != null) {
-      latchedMismatch = mismatch;
-      return report(session, receipts, mismatch, XrspsRunHaltReason.MISMATCH);
-    }
-    for (int i = 0; i < ticks; i++) {
-      if (cursor >= journal.size()) {
-        return report(session, receipts, null, XrspsRunHaltReason.COMPLETED);
-      }
-      session.stepTicks(1);
-      XrspsActionMismatch due = submitDueWhilePaused(session, receipts);
-      if (due != null) {
-        latchedMismatch = due;
-        return report(session, receipts, due, XrspsRunHaltReason.MISMATCH);
-      }
-    }
-    if (cursor >= journal.size()) {
-      return report(session, receipts, null, XrspsRunHaltReason.COMPLETED);
-    }
-    return report(session, receipts, null, XrspsRunHaltReason.SESSION_HALTED);
+  private boolean isUnappliedLate(XrspsSession session, XrspsRecordedAction action) {
+    return action.relativeTick() < session.getTick()
+        && !store.isJournaledIdentical(
+            sessionId,
+            action.commandId(),
+            action.actionType(),
+            XrspsCommandSource.RECORDED_ACTION,
+            action.payloadHash());
   }
 
-  private XrspsActionMismatch submitDueWhilePaused(
-      XrspsSession session, List<XrspsSessionReceipt> receipts) {
-    while (cursor < journal.size() && journal.get(cursor).relativeTick() <= session.getTick()) {
-      XrspsRecordedAction action = journal.get(cursor);
-      XrspsSessionReceipt receipt =
-          store.submitWhilePaused(
-              new XrspsSessionCommand(
-                  action.commandId(),
-                  sessionId,
-                  action.expectedRevision(),
-                  action.actionType(),
-                  action.payloadHash(),
-                  XrspsCommandSource.RECORDED_ACTION,
-                  session.getLeaseId()));
-      if (receipt.outcome() == XrspsReceiptOutcome.REJECTED_SESSION_NOT_RUNNING) {
-        return new XrspsActionMismatch(
+  private boolean submit(
+      XrspsSession session,
+      XrspsRecordedAction action,
+      boolean paused,
+      List<XrspsSessionReceipt> receipts) {
+    XrspsSessionCommand command =
+        new XrspsSessionCommand(
+            action.commandId(),
+            sessionId,
+            action.expectedRevision(),
+            action.actionType(),
+            action.payloadHash(),
+            XrspsCommandSource.RECORDED_ACTION,
+            leaseId);
+    XrspsSessionReceipt receipt = paused ? store.submitWhilePaused(command) : store.submit(command);
+    receipts.add(receipt);
+    if (receipt.outcome() == XrspsReceiptOutcome.ACCEPTED
+        || receipt.outcome() == XrspsReceiptOutcome.DUPLICATE) {
+      cursor++;
+      return true;
+    }
+    latch(session, action, receipt.outcome(), receipt.reason());
+    return false;
+  }
+
+  private void latch(
+      XrspsSession session,
+      XrspsRecordedAction action,
+      XrspsReceiptOutcome outcome,
+      String detail) {
+    latchedMismatch =
+        new XrspsActionMismatch(
             sessionId,
             action.commandId(),
             action.relativeTick(),
             action.expectedRevision(),
-            receipt.tick(),
-            receipt.revision(),
-            receipt.outcome(),
-            receipt.reason());
-      }
-      receipts.add(receipt);
-      if (receipt.outcome() == XrspsReceiptOutcome.ACCEPTED
-          || receipt.outcome() == XrspsReceiptOutcome.DUPLICATE) {
-        cursor += 1;
-        continue;
-      }
-      return new XrspsActionMismatch(
-          sessionId,
-          action.commandId(),
-          action.relativeTick(),
-          action.expectedRevision(),
-          receipt.tick(),
-          receipt.revision(),
-          receipt.outcome(),
-          receipt.reason());
-    }
-    return null;
+            session.getTick(),
+            session.getObservationRevision(),
+            outcome,
+            detail);
   }
 
-  /** Number of journaled actions submitted so far (across passes). */
-  public int cursor() {
+  public synchronized int cursor() {
     return cursor;
   }
 
   private XrspsRecordedRunReport report(
-      XrspsSession session,
-      List<XrspsSessionReceipt> receipts,
-      XrspsActionMismatch mismatch,
-      XrspsRunHaltReason reason) {
-    return new XrspsRecordedRunReport(
-        sessionId,
-        receipts.size(),
-        List.copyOf(receipts),
-        session.getTick(),
-        session.getObservationRevision(),
-        mismatch,
-        reason);
+      XrspsSession session, List<XrspsSessionReceipt> receipts, XrspsRunHaltReason reason) {
+    synchronized (session) {
+      return new XrspsRecordedRunReport(
+          sessionId,
+          receipts.size(),
+          List.copyOf(receipts),
+          session.getTick(),
+          session.getObservationRevision(),
+          latchedMismatch,
+          reason);
+    }
   }
 }
