@@ -100,6 +100,16 @@ override. No certified packaging/parity claim follows from these direct tests.
 
 ## Remaining work
 
+Push read-back confirmed ChromaScape `c294644be344a06f5770314a001f3e42baf0cdb2`
+and xRSPS `190d0a49dd0b81fc4b230be1117e68236b68eae7` on the existing PR branches.
+PR62 reports mergeable after reconciliation. GitHub runs
+[38008874639](https://github.com/ikiddoi/ChromaScape/actions/runs/38008874639) and
+[38008876375](https://github.com/ikiddoi/ChromaScape/actions/runs/38008876375) failed
+before any job step executed. The check annotation states exactly:
+"The job was not started because an Actions budget is preventing further use."
+CI requires the repository owner's Actions budget to permit execution. No CI test
+pass is claimed, and no spending/billing configuration was changed.
+
 | Whole-story requirement | Remaining deliverable |
 | --- | --- |
 | One world and real client | Actual OsrsClient bootstrap and shared production synchronization at intermediate ticks; separate viewer gateway outside the offline worker |
