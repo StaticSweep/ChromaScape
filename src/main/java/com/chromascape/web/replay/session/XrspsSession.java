@@ -52,12 +52,12 @@ public class XrspsSession {
     this.updatedAt = Instant.now();
   }
 
-  public String getOwnerId() {
-    return ownerId;
-  }
-
   public UUID getId() {
     return id;
+  }
+
+  public String getOwnerId() {
+    return ownerId;
   }
 
   public XrspsSessionMode getMode() {
@@ -216,13 +216,54 @@ public class XrspsSession {
           "Lease fencing violated",
           "Recover only with the exact lease that was active when the worker was lost");
     }
-    if (newLeaseId == null || newLeaseId.isBlank() || newLeaseId.equals(leaseId)) {
-      throw ReplayException.conflict(
-          ReplayErrorCode.VALIDATION_ERROR, "Recovery requires a distinct non-empty lease");
-    }
     leaseId = newLeaseId;
     epoch += 1;
     transitionTo(XrspsSessionStatus.PAUSED, null);
+  }
+
+  /** Persisted lifecycle coordinates, separate from the authoritative worker snapshot. */
+  public record Snapshot(
+      UUID id,
+      XrspsSessionMode mode,
+      String idempotencyKey,
+      String scenarioRef,
+      String ownerId,
+      XrspsSessionStatus status,
+      long tick,
+      long observationRevision,
+      long epoch,
+      String leaseId,
+      String terminalReason,
+      Instant updatedAt) {}
+
+  public synchronized Snapshot snapshot() {
+    return new Snapshot(
+        id,
+        mode,
+        idempotencyKey,
+        scenarioRef,
+        ownerId,
+        status,
+        tick,
+        observationRevision,
+        epoch,
+        leaseId,
+        terminalReason,
+        updatedAt);
+  }
+
+  public static XrspsSession restore(Snapshot saved) {
+    XrspsSession session =
+        new XrspsSession(
+            saved.id(), saved.mode(), saved.idempotencyKey(), saved.scenarioRef(), saved.ownerId());
+    session.status = saved.status();
+    session.tick = saved.tick();
+    session.observationRevision = saved.observationRevision();
+    session.epoch = saved.epoch();
+    session.leaseId = saved.leaseId();
+    session.terminalReason = saved.terminalReason();
+    session.updatedAt = saved.updatedAt();
+    return session;
   }
 
   private void transitionTo(XrspsSessionStatus next, String reason) {

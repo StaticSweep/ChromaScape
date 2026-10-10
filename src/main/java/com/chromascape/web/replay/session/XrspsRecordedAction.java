@@ -10,4 +10,15 @@ public record XrspsRecordedAction(
     String commandId,
     String actionType,
     String payloadHash,
-    long expectedRevision) {}
+    long expectedRevision,
+    com.fasterxml.jackson.databind.JsonNode payload) {
+  /** Diagnostic compatibility; production dispatch requires the actual semantic payload. */
+  public XrspsRecordedAction(
+      long relativeTick,
+      String commandId,
+      String actionType,
+      String payloadHash,
+      long expectedRevision) {
+    this(relativeTick, commandId, actionType, payloadHash, expectedRevision, null);
+  }
+}

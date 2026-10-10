@@ -15,6 +15,7 @@ public record XrspsSessionReceipt(
     String reason) {
 
   /** Identical idempotent retries return the stored receipt with no duplicated effects. */
+  @com.fasterxml.jackson.annotation.JsonIgnore
   public boolean isDuplicate() {
     return outcome == XrspsReceiptOutcome.DUPLICATE;
   }
