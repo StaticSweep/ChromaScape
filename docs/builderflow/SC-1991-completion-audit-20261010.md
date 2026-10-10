@@ -126,6 +126,33 @@ The Windows production launch factory requires Linux bubblewrap isolation. This
 remediation does not weaken that boundary or pretend the skipped tests ran.
 Latest recording audit found 211 finalized snapshots, ticks20–230, four typed actions,
 57.14% coverage and four gaps; eight catches/480XP are separate from replay eligibility.
+Final read-only recheck of `/api/replay/v2/recordings/recording_c4caff1d/preflight`
+still reports BLOCKED, simulationEligible=false and certificationEligible=false.
+The older `/api/replay/recordings/.../preflight` GET reports coarse recording-level
+integrity; its simulation flag must not be used as authoritative xRSPS v2 proof.
+
+### Focused Micro6 navigation patch
+
+The previously local Swan Song and walking fixes were independently extracted onto
+current Micro6 main `54e1d07d6b`, without unrelated capture/AccountBuilder changes.
+Canonical project: `C:\Dev\IdeaProjects\micro6`. The patch gates Piscatoris teleport
+on Swan Song FINISHED and replaces normal missing-context and escalation walking to
+teleport landing tiles with walking to the actual Fishing goal.
+
+Changed production files are `Rs2TeleportCostCalculator.java` under
+`runelite-client\src\main\java\net\runelite\client\plugins\microbot\util\walker`
+and `FishTrainingTask.java` under the corresponding AccountBuilder Fishing task tree.
+The two regression tests are `PiscatorisTeleportRequirementTest.java` and
+`FishingNavigationFallbackTest.java`. Full scope/evidence is in
+[the Micro6 handoff](https://github.com/ikiddoi/micro6/blob/codex/sc-1991-quest-gate-20261010/docs/SC-1991-fishing-navigation-remediation.md).
+
+Native Windows `:client:test` filtered to those two tests with
+`-PaiRoutineCaptureContractsDir=C:\Dev\IdeaProjects\contracts\java` succeeded:
+2 passed, zero failures/errors/skips, production/test compilation and
+`:client:verifyCaptureContract` passed. Scoped diff checks passed. Existing
+compiler warnings remain. No game login, live travel or runtime replacement occurred.
+Capture lifecycle changes left in the original dirty checkout are not part of this
+focused navigation patch. Revert its commit to roll back; no database migration applies.
 
 ## Risks
 
