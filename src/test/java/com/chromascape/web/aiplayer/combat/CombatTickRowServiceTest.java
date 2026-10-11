@@ -209,7 +209,8 @@ class CombatTickRowServiceTest {
   @DisplayName("combat vocabulary maps to canonical types; PRAYER_MAGIC stays unmapped")
   void vocabMapping() {
     assertThat(CombatTickRowService.mapVocabToCanonical("ATTACK")).isEqualTo("INTERACT_NPC");
-    assertThat(CombatTickRowService.mapVocabToCanonical("EAT")).isEqualTo("INVENTORY_ACTION");
+    assertThat(CombatTickRowService.mapVocabToCanonical("EAT"))
+        .isEqualTo("INTERACT_INVENTORY_ITEM");
     assertThat(CombatTickRowService.mapVocabToCanonical("MOVE_TILE")).isEqualTo("WALK_TO");
     assertThat(CombatTickRowService.mapVocabToCanonical("CAST_SPELL")).isEqualTo("CAST_SPELL");
     assertThat(CombatTickRowService.mapVocabToCanonical("WAIT")).isEqualTo("WAIT_UNTIL_TICK");
@@ -222,7 +223,9 @@ class CombatTickRowServiceTest {
     assertThat(prayer.unmapped()).isTrue();
     Map<String, Object> row = CombatTickRowService.build(snapshot(), prayer, null, videoSync());
     assertThat(map(row, "label").get("unmapped")).isEqualTo(true);
-    CombatTickRowService.requireLabelSafe(row);
+    assertThatThrownBy(() -> CombatTickRowService.requireLabelSafe(row))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("unambiguous");
   }
 
   @Test
@@ -250,6 +253,28 @@ class CombatTickRowServiceTest {
     assertThat(diagnostics.get("clickedEntity")).isEqualTo("npc:415:0");
     assertThat(diagnostics.get("mouseX")).isNull();
     CombatTickRowService.requireLabelSafe(row);
+  }
+
+  @Test
+  void labelFenceRejectsRawValuesUnknownActionsAndDefaultedEvidence() {
+    for (String actionType : List.of("mouseX", "MENU_CLICK", "BOGUS")) {
+      Map<String, Object> row =
+          CombatTickRowService.build(
+              snapshot(), LabelEvidence.fromAction(action()), null, videoSync());
+      map(row, "label").put("canonicalType", actionType);
+      assertThatThrownBy(() -> CombatTickRowService.requireLabelSafe(row))
+          .isInstanceOf(IllegalArgumentException.class);
+    }
+    Map<String, Object> row =
+        CombatTickRowService.build(
+            snapshot(), LabelEvidence.fromAction(action()), null, videoSync());
+    map(row, "label").put("vocab", "mouseX");
+    assertThatThrownBy(() -> CombatTickRowService.requireLabelSafe(row))
+        .isInstanceOf(IllegalArgumentException.class);
+    map(row, "label").remove("vocab");
+    map(row, "label").put("provenance", "DEFAULTED");
+    assertThatThrownBy(() -> CombatTickRowService.requireLabelSafe(row))
+        .isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test

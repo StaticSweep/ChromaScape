@@ -2,46 +2,233 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://chromascape.dev/replay/combat-tick-row-v1.schema.json",
   "title": "Combat Tick Row v1",
-  "description": "SC-1976: combat-oriented per-tick training row. Every field carries provenance (captured = produced by micro6 schema-4 collectors and stored by ChromaScape, derived = computed from stored data, deferred = producer absent on this payload) and labelRole (label = permitted training target, diagnostic = evidence only per SC-718/SC-751, context = model input features). Raw mouse/menu inputs are diagnostic-only and must never become training labels.",
+  "description": "SC-1976: combat-oriented per-tick training row. Every field carries provenance (captured = produced by micro6 schema-4 collectors and stored by ChromaScape, derived = computed from stored data, deferred = producer absent on this payload) and labelRole (label = permitted training target, diagnostic = evidence only per SC-718/SC-751, context = model input features). Raw mouse/menu inputs are diagnostic-only and must never become training labels. Field annotations x-provenance, x-producer and x-labelRole publish static derivation; deferred records payload-specific missing producers. Nullable absolute HP and boss-phase limitations are explicit. Contract fixtures are constructed tests, not genuine capture evidence.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "schema": { "type": "string", "const": "combat-tick-row/v1" },
-    "tick_id": { "type": "integer", "minimum": 0 },
-    "timestamp": { "type": "string" },
+    "schema": {
+      "type": "string",
+      "const": "combat-tick-row/v1",
+      "x-provenance": "derived",
+      "x-producer": "ChromaScape CombatTickRowService contract version",
+      "x-labelRole": "context"
+    },
+    "tick_id": {
+      "type": "integer",
+      "minimum": 0,
+      "x-provenance": "captured",
+      "x-producer": "Micro6 TickBatchCollector",
+      "x-labelRole": "context"
+    },
+    "timestamp": {
+      "type": "string",
+      "x-provenance": "captured",
+      "x-producer": "Micro6 TickBatchCollector",
+      "x-labelRole": "context"
+    },
     "player": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "hp": { "type": ["integer", "null"] },
-        "maxHp": { "type": ["integer", "null"] },
-        "prayer": { "type": ["integer", "null"] },
-        "maxPrayer": { "type": ["integer", "null"] },
-        "runEnergy": { "type": ["integer", "null"] },
-        "specialAttack": { "type": ["integer", "null"], "description": "Captured by micro6 schema-4 collectors (special-attack varp, percent 0-100); null on older payloads." },
-        "animationId": { "type": ["integer", "null"] },
-        "x": { "type": ["integer", "null"] },
-        "y": { "type": ["integer", "null"] },
-        "plane": { "type": ["integer", "null"] }
+        "hp": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "captured",
+          "x-producer": "Micro6 PlayerStateTracker",
+          "x-labelRole": "context"
+        },
+        "maxHp": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "captured",
+          "x-producer": "Micro6 PlayerStateTracker",
+          "x-labelRole": "context"
+        },
+        "prayer": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "captured",
+          "x-producer": "Micro6 PlayerStateTracker",
+          "x-labelRole": "context"
+        },
+        "maxPrayer": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "captured",
+          "x-producer": "Micro6 PlayerStateTracker",
+          "x-labelRole": "context"
+        },
+        "runEnergy": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "captured",
+          "x-producer": "Micro6 PlayerStateTracker",
+          "x-labelRole": "context"
+        },
+        "specialAttack": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Captured by micro6 schema-4 collectors (special-attack varp, percent 0-100); null on older payloads.",
+          "x-provenance": "captured",
+          "x-producer": "Micro6 PlayerStateTracker",
+          "x-labelRole": "context"
+        },
+        "animationId": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "captured",
+          "x-producer": "Micro6 PlayerStateTracker",
+          "x-labelRole": "context"
+        },
+        "x": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "captured",
+          "x-producer": "Micro6 PlayerStateTracker",
+          "x-labelRole": "context"
+        },
+        "y": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "captured",
+          "x-producer": "Micro6 PlayerStateTracker",
+          "x-labelRole": "context"
+        },
+        "plane": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "captured",
+          "x-producer": "Micro6 PlayerStateTracker",
+          "x-labelRole": "context"
+        }
       },
-      "required": ["hp", "prayer", "runEnergy", "animationId", "x", "y", "plane"]
+      "required": [
+        "hp",
+        "prayer",
+        "runEnergy",
+        "animationId",
+        "x",
+        "y",
+        "plane"
+      ],
+      "x-provenance": "captured",
+      "x-producer": "Micro6 PlayerStateTracker",
+      "x-labelRole": "context"
     },
     "target": {
       "type": "object",
       "additionalProperties": false,
       "description": "DERIVED: resolved by joining playerState.interacting.index to npcs[].index. Nulls with resolved=false when nothing is targeted.",
       "properties": {
-        "resolved": { "type": "boolean" },
-        "targetId": { "type": ["integer", "null"] },
-        "targetHp": { "type": ["integer", "null"] },
-        "targetMaxHp": { "type": ["integer", "null"] },
-        "targetHealthRatio": { "type": ["integer", "null"], "description": "Captured NPC health-bar ratio; not absolute hitpoints." },
-        "targetHealthScale": { "type": ["integer", "null"], "description": "Captured NPC health-bar scale; not maximum hitpoints." },
-        "targetAnimation": { "type": ["integer", "null"] },
-        "x": { "type": ["integer", "null"] },
-        "y": { "type": ["integer", "null"] }
+        "resolved": {
+          "type": "boolean",
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape CombatTickRowService interacting/NPC join",
+          "x-labelRole": "context"
+        },
+        "targetId": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape CombatTickRowService interacting/NPC join",
+          "x-labelRole": "context"
+        },
+        "targetHp": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape CombatTickRowService interacting/NPC join",
+          "x-labelRole": "context",
+          "x-nullReason": "Absolute NPC HP is unavailable on the live client; health ratio/scale are retained separately."
+        },
+        "targetMaxHp": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape CombatTickRowService interacting/NPC join",
+          "x-labelRole": "context",
+          "x-nullReason": "Maximum NPC HP is unavailable on the live client; health scale is not maximum HP."
+        },
+        "targetHealthRatio": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Captured NPC health-bar ratio; not absolute hitpoints.",
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape CombatTickRowService interacting/NPC join",
+          "x-labelRole": "context"
+        },
+        "targetHealthScale": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Captured NPC health-bar scale; not maximum hitpoints.",
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape CombatTickRowService interacting/NPC join",
+          "x-labelRole": "context"
+        },
+        "targetAnimation": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape CombatTickRowService interacting/NPC join",
+          "x-labelRole": "context"
+        },
+        "x": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape CombatTickRowService interacting/NPC join",
+          "x-labelRole": "context"
+        },
+        "y": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape CombatTickRowService interacting/NPC join",
+          "x-labelRole": "context"
+        }
       },
-      "required": ["resolved"]
+      "required": [
+        "resolved"
+      ],
+      "x-provenance": "derived",
+      "x-producer": "ChromaScape CombatTickRowService interacting/NPC join",
+      "x-labelRole": "context"
     },
     "environment": {
       "type": "object",
@@ -53,107 +240,528 @@
             "type": "object",
             "additionalProperties": false,
             "properties": {
-              "index": { "type": "integer" },
-              "id": { "type": ["integer", "null"] },
-              "name": { "type": ["string", "null"] },
-              "hp": { "type": ["integer", "null"] },
-              "healthRatio": { "type": ["integer", "null"] },
-              "healthScale": { "type": ["integer", "null"] },
-              "animation": { "type": ["integer", "null"] },
-              "x": { "type": ["integer", "null"] },
-              "y": { "type": ["integer", "null"] },
-              "distance": { "type": ["integer", "null"] }
-            }
-          }
+              "index": {
+                "type": "integer",
+                "x-provenance": "captured",
+                "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+                "x-labelRole": "context"
+              },
+              "id": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "x-provenance": "captured",
+                "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+                "x-labelRole": "context"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "x-provenance": "captured",
+                "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+                "x-labelRole": "context"
+              },
+              "hp": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "x-provenance": "captured",
+                "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+                "x-labelRole": "context"
+              },
+              "healthRatio": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "x-provenance": "captured",
+                "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+                "x-labelRole": "context"
+              },
+              "healthScale": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "x-provenance": "captured",
+                "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+                "x-labelRole": "context"
+              },
+              "animation": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "x-provenance": "captured",
+                "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+                "x-labelRole": "context"
+              },
+              "x": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "x-provenance": "captured",
+                "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+                "x-labelRole": "context"
+              },
+              "y": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "x-provenance": "captured",
+                "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+                "x-labelRole": "context"
+              },
+              "distance": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "x-provenance": "captured",
+                "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+                "x-labelRole": "context"
+              }
+            },
+            "x-provenance": "captured",
+            "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+            "x-labelRole": "context"
+          },
+          "x-provenance": "captured",
+          "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+          "x-labelRole": "context"
         },
-        "projectiles": { "type": "array", "items": { "type": "object" } },
-        "groundObjects": { "type": "array", "items": { "type": "object" } },
+        "projectiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "x-provenance": "captured",
+            "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+            "x-labelRole": "context"
+          },
+          "x-provenance": "captured",
+          "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+          "x-labelRole": "context"
+        },
+        "groundObjects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "x-provenance": "captured",
+            "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+            "x-labelRole": "context"
+          },
+          "x-provenance": "captured",
+          "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+          "x-labelRole": "context"
+        },
         "tiles": {
-          "type": ["array", "null"],
+          "type": [
+            "array",
+            "null"
+          ],
           "description": "Captured by micro6 schema-4 collectors (bounded collision-flag grid); null when the grid never arrived.",
           "items": {
             "type": "object",
             "properties": {
-              "x": { "type": "integer" },
-              "y": { "type": "integer" },
-              "plane": { "type": "integer" },
-              "flags": { "type": "integer" },
-              "blocked": { "type": "boolean" }
-            }
-          }
+              "x": {
+                "type": "integer",
+                "x-provenance": "captured",
+                "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+                "x-labelRole": "context"
+              },
+              "y": {
+                "type": "integer",
+                "x-provenance": "captured",
+                "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+                "x-labelRole": "context"
+              },
+              "plane": {
+                "type": "integer",
+                "x-provenance": "captured",
+                "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+                "x-labelRole": "context"
+              },
+              "flags": {
+                "type": "integer",
+                "x-provenance": "captured",
+                "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+                "x-labelRole": "context"
+              },
+              "blocked": {
+                "type": "boolean",
+                "x-provenance": "captured",
+                "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+                "x-labelRole": "context"
+              }
+            },
+            "x-provenance": "captured",
+            "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+            "x-labelRole": "context"
+          },
+          "x-provenance": "captured",
+          "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+          "x-labelRole": "context"
         },
         "hazards": {
           "type": "array",
           "description": "Captured by micro6 schema-4 collectors (NPC attackers + incoming projectiles); empty means none active.",
-          "items": { "type": "object" }
+          "items": {
+            "type": "object",
+            "x-provenance": "captured",
+            "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+            "x-labelRole": "context"
+          },
+          "x-provenance": "captured",
+          "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+          "x-labelRole": "context"
         },
-        "phase": { "type": ["object", "null"], "description": "Captured encounter envelope (identity + HP signal); phaseIndex stays null until per-boss varbit content lands." },
-        "prayersActive": { "type": ["array", "null"], "items": { "type": "string" }, "description": "Captured by micro6 schema-4 collectors (toggled prayer names); empty means none on, null on older payloads." }
+        "phase": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Captured encounter envelope (identity + HP signal); phaseIndex stays null until per-boss varbit content lands.",
+          "x-provenance": "captured",
+          "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+          "x-labelRole": "context",
+          "x-nullReason": "Absent producer is deferred; captured encounter envelopes leave phaseIndex null because generic boss-phase content is unavailable."
+        },
+        "prayersActive": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string",
+            "x-provenance": "captured",
+            "x-producer": "Micro6 PlayerStateTracker",
+            "x-labelRole": "context"
+          },
+          "description": "Captured by micro6 schema-4 collectors (toggled prayer names); empty means none on; null means unavailable, failed capture, or older payloads.",
+          "x-provenance": "captured",
+          "x-producer": "Micro6 PlayerStateTracker",
+          "x-labelRole": "context"
+        }
       },
-      "required": ["nearbyNpcs", "projectiles", "groundObjects", "hazards"]
+      "required": [
+        "nearbyNpcs",
+        "projectiles",
+        "groundObjects",
+        "hazards"
+      ],
+      "x-provenance": "captured",
+      "x-producer": "Micro6 NPC/Projectile/Object/CombatEnvironment trackers",
+      "x-labelRole": "context"
     },
     "inventory": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "ids": { "type": "array", "items": { "type": "integer" } },
-        "amounts": { "type": "array", "items": { "type": "integer" } },
-        "slots": { "type": "array", "items": { "type": "integer" } }
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "x-provenance": "derived",
+            "x-producer": "ChromaScape CombatTickRowService over Micro6 inventory slots",
+            "x-labelRole": "context"
+          },
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape CombatTickRowService over Micro6 inventory slots",
+          "x-labelRole": "context"
+        },
+        "amounts": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "x-provenance": "derived",
+            "x-producer": "ChromaScape CombatTickRowService over Micro6 inventory slots",
+            "x-labelRole": "context"
+          },
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape CombatTickRowService over Micro6 inventory slots",
+          "x-labelRole": "context"
+        },
+        "slots": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "x-provenance": "derived",
+            "x-producer": "ChromaScape CombatTickRowService over Micro6 inventory slots",
+            "x-labelRole": "context"
+          },
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape CombatTickRowService over Micro6 inventory slots",
+          "x-labelRole": "context"
+        }
       },
-      "required": ["ids", "amounts", "slots"]
+      "required": [
+        "ids",
+        "amounts",
+        "slots"
+      ],
+      "x-provenance": "derived",
+      "x-producer": "ChromaScape CombatTickRowService over Micro6 inventory slots",
+      "x-labelRole": "context"
     },
-    "equipment": { "type": "array", "items": { "type": "object" } },
+    "equipment": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "x-provenance": "captured",
+        "x-producer": "Micro6 inventory/equipment tracker",
+        "x-labelRole": "context"
+      },
+      "x-provenance": "captured",
+      "x-producer": "Micro6 inventory/equipment tracker",
+      "x-labelRole": "context"
+    },
     "diagnosticInputs": {
       "type": "object",
       "additionalProperties": false,
       "description": "DIAGNOSTIC-ONLY per SC-718/SC-751. Raw inputs are evidence, never training labels. Captured by micro6 schema-4 collectors (manual-input snapshot + typed-action join); null when unobserved.",
       "properties": {
-        "mouseX": { "type": ["integer", "null"] },
-        "mouseY": { "type": ["integer", "null"] },
-        "mouseButton": { "type": ["integer", "null"] },
-        "menuOption": { "type": ["string", "null"] },
-        "clickedEntity": { "type": ["string", "null"] },
+        "mouseX": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "captured",
+          "x-producer": "Micro6 ChromaScapeManualInputCapture and typed action join",
+          "x-labelRole": "diagnostic"
+        },
+        "mouseY": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "captured",
+          "x-producer": "Micro6 ChromaScapeManualInputCapture and typed action join",
+          "x-labelRole": "diagnostic"
+        },
+        "mouseButton": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "captured",
+          "x-producer": "Micro6 ChromaScapeManualInputCapture and typed action join",
+          "x-labelRole": "diagnostic"
+        },
+        "menuOption": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-provenance": "captured",
+          "x-producer": "Micro6 ChromaScapeManualInputCapture and typed action join",
+          "x-labelRole": "diagnostic"
+        },
+        "clickedEntity": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-provenance": "captured",
+          "x-producer": "Micro6 ChromaScapeManualInputCapture and typed action join",
+          "x-labelRole": "diagnostic"
+        },
         "clickedTile": {
-          "type": ["object", "null"],
+          "type": [
+            "object",
+            "null"
+          ],
           "properties": {
-            "x": { "type": "integer" },
-            "y": { "type": "integer" },
-            "plane": { "type": "integer" }
-          }
+            "x": {
+              "type": "integer",
+              "x-provenance": "captured",
+              "x-producer": "Micro6 ChromaScapeManualInputCapture and typed action join",
+              "x-labelRole": "diagnostic"
+            },
+            "y": {
+              "type": "integer",
+              "x-provenance": "captured",
+              "x-producer": "Micro6 ChromaScapeManualInputCapture and typed action join",
+              "x-labelRole": "diagnostic"
+            },
+            "plane": {
+              "type": "integer",
+              "x-provenance": "captured",
+              "x-producer": "Micro6 ChromaScapeManualInputCapture and typed action join",
+              "x-labelRole": "diagnostic"
+            }
+          },
+          "x-provenance": "captured",
+          "x-producer": "Micro6 ChromaScapeManualInputCapture and typed action join",
+          "x-labelRole": "diagnostic"
         }
-      }
+      },
+      "x-provenance": "captured",
+      "x-producer": "Micro6 ChromaScapeManualInputCapture and typed action join",
+      "x-labelRole": "diagnostic"
     },
     "label": {
       "type": "object",
       "additionalProperties": false,
       "description": "The sole permitted training target: one semantic action. Combat vocabulary maps to semantic-action-v1 canonical types; PRAYER_MAGIC is ambiguous (prayer toggle vs combat spell) and stays unmapped until micro6 disambiguates it.",
       "properties": {
-        "vocab": { "type": ["string", "null"], "enum": ["ATTACK", "EAT", "PRAYER_MAGIC", "MOVE_TILE", "CAST_SPELL", "WAIT", null] },
-        "canonicalType": { "type": ["string", "null"] },
-        "provenance": { "type": ["string", "null"] },
-        "sourceTick": { "type": ["integer", "null"] },
-        "sequence": { "type": ["integer", "null"] },
-        "unmapped": { "type": "boolean" }
+        "vocab": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "ATTACK",
+            "EAT",
+            "PRAYER_MAGIC",
+            "MOVE_TILE",
+            "CAST_SPELL",
+            "WAIT",
+            null
+          ],
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape CombatTickRowService over recording-action/v1",
+          "x-labelRole": "label"
+        },
+        "canonicalType": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape CombatTickRowService over recording-action/v1",
+          "x-labelRole": "label",
+          "enum": [
+            "WAIT_UNTIL_TICK",
+            "WALK_TO",
+            "INTERACT_NPC",
+            "INTERACT_OBJECT",
+            "INTERACT_GROUND_ITEM",
+            "INTERACT_INVENTORY_ITEM",
+            "INTERACT_WIDGET",
+            "SELECT_DIALOGUE_OPTION",
+            "CAST_SPELL",
+            "EQUIP_ITEM",
+            null
+          ]
+        },
+        "provenance": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape CombatTickRowService over recording-action/v1",
+          "x-labelRole": "label"
+        },
+        "sourceTick": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape CombatTickRowService over recording-action/v1",
+          "x-labelRole": "label"
+        },
+        "sequence": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape CombatTickRowService over recording-action/v1",
+          "x-labelRole": "label"
+        },
+        "unmapped": {
+          "type": "boolean",
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape CombatTickRowService over recording-action/v1",
+          "x-labelRole": "label"
+        }
       },
-      "required": ["unmapped"]
+      "required": [
+        "unmapped"
+      ],
+      "x-provenance": "derived",
+      "x-producer": "ChromaScape CombatTickRowService over recording-action/v1",
+      "x-labelRole": "label"
     },
     "video": {
       "type": "object",
       "additionalProperties": false,
       "description": "DERIVED via TickVideoSyncService formula frame=(tick-startTick)*fps*0.6; frameEnd is frame(tick+1)-1. Nulls with hasVideo=false when the session has no recording.",
       "properties": {
-        "hasVideo": { "type": "boolean" },
-        "fps": { "type": ["integer", "null"] },
-        "frameStart": { "type": ["integer", "null"] },
-        "frameEnd": { "type": ["integer", "null"] }
+        "hasVideo": {
+          "type": "boolean",
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape existing TickVideoSyncService tick-to-frame formula",
+          "x-labelRole": "context"
+        },
+        "fps": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape existing TickVideoSyncService tick-to-frame formula",
+          "x-labelRole": "context"
+        },
+        "frameStart": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape existing TickVideoSyncService tick-to-frame formula",
+          "x-labelRole": "context"
+        },
+        "frameEnd": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-provenance": "derived",
+          "x-producer": "ChromaScape existing TickVideoSyncService tick-to-frame formula",
+          "x-labelRole": "context"
+        }
       },
-      "required": ["hasVideo"]
+      "required": [
+        "hasVideo"
+      ],
+      "x-provenance": "derived",
+      "x-producer": "ChromaScape existing TickVideoSyncService tick-to-frame formula",
+      "x-labelRole": "context",
+      "x-nullReason": "No associated video/FPS produces null frames and a deferred video field."
     },
     "deferred": {
       "type": "array",
       "description": "Proposed fields whose producer was absent on this payload (pre-schema-4 client, disabled stream, or no video). Empty means every producer ran: the row is coverage-ready for SC-752.",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string",
+        "x-provenance": "derived",
+        "x-producer": "ChromaScape CombatTickRowService producer availability",
+        "x-labelRole": "diagnostic"
+      },
+      "x-provenance": "derived",
+      "x-producer": "ChromaScape CombatTickRowService producer availability",
+      "x-labelRole": "diagnostic"
     }
   },
-  "required": ["schema", "tick_id", "player", "target", "environment", "inventory", "equipment", "label", "video", "deferred"]
+  "required": [
+    "schema",
+    "tick_id",
+    "player",
+    "target",
+    "environment",
+    "inventory",
+    "equipment",
+    "label",
+    "video",
+    "deferred"
+  ]
 }

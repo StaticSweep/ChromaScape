@@ -1,4 +1,4 @@
--- V40: additive SC-1976 combat row sections.
+-- V68: additive SC-1976 combat row sections (V66/V67 belong to durable sessions).
 -- Old rows keep NULL for sections that were not captured by the producer. Schema-4 micro6
 -- batches may persist inputs (cursor/button/menu/clicked), walkable-tile flags, hazards, and
 -- the encounter phase envelope needed by the combat tick row and SC-752 coverage.

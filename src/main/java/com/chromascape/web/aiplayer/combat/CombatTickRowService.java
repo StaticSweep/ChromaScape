@@ -3,6 +3,7 @@ package com.chromascape.web.aiplayer.combat;
 import com.chromascape.web.debug.tickdebugger.dto.RecordingAction;
 import com.chromascape.web.debug.tickdebugger.dto.TickBatchMessage;
 import com.chromascape.web.debug.tickdebugger.entity.TickSnapshot;
+import com.chromascape.web.replay.catalog.ReplayEvidenceValidator;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,7 +37,7 @@ public final class CombatTickRowService {
   private static final Map<String, String> VOCAB_TO_CANONICAL =
       Map.of(
           "ATTACK", "INTERACT_NPC",
-          "EAT", "INVENTORY_ACTION",
+          "EAT", "INTERACT_INVENTORY_ITEM",
           "MOVE_TILE", "WALK_TO",
           "CAST_SPELL", "CAST_SPELL",
           "WAIT", "WAIT_UNTIL_TICK");
@@ -130,6 +131,26 @@ public final class CombatTickRowService {
       if (!LABEL_KEYS.contains(String.valueOf(key))) {
         throw new IllegalArgumentException("label block carries non-label key: " + key);
       }
+    }
+    Object type = labelMap.get("canonicalType");
+    if (!(type instanceof String actionType)
+        || !ReplayEvidenceValidator.CANONICAL_ACTION_TYPES.contains(actionType)
+        || !Boolean.FALSE.equals(labelMap.get("unmapped"))) {
+      throw new IllegalArgumentException("label has no supported unambiguous semantic action");
+    }
+    Object vocab = labelMap.get("vocab");
+    if (vocab != null && !actionType.equals(VOCAB_TO_CANONICAL.get(vocab))) {
+      throw new IllegalArgumentException("label vocabulary does not match its semantic action");
+    }
+    if (!Set.of("MICRO6_SEMANTIC_DISPATCH", "MICRO6_LEGACY_CONVERSION", "OPERATOR_SUPPLIED")
+        .contains(String.valueOf(labelMap.get("provenance")))) {
+      throw new IllegalArgumentException("label has no attributable action provenance");
+    }
+    if (!(labelMap.get("sourceTick") instanceof Number sourceTick)
+        || sourceTick.longValue() < 0
+        || !(labelMap.get("sequence") instanceof Number sequence)
+        || sequence.intValue() < 0) {
+      throw new IllegalArgumentException("label has no source tick and action sequence");
     }
   }
 

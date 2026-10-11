@@ -19,7 +19,7 @@ import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.PostgreSQLContainer;
 
-/** Real PostgreSQL coverage for V66 and Hibernate JSON save/reload, in a disposable schema. */
+/** Real PostgreSQL coverage for V68 and Hibernate JSON save/reload, in a disposable schema. */
 class CombatTickRowPostgresIntegrationTest {
   private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
 
@@ -57,7 +57,7 @@ class CombatTickRowPostgresIntegrationTest {
                   + "VALUES ('legacy', 1, CURRENT_TIMESTAMP, '{}'::jsonb)");
           String migration;
           try (var in =
-              getClass().getResourceAsStream("/db/migration/V66__sc1976_combat_row_sections.sql")) {
+              getClass().getResourceAsStream("/db/migration/V68__sc1976_combat_row_sections.sql")) {
             assertThat(in).isNotNull();
             migration = new String(in.readAllBytes(), StandardCharsets.UTF_8);
           }
@@ -65,7 +65,8 @@ class CombatTickRowPostgresIntegrationTest {
           statement.execute(migration); // Idempotent when the table already has the new columns.
           try (var result =
               statement.executeQuery(
-                  "SELECT inputs, tiles, hazards, phase FROM tick_snapshots WHERE session_id='legacy'")) {
+                  "SELECT inputs, tiles, hazards, phase FROM tick_snapshots "
+                      + "WHERE session_id='legacy'")) {
             assertThat(result.next()).isTrue();
             for (int column = 1; column <= 4; column++) {
               assertThat(result.getString(column)).isNull();
@@ -74,7 +75,8 @@ class CombatTickRowPostgresIntegrationTest {
           assertThatThrownBy(
                   () ->
                       statement.execute(
-                          "UPDATE tick_snapshots SET inputs=jsonb_build_object('raw', repeat('x', 262144)) "
+                          "UPDATE tick_snapshots SET inputs="
+                              + "jsonb_build_object('raw', repeat('x', 262144)) "
                               + "WHERE session_id='legacy'"))
               .isInstanceOf(SQLException.class)
               .hasMessageContaining("ck_tick_snapshots_combat_row_json_sizes");
@@ -112,7 +114,10 @@ class CombatTickRowPostgresIntegrationTest {
                 CombatTickRowService.build(
                     reloaded, null, null, new CombatTickRowService.VideoSync(100L, 30));
             assertThat(row.get("deferred")).isEqualTo(java.util.List.of());
-            CombatTickRowService.requireLabelSafe(row);
+            // Persistence alone must not invent a semantic training label.
+            assertThatThrownBy(() -> CombatTickRowService.requireLabelSafe(row))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("semantic action");
           }
         }
       } finally {

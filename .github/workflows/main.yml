@@ -8,6 +8,58 @@ on:
   workflow_dispatch:
 
 jobs:
+  combat-regressions:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: sc1976
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d sc1976"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SC1976_TEST_JDBC_URL: jdbc:postgresql://127.0.0.1:5432/sc1976
+      SC1976_TEST_JDBC_USER: test
+      SC1976_TEST_JDBC_PASSWORD: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require canonical contracts credential
+        env:
+          CONTRACTS_READ_TOKEN: ${{ secrets.CONTRACTS_READ_TOKEN }}
+        run: |
+          if [ -z "$CONTRACTS_READ_TOKEN" ]; then
+            echo "::error::Configure CONTRACTS_READ_TOKEN with read-only Contents access to ikiddoi/contracts."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          repository: ikiddoi/contracts
+          ref: 7f4fa47ea3f195ff12ca759a0c556b21fedbfc9f
+          path: shared-contracts
+          token: ${{ secrets.CONTRACTS_READ_TOKEN }}
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: temurin
+      - run: chmod +x ./gradlew
+      - name: Combat rows, safe labels, coverage and PostgreSQL persistence
+        run: ./gradlew test --tests 'com.chromascape.web.aiplayer.combat.*' -Psc967VectorsPath=shared-contracts/sc967/ed25519-vectors.json --console=plain
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: combat-regression-results
+          path: |
+            build/test-results/test
+            build/reports/tests/test
+
   session-regressions:
     # API/durable boundary coverage, not packaged worker or rendered-client proof.
     runs-on: ubuntu-latest
