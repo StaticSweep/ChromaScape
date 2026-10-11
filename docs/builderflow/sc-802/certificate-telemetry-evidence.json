@@ -1,0 +1,123 @@
+{
+  "story": 802,
+  "project": "C:\\Dev\\IdeaProjects\\ChromaScape",
+  "felixTask": "task_1791197839439_8munzct5",
+  "scope": [
+    "Observe approved executor HTTPS peer chain validity dates from successful Java TLS sessions in catalog/control/patch transports",
+    "Expose safe dates, observation provenance and expiry/freshness class in existing topology diagnostics",
+    "Verify real wall-clock expiry, fresh-handshake rejection, and renewed certificate observation on Fedora"
+  ],
+  "exclusions": [
+    "Live gameplay or deployment",
+    "SC-671 all-service and Windows qualification",
+    "dev-MCP adapter task 910",
+    "TLS connection/session invalidation policy changes"
+  ],
+  "acceptanceResults": [
+    {
+      "given": "No verified executor HTTPS observation",
+      "when": "diagnostics are read or an untrusted CA handshake fails",
+      "then": "NOT_OBSERVED; no certificate claim is learned; no HTTP handler request"
+    },
+    {
+      "given": "Provisioned HTTPS peer with a 20-second certificate",
+      "when": "real catalog transport validates its certificate through an isolated CA trust store",
+      "then": "EXPIRING_SOON, safe peer-chain validity dates, observed time, VERIFIED_TLS_SESSION"
+    },
+    {
+      "given": "Previously observed short-lived certificate",
+      "when": "wall clock passes notAfter",
+      "then": "EXPIRED, DEGRADED diagnostic state and rotation remediation"
+    },
+    {
+      "given": "Expired certificate on test peer",
+      "when": "a fresh SSLContext attempts a catalog refresh",
+      "then": "ENDPOINT_UNAVAILABLE, TLS validation rejects before HTTP handler, previous EXPIRED observation retained"
+    },
+    {
+      "given": "Expired observation",
+      "when": "peer is restarted at the same origin with a new certificate and a fresh trusted connection succeeds",
+      "then": "new expiry replaces old observation; class returns to EXPIRING_SOON"
+    },
+    {
+      "given": "Old or excessive observations",
+      "when": "freshness/retention/capacity bounds apply",
+      "then": "OBSERVATION_STALE after 5 minutes, NOT_OBSERVED after 24 hours; bounded 512 origins with oldest-observation eviction"
+    }
+  ],
+  "changedFiles": [
+    "docs/builderflow/sc-802/certificate-telemetry-evidence.json",
+    "docs/builderflow/sc-802/route-remediation-plan.json",
+    "src/main/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalEndpointAuthority.java",
+    "src/main/java/com/chromascape/web/debug/buildergoal/service/ExecutorCertificateTelemetry.java",
+    "src/main/java/com/chromascape/web/debug/buildergoal/service/Micro6OnlineClientRegistryService.java",
+    "src/main/java/com/chromascape/web/debug/buildergoal/service/Micro6TaskSourcePatchService.java",
+    "src/main/java/com/chromascape/web/debug/patchloop/service/ScriptExecutionService.java",
+    "src/main/java/com/chromascape/web/integration/micro6/service/Micro6ExecutorCatalogService.java",
+    "src/main/resources/static/js/executor-topology.js",
+    "src/test/java/com/chromascape/web/debug/buildergoal/service/ExecutorCertificateTelemetryTest.java"
+  ],
+  "tests": {
+    "regression": {
+      "tests": 111,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0,
+      "suites": [
+        "ExecutorCertificateTelemetryTest (initial two tests)",
+        "BuilderGoalEndpointAuthorityTest",
+        "Micro6OnlineClientRegistryServiceTest",
+        "ScriptExecutionServiceTest",
+        "Micro6ExecutorCatalogServiceTest",
+        "Micro6TaskSourcePatchAuthorityTest"
+      ],
+      "log": "/tmp/sc802-certificate-tests.log"
+    },
+    "finalExpiryRotation": {
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0,
+      "suite": "ExecutorCertificateTelemetryTest",
+      "runtimeSeconds": 23.557,
+      "log": "/tmp/sc802-certificate-rotation-tests.log"
+    },
+    "format": "scoped spotlessJavaCheck passed; node --check executor-topology.js passed; git diff --check passed",
+    "runtime": "JDK 21, pinned SC-967 vectors; openssl-generated disposable CA and EC leaf certificates; loopback HTTPS harness only"
+  },
+  "certificatePolicy": {
+    "source": "HTTP response SSLSession.getPeerCertificates after normal TLS validation",
+    "originPolicy": "exact provisioned executor origins or explicitly enabled DEV static origin",
+    "chainValidity": "latest notBefore and earliest notAfter across presented X509 chain",
+    "warningDays": 7,
+    "freshnessMinutes": 5,
+    "retentionHours": 24,
+    "capacity": 512,
+    "redaction": "No subject, issuer DN, serial, PEM, key, raw URL or credential in diagnostics"
+  },
+  "qualificationPreparation": {
+    "cleanBranchesAlreadyPresent": [
+      "fix/sc802-executor-auth at 36824aea5b",
+      "fix/sc802-allocation-endpoint-grants at 29dca138",
+      "fix/sc802-allocation-probes at f00063d"
+    ],
+    "ChromaScapeBranch": "fix/sc802-trusted-route-identity",
+    "deploymentPrerequisites": "Exact origins, matching service credentials, deployment TLS identities and durable fences remain operator prerequisites; no deployment credential or live service configuration changed",
+    "Micro6": "Native Fedora focused compile/test already succeeded (109 tests) in previous stage; not a live executor qualification",
+    "backend": "Cached Go 1.24 toolchain was available and used in previous stage; no container runtime needed for unit/HTTP fixtures"
+  },
+  "tracker": "No Felix, Shortcut, CI, push or merge operations; task status unchanged/unverified and SC-802 not marked Done",
+  "risks": [
+    "Telemetry is passive and in-memory; it does not invalidate established TLS sessions or change TLS policy",
+    "Fresh-handshake expired-certificate rejection proven; pooled-session revalidation not qualified",
+    "Observations are per origin and record the last verified session, not an actively polled certificate inventory",
+    "Loopback DEV harness evidence is not STAGING or PRODUCTION qualification"
+  ],
+  "remainingWork": [
+    "Live all-service SC-671 qualification including actual enrollment, renewal and TLS/mTLS rotation",
+    "Windows simulator isolation qualification",
+    "Pinned read-only dev-MCP adapter specification, implementation and qualification"
+  ],
+  "rollback": "Revert the certificate telemetry commit to restore NOT_OBSERVED diagnostics while retaining the prior SC-802 routing/authentication fixes",
+  "verifiedAt": "2026-10-05T17:01:53.968537+00:00"
+}

@@ -8,6 +8,43 @@ on:
   workflow_dispatch:
 
 jobs:
+  session-regressions:
+    # API/durable boundary coverage, not packaged worker or rendered-client proof.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: sc1991
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d sc1991"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SC1991_TEST_JDBC_URL: jdbc:postgresql://127.0.0.1:5432/sc1991
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: temurin
+      - run: chmod +x ./gradlew
+      - name: Session API and PostgreSQL regressions
+        run: ./gradlew replayTest --tests 'com.chromascape.web.replay.session.*' --console=plain
+      - name: Preserve test results (native worker tests require a staged package)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: session-regression-results
+          path: |
+            build/test-results/replayTest
+            build/reports/tests/replayTest
+
   verify:
     runs-on: ubuntu-latest
 

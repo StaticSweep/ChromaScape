@@ -3,15 +3,21 @@ package com.chromascape.web.debug.buildergoal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class Micro6OnlineClientRegistryServiceTest {
 
   private final ObjectMapper objectMapper = new ObjectMapper();
 
+  /** Test topology trusts the fixture LAN host explicitly; loopback-only is the default. */
+  private static Micro6OnlineClientRegistryService lanTrustedService() {
+    return new Micro6OnlineClientRegistryService(Set.of("192.168.1.50"));
+  }
+
   @Test
   void recordHeartbeat_registersRunnableClient() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
 
     service.recordHeartbeat(
         objectMapper.readTree(
@@ -53,7 +59,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void recordHeartbeat_missingReadinessFieldsFailClosed() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
 
     service.recordHeartbeat(
         objectMapper.readTree(
@@ -79,7 +85,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void recordHeartbeat_wrongWorldIsNotDispatchReady() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
 
     service.recordHeartbeat(
         objectMapper.readTree(
@@ -115,7 +121,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void recordHeartbeat_capturesWorldAndScriptLifecycleFields() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
 
     service.recordHeartbeat(
         objectMapper.readTree(
@@ -151,7 +157,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void recordHeartbeat_absentWorldFieldsAreNotMatched() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
 
     service.recordHeartbeat(
         objectMapper.readTree(
@@ -173,7 +179,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void dispatchReadyLookup_hashIsAuthoritativeOverMatchingName() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
     registerReadyClient(service, "client-hash-a", "same-name", "aaaaaaaaaaaaaaaa", 360);
     registerReadyClient(service, "client-hash-b", "same-name", "bbbbbbbbbbbbbbbb", 360);
 
@@ -203,7 +209,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void dispatchReadyLookup_nameFallbackAllowedOnlyWhenNoExpectedHash() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
     registerReadyClient(service, "client-name-match", "Fallback Name", "1111111111111111", 360);
 
     assertThat(
@@ -217,7 +223,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void dispatchReadyLookup_nameFallbackRejectsMalformedReportedIdentity() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
     registerReadyClient(service, "client-name-malformed", "Fallback Name", "hash-1", 360);
 
     assertThat(
@@ -228,7 +234,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void dispatchReadyLookup_matchingNameNeverOverridesHashMismatch() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
     registerReadyClient(service, "client-hash-b", "same-name", "bbbbbbbbbbbbbbbb", 360);
 
     assertThat(
@@ -243,7 +249,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void dispatchReadyLookup_matchingMalformedHashesNeverAuthorizeDispatch() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
     registerReadyClient(service, "client-malformed", "same-name", "hash-1", 360);
 
     // String equality alone is not identity evidence: malformed values must fail before a
@@ -256,7 +262,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void dispatchReadyLookup_missingIdentityRejected() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
     registerReadyClient(service, "client-1", "Some Name", "1111111111111111", 360);
 
     assertThat(
@@ -267,7 +273,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void dispatchReadyLookup_requiresExactCurrentWorldNotHeartbeatFlag() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
     // Heartbeat claims world_matched=true but observed current_world differs from the requested
     // launch world. The flag is diagnostic only; the observed world must be authoritative.
     service.recordHeartbeat(
@@ -311,7 +317,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void dispatchReadyLookup_usesObservedWorldWhenHeartbeatFlagIsStale() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
     service.recordHeartbeat(
         readyHeartbeat("client-stale-match-flag", "1111111111111111", 360)
             .put("world_matched", false));
@@ -329,7 +335,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void dispatchReadyLookup_wrongExpectedWorldRejected() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
     registerReadyClient(service, "client-360", "Test Account", "1111111111111111", 360);
 
     assertThat(
@@ -352,7 +358,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void dispatchReadyLookup_dispatchHoldFailsClosed() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
     service.recordHeartbeat(
         readyHeartbeat("client-held", "1111111111111111", 360)
             .put("dispatch_hold", true)
@@ -370,7 +376,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void dispatchReadyLookup_loggedOutFailsClosed() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
     service.recordHeartbeat(
         readyHeartbeat("client-logged-out", "1111111111111111", 360)
             .put("login_state", "auto_login_failed"));
@@ -387,7 +393,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void dispatchReadyLookup_startupIncompleteFailsClosed() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
     service.recordHeartbeat(
         readyHeartbeat("client-startup", "1111111111111111", 360)
             .put("startup_state", "initializing_bot_logic"));
@@ -404,7 +410,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void dispatchReadyLookup_pathfinderIncompleteFailsClosed() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
     service.recordHeartbeat(
         readyHeartbeat("client-pf", "1111111111111111", 360).put("pathfinder_ready", false));
 
@@ -420,7 +426,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void dispatchReadyLookup_missingLoginStateFailsClosed() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
     com.fasterxml.jackson.databind.node.ObjectNode heartbeat =
         readyHeartbeat("client-nologin", "1111111111111111", 360);
     heartbeat.remove("login_state");
@@ -438,7 +444,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void genericRunnableDoesNotProveSelectedAccountEligibility() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
     service.recordHeartbeat(
         readyHeartbeat("client-other-account", "b01c7f006bace664", 360)
             .put("requested_account_hash", "3720a9a3b5c9f57b"));
@@ -453,7 +459,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void heartbeatWithRequestedAccountHashIsEligibleWhenAllConditionsMatch() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
 
     service.recordHeartbeat(
         objectMapper.readTree(
@@ -489,7 +495,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void legacyExpectedAccountHashRemainsCompatibilityOnly() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
 
     service.recordHeartbeat(
         objectMapper.readTree(
@@ -522,7 +528,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void requestedAccountHashWinsOverLegacyExpectedField() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
 
     service.recordHeartbeat(
         objectMapper.readTree(
@@ -556,7 +562,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void sameNameDifferentHashRejects() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
     service.recordHeartbeat(
         readyHeartbeat("client-same-name", "b01c7f006bace664", 360)
             .put("account_name", "Shared Name")
@@ -570,7 +576,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void missingOrWrongHashSchemeRejects() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
 
     service.recordHeartbeat(
         readyHeartbeat("client-no-scheme", "b01c7f006bace664", 360)
@@ -591,7 +597,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void invalidHashValuesReject() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
 
     service.recordHeartbeat(readyHeartbeat("client-invalid-hash", "not-a-canonical-hash", 360));
 
@@ -603,7 +609,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void runnableAndDispatchReadyAgreeWithEvaluator() throws Exception {
-    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+    Micro6OnlineClientRegistryService service = lanTrustedService();
     registerReadyClient(service, "client-ready", "Test Account", "1111111111111111", 360);
 
     java.util.Map<String, Object> summary = service.listClients().get(0);
@@ -635,7 +641,7 @@ class Micro6OnlineClientRegistryServiceTest {
 
   @Test
   void remoteReadinessRequiresMachineAttemptAccountWorldAndFreshHeartbeat() {
-    var service = new Micro6OnlineClientRegistryService();
+    var service = lanTrustedService();
     var heartbeat = readyHeartbeat("remote", "0123456789abcdef", 360).put("machine_uuid", "fedora");
     service.recordHeartbeat(heartbeat);
     var before = java.time.Instant.now().minusSeconds(5);
@@ -673,8 +679,71 @@ class Micro6OnlineClientRegistryServiceTest {
         .isEmpty();
   }
 
+  @Test
+  void untrustedEndpointHeartbeatIsOnlineButNeverDispatchReady() throws Exception {
+    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+
+    service.recordHeartbeat(readyHeartbeat("client-untrusted", "0123456789abcdef", 360));
+
+    java.util.Map<String, Object> summary = service.listClients().get(0);
+    assertThat(summary.get("online")).isEqualTo(true);
+    assertThat(summary.get("endpointTrusted")).isEqualTo(false);
+    assertThat(summary.get("endpointTrustReason").toString()).contains("ENDPOINT_UNTRUSTED");
+    assertThat(summary.get("runnable")).isEqualTo(false);
+    assertThat(summary.get("dispatchReady")).isEqualTo(false);
+    assertThat(service.getRunnableClient("client-untrusted")).isEmpty();
+    assertThat(
+            service.findDispatchReadyClientsForRecovery(
+                "0123456789abcdef", "Test Account", null, null, 360))
+        .isEmpty();
+  }
+
+  @Test
+  void untrustedEndpointVariantsAreNeverDispatchReady() throws Exception {
+    String[] untrustedUrls = {
+      "ftp://192.168.1.50:8098",
+      "http://user:pass@192.168.1.50:8098",
+      "http://169.254.169.254:80",
+      "http://192.168.1.50:8098/api/v1",
+      "http://203.0.113.7:8098"
+    };
+    for (int i = 0; i < untrustedUrls.length; i++) {
+      Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+      service.recordHeartbeat(
+          readyHeartbeat("client-untrusted-" + i, "0123456789abcdef", 360, untrustedUrls[i]));
+      assertThat(service.getRunnableClient("client-untrusted-" + i)).isEmpty();
+      assertThat(service.listClients().get(0).get("endpointTrusted")).isEqualTo(false);
+    }
+  }
+
+  @Test
+  void loopbackEndpointIsTrustedByDefault() throws Exception {
+    Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
+
+    service.recordHeartbeat(
+        readyHeartbeat("client-loopback", "0123456789abcdef", 360, "http://127.0.0.1:8098/"));
+
+    java.util.Map<String, Object> summary = service.listClients().get(0);
+    assertThat(summary.get("endpointTrusted")).isEqualTo(true);
+    assertThat(summary.get("endpointTrustReason")).isNull();
+    assertThat(summary.get("dispatchReady")).isEqualTo(true);
+    assertThat(service.getRunnableClient("client-loopback")).isPresent();
+  }
+
+  @Test
+  void trustedEndpointVerdictIsExposedForCallers() {
+    Micro6OnlineClientRegistryService service = lanTrustedService();
+    assertThat(service.trustedEndpointVerdict("http://192.168.1.50:8098").trusted()).isTrue();
+    assertThat(service.trustedEndpointVerdict("http://203.0.113.7:8098").trusted()).isFalse();
+  }
+
   private com.fasterxml.jackson.databind.node.ObjectNode readyHeartbeat(
       String clientId, String accountHash, int world) {
+    return readyHeartbeat(clientId, accountHash, world, "http://192.168.1.50:8098/");
+  }
+
+  private com.fasterxml.jackson.databind.node.ObjectNode readyHeartbeat(
+      String clientId, String accountHash, int world, String advertisedBaseUrl) {
     return (com.fasterxml.jackson.databind.node.ObjectNode)
         objectMapper
             .createObjectNode()
@@ -683,7 +752,7 @@ class Micro6OnlineClientRegistryServiceTest {
             .put("account_hash", accountHash)
             .put("requested_account_hash", accountHash)
             .put("account_hash_scheme", AccountIdentityContract.HASH_SCHEME)
-            .put("advertised_base_url", "http://192.168.1.50:8098/")
+            .put("advertised_base_url", advertisedBaseUrl)
             .put("executor_bind_addr", "0.0.0.0:8098")
             .put("source_client_type", "micro6")
             .put("executor_profile", "accountbuilder_builderpro")

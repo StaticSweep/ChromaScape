@@ -181,6 +181,15 @@ chromascape:
     task-sync-interval-ms: ${CHROMASCAPE_PATCHLOOP_TASK_SYNC_INTERVAL_MS:5000}
 
 builder-goal:
+  topology:
+    environment: ${BUILDER_GOAL_TOPOLOGY_ENVIRONMENT:DEV}
+    dev-static-enabled: ${BUILDER_GOAL_TOPOLOGY_DEV_STATIC_ENABLED:false}
+  executor:
+    trusted-origins: ${BUILDER_GOAL_EXECUTOR_TRUSTED_ORIGINS:}
+    heartbeat-token: ${BUILDER_GOAL_EXECUTOR_HEARTBEAT_TOKEN:}
+    auth-token: ${BUILDER_GOAL_EXECUTOR_AUTH_TOKEN:}
+  local-launch:
+    enabled: ${BUILDER_GOAL_LOCAL_LAUNCH_ENABLED:true}
   remote:
     machine-uuid: ${BUILDER_GOAL_REMOTE_MACHINE_UUID:}
     endpoint: ${BUILDER_GOAL_REMOTE_ENDPOINT:}
@@ -308,6 +317,10 @@ tick-debugger:
 
 # Micro6 Integration Configuration
 micro6:
+  runtime-selection:
+    registry-base-url: ${MICRO6_RUNTIME_SELECTION_REGISTRY_BASE_URL:http://127.0.0.1:8084}
+    registry-auth-token: ${MICRO6_RUNTIME_SELECTION_REGISTRY_AUTH_TOKEN:}
+    dev-fallback-enabled: ${MICRO6_RUNTIME_SELECTION_DEV_FALLBACK_ENABLED:false}
   expected-artifact-name: ${MICRO6_EXPECTED_ARTIFACT_NAME:}
   log-shipper:
     # Enable/disable log file shipper
@@ -496,3 +509,6 @@ gameplay:
 ai-player:
   dataset:
     output-dir: ${AI_PLAYER_DATASET_DIR:.chromascape/datasets}
+
+# SC-802 trusted topology; opaque authenticated references are required for remote routing.
+# Keep these independent of source-manifest transport credentials.

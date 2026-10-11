@@ -67,4 +67,35 @@ class LocalReplayPrincipalFilterTest {
     environment.setActiveProfiles(profile);
     return new LocalReplayPrincipalFilter(environment);
   }
+
+  @Test
+  void sessionRoutesUseTheSameRestrictedLocalPrincipalBridge() throws Exception {
+    var config = new LocalReplayPrincipalConfig();
+    var registration =
+        config.localReplayPrincipalFilterRegistration(filterFor("local-development"));
+    org.junit.jupiter.api.Assertions.assertTrue(
+        registration.getUrlPatterns().contains("/api/xrsps/sessions/*"));
+    for (String[] profiles :
+        new String[][] {
+          {"production"}, {"production", "local-development"}, {"local-development"}
+        }) {
+      StandardEnvironment environment = new StandardEnvironment();
+      environment.setActiveProfiles(profiles);
+      for (String peer : new String[] {"127.0.0.1", "192.0.2.1"}) {
+        var request = new MockHttpServletRequest("POST", "/api/xrsps/sessions");
+        request.setRemoteAddr(peer);
+        AtomicReference<Principal> observed = new AtomicReference<>();
+        new LocalReplayPrincipalFilter(environment)
+            .doFilter(
+                request,
+                new MockHttpServletResponse(),
+                (req, res) -> observed.set(((HttpServletRequest) req).getUserPrincipal()));
+        if (profiles.length == 1
+            && profiles[0].equals("local-development")
+            && peer.equals("127.0.0.1"))
+          org.junit.jupiter.api.Assertions.assertNotNull(observed.get());
+        else assertNull(observed.get());
+      }
+    }
+  }
 }

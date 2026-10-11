@@ -40,6 +40,9 @@ public class BuilderGoalRunnerController {
   private final BuilderGoalRunEventService runEventService;
   private final ObjectMapper objectMapper;
 
+  @Autowired
+  private com.chromascape.web.debug.buildergoal.service.BuilderGoalTopologyGuard topologyGuard;
+
   @Autowired private BuilderGoalRepairPatchExportService repairPatchExportService;
 
   public BuilderGoalRunnerController(
@@ -138,7 +141,14 @@ public class BuilderGoalRunnerController {
   }
 
   @PostMapping("/clients/heartbeat")
-  public ResponseEntity<Object> recordClientHeartbeat(@RequestBody JsonNode payload) {
+  public ResponseEntity<Object> recordClientHeartbeat(
+      @RequestBody JsonNode payload,
+      @org.springframework.web.bind.annotation.RequestHeader(
+              value = "Authorization",
+              required = false)
+          String authorization) {
+    if (topologyGuard == null || !topologyGuard.authenticatesHeartbeat(authorization))
+      return ResponseEntity.status(401).body(Map.of("code", "HEARTBEAT_UNAUTHORIZED"));
     try {
       return ResponseEntity.ok(clientRegistryService.recordHeartbeat(payload));
     } catch (IllegalArgumentException e) {

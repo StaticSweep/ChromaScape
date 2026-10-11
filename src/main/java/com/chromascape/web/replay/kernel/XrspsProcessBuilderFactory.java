@@ -33,8 +33,61 @@ public final class XrspsProcessBuilderFactory {
    * @param mode exactly {@code --stdio} or {@code --capabilities}
    */
   public static ProcessBuilder create(ReplayProperties.Xrsps config, String mode) {
+    if (!java.util.Set.of("--stdio", "--capabilities").contains(mode))
+      throw unavailable("Unsupported worker mode", null);
     validate(config);
-    var command = new java.util.ArrayList<String>(3);
+    // Every worker gets its own user/PID/network/mount namespaces and read-only approved
+    // code root. No host home, service credentials, sockets, or network interfaces are mounted.
+    // A denied sandbox launch prevents execution; there is no unsandboxed fallback.
+    Path isolation = Path.of("/usr/bin/bwrap");
+    if (!System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("linux")
+        || !Files.isExecutable(isolation)) {
+      throw unavailable(
+          "Offline worker isolation is unavailable",
+          "Run workers on an approved Linux host with bubblewrap and unprivileged namespaces");
+    }
+    var command = new java.util.ArrayList<String>();
+    java.util.Collections.addAll(
+        command,
+        isolation.toString(),
+        "--unshare-all",
+        "--new-session",
+        "--die-with-parent",
+        "--ro-bind",
+        "/usr",
+        "/usr",
+        "--ro-bind",
+        "/lib",
+        "/lib",
+        "--ro-bind",
+        "/lib64",
+        "/lib64",
+        "--proc",
+        "/proc",
+        "--dev",
+        "/dev",
+        "--tmpfs",
+        "/tmp");
+    Path entryRoot = Path.of(config.getEntrypoint()).getParent();
+    Path workRoot =
+        config.getWorkingDirectory() == null || config.getWorkingDirectory().isBlank()
+            ? entryRoot
+            : Path.of(config.getWorkingDirectory());
+    if (workRoot.getNameCount() < 2
+        || Path.of(System.getProperty("user.home")).startsWith(workRoot))
+      throw unavailable(
+          "Worker staging root is too broad",
+          "Use an integrity-checked worker package/cache staging root");
+    java.util.Collections.addAll(command, "--ro-bind", workRoot.toString(), workRoot.toString());
+    if (!entryRoot.startsWith(workRoot))
+      java.util.Collections.addAll(
+          command, "--ro-bind", entryRoot.toString(), entryRoot.toString());
+    if (config.getExecutable().startsWith("/")
+        && !config.getExecutable().startsWith("/usr/")
+        && !Path.of(config.getExecutable()).startsWith(workRoot))
+      java.util.Collections.addAll(
+          command, "--ro-bind", config.getExecutable(), config.getExecutable());
+    java.util.Collections.addAll(command, "--chdir", workRoot.toString(), "--");
     command.add(config.getExecutable());
     command.add(config.getEntrypoint());
     command.add(mode);
@@ -71,6 +124,8 @@ public final class XrspsProcessBuilderFactory {
       throw unavailable("xRSPS entrypoint must be an existing regular .js file", null);
     }
     String executable = config.getExecutable();
+    if (executable == null || executable.isBlank())
+      throw unavailable("Worker executable is not configured", null);
     if (executable.contains("/") || executable.contains("\\") || executable.contains(":")) {
       Path exe = Path.of(executable);
       if (!exe.isAbsolute() || !Files.isRegularFile(exe) || !Files.isExecutable(exe)) {
