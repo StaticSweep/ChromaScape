@@ -124,15 +124,17 @@ class TickStreamWebSocketHandlerTest {
     setup("ws-canonical");
     bind("debug_1");
     wsSession.getAttributes().put("selectedTickBatchVersion", 3);
-    var wire = (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(tickBatchJson());
+    var wire =
+        (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(tickBatchJson());
     wire.put("schemaVersion", 3).put("sequence", 1).put("contentHash", "a".repeat(64));
     wire.put("originalWireOnly", "preserved");
     var redacted = wire.deepCopy();
     redacted.remove("originalWireOnly");
     var store = mock(com.chromascape.web.recording.provenance.CanonicalFrameStore.class);
     when(store.accept(eq("rec_1"), any()))
-        .thenReturn(new com.chromascape.web.recording.provenance.CanonicalFrameStore.Receipt(
-            "1", true, redacted));
+        .thenReturn(
+            new com.chromascape.web.recording.provenance.CanonicalFrameStore.Receipt(
+                "1", true, redacted));
     var frame = mock(com.chromascape.web.recording.provenance.CanonicalTickFrame.class);
     when(frame.payload()).thenReturn(redacted);
     when(frame.digest()).thenReturn("a".repeat(64));
@@ -149,25 +151,34 @@ class TickStreamWebSocketHandlerTest {
   void canonicalFrameUsesOneDurableAckAndPreservesOriginalWireForProjection() throws Exception {
     JsonNode wire = bindCanonicalFrame();
     handler.handleTextMessage(wsSession, new TextMessage(wire.toString()));
-    verify(ingestionService).processTickBatch(
-        argThat(batch -> batch.getCanonicalFrame() != null), eq(wire));
-    verify(wsSession, times(1)).sendMessage(argThat((TextMessage message) ->
-        message.getPayload().contains("TICK_BATCH_ACK")
-            && message.getPayload().contains("acceptedSequence")));
-    verify(wsSession, never()).sendMessage(argThat((TextMessage message) ->
-        message.getPayload().contains("tick-batch-ack/v1")));
+    verify(ingestionService)
+        .processTickBatch(argThat(batch -> batch.getCanonicalFrame() != null), eq(wire));
+    verify(wsSession, times(1))
+        .sendMessage(
+            argThat(
+                (TextMessage message) ->
+                    message.getPayload().contains("TICK_BATCH_ACK")
+                        && message.getPayload().contains("acceptedSequence")));
+    verify(wsSession, never())
+        .sendMessage(
+            argThat((TextMessage message) -> message.getPayload().contains("tick-batch-ack/v1")));
   }
 
   @Test
   void canonicalProjectionFailureDoesNotRevokeCommittedAck() throws Exception {
     JsonNode wire = bindCanonicalFrame();
     doThrow(new IllegalStateException("legacy projection unavailable"))
-        .when(ingestionService).processTickBatch(any(), any());
+        .when(ingestionService)
+        .processTickBatch(any(), any());
     handler.handleTextMessage(wsSession, new TextMessage(wire.toString()));
-    verify(wsSession, times(1)).sendMessage(argThat((TextMessage message) ->
-        message.getPayload().contains("TICK_BATCH_ACK")));
-    verify(wsSession, never()).sendMessage(argThat((TextMessage message) ->
-        message.getPayload().contains("BATCH_PERSISTENCE_FAILED")));
+    verify(wsSession, times(1))
+        .sendMessage(
+            argThat((TextMessage message) -> message.getPayload().contains("TICK_BATCH_ACK")));
+    verify(wsSession, never())
+        .sendMessage(
+            argThat(
+                (TextMessage message) ->
+                    message.getPayload().contains("BATCH_PERSISTENCE_FAILED")));
   }
 
   private void stubStartSession(String sessionId) {
@@ -988,5 +999,22 @@ class TickStreamWebSocketHandlerTest {
     verify(shadowDecisionService, never()).evaluateAndPublish(any(), any(), any());
     verify(ingestionService, never()).processTickBatch(any(), any());
     verify(shadowDecisionService, times(1)).cleanupSession(eq("debug_1"), any());
+  }
+
+  @Test
+  void manualRecorderSelectionFailsClosedOnAbsentOrAmbiguousSockets() throws Exception {
+    setup("manual-socket");
+    org.junit.jupiter.api.Assertions.assertThrows(
+        IllegalStateException.class, () -> handler.selectManualRecorder(null));
+    when(wsSession.isOpen()).thenReturn(true);
+    handler.afterConnectionEstablished(wsSession);
+    assertThat(handler.selectManualRecorder(null)).isEqualTo("manual-socket");
+    var second = mock(WebSocketSession.class);
+    when(second.getId()).thenReturn("other-socket");
+    when(second.isOpen()).thenReturn(true);
+    when(second.getAttributes()).thenReturn(new java.util.HashMap<>());
+    handler.afterConnectionEstablished(second);
+    org.junit.jupiter.api.Assertions.assertThrows(
+        IllegalStateException.class, () -> handler.selectManualRecorder(null));
   }
 }

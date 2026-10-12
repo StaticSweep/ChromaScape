@@ -1793,4 +1793,80 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     }
     return sent;
   }
+
+  /** Select exactly one recorder without touching unrelated task-owned connections. */
+  public String selectManualRecorder(String preferredSessionId) {
+    synchronized (ownershipLock) {
+      String owner = preferredSessionId == null ? null : sessionOwners.get(preferredSessionId);
+      var candidates =
+          micro6Clients.stream()
+              .filter(WebSocketSession::isOpen)
+              .filter(
+                  client ->
+                      owner != null
+                          ? owner.equals(client.getId())
+                          : !sessionBindings.containsKey(client.getId())
+                              && !hasStartReservation(client.getId()))
+              .toList();
+      if (candidates.size() != 1) {
+        throw new IllegalStateException(
+            candidates.isEmpty()
+                ? "RECORDER_UNAVAILABLE: connect an idle Micro6 recorder before starting"
+                : "RECORDER_AMBIGUOUS: select a single Micro6 recorder before starting");
+      }
+      return candidates.get(0).getId();
+    }
+  }
+
+  /** Send a targeted command; authoritative ownership still comes from SESSION_START/STOP. */
+  public void sendRecordingControl(
+      String clientId, String action, String sessionId, String scriptName) {
+    WebSocketSession client =
+        micro6Clients.stream()
+            .filter(socket -> socket.getId().equals(clientId))
+            .findFirst()
+            .orElseThrow(() -> new IllegalStateException("RECORDER_DISCONNECTED"));
+    synchronized (client) {
+      synchronized (ownershipLock) {
+        SessionBinding binding = sessionBindings.get(clientId);
+        if (!client.isOpen()
+            || hasStartReservation(clientId)
+            || (binding != null && !sessionId.equals(binding.sessionId()))
+            || ("STOP".equals(action) && binding == null)) {
+          throw new IllegalStateException("RECORDER_BINDING_CHANGED");
+        }
+      }
+      try {
+        client.sendMessage(
+            new TextMessage(
+                objectMapper.writeValueAsString(
+                    Map.of(
+                        "type",
+                        "RECORDING_CONTROL",
+                        "action",
+                        action,
+                        "sessionId",
+                        sessionId,
+                        "scriptName",
+                        scriptName == null ? "Manual Recording" : scriptName))));
+      } catch (java.io.IOException failure) {
+        throw new IllegalStateException("RECORDER_COMMAND_FAILED", failure);
+      }
+    }
+  }
+
+  public boolean isRecorderBound(String clientId, String sessionId) {
+    synchronized (ownershipLock) {
+      SessionBinding binding = sessionBindings.get(clientId);
+      return binding != null
+          && binding.phase() == BindingPhase.ACTIVE
+          && sessionId.equals(binding.sessionId());
+    }
+  }
+
+  public String recorderOwner(String sessionId) {
+    synchronized (ownershipLock) {
+      return sessionOwners.get(sessionId);
+    }
+  }
 }

@@ -62,6 +62,10 @@ public class TickReplayController {
   private final DebugSessionService debugSessionService;
   private final ObjectMapper objectMapper;
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.chromascape.web.debug.tickdebugger.service.ManualRecordingCoordinator
+      manualRecordingCoordinator;
+
   public TickReplayController(
       DebugSessionRepository sessionRepository,
       TickSnapshotRepository snapshotRepository,
@@ -575,9 +579,9 @@ public class TickReplayController {
    * @return session start response with sessionId and recordingId
    */
   @PostMapping("/start-recording")
-  public ResponseEntity<SessionStartResponse> startRecording(
-      @RequestBody RecordingStartRequest request) {
+  public ResponseEntity<?> startRecording(@RequestBody RecordingStartRequest request) {
 
+    DebugSessionService.SessionStartOutcome started = null;
     try {
       String accountName = request.getAccountName();
       String scriptName = request.getScriptName();
@@ -593,18 +597,20 @@ public class TickReplayController {
         recordingEnabled = true;
       }
 
-      SessionStartResponse response =
-          debugSessionService
-              .startSessionWithOutcome(
-                  accountName,
-                  scriptName,
-                  recordingEnabled,
-                  RecordingTriggerSource.MANUAL,
-                  request.getSessionId(),
-                  request.getTaskKey(),
-                  request.getTaskArgs(),
-                  request.getRunContext())
-              .response();
+      String recorderClientId = manualRecordingCoordinator.selectRecorder(request.getSessionId());
+      started =
+          debugSessionService.startSessionWithOutcome(
+              accountName,
+              scriptName,
+              recordingEnabled,
+              RecordingTriggerSource.MANUAL,
+              request.getSessionId(),
+              request.getTaskKey(),
+              request.getTaskArgs(),
+              request.getRunContext());
+      SessionStartResponse response = started.response();
+      manualRecordingCoordinator.startAndAwaitTick(
+          recorderClientId, response.getSessionId(), scriptName);
 
       log.info(
           "Started recording via replay page: sessionId={}, recordingId={}",
@@ -614,8 +620,27 @@ public class TickReplayController {
       return ResponseEntity.ok(response);
 
     } catch (Exception e) {
+      if (started != null) {
+        // A readiness timeout must never close a pre-existing session reused by this request.
+        if (started.createdNewSession()) {
+          try {
+            manualRecordingCoordinator.stopAndAwaitDrain(started.response().getSessionId());
+          } catch (Exception cleanupFailure) {
+            log.warn("Recorder cleanup after failed start: {}", cleanupFailure.getMessage());
+          }
+        }
+        try {
+          debugSessionService.rollbackSessionStart(
+              started.rollbackToken(), "manual capture readiness failed");
+        } catch (Exception cleanupFailure) {
+          log.error("Failed to compensate manual recording start", cleanupFailure);
+        }
+      }
       log.error("Failed to start recording: {}", e.getMessage(), e);
-      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+      return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+          .body(
+              Map.of(
+                  "message", e.getMessage() == null ? "Recorder failed to start" : e.getMessage()));
     }
   }
 
@@ -639,6 +664,13 @@ public class TickReplayController {
         return ResponseEntity.badRequest().body(error);
       }
 
+      try {
+        manualRecordingCoordinator.stopAndAwaitDrain(sessionId);
+      } catch (IllegalStateException drainFailed) {
+        debugSessionService.stopSession(sessionId, endTick);
+        return ResponseEntity.status(HttpStatus.GATEWAY_TIMEOUT)
+            .body(Map.of("message", drainFailed.getMessage(), "sessionId", sessionId));
+      }
       debugSessionService.stopSession(sessionId, endTick);
       DebugSession stoppedSession = sessionRepository.findBySessionId(sessionId).orElse(null);
       String recordingId = stoppedSession != null ? stoppedSession.getRecordingId() : null;

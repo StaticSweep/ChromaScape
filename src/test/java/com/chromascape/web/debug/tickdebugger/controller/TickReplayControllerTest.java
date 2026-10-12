@@ -53,6 +53,10 @@ class TickReplayControllerTest {
   @Mock private DebugSessionService debugSessionService;
   @Mock private PacketObservationRepository packetObservationRepository;
 
+  @Mock
+  private com.chromascape.web.debug.tickdebugger.service.ManualRecordingCoordinator
+      manualRecordingCoordinator;
+
   private TickReplayController controller;
 
   @BeforeEach
@@ -69,6 +73,80 @@ class TickReplayControllerTest {
             standardLogRepository,
             debugSessionService,
             new ObjectMapper());
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        controller, "manualRecordingCoordinator", manualRecordingCoordinator);
+  }
+
+  @Test
+  void unavailableRecorderCannotStartAVideoOrSession() {
+    when(manualRecordingCoordinator.selectRecorder(null))
+        .thenThrow(new IllegalStateException("RECORDER_UNAVAILABLE"));
+    var response = controller.startRecording(new TickReplayController.RecordingStartRequest());
+    assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
+    verifyNoInteractions(debugSessionService);
+  }
+
+  private DebugSessionService.SessionStartOutcome manualStart(boolean created) {
+    var response =
+        new com.chromascape.web.debug.tickdebugger.dto.SessionStartResponse(
+            "debug_manual", true, "rec_manual", 0L, null);
+    var token =
+        new DebugSessionService.SessionStartRollbackToken(
+            "debug_manual", created, created ? "rec_manual" : null, null, null, null);
+    var outcome =
+        new DebugSessionService.SessionStartOutcome(response, token, created, !created, created);
+    when(manualRecordingCoordinator.selectRecorder(null)).thenReturn("socket");
+    when(debugSessionService.startSessionWithOutcome(
+            any(), any(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(outcome);
+    return outcome;
+  }
+
+  @Test
+  void recordingSuccessWaitsForBindingAndACommittedTick() {
+    var outcome = manualStart(true);
+    var response = controller.startRecording(new TickReplayController.RecordingStartRequest());
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    assertSame(outcome.response(), response.getBody());
+    var ordered = inOrder(manualRecordingCoordinator, debugSessionService);
+    ordered.verify(manualRecordingCoordinator).selectRecorder(null);
+    ordered
+        .verify(debugSessionService)
+        .startSessionWithOutcome(any(), any(), any(), any(), any(), any(), any(), any());
+    ordered
+        .verify(manualRecordingCoordinator)
+        .startAndAwaitTick("socket", "debug_manual", "Manual Recording");
+  }
+
+  @Test
+  void readinessFailureDrainsAndCompensatesOnlyTheNewSession() {
+    var outcome = manualStart(true);
+    doThrow(new IllegalStateException("RECORDER_TICK_TIMEOUT"))
+        .when(manualRecordingCoordinator)
+        .startAndAwaitTick(any(), any(), any());
+    doThrow(new IllegalStateException("RECORDER_DISCONNECTED"))
+        .when(manualRecordingCoordinator)
+        .stopAndAwaitDrain(any());
+    var response = controller.startRecording(new TickReplayController.RecordingStartRequest());
+    assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
+    verify(debugSessionService)
+        .rollbackSessionStart(outcome.rollbackToken(), "manual capture readiness failed");
+  }
+
+  @Test
+  void readinessFailureCannotStopAReusedSession() {
+    var outcome = manualStart(false);
+    doThrow(new IllegalStateException("RECORDER_TICK_TIMEOUT"))
+        .when(manualRecordingCoordinator)
+        .startAndAwaitTick(any(), any(), any());
+    assertEquals(
+        HttpStatus.SERVICE_UNAVAILABLE,
+        controller
+            .startRecording(new TickReplayController.RecordingStartRequest())
+            .getStatusCode());
+    verify(manualRecordingCoordinator, never()).stopAndAwaitDrain(any());
+    verify(debugSessionService)
+        .rollbackSessionStart(outcome.rollbackToken(), "manual capture readiness failed");
   }
 
   private DebugSession createSession(String sessionId) {
