@@ -51,7 +51,7 @@ class CombatTickRowPostgresIntegrationTest {
             var statement = connection.createStatement()) {
           statement.execute(
               "ALTER TABLE tick_snapshots DROP COLUMN inputs, DROP COLUMN tiles, "
-                  + "DROP COLUMN hazards, DROP COLUMN phase");
+                  + "DROP COLUMN hazards, DROP COLUMN phase, DROP COLUMN capture_quality");
           statement.execute(
               "INSERT INTO tick_snapshots (session_id, tick, timestamp, player_state) "
                   + "VALUES ('legacy', 1, CURRENT_TIMESTAMP, '{}'::jsonb)");
@@ -63,12 +63,24 @@ class CombatTickRowPostgresIntegrationTest {
           }
           statement.execute(migration);
           statement.execute(migration); // Idempotent when the table already has the new columns.
+          try (var in =
+              getClass().getResourceAsStream("/db/migration/V69__sc751_capture_quality.sql")) {
+            String qualityMigration = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            statement.execute(qualityMigration);
+            statement.execute(qualityMigration);
+          }
+          assertThatThrownBy(
+                  () ->
+                      statement.execute(
+                          "UPDATE tick_snapshots SET capture_quality=jsonb_build_object('raw',repeat('x',262144)) WHERE session_id='legacy'"))
+              .isInstanceOf(SQLException.class)
+              .hasMessageContaining("ck_tick_snapshots_capture_quality_size");
           try (var result =
               statement.executeQuery(
-                  "SELECT inputs, tiles, hazards, phase FROM tick_snapshots "
+                  "SELECT inputs, tiles, hazards, phase, capture_quality FROM tick_snapshots "
                       + "WHERE session_id='legacy'")) {
             assertThat(result.next()).isTrue();
-            for (int column = 1; column <= 4; column++) {
+            for (int column = 1; column <= 5; column++) {
               assertThat(result.getString(column)).isNull();
             }
           }
@@ -95,6 +107,11 @@ class CombatTickRowPostgresIntegrationTest {
                   110L,
                   java.time.LocalDateTime.of(2026, 10, 5, 14, 0),
                   fixture.get("playerState"));
+          try (var in =
+              getClass()
+                  .getResourceAsStream("/replay/contracts/capture-quality-simulated-v1.json")) {
+            snapshot.setCaptureQuality(mapper.readTree(in));
+          }
           snapshot.setInputs(fixture.get("inputs"));
           snapshot.setTiles(fixture.get("tiles"));
           snapshot.setHazards(fixture.get("hazards"));
@@ -111,6 +128,7 @@ class CombatTickRowPostgresIntegrationTest {
             assertThat(reloaded.getTiles()).isEqualTo(fixture.get("tiles"));
             assertThat(reloaded.getHazards()).isEqualTo(fixture.get("hazards"));
             assertThat(reloaded.getPhase()).isEqualTo(fixture.get("phase"));
+            assertThat(reloaded.getCaptureQuality()).isEqualTo(snapshot.getCaptureQuality());
             Map<String, Object> row =
                 CombatTickRowService.build(
                     reloaded, null, null, new CombatTickRowService.VideoSync(100L, 30));

@@ -89,6 +89,18 @@ public class TickReplayController {
     this.objectMapper = objectMapper;
   }
 
+  @GetMapping("/{sessionId}/quality")
+  public ResponseEntity<Map<String, Object>> captureQuality(@PathVariable String sessionId) {
+    if (sessionRepository.findBySessionId(sessionId).isEmpty()) {
+      return ResponseEntity.notFound().build();
+    }
+    return ResponseEntity.ok(
+        com.chromascape.web.debug.tickdebugger.service.CaptureQualityReport.summarize(
+            sessionId,
+            snapshotRepository.findBySessionIdOrderByTick(sessionId),
+            tickVideoSyncService.measurements(sessionId)));
+  }
+
   /**
    * Get tick range data for a session.
    *

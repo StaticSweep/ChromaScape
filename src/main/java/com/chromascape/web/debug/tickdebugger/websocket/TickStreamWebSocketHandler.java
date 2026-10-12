@@ -337,6 +337,29 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
         String type = root.has("type") ? root.get("type").asText() : "";
 
         switch (type) {
+          case "CALIBRATION_PING":
+            long receivedMillis = System.currentTimeMillis();
+            String probeId = root.path("requestId").asText();
+            if (probeId.length() > 64
+                || !probeId.matches("[a-zA-Z0-9-]{1,64}")
+                || !root.path("clientSendMillis").isIntegralNumber()) {
+              throw new IllegalArgumentException("Invalid clock probe");
+            }
+            session.sendMessage(
+                new TextMessage(
+                    objectMapper.writeValueAsString(
+                        Map.of(
+                            "type",
+                            "CALIBRATION_PONG",
+                            "requestId",
+                            probeId,
+                            "clientSendMillis",
+                            root.get("clientSendMillis").longValue(),
+                            "serverReceiveMillis",
+                            receivedMillis,
+                            "serverSendMillis",
+                            System.currentTimeMillis()))));
+            break;
           case "SESSION_START":
             handleSessionStart(session, root);
             break;

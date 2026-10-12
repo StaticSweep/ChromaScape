@@ -621,6 +621,7 @@ public class TickStreamIngestionService {
     snapshot.setTiles(tiles);
     snapshot.setHazards(hazards);
     snapshot.setPhase(phase);
+    snapshot.setCaptureQuality(CaptureQualityContract.validate(batch, objectMapper));
 
     snapshot.setNpcs(npcs);
     snapshot.setGameObjects(gameObjects);

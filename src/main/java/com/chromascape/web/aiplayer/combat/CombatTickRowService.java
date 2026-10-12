@@ -57,7 +57,15 @@ public final class CombatTickRowService {
   private CombatTickRowService() {}
 
   /** Video-sync inputs for the derived frame range (TickVideoSyncService formula). */
-  public record VideoSync(long startTick, Integer fps) {
+  public record VideoSync(
+      long startTick,
+      Integer fps,
+      com.chromascape.web.recording.service.MeasuredVideoIndex.Mapping measuredStart,
+      com.chromascape.web.recording.service.MeasuredVideoIndex.Mapping measuredEnd) {
+    public VideoSync(long startTick, Integer fps) {
+      this(startTick, fps, null, null);
+    }
+
     /** Sync for a session with no recording: frames stay null and {@code hasVideo} is false. */
     public static VideoSync absent(long startTick) {
       return new VideoSync(startTick, null);
@@ -142,7 +150,27 @@ public final class CombatTickRowService {
     if (vocab != null && !actionType.equals(VOCAB_TO_CANONICAL.get(vocab))) {
       throw new IllegalArgumentException("label vocabulary does not match its semantic action");
     }
-    if (!Set.of("MICRO6_SEMANTIC_DISPATCH", "MICRO6_LEGACY_CONVERSION", "OPERATOR_SUPPLIED")
+    Object quality = row.get("captureQuality");
+    JsonNode qualityNode = quality == null ? null : valueToTree(quality);
+    if (qualityNode != null) {
+      com.chromascape.web.debug.tickdebugger.service.CaptureQualityContract.validate(
+          qualityNode,
+          qualityNode.path("sessionId").asText(),
+          ((Number) row.get("tick_id")).longValue(),
+          OBJECT_MAPPER);
+      if (!qualityNode.path("qualityCodes").isEmpty()
+          || !"MEASURED".equals(qualityNode.path("clock").path("status").asText())) {
+        throw new IllegalArgumentException("capture quality is ineligible");
+      }
+    }
+    if ("CLIENT_EVENT_SETTLED".equals(labelMap.get("provenance"))) {
+      LabelEvidence expected = settledLabel(qualityNode, ((Number) row.get("tick_id")).longValue());
+      if (!actionType.equals(expected.canonicalType())
+          || !java.util.Objects.equals(labelMap.get("sourceTick"), expected.sourceTick())
+          || !java.util.Objects.equals(labelMap.get("sequence"), expected.sequence())) {
+        throw new IllegalArgumentException("label has no confirmed raw-source lineage");
+      }
+    } else if (!Set.of("MICRO6_SEMANTIC_DISPATCH", "MICRO6_LEGACY_CONVERSION", "OPERATOR_SUPPLIED")
         .contains(String.valueOf(labelMap.get("provenance")))) {
       throw new IllegalArgumentException("label has no attributable action provenance");
     }
@@ -151,6 +179,44 @@ public final class CombatTickRowService {
         || !(labelMap.get("sequence") instanceof Number sequence)
         || sequence.intValue() < 0) {
       throw new IllegalArgumentException("label has no source tick and action sequence");
+    }
+  }
+
+  private static LabelEvidence settledLabel(JsonNode q, long tick) {
+    LabelEvidence absent = LabelEvidence.fromAction(null);
+    if (q == null || q.isNull()) {
+      return absent;
+    }
+    try {
+      com.chromascape.web.debug.tickdebugger.service.CaptureQualityContract.validate(
+          q, q.path("sessionId").asText(), tick, OBJECT_MAPPER);
+      if (!q.path("qualityCodes").isEmpty()
+          || !"MEASURED".equals(q.path("clock").path("status").asText())) {
+        return absent;
+      }
+      JsonNode selected = null;
+      for (JsonNode event : q.path("settlements")) {
+        if (!"CONFIRMED".equals(event.path("status").asText())
+            || event.path("settlementTick").longValue() != tick) {
+          continue;
+        }
+        if (selected != null) {
+          return absent;
+        } // one label per row; simultaneous families remain explicit evidence
+        selected = event;
+      }
+      if (selected == null || !selected.path("sequence").canConvertToInt()) {
+        return absent;
+      }
+      return new LabelEvidence(
+          null,
+          selected.path("actionType").asText(),
+          "CLIENT_EVENT_SETTLED",
+          selected.path("sourceTick").longValue(),
+          selected.path("sequence").intValue(),
+          false);
+    } catch (IllegalArgumentException invalid) {
+      return absent;
     }
   }
 
@@ -176,6 +242,7 @@ public final class CombatTickRowService {
         snapshot.getHazards(),
         snapshot.getPhase(),
         snapshot.getInputs(),
+        snapshot.getCaptureQuality(),
         label,
         diagnostics,
         videoSync);
@@ -203,6 +270,7 @@ public final class CombatTickRowService {
         valueToTree(batch.getHazards()),
         valueToTree(batch.getPhase()),
         valueToTree(batch.getInputs()),
+        valueToTree(batch.getCaptureQuality()),
         label,
         diagnostics,
         videoSync);
@@ -221,6 +289,7 @@ public final class CombatTickRowService {
       JsonNode hazards,
       JsonNode phase,
       JsonNode inputs,
+      JsonNode captureQuality,
       LabelEvidence label,
       DiagnosticEvidence diagnostics,
       VideoSync videoSync) {
@@ -300,7 +369,7 @@ public final class CombatTickRowService {
             : nodeToMap(inputs == null ? null : inputs.get("clickedTile"));
     diagnosticBlock.put("clickedTile", clickedTile);
 
-    LabelEvidence effective = label == null ? LabelEvidence.fromAction(null) : label;
+    LabelEvidence effective = label == null ? settledLabel(captureQuality, tick) : label;
     Map<String, Object> labelBlock = new LinkedHashMap<>();
     labelBlock.put("vocab", effective.vocab());
     labelBlock.put("canonicalType", effective.canonicalType());
@@ -323,6 +392,9 @@ public final class CombatTickRowService {
     row.put("diagnosticInputs", diagnosticBlock);
     row.put("label", labelBlock);
     row.put("video", videoBlock(tick, videoSync));
+    if (captureQuality != null && !captureQuality.isNull()) {
+      row.put("captureQuality", nodeToMap(captureQuality));
+    }
     row.put(
         "deferred",
         deferredFields(
@@ -332,6 +404,13 @@ public final class CombatTickRowService {
             inputs != null,
             hasNpcInteraction(playerState) && !Boolean.TRUE.equals(target.get("resolved")),
             videoSync));
+    if (captureQuality != null && captureQuality.path("qualityCodes").isArray()) {
+      @SuppressWarnings("unchecked")
+      List<String> gaps = (List<String>) row.get("deferred");
+      captureQuality
+          .path("qualityCodes")
+          .forEach(code -> gaps.add("capture_quality:" + code.asText()));
+    }
     return row;
   }
 
@@ -447,6 +526,30 @@ public final class CombatTickRowService {
     boolean hasVideo = videoSync != null && videoSync.fps() != null;
     video.put("hasVideo", hasVideo);
     video.put("fps", hasVideo ? videoSync.fps() : null);
+    if (videoSync != null && videoSync.measuredStart() != null) {
+      var start = videoSync.measuredStart();
+      var end = videoSync.measuredEnd();
+      boolean measured =
+          "MEASURED".equals(start.status())
+              && end != null
+              && "MEASURED".equals(end.status())
+              && end.frameIndex() >= start.frameIndex();
+      video.put(
+          "calibration",
+          Map.of(
+              "status",
+              measured ? "MEASURED" : "UNAVAILABLE",
+              "start",
+              start,
+              "end",
+              end == null
+                  ? com.chromascape.web.recording.service.MeasuredVideoIndex.unavailable(
+                      "NEXT_TICK_UNAVAILABLE")
+                  : end));
+      video.put("frameStart", measured ? start.frameIndex() : null);
+      video.put("frameEnd", measured ? Math.max(start.frameIndex(), end.frameIndex() - 1) : null);
+      return video;
+    }
     if (!hasVideo) {
       video.put("frameStart", null);
       video.put("frameEnd", null);

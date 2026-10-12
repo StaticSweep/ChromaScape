@@ -2,8 +2,12 @@ package com.chromascape.web.debug.tickdebugger.service;
 
 import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository;
+import com.chromascape.web.debug.tickdebugger.entity.TickSnapshotRepository;
 import com.chromascape.web.recording.entity.RecordingSession;
 import com.chromascape.web.recording.entity.RecordingSessionRepository;
+import com.chromascape.web.recording.service.MeasuredVideoIndex;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -25,11 +29,120 @@ public class TickVideoSyncService {
   private final DebugSessionRepository sessionRepository;
   private final RecordingSessionRepository recordingSessionRepository;
 
+  private final TickSnapshotRepository snapshots;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public TickVideoSyncService(
+      DebugSessionRepository sessions,
+      RecordingSessionRepository recordings,
+      TickSnapshotRepository snapshots) {
+    this.sessionRepository = sessions;
+    this.recordingSessionRepository = recordings;
+    this.snapshots = snapshots;
+  }
+
+  public MeasuredVideoIndex.Mapping measuredMapping(String sessionId, long tick) {
+    try {
+      DebugSession session = sessionRepository.findBySessionId(sessionId).orElse(null);
+      if (session == null || session.getRecordingId() == null || snapshots == null) {
+        return MeasuredVideoIndex.unavailable("CAPTURE_CALIBRATION_MISSING");
+      }
+      var snapshot = snapshots.findBySessionIdAndTick(sessionId, tick).orElse(null);
+      var q = snapshot == null ? null : snapshot.getCaptureQuality();
+      if (q == null) {
+        return MeasuredVideoIndex.unavailable("CAPTURE_CALIBRATION_MISSING");
+      }
+      RecordingSession recording =
+          recordingSessionRepository.findByRecordingId(session.getRecordingId()).orElse(null);
+      if (recording == null || recording.getVideoPath() == null) {
+        return MeasuredVideoIndex.unavailable("VIDEO_INDEX_MISSING");
+      }
+      var index =
+          MeasuredVideoIndex.read(
+              java.nio.file.Path.of(recording.getVideoPath()), recording.getRecordingId());
+      return measuredMapping(q, sessionId, tick, index);
+    } catch (Exception invalid) {
+      return MeasuredVideoIndex.unavailable("VIDEO_INDEX_OR_CAPTURE_INVALID");
+    }
+  }
+
+  private MeasuredVideoIndex.Mapping measuredMapping(
+      JsonNode q, String session, long tick, MeasuredVideoIndex.Index index) {
+    try {
+      if (q == null) {
+        return MeasuredVideoIndex.unavailable("CAPTURE_CALIBRATION_MISSING");
+      }
+      CaptureQualityContract.validate(q, session, tick, new ObjectMapper());
+      if (!q.path("qualityCodes").isEmpty()
+          || !"MEASURED".equals(q.path("clock").path("status").asText())) {
+        return MeasuredVideoIndex.unavailable("CAPTURE_QUALITY_UNAVAILABLE");
+      }
+      return MeasuredVideoIndex.map(
+          index,
+          q.path("tickCapturedAtEpochMillis").doubleValue()
+              + q.path("clock").path("serverOffsetMillis").doubleValue(),
+          q.path("clock").path("uncertaintyMillis").doubleValue());
+    } catch (Exception invalid) {
+      return MeasuredVideoIndex.unavailable("CAPTURE_QUALITY_INVALID");
+    }
+  }
+
+  public java.util.Map<Long, MeasuredVideoIndex.Mapping> measurements(String sessionId) {
+    var results = new java.util.LinkedHashMap<Long, MeasuredVideoIndex.Mapping>();
+    if (snapshots == null) {
+      return results;
+    }
+    MeasuredVideoIndex.Index index = null;
+    try {
+      var session = sessionRepository.findBySessionId(sessionId).orElse(null);
+      var recording =
+          session == null || session.getRecordingId() == null
+              ? null
+              : recordingSessionRepository.findByRecordingId(session.getRecordingId()).orElse(null);
+      if (recording != null && recording.getVideoPath() != null) {
+        index =
+            MeasuredVideoIndex.read(
+                java.nio.file.Path.of(recording.getVideoPath()), recording.getRecordingId());
+      }
+    } catch (Exception invalid) {
+      /* Missing, partial or corrupt media remains explicitly unavailable. */
+    }
+    for (var snapshot : snapshots.findBySessionIdOrderByTick(sessionId)) {
+      results.put(
+          snapshot.getTick(),
+          measuredMapping(snapshot.getCaptureQuality(), sessionId, snapshot.getTick(), index));
+    }
+    return results;
+  }
+
+  private boolean hasCaptureQuality(String sessionId, long tick) {
+    return snapshots != null
+        && snapshots
+            .findBySessionIdAndTick(sessionId, tick)
+            .map(s -> s.getCaptureQuality() != null)
+            .orElse(false);
+  }
+
+  public com.chromascape.web.aiplayer.combat.CombatTickRowService.VideoSync combatVideoSync(
+      String sessionId, long tick) {
+    var session = sessionRepository.findBySessionId(sessionId).orElse(null);
+    var recording =
+        session == null || session.getRecordingId() == null
+            ? null
+            : recordingSessionRepository.findByRecordingId(session.getRecordingId()).orElse(null);
+    return new com.chromascape.web.aiplayer.combat.CombatTickRowService.VideoSync(
+        session == null || session.getStartTick() == null ? 0 : session.getStartTick(),
+        recording == null ? null : recording.getFps(),
+        measuredMapping(sessionId, tick),
+        measuredMapping(sessionId, tick + 1));
+  }
+
   public TickVideoSyncService(
       DebugSessionRepository sessionRepository,
       RecordingSessionRepository recordingSessionRepository) {
     this.sessionRepository = sessionRepository;
     this.recordingSessionRepository = recordingSessionRepository;
+    this.snapshots = null;
   }
 
   /**
@@ -42,6 +155,10 @@ public class TickVideoSyncService {
    * @return the video frame number, or null if no video is available
    */
   public Integer getFrameForTick(String sessionId, long tick) {
+    if (hasCaptureQuality(sessionId, tick)) {
+      var measured = measuredMapping(sessionId, tick);
+      return "MEASURED".equals(measured.status()) ? measured.frameIndex() : null;
+    }
     try {
       DebugSession debugSession = sessionRepository.findBySessionId(sessionId).orElse(null);
       if (debugSession == null || debugSession.getRecordingId() == null) {
@@ -79,6 +196,10 @@ public class TickVideoSyncService {
    * @return the tick number, or null if calculation fails
    */
   public Long getTickForFrame(String sessionId, int frame) {
+    Long measured = measuredTickForMedia(sessionId, frame, null);
+    if (measured != null || hasAnyCaptureQuality(sessionId)) {
+      return measured;
+    }
     try {
       DebugSession debugSession = sessionRepository.findBySessionId(sessionId).orElse(null);
       if (debugSession == null || debugSession.getRecordingId() == null) {
@@ -116,6 +237,10 @@ public class TickVideoSyncService {
    * @return the video time in milliseconds, or null if calculation fails
    */
   public Long getVideoTimeForTick(String sessionId, long tick) {
+    if (hasCaptureQuality(sessionId, tick)) {
+      var measured = measuredMapping(sessionId, tick);
+      return "MEASURED".equals(measured.status()) ? Math.round(measured.mediaTimeMillis()) : null;
+    }
     try {
       DebugSession debugSession = sessionRepository.findBySessionId(sessionId).orElse(null);
       if (debugSession == null) {
@@ -145,6 +270,10 @@ public class TickVideoSyncService {
    * @return the tick number, or null if calculation fails
    */
   public Long getTickForVideoTime(String sessionId, long timeMs) {
+    Long measured = measuredTickForMedia(sessionId, null, timeMs);
+    if (measured != null || hasAnyCaptureQuality(sessionId)) {
+      return measured;
+    }
     try {
       DebugSession debugSession = sessionRepository.findBySessionId(sessionId).orElse(null);
       if (debugSession == null) {
@@ -160,6 +289,64 @@ public class TickVideoSyncService {
 
     } catch (Exception e) {
       log.error("Error calculating tick for video time {}: {}", timeMs, e.getMessage(), e);
+      return null;
+    }
+  }
+
+  private boolean hasAnyCaptureQuality(String sessionId) {
+    return snapshots != null
+        && snapshots.findBySessionIdOrderByTick(sessionId).stream()
+            .anyMatch(s -> s.getCaptureQuality() != null);
+  }
+
+  private Long measuredTickForMedia(String sessionId, Integer frame, Long timeMillis) {
+    if (snapshots == null) {
+      return null;
+    }
+    try {
+      var session = sessionRepository.findBySessionId(sessionId).orElse(null);
+      if (session == null || session.getRecordingId() == null) {
+        return null;
+      }
+      var recording =
+          recordingSessionRepository.findByRecordingId(session.getRecordingId()).orElse(null);
+      if (recording == null || recording.getVideoPath() == null) {
+        return null;
+      }
+      var index =
+          MeasuredVideoIndex.read(
+              java.nio.file.Path.of(recording.getVideoPath()), recording.getRecordingId());
+      if (!index.qualityCodes().isEmpty()) {
+        return null;
+      }
+      double media;
+      if (frame != null) {
+        if (frame < 0 || frame >= index.frames().size()) {
+          return null;
+        }
+        media = index.frames().get(frame).mediaMicros() / 1000.0;
+      } else {
+        media = timeMillis;
+      }
+      if (media < 0
+          || media > index.frames().get(index.frames().size() - 1).mediaMicros() / 1000.0) {
+        return null;
+      }
+      Long best = null;
+      double delta = Double.POSITIVE_INFINITY;
+      for (var s : snapshots.findBySessionIdOrderByTick(sessionId)) {
+        var mapping = measuredMapping(s.getCaptureQuality(), sessionId, s.getTick(), index);
+        if (!"MEASURED".equals(mapping.status())) {
+          continue;
+        }
+        double distance = Math.abs(mapping.mediaTimeMillis() - media);
+        if (distance < delta) {
+          delta = distance;
+          best = s.getTick();
+        }
+      }
+      return delta <= 400 ? best : null;
+    } catch (Exception invalid) {
       return null;
     }
   }
@@ -200,6 +387,27 @@ public class TickVideoSyncService {
       log.error("Error getting sync info for session {}: {}", sessionId, e.getMessage(), e);
     }
 
+    if (snapshots != null && info.hasVideo) {
+      java.util.List<Double> residuals = new java.util.ArrayList<>();
+      java.util.Set<String> codes = new java.util.TreeSet<>();
+      for (var mapping : measurements(sessionId).values()) {
+        if ("MEASURED".equals(mapping.status())) {
+          residuals.add(Math.abs(mapping.residualMillis()) + mapping.uncertaintyMillis());
+        } else {
+          codes.addAll(mapping.qualityCodes());
+        }
+      }
+      residuals.sort(Double::compare);
+      info.calibratedTicks = residuals.size();
+      info.calibrationStatus =
+          residuals.isEmpty() ? "UNAVAILABLE" : codes.isEmpty() ? "MEASURED" : "PARTIAL";
+      info.calibrationQualityCodes = java.util.List.copyOf(codes);
+      if (!residuals.isEmpty()) {
+        info.maxAlignmentErrorMillis = residuals.get(residuals.size() - 1);
+        info.p95AlignmentErrorMillis =
+            residuals.get(Math.max(0, (int) Math.ceil(residuals.size() * .95) - 1));
+      }
+    }
     return info;
   }
 
@@ -212,6 +420,13 @@ public class TickVideoSyncService {
     public Integer fps;
     public Integer totalFrames;
     public Long durationMs;
+    public String calibrationSchema = "tick-video-calibration/v1";
+    public String calibrationStatus = "UNAVAILABLE";
+    public java.util.List<String> calibrationQualityCodes =
+        java.util.List.of("CAPTURE_CALIBRATION_MISSING");
+    public int calibratedTicks;
+    public Double maxAlignmentErrorMillis;
+    public Double p95AlignmentErrorMillis;
 
     public long getTickRange() {
       if (endTick != null) {

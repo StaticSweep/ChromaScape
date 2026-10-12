@@ -1,0 +1,444 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "capture-quality/v1"
+    },
+    "sessionId": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "producerId": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9-]{1,64}$"
+    },
+    "epochTick": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "epochCapturedAtEpochMillis": {
+      "type": "integer"
+    },
+    "tick": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tickCapturedAtEpochMillis": {
+      "type": "integer"
+    },
+    "clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "MEASURED",
+            "UNAVAILABLE"
+          ]
+        },
+        "qualityCode": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 64
+        },
+        "measuredAtEpochMillis": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "serverOffsetMillis": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "uncertaintyMillis": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "MEASURED"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "measuredAtEpochMillis",
+              "serverOffsetMillis",
+              "uncertaintyMillis"
+            ],
+            "properties": {
+              "measuredAtEpochMillis": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "serverOffsetMillis": {
+                "type": "number"
+              },
+              "uncertaintyMillis": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 50
+              }
+            }
+          }
+        }
+      ]
+    },
+    "rawEvents": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9-]{1,64}$"
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sessionId": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "producerId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9-]{1,64}$"
+          },
+          "source": {
+            "type": "string",
+            "const": "CLIENT_EVENT"
+          },
+          "sourceTick": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "producer": {
+            "type": "string",
+            "const": "micro6-combat-menu/v1"
+          },
+          "capturedAtEpochMillis": {
+            "type": "integer"
+          },
+          "family": {
+            "const": "MENU_CALLBACK"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "opcode": {
+                "type": "integer"
+              },
+              "identifier": {
+                "type": "integer"
+              },
+              "param0": {
+                "type": "integer"
+              },
+              "param1": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "opcode",
+              "identifier",
+              "param0",
+              "param1"
+            ]
+          },
+          "payloadHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "eventId",
+          "sequence",
+          "sessionId",
+          "producerId",
+          "source",
+          "sourceTick",
+          "producer",
+          "capturedAtEpochMillis",
+          "family",
+          "payload",
+          "payloadHash"
+        ]
+      }
+    },
+    "settlements": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9-]{1,64}$"
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sessionId": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "producerId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9-]{1,64}$"
+          },
+          "source": {
+            "type": "string",
+            "const": "CLIENT_EVENT"
+          },
+          "sourceTick": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "actionType": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "INTERACT_NPC",
+              "WALK_TO",
+              "INTERACT_INVENTORY_ITEM",
+              "INTERACT_WIDGET",
+              null
+            ]
+          },
+          "target": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "npcId": {
+                "type": "integer"
+              },
+              "clientIndex": {
+                "type": "integer"
+              },
+              "itemId": {
+                "type": "integer"
+              },
+              "slot": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 27
+              },
+              "x": {
+                "type": "integer"
+              },
+              "y": {
+                "type": "integer"
+              },
+              "plane": {
+                "type": "integer"
+              },
+              "widgetId": {
+                "type": "integer"
+              },
+              "stableId": {
+                "type": "string",
+                "maxLength": 120
+              },
+              "prayer": {
+                "type": "string",
+                "maxLength": 64
+              }
+            },
+            "required": []
+          },
+          "settlementTick": {
+            "type": "integer"
+          },
+          "outcomeHorizonTick": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "CONFIRMED",
+              "UNCONFIRMED",
+              "AMBIGUOUS"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "pattern": "^[A-Z_]{1,64}$"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "rawEventIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9-]{1,64}$"
+            }
+          },
+          "derivation": {
+            "enum": [
+              "AUTHORITATIVE_END_OF_TICK_MUTATION",
+              "RAW_CALLBACK_UNRESOLVED"
+            ]
+          },
+          "observationTick": {
+            "type": "integer"
+          },
+          "stateEvidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "beforeTick": {
+                "type": "integer"
+              },
+              "afterTick": {
+                "type": "integer"
+              },
+              "before": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "npcId": {
+                    "type": "integer"
+                  },
+                  "clientIndex": {
+                    "type": "integer"
+                  },
+                  "x": {
+                    "type": "integer"
+                  },
+                  "y": {
+                    "type": "integer"
+                  },
+                  "plane": {
+                    "type": "integer"
+                  },
+                  "quantity": {
+                    "type": "integer"
+                  },
+                  "active": {
+                    "type": "boolean"
+                  }
+                },
+                "required": []
+              },
+              "after": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "npcId": {
+                    "type": "integer"
+                  },
+                  "clientIndex": {
+                    "type": "integer"
+                  },
+                  "x": {
+                    "type": "integer"
+                  },
+                  "y": {
+                    "type": "integer"
+                  },
+                  "plane": {
+                    "type": "integer"
+                  },
+                  "quantity": {
+                    "type": "integer"
+                  },
+                  "active": {
+                    "type": "boolean"
+                  }
+                },
+                "required": []
+              }
+            },
+            "required": [
+              "beforeTick",
+              "afterTick",
+              "before",
+              "after"
+            ]
+          }
+        },
+        "required": [
+          "eventId",
+          "sequence",
+          "sessionId",
+          "producerId",
+          "source",
+          "sourceTick",
+          "target",
+          "settlementTick",
+          "outcomeHorizonTick",
+          "status",
+          "reason",
+          "confidence",
+          "rawEventIds",
+          "derivation",
+          "observationTick"
+        ]
+      }
+    },
+    "pendingCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 64
+    },
+    "qualityCodes": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z_]{1,64}$"
+      }
+    },
+    "terminal": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema",
+    "sessionId",
+    "producerId",
+    "epochTick",
+    "epochCapturedAtEpochMillis",
+    "tick",
+    "tickCapturedAtEpochMillis",
+    "clock",
+    "rawEvents",
+    "settlements",
+    "pendingCount",
+    "qualityCodes",
+    "terminal"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chromascape.dev/replay/capture-quality-v1.schema.json",
+  "title": "Capture quality v1",
+  "description": "Additive checksum-covered immutable CLIENT_EVENT raw-source and mutation-backed settlement evidence. Ingestion additionally verifies exact session/tick binding, sorted numeric payload hash, lineage/horizon and actual captured mutation. 256KiB section bound. Constructed fixtures do not certify real combat acceptance."
+}

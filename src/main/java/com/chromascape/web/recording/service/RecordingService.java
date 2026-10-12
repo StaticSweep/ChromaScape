@@ -80,6 +80,12 @@ public class RecordingService implements FrameListener {
 
   private FFmpegFrameRecorder recorder;
   private File currentRecordingFile;
+  private java.util.concurrent.Future<?> encoderFuture;
+  private volatile long initialFrameCaptureNanos;
+  private final java.util.List<MeasuredVideoIndex.Submission> frameTimings =
+      new java.util.ArrayList<>();
+  private final java.util.Set<String> timingQualityCodes = new java.util.LinkedHashSet<>();
+  private long lastMediaSlot = -1;
   private long recordingStartTime;
   private volatile long recordingStartTimeNano; // Store nano time at start
   private String currentRecordingId;
@@ -148,6 +154,12 @@ public class RecordingService implements FrameListener {
       throw new RecordingDisabledException();
     }
 
+    if (!recording.get() && recorder != null) {
+      throw new RecordingException(
+          "Previous recording was not finalized",
+          "Restart the recording service before starting another recording.");
+    }
+
     if (recording.get()) {
       logger.warn("Recording is already in progress: {}", currentRecordingId);
       throw new RecordingAlreadyInProgressException(currentRecordingId);
@@ -200,8 +212,11 @@ public class RecordingService implements FrameListener {
       recordingStartTime = System.currentTimeMillis();
       recordingStartTimeNano = System.nanoTime();
 
-      // Add first frame to buffer (capture time is recording start time)
-      frameBuffer.offer(new TimestampedFrame(normalizedFirstFrame, recordingStartTimeNano));
+      frameTimings.clear();
+      timingQualityCodes.clear();
+      lastMediaSlot = -1;
+      // Keep the actual first-image capture time as well as its presentation origin.
+      frameBuffer.offer(new TimestampedFrame(normalizedFirstFrame, initialFrameCaptureNanos));
       frameCount.set(1);
       framesRecorded = 1;
 
@@ -215,7 +230,7 @@ public class RecordingService implements FrameListener {
           FRAME_BUFFER_SIZE);
 
       // Start encoder thread (consumer)
-      encoderThread.submit(this::encoderLoop);
+      encoderFuture = encoderThread.submit(this::encoderLoop);
 
       // Register with unified capture service to receive frames
       if (unifiedConfig.isEnabled()) {
@@ -321,6 +336,8 @@ public class RecordingService implements FrameListener {
             candidateFirstSeenNanos = System.nanoTime();
           }
           candidate = normalized;
+          initialFrameCaptureNanos =
+              capturedEvent == null ? 0 : capturedEvent.getCaptureTimeNanos();
 
           boolean largeEnough = width >= minWidth && height >= minHeight;
           long stableNanos = System.nanoTime() - candidateFirstSeenNanos;
@@ -426,22 +443,11 @@ public class RecordingService implements FrameListener {
       // Signal encoder thread to finish (it will drain remaining frames)
       encoderRunning = false;
 
-      // Wait for encoder to drain buffer (dynamic timeout based on queue size)
-      int waitCount = 0;
-      long maxWaitMs =
-          Math.min(5000L, (long) (frameBuffer.size() * 2L * (1000.0 / unifiedConfig.getFps())));
-      while (!frameBuffer.isEmpty() && waitCount < (maxWaitMs / 100)) {
-        Thread.sleep(100);
-        waitCount++;
+      // Queue emptiness does not prove the final recorder call finished. Join the owner before
+      // closing FFmpeg.
+      if (encoderFuture != null) {
+        encoderFuture.get(15, TimeUnit.SECONDS);
       }
-
-      if (!frameBuffer.isEmpty()) {
-        logger.warn(
-            "Encoder did not drain buffer in time, {} frames remaining", frameBuffer.size());
-      }
-
-      // Give encoder a moment to finish encoding last frames
-      Thread.sleep(200);
 
       // Finalize recording
       if (recorder != null) {
@@ -469,6 +475,21 @@ public class RecordingService implements FrameListener {
 
       long duration = System.currentTimeMillis() - recordingStartTime;
       long frames = frameCount.get();
+      try {
+        if (droppedFrameCount.get() > 0) {
+          timingQualityCodes.add("FRAME_BUFFER_OVERFLOW");
+        }
+        MeasuredVideoIndex.Index index =
+            MeasuredVideoIndex.finalizeIndex(
+                currentRecordingFile.toPath(),
+                currentRecordingId,
+                java.util.List.copyOf(frameTimings),
+                java.util.List.copyOf(timingQualityCodes));
+        frames = index.frames().size();
+      } catch (Exception indexFailure) {
+        logger.warn(
+            "Recording finalized without calibrated video index: {}", indexFailure.getMessage());
+      }
       long dropped = droppedFrameCount.get();
       long duplicated = duplicatedFrameCount.get();
       long scaled = scaledFrameCount.get();
@@ -518,10 +539,17 @@ public class RecordingService implements FrameListener {
           dropped,
           currentVideoCodec);
 
+    } catch (java.util.concurrent.TimeoutException e) {
+      // The encoder still owns the native recorder. Closing it here would race a record call.
+      logger.error(
+          "Encoder did not finish; media remains unfinalized and no calibrated index is published");
+      return null;
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       logger.error("Recording stop interrupted: {}", e.getMessage());
-      cleanup();
+      if (encoderFuture == null || encoderFuture.isDone()) {
+        cleanup();
+      }
       return null;
     } catch (Exception e) {
       logger.error("Failed to stop recording: {}", e.getMessage(), e);
@@ -751,6 +779,44 @@ public class RecordingService implements FrameListener {
     return recording.get();
   }
 
+  private long encodeTimedFrame(TimestampedFrame frame, boolean duplicated) throws Exception {
+    long now = System.nanoTime();
+    if (Math.abs(
+            System.currentTimeMillis()
+                - (recordingStartTime + (now - recordingStartTimeNano) / 1_000_000.0))
+        > 20) {
+      timingQualityCodes.add("FRAME_SERVER_CLOCK_RESET");
+    }
+    long captured = frame.captureNanoTime;
+    if (captured <= 0
+        || captured > now + TimeUnit.MILLISECONDS.toNanos(20)
+        || now - captured > TimeUnit.MINUTES.toNanos(10)) {
+      timingQualityCodes.add("FRAME_CAPTURE_CLOCK_INVALID");
+      captured = now; // Video remains useful; calibration is explicitly unavailable.
+    }
+    long presented = duplicated ? now : Math.max(recordingStartTimeNano, captured);
+    long relativeMicros =
+        Math.max(0, TimeUnit.NANOSECONDS.toMicros(presented - recordingStartTimeNano));
+    long slot = Math.round(relativeMicros * (double) unifiedConfig.getFps() / 1_000_000.0);
+    if (slot <= lastMediaSlot) {
+      return encodedMediaMicros;
+    }
+    long mediaMicros = Math.round(slot * 1_000_000.0 / unifiedConfig.getFps());
+    recorder.setTimestamp(mediaMicros);
+    recorder.record(frameConverter.convert(frame.image));
+    lastMediaSlot = slot;
+    encodedMediaMicros = mediaMicros;
+    encodedFrameCount++;
+    frameTimings.add(
+        new MeasuredVideoIndex.Submission(
+            mediaMicros,
+            recordingStartTime + (captured - recordingStartTimeNano) / 1_000_000.0,
+            recordingStartTime + (presented - recordingStartTimeNano) / 1_000_000.0,
+            Math.max(0, (now - captured) / 1_000_000.0),
+            Math.max(0, (presented - captured) / 1_000_000.0)));
+    return mediaMicros;
+  }
+
   /** Encoder loop that consumes frames from the buffer (consumer). */
   private void encoderLoop() {
     logger.info("Encoder thread started");
@@ -771,27 +837,20 @@ public class RecordingService implements FrameListener {
         // Wait for frame with timeout
         TimestampedFrame timestampedFrame = frameBuffer.poll(pollTimeoutMs, TimeUnit.MILLISECONDS);
 
+        boolean duplicated = false;
         if (timestampedFrame != null) {
           lastFrame = timestampedFrame;
         } else if (encoderRunning && lastFrame != null) {
           // No frame received within poll window — duplicate last frame to maintain cadence
           timestampedFrame = lastFrame;
+          duplicated = true;
           duplicatedFrameCount.incrementAndGet();
         }
 
         if (timestampedFrame != null && recorder != null) {
-          // Wall-clock timestamp: the media timeline must track real elapsed time so the video
-          // duration matches the recording window even when capture stalls or the encoder cannot
-          // sustain the target FPS. A count-based timestamp (encodedFrameCount / fps) silently
-          // compresses the video whenever throughput drops below target.
-          long timestampMicros =
-              Math.max(
-                  lastTimestampMicros + 1L,
-                  TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - recordingStartTimeNano));
-          lastTimestampMicros = timestampMicros;
-          recorder.setTimestamp(timestampMicros);
-          recorder.record(frameConverter.convert(timestampedFrame.image));
-          encodedFrameCount++;
+          // Backlogged images retain capture-relative media time. Cadence fill retains stale-image
+          // age.
+          lastTimestampMicros = encodeTimedFrame(timestampedFrame, duplicated);
 
           // Track queue high-water mark
           int queueDepth = frameBuffer.size();
@@ -821,27 +880,8 @@ public class RecordingService implements FrameListener {
         logger.info("Encoder thread interrupted");
         break;
       } catch (Exception e) {
+        timingQualityCodes.add("FRAME_ENCODING_FAILURE");
         logger.warn("Failed to encode frame: {}", e.getMessage());
-      }
-    }
-
-    // Drain remaining frames
-    logger.info("Draining {} remaining frames from buffer", frameBuffer.size());
-    TimestampedFrame frame;
-    while ((frame = frameBuffer.poll()) != null) {
-      try {
-        if (recorder != null) {
-          long timestampMicros =
-              Math.max(
-                  lastTimestampMicros + 1L,
-                  TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - recordingStartTimeNano));
-          lastTimestampMicros = timestampMicros;
-          recorder.setTimestamp(timestampMicros);
-          recorder.record(frameConverter.convert(frame.image));
-          encodedFrameCount++;
-        }
-      } catch (Exception e) {
-        logger.warn("Failed to encode remaining frame: {}", e.getMessage());
       }
     }
 

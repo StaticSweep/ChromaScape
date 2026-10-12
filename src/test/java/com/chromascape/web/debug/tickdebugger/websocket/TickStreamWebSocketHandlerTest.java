@@ -78,6 +78,27 @@ class TickStreamWebSocketHandlerTest {
         + "}";
   }
 
+  @Test
+  void clockProbeRepliesOnExactSocketWithoutCreatingASession() throws Exception {
+    setup("clock-socket");
+    long before = System.currentTimeMillis();
+    handler.handleTextMessage(
+        wsSession,
+        new TextMessage(
+            "{\"type\":\"CALIBRATION_PING\",\"requestId\":\"probe-1\",\"clientSendMillis\":1234}"));
+    ArgumentCaptor<TextMessage> response = ArgumentCaptor.forClass(TextMessage.class);
+    verify(wsSession).sendMessage(response.capture());
+    JsonNode pong = objectMapper.readTree(response.getValue().getPayload());
+    assertThat(pong.path("type").asText()).isEqualTo("CALIBRATION_PONG");
+    assertThat(pong.path("requestId").asText()).isEqualTo("probe-1");
+    assertThat(pong.path("clientSendMillis").asLong()).isEqualTo(1234);
+    assertThat(pong.path("serverReceiveMillis").asLong())
+        .isBetween(before, System.currentTimeMillis());
+    assertThat(pong.path("serverSendMillis").asLong())
+        .isGreaterThanOrEqualTo(pong.path("serverReceiveMillis").asLong());
+    org.mockito.Mockito.verifyNoInteractions(sessionService);
+  }
+
   private String tickBatchJson() {
     return tickBatchJson("debug_1");
   }

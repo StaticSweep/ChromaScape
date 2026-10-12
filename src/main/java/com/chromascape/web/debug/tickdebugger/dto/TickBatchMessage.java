@@ -113,6 +113,16 @@ public class TickBatchMessage {
   /** Encounter phase envelope (SC-1976 combat row). */
   private Map<String, Object> phase;
 
+  private Map<String, Object> captureQuality;
+
+  public Map<String, Object> getCaptureQuality() {
+    return captureQuality;
+  }
+
+  public void setCaptureQuality(Map<String, Object> value) {
+    captureQuality = value;
+  }
+
   /** All NPCs in render distance. */
   private List<Map<String, Object>> npcs;
 

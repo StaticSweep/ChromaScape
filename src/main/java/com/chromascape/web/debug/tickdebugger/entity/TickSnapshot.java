@@ -104,6 +104,18 @@ public class TickSnapshot {
   @JdbcTypeCode(SqlTypes.JSON)
   private JsonNode phase;
 
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "capture_quality")
+  private JsonNode captureQuality;
+
+  public JsonNode getCaptureQuality() {
+    return captureQuality;
+  }
+
+  public void setCaptureQuality(JsonNode value) {
+    captureQuality = value;
+  }
+
   /** NPCs in render distance as JSON array. */
   @JdbcTypeCode(SqlTypes.JSON)
   private JsonNode npcs;
