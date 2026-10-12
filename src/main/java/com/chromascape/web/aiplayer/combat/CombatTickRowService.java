@@ -325,7 +325,13 @@ public final class CombatTickRowService {
     row.put("video", videoBlock(tick, videoSync));
     row.put(
         "deferred",
-        deferredFields(player, environment, hazards != null, inputs != null, videoSync));
+        deferredFields(
+            player,
+            environment,
+            hazards != null,
+            inputs != null,
+            hasNpcInteraction(playerState) && !Boolean.TRUE.equals(target.get("resolved")),
+            videoSync));
     return row;
   }
 
@@ -339,6 +345,7 @@ public final class CombatTickRowService {
       Map<String, Object> environment,
       boolean hazardsPresent,
       boolean inputsPresent,
+      boolean targetContextMissing,
       VideoSync videoSync) {
     List<String> deferred = new ArrayList<>();
     if (player.get("specialAttack") == null) {
@@ -361,6 +368,9 @@ public final class CombatTickRowService {
       deferred.add("mouse_y");
       deferred.add("mouse_button");
     }
+    if (targetContextMissing) {
+      deferred.add("target_context");
+    }
     if (videoSync == null || videoSync.fps() == null) {
       deferred.add("per_tick_frames_stored");
     }
@@ -373,7 +383,7 @@ public final class CombatTickRowService {
     JsonNode interacting = playerState == null ? null : playerState.get("interacting");
     int index = intValue(interacting, "index");
     JsonNode match = null;
-    if (index >= 0 && npcs != null && npcs.isArray()) {
+    if (hasNpcInteraction(playerState) && index >= 0 && npcs != null && npcs.isArray()) {
       for (JsonNode npc : npcs) {
         if (intValue(npc, "index") == index) {
           match = npc;
@@ -395,6 +405,11 @@ public final class CombatTickRowService {
     target.put("x", match == null ? null : intOrNull(intValue(match, "x")));
     target.put("y", match == null ? null : intOrNull(intValue(match, "y", "z")));
     return target;
+  }
+
+  private static boolean hasNpcInteraction(JsonNode playerState) {
+    JsonNode interacting = playerState == null ? null : playerState.get("interacting");
+    return "NPC".equals(textOrNull(interacting, "type"));
   }
 
   private static List<Map<String, Object>> nearbyNpcs(

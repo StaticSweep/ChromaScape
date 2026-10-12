@@ -694,7 +694,7 @@
     "video": {
       "type": "object",
       "additionalProperties": false,
-      "description": "DERIVED via TickVideoSyncService formula frame=(tick-startTick)*fps*0.6; frameEnd is frame(tick+1)-1. Nulls with hasVideo=false when the session has no recording.",
+      "description": "DERIVED nominal coordinates via TickVideoSyncService formula frame=(tick-startTick)*fps*0.6; frameEnd is frame(tick+1)-1. These configured-FPS coordinates are not measured physical frame indices or SC-751 calibration. Nulls with hasVideo=false when the session has no recording.",
       "properties": {
         "hasVideo": {
           "type": "boolean",
@@ -740,7 +740,7 @@
     },
     "deferred": {
       "type": "array",
-      "description": "Proposed fields whose producer was absent on this payload (pre-schema-4 client, disabled stream, or no video). Empty means every producer ran: the row is coverage-ready for SC-752.",
+      "description": "Detected producer or target-context gaps on this payload (older client, disabled stream, no video, or NPC interaction without a matching captured NPC). target_context denotes the unresolved NPC join; idle and player interactions do not require an NPC target. Empty reports no listed gaps, not semantic-label eligibility, measured video calibration or dataset readiness; SC-752 consumes these counts with separate evidence gates.",
       "items": {
         "type": "string",
         "x-provenance": "derived",
