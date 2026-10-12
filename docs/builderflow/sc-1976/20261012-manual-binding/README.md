@@ -43,7 +43,17 @@ Exclude game authentication or gameplay automation, invented identity hashes, re
 
 ## Test checklist and evidence
 
-ChromaScape: 310 selected combat/debugger/playback tests passed, zero failures/errors/skips, including real PostgreSQL migration/reload/locking checks. Four Docker-only suites were excluded. Scoped Spotless and Checkstyle main/test passed with repository warnings (4,270 main warning-severity findings). Micro6 and live recording validation are still in progress; historical results do not prove this repair.
+ChromaScape: 310 selected combat/debugger/playback tests passed, zero failures/errors/skips, including real PostgreSQL migration/reload/locking checks. Four Docker-only suites were excluded. Scoped Spotless and Checkstyle main/test passed with repository warnings (4,270 main warning-severity findings).
+
+Micro6: the final native JDK21 `:client:test --tests 'net.runelite.client.plugins.debugrecorder.*'` run passed all 289 tests, zero failures/errors/skips, with the canonical contracts composite and SC-967 vectors. Initial new-test attempts failed because of the fixture's Gson version, incomplete recorder initialization/socket teardown, and a primitive Mockito matcher; these were corrected before the successful final run. The earlier 1,673-test full client run predates this repair.
+
+Packaged client preparation and launch succeeded from Micro6 commit `1f0d35d20a8888423f64ec272f516bdd85b44f09`, artifact `sha256:ca06f5da02a513097fcf70b3a97f65dc15baab679b62517c944bec178dd997e2`, source mode disabled. Startup logs confirm `ws://127.0.0.1:18090/ws/micro6/tick-stream`, and authenticated health confirms an open transport at the login screen. No settings-hash failure appeared in the inspected new startup interval. This establishes launch/routing, not saved tick acceptance.
+
+ChromaScape code commit `59d20d696d13100777e365a5cc32209b487d1df7` runs on loopback18090 with owned schema `sc1976_live_20261012`; V68 was explicitly reapplied successfully, and the debugger returned HTTP200. This disposable schema uses Hibernate update with Flyway disabled and an unrelated replay worker disabled; it does not certify the production migration chain. Original8090 remained untouched.
+
+Both PR branches were fast-forward pushed successfully. Current hosted ChromaScape run38298476626 and Micro6 run38298475891 did not start their jobs: GitHub reports an Actions budget preventing further use. The previously reported ChromaScape contracts-token prerequisite was not reverified.
+
+Actual idle capture and post-stop stability await manual user login. Genuine combat acceptance remains unrun.
 
 Required checks: endpoint precedence/SC-968 isolation/invalid origins; validated targeted commands; client-thread handoff; preferred binding and matching stop; no/ambiguous socket preflight; new persisted-tick readiness; new-session rollback versus reused-session preservation; existing packet, combat, PostgreSQL and finalized-boundary checks; packaged runtime identity; idle MP4, field reload and 60-second stability.
 
