@@ -63,8 +63,16 @@ The paired ChromaScape code is `f9db7133e1484d0fb81ca0a61cbbf9eba2c8b1f2`, runni
 
 ## Published clock fix and current runtime
 
-Micro6 clock-race fix `8717d3ee34cc2de49df9e18952475fcd6f6eb769` is fast-forward pushed to PR162. After the fix,81 focused recorder/clock/config/transport tests pass with zero failures/errors/skips; repository Checkstyle10.26.1 passes for the changed files. Capture contract and native runtime export pass. Earlier full-client and Chroma tests above are not claimed as rerun after this focused change.
+Micro6 clock-race fix `8717d3ee34cc2de49df9e18952475fcd6f6eb769` is fast-forward pushed to PR162. After the fix,81 focused recorder/clock/config/transport tests pass with zero failures/errors/skips; repository Checkstyle10.26.1 passes for the changed files. Capture contract and native runtime export pass. Chroma checks above remain at their listed revisions; the final complete client run is documented below.
 
 Only the idle owned client49420 was stopped after verifying no active recording or pending/queued evidence. The replacement client6248 is open, with matching build_id8717d3ee34cc2de49df9e18952475fcd6f6eb769, source_mode disabled and packaged JAR SHA256 `2e5e6cfa606a97c9ad3b3f233ffa95b950fbaafba774e4f243fd2f1ec7ef3ddd`. Recorder health confirms ready, connected, ACTIVE and zero queued/pending/incomplete/dropped batches. The client is at the login screen; manual login/world entry is requested so the repaired timing path can be rechecked. Authentication and gameplay remain user performed.
 
 Official Shortcut MCP successfully posted progress comments [SC1976 activity2053](https://app.shortcut.com/leeuwbot/story/1976#activity-2053) and [SC751 activity2054](https://app.shortcut.com/leeuwbot/story/751#activity-2054), with idempotent progress tags. Both stories remain In Progress500000008, matching Felix spec_ready/in_progress. Planned/started markers are preserved without duplication; no review/done transition or marker was emitted. Both PR descriptions now include the actual idle smoke, clock-race fix,81 focused checks and outstanding genuine acceptance.
+
+## Final complete client regression and setup recovery
+
+At commit8717d3ee34 the full native `:client:test` run executed1,704 tests:1,700 passed, four failed solely because this worktree invocation omitted the shared contract-vector path, zero errors/skips. The failures were the four mandatory shared-vector cases in RemoteAccountBuilderManagerTest; the fail-closed prerequisite correctly remained enforced. XML evidence from this full run is archived locally outside Git.
+
+After setting `SC967_VECTORS_PATH=C:\Dev\IdeaProjects\contracts\sc967\ed25519-vectors.json`, the entire affected RemoteAccountBuilderManagerTest class reran successfully:20 tests, zero failures/errors/skips, including all four failed cases. No source change, skipped test, waiver or dependency-verification bypass was used for this recovery. All observed failures are resolved, but this evidence is not presented as one clean1,704-test invocation. Counts overlap with the prior81 focused and full1,700 runs.
+
+The repaired client remains connected at the login screen. Repeat actual idle calibration and genuine combat acceptance are still unrun, awaiting user login/world entry. Four Docker debugger suites, production migration-chain certification and hosted Actions remain excluded/unverified as described above.
