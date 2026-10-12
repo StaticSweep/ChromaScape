@@ -1,0 +1,21 @@
+{
+  "recordingId": "recording_96450ab1",
+  "sessionId": "debug_f4ed64a24ff543d48e8cb0da1a4cd83b",
+  "tickCount": 30,
+  "startTick": 409,
+  "endTick": 438,
+  "required_fields_and_npc_ticks": 30,
+  "missing_ticks": 0,
+  "capture_quality_ticks": 30,
+  "physical_frames_decoded": 490,
+  "calibrated_ticks": 28,
+  "max_error_millis": 61.2722921875,
+  "p95_error_millis": 26.136116796875,
+  "quality_codes": [
+    "CAPTURE_QUALITY_UNAVAILABLE",
+    "CLOCK_CALIBRATION_STALE",
+    "CLOCK_CALIBRATION_UNAVAILABLE"
+  ],
+  "finalized_bounds_stable_after_60_seconds": true,
+  "genuine_combat_acceptance": false
+}

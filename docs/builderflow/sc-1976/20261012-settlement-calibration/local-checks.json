@@ -10,7 +10,12 @@
     "failures": 0,
     "errors": 0,
     "skipped": 0,
-    "capture_contract": "passed"
+    "capture_contract": "passed",
+    "clock_race_focused": 81,
+    "clock_race_commit": "8717d3ee34cc2de49df9e18952475fcd6f6eb769",
+    "export_after_clock_race": "passed",
+    "capture_contract_after_clock_race": "passed",
+    "packaged_jar_sha256": "2e5e6cfa606a97c9ad3b3f233ffa95b950fbaafba774e4f243fd2f1ec7ef3ddd"
   },
   "chromascape": {
     "broad_selected": 374,
@@ -41,5 +46,10 @@
     "production_migration_chain",
     "four_Docker_debugger_suites",
     "hosted_Actions"
-  ]
+  ],
+  "idle_smoke": "idle-smoke-results.json",
+  "shortcut_progress_comments": {
+    "1976": 2053,
+    "751": 2054
+  }
 }
