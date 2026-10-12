@@ -1,10 +1,12 @@
 package com.chromascape.web.debug.tickdebugger.entity;
 
 import com.chromascape.web.debug.tickdebugger.dto.SessionCounts;
+import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -15,6 +17,16 @@ public interface DebugSessionRepository extends JpaRepository<DebugSession, Long
 
   /** Find a debug session by its unique session ID. */
   Optional<DebugSession> findBySessionId(String sessionId);
+
+  /** Serialize tick ingestion with session closure for the lifetime of the transaction. */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("SELECT s FROM DebugSession s WHERE s.sessionId = :sessionId")
+  Optional<DebugSession> findBySessionIdForUpdate(@Param("sessionId") String sessionId);
+
+  /** Repair/finalization by recording identity uses the same session row lock. */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("SELECT s FROM DebugSession s WHERE s.recordingId = :recordingId")
+  Optional<DebugSession> findByRecordingIdForUpdate(@Param("recordingId") String recordingId);
 
   /** Find all active sessions (no end time set). */
   List<DebugSession> findByEndTimeIsNullOrderByStartTimeDesc();

@@ -247,7 +247,7 @@ public class TickStreamIngestionService {
       String sessionId = batch.getSessionId();
 
       // Verify session exists
-      Optional<DebugSession> session = sessionService.getSession(sessionId);
+      Optional<DebugSession> session = sessionService.getSessionForTickIngestion(sessionId);
       if (session.isEmpty()) {
         throw new IllegalArgumentException("Unknown debug session: " + sessionId);
       }
@@ -269,6 +269,15 @@ public class TickStreamIngestionService {
           ensureReceiptMatches(tickWinner.get(), batch);
           return acknowledgment(tickWinner.get());
         }
+      }
+
+      // Exact committed retries remain ACKable after closure. New evidence must never extend
+      // a stopped/failed recording, including late batches already queued on the client.
+      if (!session.get().acceptsTickEvidence()) {
+        throw new IllegalArgumentException("BATCH_SESSION_CLOSED: " + sessionId);
+      }
+
+      if (batchReceiptRepository != null && !canonicalProjection) {
         int inserted =
             batchReceiptRepository.insertIfAbsent(
                 sessionId,

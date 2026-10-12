@@ -59,6 +59,25 @@ class DebugSessionServiceTest {
         sessionId, "testAccount", "testScript", LocalDateTime.of(2025, 6, 15, 12, 0), 0L);
   }
 
+  @Test
+  void finalizedBoundsCannotGrowEvenWhenCalledDirectly() {
+    DebugSession session = createSession("closed");
+    session.setLifecycleState(DebugSessionLifecycleState.FINALIZED);
+    session.setEndTick(322L);
+    when(sessionRepository.findBySessionIdForUpdate("closed")).thenReturn(Optional.of(session));
+    service.updateSessionTickBounds("closed", 824L);
+    assertEquals(322L, session.getEndTick());
+    verify(sessionRepository, never()).save(any());
+  }
+
+  @Test
+  void ingestionUsesTheTransactionLockedSessionLookup() {
+    DebugSession session = createSession("active");
+    when(sessionRepository.findBySessionIdForUpdate("active")).thenReturn(Optional.of(session));
+    assertEquals(session, service.getSessionForTickIngestion("active").orElseThrow());
+    verify(sessionRepository, never()).findBySessionId(any());
+  }
+
   private SessionCountProjection projection(String sessionId, long count) {
     return new SessionCountProjection() {
       @Override

@@ -88,6 +88,7 @@ class CombatTickRowPostgresIntegrationTest {
           fixture = mapper.readTree(in);
         }
         try (SessionFactory factory = factory(scopedUrl, user, password, "validate")) {
+          verifyClosureLock(factory);
           TickSnapshot snapshot =
               new TickSnapshot(
                   "combat",
@@ -151,11 +152,69 @@ class CombatTickRowPostgresIntegrationTest {
     try {
       return new MetadataSources(registry)
           .addAnnotatedClass(TickSnapshot.class)
+          .addAnnotatedClass(com.chromascape.web.debug.tickdebugger.entity.DebugSession.class)
+          .addAnnotatedClass(com.chromascape.web.debug.tickdebugger.entity.TickLog.class)
+          .addAnnotatedClass(com.chromascape.web.debug.tickdebugger.entity.TimelineMarker.class)
           .buildMetadata()
           .buildSessionFactory();
     } catch (RuntimeException error) {
       StandardServiceRegistryBuilder.destroy(registry);
       throw error;
+    }
+  }
+
+  private static void verifyClosureLock(SessionFactory factory) throws Exception {
+    String id = "closure-lock";
+    try (var seed = factory.openSession()) {
+      var tx = seed.beginTransaction();
+      var row =
+          new com.chromascape.web.debug.tickdebugger.entity.DebugSession(
+              id, "test", "combat", java.time.LocalDateTime.now(), 8L);
+      row.setEndTick(322L);
+      seed.persist(row);
+      tx.commit();
+    }
+    var worker = java.util.concurrent.Executors.newSingleThreadExecutor();
+    try (var closing = factory.openSession()) {
+      var closeTx = closing.beginTransaction();
+      var repo =
+          new org.springframework.data.jpa.repository.support.JpaRepositoryFactory(closing)
+              .getRepository(
+                  com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository.class);
+      var row = repo.findBySessionIdForUpdate(id).orElseThrow();
+      row.setEndTime(java.time.LocalDateTime.now());
+      row.setLifecycleState(
+          com.chromascape.web.debug.tickdebugger.entity.DebugSessionLifecycleState.FINALIZED);
+      closing.flush();
+      var attempting = new java.util.concurrent.CountDownLatch(1);
+      var competing =
+          worker.submit(
+              () -> {
+                try (var ingesting = factory.openSession()) {
+                  var tx = ingesting.beginTransaction();
+                  var ingestionRepo =
+                      new org.springframework.data.jpa.repository.support.JpaRepositoryFactory(
+                              ingesting)
+                          .getRepository(
+                              com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository
+                                  .class);
+                  attempting.countDown();
+                  var afterClosure = ingestionRepo.findBySessionIdForUpdate(id).orElseThrow();
+                  boolean accepts = afterClosure.acceptsTickEvidence();
+                  long bound = afterClosure.getEndTick();
+                  tx.commit();
+                  return java.util.List.of(accepts, bound);
+                }
+              });
+      assertThat(attempting.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+      org.junit.jupiter.api.Assertions.assertThrows(
+          java.util.concurrent.TimeoutException.class,
+          () -> competing.get(250, java.util.concurrent.TimeUnit.MILLISECONDS));
+      closeTx.commit();
+      assertThat(competing.get(10, java.util.concurrent.TimeUnit.SECONDS))
+          .containsExactly(false, 322L);
+    } finally {
+      worker.shutdownNow();
     }
   }
 }

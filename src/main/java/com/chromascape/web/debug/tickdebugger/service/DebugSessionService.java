@@ -582,7 +582,7 @@ public class DebugSessionService {
   @Transactional
   public void stopSession(String sessionId, Long endTick, boolean stopRecording) {
     if (canonicalFrames != null) canonicalFrames.close(sessionId, "EXPLICIT_STOP");
-    Optional<DebugSession> sessionOpt = sessionRepository.findBySessionId(sessionId);
+    Optional<DebugSession> sessionOpt = sessionRepository.findBySessionIdForUpdate(sessionId);
 
     if (sessionOpt.isEmpty()) {
       log.warn("Attempted to stop non-existent session: {}", sessionId);
@@ -741,7 +741,7 @@ public class DebugSessionService {
   @Transactional
   public void finalizeSessionOnDisconnect(String sessionId, String cause) {
     if (canonicalFrames != null) canonicalFrames.close(sessionId, "DISCONNECT");
-    Optional<DebugSession> sessionOpt = sessionRepository.findBySessionId(sessionId);
+    Optional<DebugSession> sessionOpt = sessionRepository.findBySessionIdForUpdate(sessionId);
 
     if (sessionOpt.isEmpty()) {
       log.warn("Attempted to finalize non-existent session on {}: {}", cause, sessionId);
@@ -838,6 +838,12 @@ public class DebugSessionService {
     return sessionRepository.findBySessionId(sessionId);
   }
 
+  /** Tick writes hold the session row until commit so closure cannot race evidence insertion. */
+  @Transactional(propagation = Propagation.MANDATORY)
+  public Optional<DebugSession> getSessionForTickIngestion(String sessionId) {
+    return sessionRepository.findBySessionIdForUpdate(sessionId);
+  }
+
   private boolean shouldStartRecording(RecordingTriggerSource triggerSource) {
     return switch (triggerSource) {
       case MANUAL -> true;
@@ -877,7 +883,7 @@ public class DebugSessionService {
    */
   @Transactional
   public boolean repairRecordingLink(String recordingId) {
-    Optional<DebugSession> currentOpt = sessionRepository.findByRecordingId(recordingId);
+    Optional<DebugSession> currentOpt = sessionRepository.findByRecordingIdForUpdate(recordingId);
     if (currentOpt.isEmpty()) {
       return false;
     }
@@ -1118,7 +1124,7 @@ public class DebugSessionService {
    */
   @Transactional
   public void updateSessionTickBounds(String sessionId, long tick) {
-    Optional<DebugSession> sessionOpt = sessionRepository.findBySessionId(sessionId);
+    Optional<DebugSession> sessionOpt = sessionRepository.findBySessionIdForUpdate(sessionId);
 
     if (sessionOpt.isEmpty()) {
       log.warn("Attempted to update tick bounds for non-existent session: {}", sessionId);
@@ -1126,6 +1132,10 @@ public class DebugSessionService {
     }
 
     DebugSession session = sessionOpt.get();
+    if (!session.acceptsTickEvidence()) {
+      return;
+    }
+
     boolean updated = false;
 
     // Set startTick if it's null or 0 (only on first tick)
@@ -1311,7 +1321,8 @@ public class DebugSessionService {
         }
 
         // Find the debug session linked to this recording
-        Optional<DebugSession> sessionOpt = sessionRepository.findByRecordingId(recordingId);
+        Optional<DebugSession> sessionOpt =
+            sessionRepository.findByRecordingIdForUpdate(recordingId);
 
         // Backfill RecordingSession metadata
         if (rec.getVideoPath() == null || rec.getVideoPath().isBlank()) {
@@ -1396,7 +1407,7 @@ public class DebugSessionService {
         return false;
       }
 
-      Optional<DebugSession> sessionOpt = sessionRepository.findByRecordingId(recordingId);
+      Optional<DebugSession> sessionOpt = sessionRepository.findByRecordingIdForUpdate(recordingId);
 
       if (rec.getVideoPath() == null || rec.getVideoPath().isBlank()) {
         rec.setVideoPath(videoFile.toAbsolutePath().toString());

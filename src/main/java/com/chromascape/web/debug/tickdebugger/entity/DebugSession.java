@@ -183,6 +183,13 @@ public class DebugSession {
     return endTime == null;
   }
 
+  /** Terminal sessions never accept new evidence, even if legacy end-time data is absent. */
+  public boolean acceptsTickEvidence() {
+    return isActive()
+        && lifecycleState != DebugSessionLifecycleState.FINALIZED
+        && lifecycleState != DebugSessionLifecycleState.FAILED;
+  }
+
   public DebugSessionLifecycleState getLifecycleState() {
     return lifecycleState;
   }

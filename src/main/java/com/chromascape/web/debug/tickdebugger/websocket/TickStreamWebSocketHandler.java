@@ -1076,6 +1076,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     if (message.contains("BATCH_CHECKSUM_CONFLICT")) return "BATCH_CHECKSUM_CONFLICT";
     if (message.contains("BATCH_WIRE_IDENTITY_MISMATCH")) return "BATCH_WIRE_IDENTITY_MISMATCH";
     if (message.contains("BATCH_SESSION_MISMATCH")) return "BATCH_SESSION_MISMATCH";
+    if (message.contains("BATCH_SESSION_CLOSED")) return "BATCH_SESSION_CLOSED";
     if (message.contains("BATCH_ORDER_INVALID")) return "BATCH_ORDER_INVALID";
     if (message.contains("ACTION_CHECKSUM_CONFLICT")) return "ACTION_CHECKSUM_CONFLICT";
     if (message.contains("PACKET_")) return "BATCH_PACKET_INVALID";
