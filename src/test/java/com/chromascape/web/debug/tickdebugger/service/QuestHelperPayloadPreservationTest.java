@@ -117,7 +117,7 @@ class QuestHelperPayloadPreservationTest {
   }
 
   private TickSnapshot ingest(String sessionId, long tick, Map<String, Object> questHelper) {
-    when(sessionService.getSession(sessionId))
+    when(sessionService.getSessionForIngestion(sessionId))
         .thenReturn(
             Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
     service.processTickBatch(batchWithQuestHelper(sessionId, tick, questHelper));

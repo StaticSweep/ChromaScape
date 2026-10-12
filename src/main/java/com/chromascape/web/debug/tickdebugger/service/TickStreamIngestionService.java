@@ -247,9 +247,39 @@ public class TickStreamIngestionService {
       String sessionId = batch.getSessionId();
 
       // Verify session exists
-      Optional<DebugSession> session = sessionService.getSession(sessionId);
+      Optional<DebugSession> session = sessionService.getSessionForIngestion(sessionId);
       if (session.isEmpty()) {
         throw new IllegalArgumentException("Unknown debug session: " + sessionId);
+      }
+
+      DebugSession captureSession = session.get();
+      if (!captureSession.isActive()
+          || captureSession.getLifecycleStateOrDefault()
+              == com.chromascape.web.debug.tickdebugger.entity.DebugSessionLifecycleState.FINALIZED
+          || captureSession.getLifecycleStateOrDefault()
+              == com.chromascape.web.debug.tickdebugger.entity.DebugSessionLifecycleState.FAILED) {
+        // Delayed packets within the immutable interval remain admissible. Both tick and
+        // capture time must fit: a stale/reused tick number is not evidence for this recording.
+        LocalDateTime capturedAt;
+        try {
+          capturedAt =
+              java.time.Instant.parse(batch.getTimestamp())
+                  .atZone(ZoneId.systemDefault())
+                  .toLocalDateTime();
+        } catch (Exception invalidTimestamp) {
+          throw new IllegalArgumentException(
+              "FINALIZED_SESSION_BOUNDARY: invalid capture timestamp");
+        }
+        if (captureSession.getStartTick() == null
+            || captureSession.getEndTick() == null
+            || captureSession.getEndTime() == null
+            || batch.getTick() < captureSession.getStartTick()
+            || batch.getTick() > captureSession.getEndTick()
+            || capturedAt.isBefore(captureSession.getStartTime())
+            || capturedAt.isAfter(captureSession.getEndTime())) {
+          throw new IllegalArgumentException(
+              "FINALIZED_SESSION_BOUNDARY: batch outside recording interval");
+        }
       }
 
       // SC-1618: schema-3 packet validation runs before any persistence so a bad

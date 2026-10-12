@@ -42,6 +42,10 @@ class DebugSessionServiceTest {
 
   @BeforeEach
   void setUp() {
+    org.mockito.Mockito.lenient()
+        .when(sessionRepository.findBySessionIdForUpdate(org.mockito.ArgumentMatchers.anyString()))
+        .thenAnswer(invocation -> sessionRepository.findBySessionId(invocation.getArgument(0)));
+
     service =
         new DebugSessionService(
             sessionRepository,
@@ -324,5 +328,34 @@ class DebugSessionServiceTest {
     assertFalse(outcome.recordingStartedByOperation());
     assertNull(outcome.rollbackToken().recordingIdStartedByOperation());
     assertNotNull(outcome.response().getRecordingFailureReason());
+  }
+
+  @Test
+  void finalizedBoundsNeverGrowFromLateBatches() {
+    DebugSession session = createSession("closed");
+    session.setEndTime(LocalDateTime.of(2025, 6, 15, 12, 1));
+    session.setStartTick(10L);
+    session.setEndTick(100L);
+    when(sessionRepository.findBySessionIdForUpdate("closed")).thenReturn(Optional.of(session));
+    service.updateSessionTickBounds("closed", 2815L);
+    assertEquals(10L, session.getStartTick());
+    assertEquals(100L, session.getEndTick());
+    org.mockito.Mockito.verify(sessionRepository, org.mockito.Mockito.never()).save(session);
+  }
+
+  @Test
+  void activeBoundsContinueAndNewRecordingHasIndependentBounds() {
+    DebugSession old = createSession("old");
+    old.setStartTick(10L);
+    old.setEndTick(100L);
+    old.setEndTime(LocalDateTime.of(2025, 6, 15, 12, 1));
+    DebugSession fresh = createSession("new");
+    when(sessionRepository.findBySessionIdForUpdate("old")).thenReturn(Optional.of(old));
+    when(sessionRepository.findBySessionIdForUpdate("new")).thenReturn(Optional.of(fresh));
+    service.updateSessionTickBounds("old", 150L);
+    service.updateSessionTickBounds("new", 151L);
+    assertEquals(100L, old.getEndTick());
+    assertEquals(151L, fresh.getStartTick());
+    assertEquals(151L, fresh.getEndTick());
   }
 }
