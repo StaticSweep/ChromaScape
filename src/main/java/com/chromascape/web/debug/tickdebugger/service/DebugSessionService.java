@@ -397,7 +397,7 @@ public class DebugSessionService {
       return;
     }
     Optional<DebugSession> sessionOpt =
-        sessionRepository.findBySessionId(rollbackToken.sessionId());
+        sessionRepository.findBySessionIdForUpdate(rollbackToken.sessionId());
     if (sessionOpt.isEmpty()) {
       // Nothing to compensate; idempotent no-op.
       log.warn("Start rollback found no debug session for token; nothing to compensate");
@@ -581,7 +581,6 @@ public class DebugSessionService {
    */
   @Transactional
   public void stopSession(String sessionId, Long endTick, boolean stopRecording) {
-    if (canonicalFrames != null) canonicalFrames.close(sessionId, "EXPLICIT_STOP");
     Optional<DebugSession> sessionOpt = sessionRepository.findBySessionIdForUpdate(sessionId);
 
     if (sessionOpt.isEmpty()) {
@@ -590,6 +589,9 @@ public class DebugSessionService {
     }
 
     DebugSession session = sessionOpt.get();
+    if (canonicalFrames != null) {
+      canonicalFrames.close(sessionId, "EXPLICIT_STOP");
+    }
 
     // Idempotency: if already finalized or failed, still attempt recording metadata backfill
     // (handles edge case where SESSION_STOP ran but recording metadata update failed)
@@ -740,7 +742,6 @@ public class DebugSessionService {
    */
   @Transactional
   public void finalizeSessionOnDisconnect(String sessionId, String cause) {
-    if (canonicalFrames != null) canonicalFrames.close(sessionId, "DISCONNECT");
     Optional<DebugSession> sessionOpt = sessionRepository.findBySessionIdForUpdate(sessionId);
 
     if (sessionOpt.isEmpty()) {
@@ -749,6 +750,9 @@ public class DebugSessionService {
     }
 
     DebugSession session = sessionOpt.get();
+    if (canonicalFrames != null) {
+      canonicalFrames.close(sessionId, "DISCONNECT");
+    }
 
     // Idempotency: if already finalized or failed, still attempt recording metadata backfill
     if (session.getLifecycleState() == DebugSessionLifecycleState.FINALIZED
@@ -833,15 +837,15 @@ public class DebugSessionService {
         tickCount);
   }
 
-  /** Get a debug session by ID. */
-  public Optional<DebugSession> getSession(String sessionId) {
-    return sessionRepository.findBySessionId(sessionId);
+  /** Must be called inside the ingestion transaction; lock is held through all evidence writes. */
+  @Transactional(propagation = Propagation.MANDATORY)
+  public Optional<DebugSession> getSessionForIngestion(String sessionId) {
+    return sessionRepository.findBySessionIdForUpdate(sessionId);
   }
 
-  /** Tick writes hold the session row until commit so closure cannot race evidence insertion. */
-  @Transactional(propagation = Propagation.MANDATORY)
-  public Optional<DebugSession> getSessionForTickIngestion(String sessionId) {
-    return sessionRepository.findBySessionIdForUpdate(sessionId);
+  /** Get a debug session by ID without acquiring a capture mutation lock. */
+  public Optional<DebugSession> getSession(String sessionId) {
+    return sessionRepository.findBySessionId(sessionId);
   }
 
   private boolean shouldStartRecording(RecordingTriggerSource triggerSource) {
@@ -1132,10 +1136,12 @@ public class DebugSessionService {
     }
 
     DebugSession session = sessionOpt.get();
-    if (!session.acceptsTickEvidence()) {
+    // Finalized bounds describe the recording, not the lifetime of the client connection.
+    if (!session.isActive()
+        || session.getLifecycleStateOrDefault() == DebugSessionLifecycleState.FINALIZED
+        || session.getLifecycleStateOrDefault() == DebugSessionLifecycleState.FAILED) {
       return;
     }
-
     boolean updated = false;
 
     // Set startTick if it's null or 0 (only on first tick)

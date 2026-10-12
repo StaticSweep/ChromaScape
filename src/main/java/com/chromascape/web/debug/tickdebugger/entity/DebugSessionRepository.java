@@ -18,15 +18,10 @@ public interface DebugSessionRepository extends JpaRepository<DebugSession, Long
   /** Find a debug session by its unique session ID. */
   Optional<DebugSession> findBySessionId(String sessionId);
 
-  /** Serialize tick ingestion with session closure for the lifetime of the transaction. */
+  /** Serialize capture writes with explicit stop and disconnect finalization. */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("SELECT s FROM DebugSession s WHERE s.sessionId = :sessionId")
   Optional<DebugSession> findBySessionIdForUpdate(@Param("sessionId") String sessionId);
-
-  /** Repair/finalization by recording identity uses the same session row lock. */
-  @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("SELECT s FROM DebugSession s WHERE s.recordingId = :recordingId")
-  Optional<DebugSession> findByRecordingIdForUpdate(@Param("recordingId") String recordingId);
 
   /** Find all active sessions (no end time set). */
   List<DebugSession> findByEndTimeIsNullOrderByStartTimeDesc();
@@ -50,6 +45,11 @@ public interface DebugSessionRepository extends JpaRepository<DebugSession, Long
 
   /** Find sessions linked to a specific recording ID. */
   Optional<DebugSession> findByRecordingId(String recordingId);
+
+  /** Serialize recording repair with capture writes and finalization. */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("SELECT s FROM DebugSession s WHERE s.recordingId = :recordingId")
+  Optional<DebugSession> findByRecordingIdForUpdate(@Param("recordingId") String recordingId);
 
   /** Find sessions that are linked to any recording ID, ordered by start time (newest first). */
   List<DebugSession> findByRecordingIdIsNotNullOrderByStartTimeDesc();

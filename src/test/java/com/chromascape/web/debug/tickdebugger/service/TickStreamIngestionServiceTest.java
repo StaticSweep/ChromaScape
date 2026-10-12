@@ -140,7 +140,7 @@ class TickStreamIngestionServiceTest {
       session.setLifecycleState(state);
       // Also cover legacy terminal rows that lack an end time.
       session.setEndTick(322L);
-      when(sessionService.getSessionForTickIngestion(sessionId)).thenReturn(Optional.of(session));
+      when(sessionService.getSessionForIngestion(sessionId)).thenReturn(Optional.of(session));
       TickBatchMessage batch = strictV2Batch(sessionId, 323);
       batch.setBatchId(UUID.randomUUID().toString());
       applyBatchChecksum(batch);
@@ -165,7 +165,7 @@ class TickStreamIngestionServiceTest {
     session.setEndTime(LocalDateTime.now());
     session.setLifecycleState(
         com.chromascape.web.debug.tickdebugger.entity.DebugSessionLifecycleState.FINALIZED);
-    when(sessionService.getSessionForTickIngestion(sessionId)).thenReturn(Optional.of(session));
+    when(sessionService.getSessionForIngestion(sessionId)).thenReturn(Optional.of(session));
     TickBatchMessage batch = strictV2Batch(sessionId, 322);
     batch.setBatchId(UUID.randomUUID().toString());
     applyBatchChecksum(batch);
@@ -230,7 +230,7 @@ class TickStreamIngestionServiceTest {
   void receiptBoundary_returnsPersistedAfterCommit() {
     String sessionId = "receipt-success";
     String batchId = "00000000-0000-4000-8000-000000000101";
-    when(sessionService.getSessionForTickIngestion(sessionId))
+    when(sessionService.getSessionForIngestion(sessionId))
         .thenReturn(
             Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
     when(batchReceiptRepository.insertIfAbsent(
@@ -268,7 +268,7 @@ class TickStreamIngestionServiceTest {
     String sessionId = "receipt-duplicate";
     String batchId = "00000000-0000-4000-8000-000000000102";
     String checksum = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
-    when(sessionService.getSessionForTickIngestion(sessionId))
+    when(sessionService.getSessionForIngestion(sessionId))
         .thenReturn(
             Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
     when(batchReceiptRepository.findBySessionIdAndBatchId(sessionId, UUID.fromString(batchId)))
@@ -298,7 +298,7 @@ class TickStreamIngestionServiceTest {
   void receiptBoundary_conflictingDuplicateIsRejected() {
     String sessionId = "receipt-conflict";
     String batchId = "00000000-0000-4000-8000-000000000103";
-    when(sessionService.getSessionForTickIngestion(sessionId))
+    when(sessionService.getSessionForIngestion(sessionId))
         .thenReturn(
             Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
     TickBatchMessage batch = strictV2Batch(sessionId, 100);
@@ -430,7 +430,7 @@ class TickStreamIngestionServiceTest {
 
   private void stubPacketSession(String sessionId) {
     lenient()
-        .when(sessionService.getSessionForTickIngestion(sessionId))
+        .when(sessionService.getSessionForIngestion(sessionId))
         .thenReturn(
             Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
     org.springframework.test.util.ReflectionTestUtils.setField(
@@ -872,7 +872,7 @@ class TickStreamIngestionServiceTest {
     applyBatchChecksum(batch);
     ReplayTickBatchReceipt winner =
         receipt(sessionId, "00000000-0000-4000-8000-000000000105", 100, batch.getPayloadChecksum());
-    when(sessionService.getSessionForTickIngestion(sessionId))
+    when(sessionService.getSessionForIngestion(sessionId))
         .thenReturn(
             Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
     when(batchReceiptRepository.findBySessionIdAndBatchId(sessionId, UUID.fromString(batchId)))
@@ -889,7 +889,7 @@ class TickStreamIngestionServiceTest {
   void receiptBoundary_snapshotFailureRollsBackAndDoesNotAcknowledge() {
     String sessionId = "receipt-rollback";
     String batchId = "00000000-0000-4000-8000-000000000106";
-    when(sessionService.getSessionForTickIngestion(sessionId))
+    when(sessionService.getSessionForIngestion(sessionId))
         .thenReturn(
             Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
     when(batchReceiptRepository.insertIfAbsent(any(), any(), anyLong(), any(), any(), any()))
@@ -907,7 +907,7 @@ class TickStreamIngestionServiceTest {
   @DisplayName("processTickBatch persists questHelper when present")
   void processTickBatch_persistsQuestHelper() {
     String sessionId = "s1";
-    when(sessionService.getSessionForTickIngestion(sessionId))
+    when(sessionService.getSessionForIngestion(sessionId))
         .thenReturn(
             Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
@@ -951,7 +951,7 @@ class TickStreamIngestionServiceTest {
   @DisplayName("processTickBatch allows missing questHelper")
   void processTickBatch_allowsMissingQuestHelper() {
     String sessionId = "s2";
-    when(sessionService.getSessionForTickIngestion(sessionId))
+    when(sessionService.getSessionForIngestion(sessionId))
         .thenReturn(
             Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
@@ -971,7 +971,7 @@ class TickStreamIngestionServiceTest {
   @DisplayName("Strict v2 accepts nested playerState.position.x/y/plane")
   void strictV2_acceptsNestedPosition() {
     String sessionId = "s3";
-    when(sessionService.getSessionForTickIngestion(sessionId))
+    when(sessionService.getSessionForIngestion(sessionId))
         .thenReturn(
             Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
@@ -1023,7 +1023,7 @@ class TickStreamIngestionServiceTest {
   @DisplayName("Strict v2 accepts old flat x/z/plane")
   void strictV2_acceptsOldFlatPosition() {
     String sessionId = "s4";
-    when(sessionService.getSessionForTickIngestion(sessionId))
+    when(sessionService.getSessionForIngestion(sessionId))
         .thenReturn(
             Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
@@ -1045,7 +1045,7 @@ class TickStreamIngestionServiceTest {
   @DisplayName("Old flat HP/prayer/energy/animation are stored with synthesized nested fields")
   void oldFlatPayload_synthesizesNestedFields() {
     String sessionId = "s5";
-    when(sessionService.getSessionForTickIngestion(sessionId))
+    when(sessionService.getSessionForIngestion(sessionId))
         .thenReturn(
             Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
@@ -1162,7 +1162,7 @@ class TickStreamIngestionServiceTest {
   @DisplayName("Strict v2 accepts nested position with x and z")
   void strictV2_acceptsNestedPositionWithXAndZ() {
     String sessionId = "s9";
-    when(sessionService.getSessionForTickIngestion(sessionId))
+    when(sessionService.getSessionForIngestion(sessionId))
         .thenReturn(
             Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
@@ -1216,7 +1216,7 @@ class TickStreamIngestionServiceTest {
   @DisplayName("Strict v2 accepts flat x/worldY/plane")
   void strictV2_acceptsFlatXWorldY() {
     String sessionId = "s10";
-    when(sessionService.getSessionForTickIngestion(sessionId))
+    when(sessionService.getSessionForIngestion(sessionId))
         .thenReturn(
             Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
@@ -1265,7 +1265,7 @@ class TickStreamIngestionServiceTest {
   @DisplayName("Strict v2 accepts flat worldX/worldY/plane")
   void strictV2_acceptsWorldXWorldY() {
     String sessionId = "s12";
-    when(sessionService.getSessionForTickIngestion(sessionId))
+    when(sessionService.getSessionForIngestion(sessionId))
         .thenReturn(
             Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
@@ -1352,7 +1352,7 @@ class TickStreamIngestionServiceTest {
   @DisplayName("Old flat x/z/plane synthesizes position.y")
   void oldFlatXZ_synthesizesPositionY() {
     String sessionId = "s11";
-    when(sessionService.getSessionForTickIngestion(sessionId))
+    when(sessionService.getSessionForIngestion(sessionId))
         .thenReturn(
             Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
@@ -1453,7 +1453,7 @@ class TickStreamIngestionServiceTest {
   @DisplayName("Strict v2 accepts and normalizes numeric string coordinates")
   void strictV2_acceptsNumericStringCoordinates() {
     String sessionId = "s21";
-    when(sessionService.getSessionForTickIngestion(sessionId))
+    when(sessionService.getSessionForIngestion(sessionId))
         .thenReturn(
             Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
@@ -1484,7 +1484,7 @@ class TickStreamIngestionServiceTest {
   @DisplayName("Strict v2 normalizes numeric string world coordinates")
   void strictV2_normalizesNumericStringWorldCoordinates() {
     String sessionId = "s22";
-    when(sessionService.getSessionForTickIngestion(sessionId))
+    when(sessionService.getSessionForIngestion(sessionId))
         .thenReturn(
             Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
@@ -1574,7 +1574,7 @@ class TickStreamIngestionServiceTest {
   void logFailureRollsBackAllWork() {
     String sessionId = "rollback-logs";
     String batchId = "00000000-0000-4000-8000-000000000303";
-    when(sessionService.getSessionForTickIngestion(sessionId))
+    when(sessionService.getSessionForIngestion(sessionId))
         .thenReturn(
             Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
     when(batchReceiptRepository.insertIfAbsent(any(), any(), anyLong(), any(), any(), any()))
@@ -1595,7 +1595,7 @@ class TickStreamIngestionServiceTest {
   void overlayFailureRollsBackAllWork() {
     String sessionId = "rollback-overlays";
     String batchId = "00000000-0000-4000-8000-000000000304";
-    when(sessionService.getSessionForTickIngestion(sessionId))
+    when(sessionService.getSessionForIngestion(sessionId))
         .thenReturn(
             Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
     when(batchReceiptRepository.insertIfAbsent(any(), any(), anyLong(), any(), any(), any()))
@@ -1614,7 +1614,7 @@ class TickStreamIngestionServiceTest {
   void postCommitPublicationOnlyOnSuccess() {
     String sessionId = "post-commit";
     String batchId = "00000000-0000-4000-8000-000000000305";
-    when(sessionService.getSessionForTickIngestion(sessionId))
+    when(sessionService.getSessionForIngestion(sessionId))
         .thenReturn(
             Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
     when(batchReceiptRepository.insertIfAbsent(any(), any(), anyLong(), any(), any(), any()))
@@ -1627,5 +1627,81 @@ class TickStreamIngestionServiceTest {
     // This is a direct-construction unit call, not a Spring transaction-commit verification:
     // a failure must propagate and no PERSISTED acknowledgment may be produced.
     assertThrows(IllegalStateException.class, () -> receiptService().processTickBatch(failing));
+  }
+
+  private DebugSession finalizedSession() {
+    DebugSession session =
+        new DebugSession("closed", "account", "script", LocalDateTime.of(2025, 6, 15, 12, 0), 10L);
+    session.setEndTime(LocalDateTime.of(2025, 6, 15, 12, 1));
+    session.setEndTick(100L);
+    session.setLifecycleState(
+        com.chromascape.web.debug.tickdebugger.entity.DebugSessionLifecycleState.FINALIZED);
+    when(sessionService.getSessionForIngestion("closed")).thenReturn(Optional.of(session));
+    return session;
+  }
+
+  @Test
+  void finalizedSessionRejectsBeyondEndBeforeAnyEvidenceWrite() {
+    finalizedSession();
+    TickBatchMessage batch = strictV2Batch("closed", 101L);
+    batch.setTimestamp(
+        LocalDateTime.of(2025, 6, 15, 12, 0, 30)
+            .atZone(java.time.ZoneId.systemDefault())
+            .toInstant()
+            .toString());
+    assertThat(
+            org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.processTickBatch(batch)))
+        .hasMessageContaining("FINALIZED_SESSION_BOUNDARY");
+    org.mockito.Mockito.verifyNoInteractions(
+        snapshotRepository,
+        logRepository,
+        overlayRepository,
+        markerRepository,
+        batchReceiptRepository);
+    verify(sessionService, never()).updateSessionTickBounds(any(), anyLong());
+  }
+
+  @Test
+  void finalizedSessionRejectsLaterTimeEvenWithReusedTick() {
+    finalizedSession();
+    TickBatchMessage batch = strictV2Batch("closed", 50L);
+    batch.setTimestamp(
+        LocalDateTime.of(2025, 6, 15, 12, 2)
+            .atZone(java.time.ZoneId.systemDefault())
+            .toInstant()
+            .toString());
+    assertThrows(IllegalArgumentException.class, () -> service.processTickBatch(batch));
+    org.mockito.Mockito.verifyNoInteractions(snapshotRepository, logRepository, overlayRepository);
+  }
+
+  @Test
+  void finalizedSessionAcceptsDelayedPacketInsideBothBounds() {
+    finalizedSession();
+    TickBatchMessage batch = strictV2Batch("closed", 50L);
+    batch.setTimestamp(
+        LocalDateTime.of(2025, 6, 15, 12, 0, 30)
+            .atZone(java.time.ZoneId.systemDefault())
+            .toInstant()
+            .toString());
+    service.processTickBatch(batch);
+    verify(snapshotRepository).save(any(TickSnapshot.class));
+  }
+
+  @Test
+  void finalizedSessionRejectsUnknownTimestamp() {
+    finalizedSession();
+    TickBatchMessage batch = strictV2Batch("closed", 50L);
+    batch.setTimestamp("not-a-timestamp");
+    assertThrows(IllegalArgumentException.class, () -> service.processTickBatch(batch));
+    org.mockito.Mockito.verifyNoInteractions(snapshotRepository);
+  }
+
+  @Test
+  void finalizedSessionRejectsDataFromBeforeRecording() {
+    finalizedSession();
+    TickBatchMessage batch = strictV2Batch("closed", 9L);
+    assertThrows(IllegalArgumentException.class, () -> service.processTickBatch(batch));
+    org.mockito.Mockito.verifyNoInteractions(snapshotRepository);
   }
 }

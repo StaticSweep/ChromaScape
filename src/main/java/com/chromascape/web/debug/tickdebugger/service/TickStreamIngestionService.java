@@ -247,7 +247,7 @@ public class TickStreamIngestionService {
       String sessionId = batch.getSessionId();
 
       // Verify session exists
-      Optional<DebugSession> session = sessionService.getSessionForTickIngestion(sessionId);
+      Optional<DebugSession> session = sessionService.getSessionForIngestion(sessionId);
       if (session.isEmpty()) {
         throw new IllegalArgumentException("Unknown debug session: " + sessionId);
       }
@@ -271,13 +271,8 @@ public class TickStreamIngestionService {
         }
       }
 
-      // Exact committed retries remain ACKable after closure. New evidence must never extend
-      // a stopped/failed recording, including late batches already queued on the client.
-      if (!session.get().acceptsTickEvidence()) {
-        throw new IllegalArgumentException("BATCH_SESSION_CLOSED: " + sessionId);
-      }
-
       if (batchReceiptRepository != null && !canonicalProjection) {
+        validateCaptureBoundary(session.get(), batch);
         int inserted =
             batchReceiptRepository.insertIfAbsent(
                 sessionId,
@@ -300,6 +295,10 @@ public class TickStreamIngestionService {
           ensureReceiptMatches(winner, batch);
           return acknowledgment(winner);
         }
+      }
+
+      if (batchReceiptRepository == null || canonicalProjection) {
+        validateCaptureBoundary(session.get(), batch);
       }
 
       // Persist typed actions before any derived replay artifact is built. The ingestion service
@@ -401,6 +400,37 @@ public class TickStreamIngestionService {
       nullFields.forEach(object::remove);
     } else if (node.isArray()) {
       node.forEach(this::removeNullFieldsForLegacyCaller);
+    }
+  }
+
+  private void validateCaptureBoundary(DebugSession captureSession, TickBatchMessage batch) {
+    if (!captureSession.isActive()
+        || captureSession.getLifecycleStateOrDefault()
+            == com.chromascape.web.debug.tickdebugger.entity.DebugSessionLifecycleState.FINALIZED
+        || captureSession.getLifecycleStateOrDefault()
+            == com.chromascape.web.debug.tickdebugger.entity.DebugSessionLifecycleState.FAILED) {
+      // Delayed packets within the immutable interval remain admissible. Both tick and
+      // capture time must fit: a stale/reused tick number is not evidence for this recording.
+      LocalDateTime capturedAt;
+      try {
+        capturedAt =
+            java.time.Instant.parse(batch.getTimestamp())
+                .atZone(ZoneId.systemDefault())
+                .toLocalDateTime();
+      } catch (Exception invalidTimestamp) {
+        throw new IllegalArgumentException(
+            "BATCH_SESSION_CLOSED: FINALIZED_SESSION_BOUNDARY: invalid capture timestamp");
+      }
+      if (captureSession.getStartTick() == null
+          || captureSession.getEndTick() == null
+          || captureSession.getEndTime() == null
+          || batch.getTick() < captureSession.getStartTick()
+          || batch.getTick() > captureSession.getEndTick()
+          || capturedAt.isBefore(captureSession.getStartTime())
+          || capturedAt.isAfter(captureSession.getEndTime())) {
+        throw new IllegalArgumentException(
+            "BATCH_SESSION_CLOSED: FINALIZED_SESSION_BOUNDARY: batch outside recording interval");
+      }
     }
   }
 

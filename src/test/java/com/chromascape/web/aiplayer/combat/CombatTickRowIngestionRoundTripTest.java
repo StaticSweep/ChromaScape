@@ -57,8 +57,7 @@ class CombatTickRowIngestionRoundTripTest {
     TimelineMarkerRepository markerRepository = mock(TimelineMarkerRepository.class);
 
     DebugSession session = new DebugSession("debug_combat_1", "acct", "script", null, 100L);
-    when(sessionService.getSessionForTickIngestion("debug_combat_1"))
-        .thenReturn(Optional.of(session));
+    when(sessionService.getSessionForIngestion("debug_combat_1")).thenReturn(Optional.of(session));
 
     ingestionService =
         new TickStreamIngestionService(
