@@ -1,0 +1,188 @@
+{
+  "schema": "sc1976-recording-review/v1",
+  "recordingId": "recording_eeed6066",
+  "sessionId": "debug_9be3927adc564fdda74ac79cf7054a2b",
+  "ticks": 102,
+  "bounds": [
+    34,
+    135
+  ],
+  "missing_ticks": 0,
+  "duplicate_ticks": 0,
+  "required_fields_present": 102,
+  "schema_errors": 0,
+  "database_rows_compared": 102,
+  "database_field_mismatches": 0,
+  "npc_interaction_ticks": 36,
+  "resolved_target_ticks": 36,
+  "observed_position_changes": 28,
+  "live_eating_required": false,
+  "measured_clocks": 102,
+  "quality": {
+    "rawEvents": 26,
+    "settledEvents": 26,
+    "outcomeCounts": {
+      "AMBIGUOUS": 11,
+      "CONFIRMED": 11,
+      "UNCONFIRMED": 4
+    },
+    "confirmedActionCounts": {
+      "INTERACT_NPC": 2,
+      "INTERACT_WIDGET": 8,
+      "WALK_TO": 1
+    },
+    "qualityCodes": [
+      "FRAME_ALIGNMENT_UNCERTAINTY"
+    ],
+    "calibratedTicks": 91,
+    "maxAlignmentErrorMillis": 97.837890625,
+    "p95AlignmentErrorMillis": 93.568455859375,
+    "acceptanceVerified": false
+  },
+  "coverage": {
+    "schema": "combat-recording-coverage/v1",
+    "sessionId": "debug_9be3927adc564fdda74ac79cf7054a2b",
+    "distinctTicks": 102,
+    "distinctRows": 102,
+    "invalidLabels": 93,
+    "actionCounts": {
+      "INTERACT_NPC": 1,
+      "INTERACT_WIDGET": 8
+    },
+    "deferredTickCounts": {}
+  },
+  "measured_frame_ranges": 80,
+  "unavailable_frame_ranges": [
+    59,
+    60,
+    87,
+    88,
+    91,
+    92,
+    93,
+    94,
+    98,
+    99,
+    100,
+    101,
+    102,
+    103,
+    108,
+    109,
+    110,
+    122,
+    123,
+    133,
+    134,
+    135
+  ],
+  "unavailable_mapping_ticks": [
+    60,
+    88,
+    92,
+    94,
+    99,
+    101,
+    103,
+    109,
+    110,
+    123,
+    134
+  ],
+  "nearest_capture_time_audit": {
+    "ticks_with_physical_image_within_100ms": 102,
+    "max_combined_error_ms": 98.694326953125,
+    "indices_nondecreasing": true,
+    "current_failures": [
+      {
+        "tick": 60,
+        "selected_error_ms": 109.305522265625,
+        "nearest_captured_frame": 325,
+        "nearest_captured_error_ms": 16.781840625,
+        "no_image_within_limit": false
+      },
+      {
+        "tick": 88,
+        "selected_error_ms": 161.821044921875,
+        "nearest_captured_frame": 641,
+        "nearest_captured_error_ms": 26.73388671875,
+        "no_image_within_limit": false
+      },
+      {
+        "tick": 92,
+        "selected_error_ms": 145.4599609375,
+        "nearest_captured_frame": 678,
+        "nearest_captured_error_ms": 12.489013671875,
+        "no_image_within_limit": false
+      },
+      {
+        "tick": 94,
+        "selected_error_ms": 101.939697265625,
+        "nearest_captured_frame": 698,
+        "nearest_captured_error_ms": 54.235107421875,
+        "no_image_within_limit": false
+      },
+      {
+        "tick": 99,
+        "selected_error_ms": 187.33900625,
+        "nearest_captured_frame": 749,
+        "nearest_captured_error_ms": 55.4522875,
+        "no_image_within_limit": false
+      },
+      {
+        "tick": 101,
+        "selected_error_ms": 118.31898671875,
+        "nearest_captured_frame": 766,
+        "nearest_captured_error_ms": 35.3458421875,
+        "no_image_within_limit": false
+      },
+      {
+        "tick": 103,
+        "selected_error_ms": 101.433976953125,
+        "nearest_captured_frame": 790,
+        "nearest_captured_error_ms": 54.13343984375,
+        "no_image_within_limit": false
+      },
+      {
+        "tick": 109,
+        "selected_error_ms": 145.62289921875,
+        "nearest_captured_frame": 848,
+        "nearest_captured_error_ms": 83.52817265625,
+        "no_image_within_limit": false
+      },
+      {
+        "tick": 110,
+        "selected_error_ms": 128.2356921875,
+        "nearest_captured_frame": 855,
+        "nearest_captured_error_ms": 71.41879765625,
+        "no_image_within_limit": false
+      },
+      {
+        "tick": 123,
+        "selected_error_ms": 101.644042578125,
+        "nearest_captured_frame": 986,
+        "nearest_captured_error_ms": 6.410644140625,
+        "no_image_within_limit": false
+      },
+      {
+        "tick": 134,
+        "selected_error_ms": 175.1022859375,
+        "nearest_captured_frame": 1124,
+        "nearest_captured_error_ms": 98.694326953125,
+        "no_image_within_limit": false
+      }
+    ],
+    "service_mapping_changed": false
+  },
+  "physical_video_frames": 1159,
+  "physical_media_duration_micros": 62766667,
+  "media_sha256": "a93d42a93b0fdc349489fca395e72ef0f483e9ad83f20eec9a42aad863cba3ac",
+  "full_video_decode_exit": 0,
+  "repeated_frame_count": 332,
+  "max_image_age_ms": 229.2007,
+  "final_bounds_and_snapshots_stable_after_60_seconds": true,
+  "restart_stability_verified": false,
+  "per_recording_build_provenance_exposed": false,
+  "accepted_combat_fixture": false,
+  "source_changes": false
+}
