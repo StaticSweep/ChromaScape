@@ -1,0 +1,85 @@
+{
+  "schema": "sc1976-recording-review/v1",
+  "recordingId": "recording_3ba1931c",
+  "sessionId": "debug_b13ec8685873404e9b728b159e2f63c9",
+  "ticks": 92,
+  "bounds": [
+    27,
+    118
+  ],
+  "missing_ticks": 0,
+  "required_fields_present": 92,
+  "inventory_nonempty_ticks": 0,
+  "schema_errors": 0,
+  "database_rows_compared": 92,
+  "database_field_mismatches": 0,
+  "resolved_target_ticks": 35,
+  "coverage": {
+    "schema": "combat-recording-coverage/v1",
+    "sessionId": "debug_b13ec8685873404e9b728b159e2f63c9",
+    "distinctTicks": 92,
+    "distinctRows": 92,
+    "invalidLabels": 81,
+    "actionCounts": {
+      "INTERACT_NPC": 2,
+      "INTERACT_WIDGET": 6,
+      "WALK_TO": 3
+    },
+    "deferredTickCounts": {}
+  },
+  "measured_clocks": 92,
+  "quality": {
+    "rawEvents": 29,
+    "settledEvents": 29,
+    "outcomeCounts": {
+      "AMBIGUOUS": 15,
+      "CONFIRMED": 11,
+      "UNCONFIRMED": 3
+    },
+    "confirmedActionCounts": {
+      "INTERACT_NPC": 2,
+      "INTERACT_WIDGET": 6,
+      "WALK_TO": 3
+    },
+    "qualityCodes": [
+      "FRAME_ALIGNMENT_UNCERTAINTY"
+    ],
+    "calibratedTicks": 85,
+    "maxAlignmentErrorMillis": 99.488000390625,
+    "p95AlignmentErrorMillis": 87.259577734375
+  },
+  "unavailable_mapping_ticks": [
+    35,
+    42,
+    45,
+    51,
+    76,
+    89,
+    93
+  ],
+  "measured_frame_ranges": 77,
+  "unavailable_frame_ranges": [
+    34,
+    35,
+    41,
+    42,
+    44,
+    45,
+    50,
+    51,
+    75,
+    76,
+    88,
+    89,
+    92,
+    93,
+    118
+  ],
+  "physical_video_frames": 1008,
+  "physical_media_duration_micros": 55633333,
+  "media_sha256": "fb4760c2b77390dbdd4fc35411b8033b98542e3e26ac090c5f8565f41fbaea5c",
+  "final_bounds_and_snapshots_stable_after_60_seconds": true,
+  "restart_stability_verified": false,
+  "accepted_combat_fixture": false,
+  "source_changes": false
+}
