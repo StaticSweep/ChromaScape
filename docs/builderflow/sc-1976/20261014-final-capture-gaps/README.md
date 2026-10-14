@@ -41,7 +41,17 @@ Actual native checks, 2026-10-14:
 - Scoped Google Java Format applied with original per-file line endings preserved. Standalone Checkstyle 10.26.1 passes without warnings for new Chroma identity source/tests and Micro identity source/tests. The wider Chroma changed-file audit exits successfully with existing style warnings; it is not described as a warning-free repository audit.
 - V68/V69/V70 explicitly applied successfully to retained loopback verification schema `sc1976_live_20261012`. This is not production Flyway-chain certification. GitHub Actions are skipped by user instruction. Four existing Docker debugger suites remain unrun.
 
-Micro6 full-client, runtime export, push and restart results are appended below when complete.
+Micro6 full native `:client:test :client:verifyCaptureContract` with canonical `SC967_VECTORS_PATH` and contract composite: **1,707 tests, zero failures/errors/skips**, one clean invocation on the final source. Initial focused 313-test run had one ACK-timeout failure under concurrent load; all 62 transport tests passed on isolated retry and the final full 1,707-test invocation passed. No transport semantics or timeout fences were relaxed. New producer identity/JAR-byte hash/serializer tests are included.
+
+Scoped code pushed normally to existing draft PRs: ChromaScape `0a6cbaf6`, Micro6 `93aa4810a0`. No reservations, secrets, raw gameplay or unrelated original-checkout changes were staged.
+
+## Runtime handoff status
+
+V70 is applied to retained verification schema. Automatic approval review rejected the command to stop/relaunch the owned loopback ChromaScape process, returning only ?blocked by policy? without a specific reason. The old 18090 server remains running until the user stops that instance. Original 8090 is untouched. No restart-preservation or live new-identity capture is claimed yet.
+
+If a manual restart is needed: stop only the worktree verification server on port 18090, then from `C:\Dev\IdeaProjects\.worktrees\sc1976-chromascape` run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Dev\IdeaProjects\.worktrees\felix-native-runtime\launch-chroma-gaps.ps1`. This private local helper loads existing `.env.local` settings without embedding secrets, uses only loopback18090 and retained `sc1976_live_20261012`, disables Flyway/Hibernate schema update, and writes `sc751-live-server.log`. Do not use the canonical 8090 restart defaults for this verification instance.
+
+Runtime export/launch results and any user-enabled restart proof are appended below when completed.
 
 ## Remaining work and user procedure
 
@@ -55,3 +65,17 @@ After the updated runtimes are ready:
 
 Old recordings cannot acquire provenance they never captured. Development server identity scopes its digest to the application class directory; a packaged runtime advertises a JAR digest. Build revision and dirty state are embedded; exact byte digest distinguishes a dirty build. Producer-reported client identity is not signature certification. Revision identifies the observed game/cache namespace, not every archive byte. Real missing images remain unavailable. The retained verification schema is not production migration-chain certification. Four existing Docker debugger suites and hosted Actions are not represented as passed.
 Rollback source/collector activation if needed, retain additive V70 and all existing recordings. Do not delete reservations or mutate unrelated user work.
+
+
+## Final native package and publication
+
+Micro6 `:client:exportRsproxMicro6Runtime` passed at commit `93aa4810a0`; packaged shaded JAR SHA256 `9ba0f10b82db69fce41f4429d43f8fab035c38d738217613e169c57c11263802`. Only the explicitly scoped new recorder/server changes were pushed to existing PR #162/#59; both remain draft. No source changes followed the final 1,707-test Micro6 invocation. Source revision/build resource regeneration for packaging does not change Java behavior.
+
+The rebuilt client launcher is started in the temporary debugger profile. Authentication and world entry remain manual. Chroma18090 is still the previous runtime until the manual stop requested after automatic review rejection. Do not make acceptance recordings against that old server. A new live metadata capture, server-restart preservation and accepted sanitized fixture remain unrun.
+
+
+## Verified current client and durable status
+
+Runtime health readback confirms Micro6 build `93aa4810a0aa972b44a0c6e2467fa2e4a647031f` and the exact packaged digest above, `source_mode=disabled`, `LOGIN_SCREEN`, recorder ready, connected/ACTIVE with zero queued, pending, incomplete or dropped batches. Clock calibration is stale while the user is on the login screen; this is not a calibrated game-world acceptance claim.
+
+Existing Felix authoritative plans, Architecture/ERD/API refinements and Implementation/Verification Evidence are updated while preserving their earlier content. Tasks `task_1791760667867_s74wdsgf` and `task_1791840092160_ekr5gv6a` remain `spec_ready/in_progress`. Official Shortcut progress comments [2063](https://app.shortcut.com/leeuwbot/story/1976#activity-2063)/[2064](https://app.shortcut.com/leeuwbot/story/751#activity-2064) and SC-1976 delivery-description refresh succeeded; both external states stay In Progress. The new implementation item is complete; restart/real fixture acceptance items remain unchecked. No review/done transition is claimed.

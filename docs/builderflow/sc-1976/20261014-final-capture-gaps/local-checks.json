@@ -1,0 +1,87 @@
+{
+  "date": "2026-10-14",
+  "chromascapeCodeCommit": "0a6cbaf6",
+  "micro6CodeCommit": "93aa4810a0",
+  "chromaSelected": {
+    "tests": 408,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "chromaFinalIdentity": {
+    "tests": 23,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "microFull": {
+    "tests": 1707,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "actualRecordingReview": {
+    "coverage": {
+      "schema": "combat-recording-coverage/v1",
+      "sessionId": "debug_9be3927adc564fdda74ac79cf7054a2b",
+      "distinctTicks": 102,
+      "distinctRows": 102,
+      "invalidLabels": 93,
+      "actionCounts": {
+        "INTERACT_NPC": 1,
+        "INTERACT_WIDGET": 8
+      },
+      "deferredTickCounts": {}
+    },
+    "resolvedTargetTicks": 36,
+    "combatSchemaErrors": 0,
+    "schemaErrorTicks": [],
+    "measuredFrameRanges": 101,
+    "missingRangeTicks": [
+      135
+    ],
+    "databaseRowsCompared": 102,
+    "databaseFieldMismatches": 0
+  },
+  "timingRegression": {
+    "recording_eeed6066": {
+      "ticks": 102,
+      "measured": 102
+    },
+    "recording_3ba1931c": {
+      "ticks": 92,
+      "measured": 89,
+      "genuineImageGaps": 3
+    }
+  },
+  "hostedActions": "excluded by user",
+  "productionMigrationChain": "unrun",
+  "dockerDebuggerSuites": "four unrun",
+  "liveNewIdentityCapture": "pending user login/capture",
+  "restart": "automatic approval review rejected stop/relaunch command, generic blocked by policy; awaiting manual stop or handoff",
+  "microExport": {
+    "status": "passed",
+    "artifactSha256": "9ba0f10b82db69fce41f4429d43f8fab035c38d738217613e169c57c11263802",
+    "buildId": "93aa4810a0"
+  },
+  "microLaunch": {
+    "status": "verified",
+    "buildId": "93aa4810a0aa972b44a0c6e2467fa2e4a647031f",
+    "gameState": "LOGIN_SCREEN",
+    "sourceMode": "disabled",
+    "recorderReady": true,
+    "connected": true,
+    "recoveryState": "ACTIVE",
+    "pending": 0,
+    "queue": 0,
+    "incomplete": 0,
+    "dropped": 0,
+    "clock": "stale at login screen"
+  },
+  "shortcut": {
+    "state": "In Progress",
+    "comment1976": 2063,
+    "comment751": 2064,
+    "description1976": "updated"
+  }
+}
