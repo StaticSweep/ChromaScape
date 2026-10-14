@@ -115,5 +115,28 @@
     "comment1976": 2063,
     "comment751": 2064,
     "description1976": "updated"
+  },
+  "recorderRoutingRecovery": {
+    "verifiedAt": "2026-10-14T21:59:49.224108+00:00",
+    "failure": "RECORDER_UNAVAILABLE",
+    "cause": "replacement Micro6 connected to ws://192.168.1.6:8090/ws/micro6/tick-stream while recording page uses 18090",
+    "oldClientPid": 182528,
+    "oldClientSessionHadRecording": false,
+    "newClientPid": 20816,
+    "launchScript": "C:\\Dev\\IdeaProjects\\.worktrees\\sc1976-micro6\\launch-sc1976-debug-capture.ps1",
+    "endpoint": "ws://127.0.0.1:18090/ws/micro6/tick-stream",
+    "buildId": "836b97123a2f2606643c3ee3e3373062da91dd2d",
+    "artifactDigest": "sha256:6dedde2e485df4c6d9a00cec8794701882f96b47bb0ff6e662a9cf6bb68f6b59",
+    "sourceMode": "disabled",
+    "gameState": "LOGIN_SCREEN",
+    "recorderReady": true,
+    "connected": true,
+    "pending": 0,
+    "dropped": 0,
+    "captureContract": "passed during launch preparation",
+    "startStop": "unrun - user must enter world",
+    "sourceChangesInThisFollowup": false,
+    "fullSuiteRerun": false,
+    "original8090Recording": "preserved; no stop command sent"
   }
 }

@@ -74,7 +74,7 @@ Micro6 `:client:exportRsproxMicro6Runtime` passed at commit `93aa4810a0`; packag
 The rebuilt client is running in the temporary debugger profile and reconnected automatically after the verification server restart. Authentication and world entry remain manual. Chroma18090 now runs the updated server. A new live metadata capture and accepted sanitized fixture remain unrun.
 
 
-## Verified current client and durable status
+## Earlier client verification and durable status
 
 Runtime health readback confirms Micro6 build `93aa4810a0aa972b44a0c6e2467fa2e4a647031f` and the exact packaged digest above, `source_mode=disabled`, `LOGIN_SCREEN`, recorder ready, connected/ACTIVE with zero queued, pending, incomplete or dropped batches. Clock calibration is stale while the user is on the login screen; this is not a calibrated game-world acceptance claim.
 
@@ -87,3 +87,13 @@ The old owned PID 57284 was stopped only after checking recording status and exa
 For `recording_eeed6066`, the complete session and ticks API JSON are exactly equal before and after restart: 102 consecutive ticks, bounds 34-135, finalized and inactive. The new runtime reports all 102 calibrated endpoints with no calibration quality codes, maximum combined alignment error 98.694327 ms and p95 71.418798 ms, inside the unchanged 100 ms fence. Provenance verifies all 1,159 physical frames and media SHA256 `a93d42a93b0fdc349489fca395e72ef0f483e9ad83f20eec9a42aad863cba3ac`, independently compared with the actual MP4 bytes. Legacy capture identity remains explicitly unavailable (`LEGACY_CAPTURE_IDENTITY_MISSING`), without backfill.
 
 Micro6 health confirms the existing packaged build `93aa4810a0aa972b44a0c6e2467fa2e4a647031f` reconnected, recovery ACTIVE, zero queued/pending/incomplete/dropped batches. It remains at LOGIN_SCREEN. Transport clock measurement resumed; this does not qualify game-world capture. User must manually enter the world and record separate movement, attack and prayer actions before fresh identity persistence and the accepted sanitized fixture can be verified. Existing test checklist entries that also require that capture remain unchecked. No full suite was rerun for this runtime-only verification; Actions remain excluded by user instruction.
+
+## Recorder routing recovery, 2026-10-14
+
+The subsequent Start Recording failure was `RECORDER_UNAVAILABLE`: the replacement Micro6 client had connected to `ws://192.168.1.6:8090/ws/micro6/tick-stream`, while the verification page uses port 18090. This was a different client process from the one verified above. Its server-confirmed session was tick-only, without a recording ID.
+
+Only that owned Micro6 client (PID 182528) was stopped. The existing `launch-sc1976-debug-capture.ps1` was launched through the private local helper, with the loopback 18090 origin, process-only combat collectors, SC-968 capture disabled and no account/login arguments. Saved profiles, reservation files, original ChromaScape 8090 and its existing recording were preserved. No source changes were made in this recovery.
+
+Startup log and authenticated health now verify PID 20816 connected to `ws://127.0.0.1:18090/ws/micro6/tick-stream`, recorder ready, recovery ACTIVE, zero pending/queued/incomplete/dropped batches and no transport failure. The existing worktree had advanced independently to build `836b97123a2f2606643c3ee3e3373062da91dd2d`; its packaged SHA256 is `6dedde2e485df4c6d9a00cec8794701882f96b47bb0ff6e662a9cf6bb68f6b59`. Launch preparation and capture-contract verification passed. The full suite results above certify their stated earlier source, not this newer build; no full suite was rerun here.
+
+The replacement is at LOGIN_SCREEN. Transport clock calibration becomes stale without game ticks; do not infer game-world readiness from connection alone. Start/Stop and fresh identity capture still require manual world entry. For this acceptance run, use the already opened debugger client and the 18090 page; launching a replacement through the ordinary Builder Goal/account flow can restore its saved 8090 route. The user was asked to enter the world and stay idle so the agent can verify Start/Stop before another combat recording.
