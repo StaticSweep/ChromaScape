@@ -47,7 +47,7 @@ Scoped code pushed normally to existing draft PRs: ChromaScape `0a6cbaf6`, Micro
 
 ## Runtime handoff status
 
-V70 is applied to retained verification schema. Automatic approval review rejected the command to stop/relaunch the owned loopback ChromaScape process, returning only ?blocked by policy? without a specific reason. The old 18090 server remains running until the user stops that instance. Original 8090 is untouched. No restart-preservation or live new-identity capture is claimed yet.
+V70 is applied to the retained verification schema. After the user explicitly requested the relaunch again, the separate, ownership-checked stop and hidden launch commands succeeded. The updated server is running on loopback 18090 (PID 132368), with embedded revision `92b496adebd7bfef8bacaf1f0e3ababa08b4cc13` and `dirty=false`. Original 8090 remains PID 69980 and was untouched. Debugger and the new provenance endpoint both return HTTP 200. No live new-identity capture is claimed yet.
 
 If a manual restart is needed: stop only the worktree verification server on port 18090, then from `C:\Dev\IdeaProjects\.worktrees\sc1976-chromascape` run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Dev\IdeaProjects\.worktrees\felix-native-runtime\launch-chroma-gaps.ps1`. This private local helper loads existing `.env.local` settings without embedding secrets, uses only loopback18090 and retained `sc1976_live_20261012`, disables Flyway/Hibernate schema update, and writes `sc751-live-server.log`. Do not use the canonical 8090 restart defaults for this verification instance.
 
@@ -71,7 +71,7 @@ Rollback source/collector activation if needed, retain additive V70 and all exis
 
 Micro6 `:client:exportRsproxMicro6Runtime` passed at commit `93aa4810a0`; packaged shaded JAR SHA256 `9ba0f10b82db69fce41f4429d43f8fab035c38d738217613e169c57c11263802`. Only the explicitly scoped new recorder/server changes were pushed to existing PR #162/#59; both remain draft. No source changes followed the final 1,707-test Micro6 invocation. Source revision/build resource regeneration for packaging does not change Java behavior.
 
-The rebuilt client launcher is started in the temporary debugger profile. Authentication and world entry remain manual. Chroma18090 is still the previous runtime until the manual stop requested after automatic review rejection. Do not make acceptance recordings against that old server. A new live metadata capture, server-restart preservation and accepted sanitized fixture remain unrun.
+The rebuilt client is running in the temporary debugger profile and reconnected automatically after the verification server restart. Authentication and world entry remain manual. Chroma18090 now runs the updated server. A new live metadata capture and accepted sanitized fixture remain unrun.
 
 
 ## Verified current client and durable status
@@ -79,3 +79,11 @@ The rebuilt client launcher is started in the temporary debugger profile. Authen
 Runtime health readback confirms Micro6 build `93aa4810a0aa972b44a0c6e2467fa2e4a647031f` and the exact packaged digest above, `source_mode=disabled`, `LOGIN_SCREEN`, recorder ready, connected/ACTIVE with zero queued, pending, incomplete or dropped batches. Clock calibration is stale while the user is on the login screen; this is not a calibrated game-world acceptance claim.
 
 Existing Felix authoritative plans, Architecture/ERD/API refinements and Implementation/Verification Evidence are updated while preserving their earlier content. Tasks `task_1791760667867_s74wdsgf` and `task_1791840092160_ekr5gv6a` remain `spec_ready/in_progress`. Official Shortcut progress comments [2063](https://app.shortcut.com/leeuwbot/story/1976#activity-2063)/[2064](https://app.shortcut.com/leeuwbot/story/751#activity-2064) and SC-1976 delivery-description refresh succeeded; both external states stay In Progress. The new implementation item is complete; restart/real fixture acceptance items remain unchecked. No review/done transition is claimed.
+
+## Verification server restart, 2026-10-14
+
+The old owned PID 57284 was stopped only after checking recording status and exact listener/application/worktree ownership. The prepared launcher retained `sc1976_live_20261012`, disabled Flyway/Hibernate schema updates and replay workers, and started the replacement hidden. No Micro6 restart or authentication input was performed.
+
+For `recording_eeed6066`, the complete session and ticks API JSON are exactly equal before and after restart: 102 consecutive ticks, bounds 34-135, finalized and inactive. The new runtime reports all 102 calibrated endpoints with no calibration quality codes, maximum combined alignment error 98.694327 ms and p95 71.418798 ms, inside the unchanged 100 ms fence. Provenance verifies all 1,159 physical frames and media SHA256 `a93d42a93b0fdc349489fca395e72ef0f483e9ad83f20eec9a42aad863cba3ac`, independently compared with the actual MP4 bytes. Legacy capture identity remains explicitly unavailable (`LEGACY_CAPTURE_IDENTITY_MISSING`), without backfill.
+
+Micro6 health confirms the existing packaged build `93aa4810a0aa972b44a0c6e2467fa2e4a647031f` reconnected, recovery ACTIVE, zero queued/pending/incomplete/dropped batches. It remains at LOGIN_SCREEN. Transport clock measurement resumed; this does not qualify game-world capture. User must manually enter the world and record separate movement, attack and prayer actions before fresh identity persistence and the accepted sanitized fixture can be verified. Existing test checklist entries that also require that capture remain unchecked. No full suite was rerun for this runtime-only verification; Actions remain excluded by user instruction.

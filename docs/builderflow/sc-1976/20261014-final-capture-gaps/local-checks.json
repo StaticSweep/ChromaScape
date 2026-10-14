@@ -58,7 +58,39 @@
   "productionMigrationChain": "unrun",
   "dockerDebuggerSuites": "four unrun",
   "liveNewIdentityCapture": "pending user login/capture",
-  "restart": "automatic approval review rejected stop/relaunch command, generic blocked by policy; awaiting manual stop or handoff",
+  "restart": {
+    "verifiedAt": "2026-10-14T20:44:13.404634+00:00",
+    "oldPid": 57284,
+    "newPid": 132368,
+    "port": 18090,
+    "original8090Pid": 69980,
+    "runningBuildRevision": "92b496adebd7bfef8bacaf1f0e3ababa08b4cc13",
+    "debuggerHttp": 200,
+    "newProvenanceHttp": 200,
+    "sessionExactJsonEquality": true,
+    "ticksExactJsonEquality": true,
+    "consecutiveTicks": 102,
+    "bounds": [
+      34,
+      135
+    ],
+    "mediaSha256": "a93d42a93b0fdc349489fca395e72ef0f483e9ad83f20eec9a42aad863cba3ac",
+    "physicalFrameCount": 1159,
+    "mediaStatus": "VERIFIED",
+    "legacyIdentityQualityCodes": [
+      "LEGACY_CAPTURE_IDENTITY_MISSING"
+    ],
+    "sync": {
+      "calibrationSchema": "tick-video-calibration/v1",
+      "calibrationStatus": "MEASURED",
+      "calibrationQualityCodes": [],
+      "calibratedTicks": 102,
+      "maxAlignmentErrorMillis": 98.694326953125,
+      "p95AlignmentErrorMillis": 71.41879765625
+    },
+    "micro6Reconnected": true,
+    "freshIdentityCapture": "unrun - manual world entry and capture required"
+  },
   "microExport": {
     "status": "passed",
     "artifactSha256": "9ba0f10b82db69fce41f4429d43f8fab035c38d738217613e169c57c11263802",
@@ -76,7 +108,7 @@
     "queue": 0,
     "incomplete": 0,
     "dropped": 0,
-    "clock": "stale at login screen"
+    "clock": "transport measurement resumed after reconnect; game-world capture unrun"
   },
   "shortcut": {
     "state": "In Progress",
