@@ -63,6 +63,112 @@ class DebugSessionServiceTest {
         sessionId, "testAccount", "testScript", LocalDateTime.of(2025, 6, 15, 12, 0), 0L);
   }
 
+  private com.fasterxml.jackson.databind.node.ObjectNode recorderIdentity() {
+    var identity =
+        new ObjectMapper()
+            .createObjectNode()
+            .put("schema", "debugger-client-identity/v1")
+            .put("clientBuildId", "commit")
+            .put("clientVersion", "1.0")
+            .put("artifactSha256", "a".repeat(64))
+            .put("gameRevision", 241)
+            .put("cacheRevision", 241)
+            .put("cacheRevisionSource", "CLIENT_GET_REVISION");
+    identity.putArray("qualityCodes");
+    return identity;
+  }
+
+  @Test
+  void manualRecorderIdentityBindsOnceUnderSessionLockAndRejectsChangedReconnect() {
+    var session = createSession("preferred");
+    session.setRecordingId("existing-video");
+    when(sessionRepository.findBySessionId("preferred")).thenReturn(Optional.of(session));
+    when(sessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    var client = recorderIdentity();
+    service.startSessionWithOutcome(
+        null,
+        "combat",
+        false,
+        RecordingTriggerSource.MANUAL,
+        "preferred",
+        null,
+        null,
+        null,
+        client);
+    var persisted = session.getCaptureIdentity();
+    assertEquals(241, persisted.path("client").path("gameRevision").asInt());
+    verify(sessionRepository).findBySessionIdForUpdate("preferred");
+    service.startSessionWithOutcome(
+        null,
+        "combat",
+        false,
+        RecordingTriggerSource.MANUAL,
+        "preferred",
+        null,
+        null,
+        null,
+        client);
+    assertEquals(persisted, session.getCaptureIdentity());
+    clearInvocations(sessionRepository, recordingService);
+    client.put("artifactSha256", "b".repeat(64));
+    var failure =
+        assertThrows(
+            com.chromascape.web.recording.provenance.ProvenanceException.class,
+            () ->
+                service.startSessionWithOutcome(
+                    null,
+                    "combat",
+                    true,
+                    RecordingTriggerSource.MANUAL,
+                    "preferred",
+                    null,
+                    null,
+                    null,
+                    client));
+    assertEquals("IMMUTABLE_CAPTURE_IDENTITY", failure.getCode());
+    verify(sessionRepository, never()).save(any());
+    verifyNoInteractions(recordingService);
+    assertEquals(persisted, session.getCaptureIdentity());
+  }
+
+  @Test
+  void cannotBackfillIdentityAfterTicksOrClosure() {
+    var session = createSession("legacy");
+    when(sessionRepository.findBySessionId("legacy")).thenReturn(Optional.of(session));
+    when(snapshotRepository.countBySessionId("legacy")).thenReturn(1L);
+    assertThrows(
+        com.chromascape.web.recording.provenance.ProvenanceException.class,
+        () ->
+            service.startSessionWithOutcome(
+                null,
+                "combat",
+                false,
+                RecordingTriggerSource.MANUAL,
+                "legacy",
+                null,
+                null,
+                null,
+                recorderIdentity()));
+    assertNull(session.getCaptureIdentity());
+    verify(sessionRepository, never()).save(any());
+    verifyNoInteractions(recordingService);
+  }
+
+  @Test
+  void heuristicLinkRepairCannotMoveKnownRecordingProvenance() {
+    var current = createSession("known-identity");
+    current.setRecordingId("video-identity");
+    current.bindCaptureIdentity(
+        DebuggerCaptureIdentity.snapshot(
+            DebuggerCaptureIdentity.validateClient(recorderIdentity()), 2));
+    when(sessionRepository.findByRecordingIdForUpdate("video-identity"))
+        .thenReturn(Optional.of(current));
+    assertFalse(service.repairRecordingLink("video-identity"));
+    verifyNoInteractions(snapshotRepository);
+    verify(sessionRepository, never()).save(any());
+    assertEquals("video-identity", current.getRecordingId());
+  }
+
   @Test
   void finalizedBoundsCannotGrowEvenWhenCalledDirectly() {
     DebugSession session = createSession("closed");

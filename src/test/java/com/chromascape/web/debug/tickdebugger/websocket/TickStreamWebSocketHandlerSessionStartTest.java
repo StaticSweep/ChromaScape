@@ -73,7 +73,9 @@ class TickStreamWebSocketHandlerSessionStartTest {
   }
 
   private String tickBatchJson(String sessionId) {
-    return "{\"type\":\"TICK_BATCH\",\"sessionId\":\"" + sessionId + "\",\"tick\":5}";
+    return "{\"type\":\"TICK_BATCH\",\"schemaVersion\":2,\"sessionId\":\""
+        + sessionId
+        + "\",\"tick\":5}";
   }
 
   private TickStreamWebSocketHandler handler(
@@ -110,6 +112,34 @@ class TickStreamWebSocketHandlerSessionStartTest {
 
   private void stubSessionId(WebSocketSession wsSession, String id) {
     when(wsSession.getId()).thenReturn(id);
+  }
+
+  @Test
+  void recordingIdentityTravelsThroughAuthoritativeStartAndCorrelatedRejection() throws Exception {
+    var service = mock(DebugSessionService.class);
+    var ws = mock(WebSocketSession.class);
+    stubSessionId(ws);
+    var handler =
+        handler(
+            service,
+            mock(DebuggerTickWebSocketHandler.class),
+            mock(FishingShadowDecisionService.class));
+    var request =
+        (com.fasterxml.jackson.databind.node.ObjectNode)
+            objectMapper.readTree(sessionStartJson("reserved", "identity-request"));
+    var identity = request.putObject("captureIdentity");
+    identity.put("schema", "debugger-client-identity/v1");
+    when(service.startSessionWithOutcome(
+            any(), any(), any(), any(), any(), any(), any(), any(), eq(identity)))
+        .thenThrow(
+            new com.chromascape.web.recording.provenance.ProvenanceException(
+                "IMMUTABLE_CAPTURE_IDENTITY"));
+    handler.handleTextMessage(ws, new TextMessage(request.toString()));
+    var response = ArgumentCaptor.forClass(TextMessage.class);
+    verify(ws).sendMessage(response.capture());
+    assertThat(response.getValue().getPayload())
+        .contains("IMMUTABLE_CAPTURE_IDENTITY", "identity-request");
+    verify(service, never()).startSessionWithOutcome(any(), any(), any(), any(), any());
   }
 
   @Test

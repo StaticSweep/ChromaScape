@@ -45,7 +45,7 @@ Revert only these scoped commits/profile overrides and restart the owned verific
 
 ## Remaining work and user recording steps
 
-After the rebuilt client opens, the user logs in and clicks into the game world. Open http://127.0.0.1:18090/debugger, wait for the recorder to connect, then record 1–2 minutes with a fresh NPC attack, visible movement and a prayer-tab toggle. Allow a few ticks between these actions; Stop and send the recording URL. Live eating is excluded by the user's 2026-10-13 instruction; retain implemented Eat support without claiming a live eating pass. Codex verifies target fields, confirmed raw-source lineage, measured beginning/combat/end video alignment, no tick gaps, final bounds after 60 seconds/restart, storage/projection round-trip, sanitized accepted fixture and deterministic coverage. No authentication or gameplay automation.
+After the rebuilt client opens, the user logs in and clicks into the game world. Open http://127.0.0.1:18090/debugger, wait for the recorder to connect, then record 1â€“2 minutes with a fresh NPC attack, visible movement and a prayer-tab toggle. Allow a few ticks between these actions; Stop and send the recording URL. Live eating is excluded by the user's 2026-10-13 instruction; retain implemented Eat support without claiming a live eating pass. Codex verifies target fields, confirmed raw-source lineage, measured beginning/combat/end video alignment, no tick gaps, final bounds after 60 seconds/restart, storage/projection round-trip, sanitized accepted fixture and deterministic coverage. No authentication or gameplay automation.
 
 ## Felix and Shortcut
 
@@ -90,3 +90,8 @@ Existing Felix evidence notes and task descriptions were updated and read back s
 [recording_eeed6066](recording-eeed6066-review.md) has 102 consecutive ticks, all required fields, zero PostgreSQL/schema mismatches, 36 resolved NPC-interaction ticks and 11 confirmed attack/move/prayer settlements. Video fully decodes 1,159 physical frames. Current mapping still rejects 11 ticks, although a read-only capture-time audit finds genuine physical frames within 100 ms for all 102 ticks. The remaining mapping change is therefore concrete; the audit does not change the service or acceptance status. Per-recording build/version provenance and accepted fixture/restart proof also remain open. Eating is excluded. Both stories remain In Progress and both PRs draft.
 
 Existing Felix Implementation/Verification notes and task descriptions were saved/read back successfully. Official Shortcut review comments [2061 (SC-1976)](https://app.shortcut.com/leeuwbot/story/1976#activity-2061) and [2062 (SC-751)](https://app.shortcut.com/leeuwbot/story/751#activity-2062) succeeded; SC-1976's delivery description now reflects actual combat and the eating exclusion. Both Felix tasks remain `spec_ready/in_progress`, both Shortcut states remain In Progress, and no review/done marker was emitted.
+
+
+## Final code-gap follow-up (2026-10-14)
+
+Frame selection and immutable per-recording provenance are implemented. The complete current plan, checks, risks and final user capture procedure are in [final gap evidence](../20261014-final-capture-gaps/README.md). Earlier recording limitations above are historical; latest actual timing results and remaining real-capture acceptance are recorded there.

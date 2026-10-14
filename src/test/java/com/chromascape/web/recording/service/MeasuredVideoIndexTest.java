@@ -9,6 +9,94 @@ import org.junit.jupiter.api.Test;
 
 class MeasuredVideoIndexTest {
   @Test
+  void selectsCaptureTimeInsteadOfStalePresentationAndPrefersOriginalCopy() {
+    var index =
+        new MeasuredVideoIndex.Index(
+            "measured-video-index/v1",
+            "r",
+            "hash",
+            true,
+            List.of(),
+            List.of(
+                new MeasuredVideoIndex.PhysicalFrame(0, 0, 1000, 1000, 0, 0),
+                new MeasuredVideoIndex.PhysicalFrame(1, 100000, 1000, 1100, 0, 100),
+                new MeasuredVideoIndex.PhysicalFrame(2, 150000, 1145, 1150, 0, 5),
+                new MeasuredVideoIndex.PhysicalFrame(3, 200000, 1145, 1200, 0, 55)),
+            250000);
+    var mapping = MeasuredVideoIndex.map(index, 1110, 10);
+    assertThat(mapping.status()).isEqualTo("MEASURED");
+    assertThat(mapping.frameIndex()).isEqualTo(2);
+    assertThat(MeasuredVideoIndex.map(index, 1145, 10).frameIndex()).isEqualTo(2);
+  }
+
+  @Test
+  void captureCallbacksMayBeOutOfOrderAndTiesAreDeterministic() {
+    var index =
+        new MeasuredVideoIndex.Index(
+            "measured-video-index/v1",
+            "r",
+            "hash",
+            true,
+            List.of(),
+            List.of(
+                new MeasuredVideoIndex.PhysicalFrame(0, 0, 1000, 1000, 0, 0),
+                new MeasuredVideoIndex.PhysicalFrame(1, 100000, 1100, 1100, 0, 0),
+                new MeasuredVideoIndex.PhysicalFrame(2, 150000, 1050, 1150, 0, 100)));
+    assertThat(MeasuredVideoIndex.map(index, 1055, 7).frameIndex()).isEqualTo(2);
+    assertThat(MeasuredVideoIndex.map(index, 1075, 7).frameIndex()).isEqualTo(2);
+    assertThat(MeasuredVideoIndex.map(index, Double.NaN, 7).qualityCodes())
+        .contains("CLOCK_UNCERTAINTY_EXCEEDED");
+  }
+
+  @Test
+  void sanitizedActualTimingsRecoverSelectorFailuresWithoutRelaxingRealImageGaps()
+      throws Exception {
+    var json = new com.fasterxml.jackson.databind.ObjectMapper();
+    try (var in =
+        getClass().getResourceAsStream("/replay/contracts/sc1976-real-frame-timings.json")) {
+      var root = json.readTree(in);
+      for (var capture : root.path("captures")) {
+        var frames = new java.util.ArrayList<MeasuredVideoIndex.PhysicalFrame>();
+        for (var frame : capture.path("frames")) {
+          frames.add(
+              new MeasuredVideoIndex.PhysicalFrame(
+                  frame.get(0).asInt(),
+                  frame.get(1).asLong(),
+                  frame.get(2).asDouble(),
+                  frame.get(3).asDouble(),
+                  frame.get(4).asDouble(),
+                  frame.get(5).asDouble()));
+        }
+        var index =
+            new MeasuredVideoIndex.Index(
+                "measured-video-index/v1",
+                "timing-only",
+                "unused",
+                true,
+                List.of(),
+                frames,
+                capture.path("mediaDurationMicros").asLong());
+        for (var tick : capture.path("ticks")) {
+          var mapping =
+              MeasuredVideoIndex.map(
+                  index,
+                  tick.path("serverMillis").asDouble(),
+                  tick.path("uncertaintyMillis").asDouble());
+          assertThat(mapping.status())
+              .as("%s tick %s", capture.path("source"), tick.path("tick"))
+              .isEqualTo(tick.path("expectedStatus").asText());
+          if ("MEASURED".equals(mapping.status())) {
+            assertThat(Math.abs(mapping.residualMillis()) + mapping.uncertaintyMillis())
+                .isLessThanOrEqualTo(100);
+          }
+        }
+        // Derived lookup is not written to the digest-bound timing sidecar.
+        assertThat(json.readTree(json.writeValueAsString(index)).has("captureFrames")).isFalse();
+      }
+    }
+  }
+
+  @Test
   void variableFrameIntervalsUsePhysicalIndicesAndPreserveEncodeLag() {
     var index =
         new MeasuredVideoIndex.Index(

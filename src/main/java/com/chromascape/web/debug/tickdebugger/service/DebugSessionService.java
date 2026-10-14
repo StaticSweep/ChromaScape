@@ -171,6 +171,39 @@ public class DebugSessionService {
       String taskKey,
       com.fasterxml.jackson.databind.JsonNode taskArgs,
       com.fasterxml.jackson.databind.JsonNode runContext) {
+    return startSessionWithOutcome(
+        accountName,
+        scriptName,
+        recordingEnabled,
+        triggerSource,
+        preferredSessionId,
+        taskKey,
+        taskArgs,
+        runContext,
+        null);
+  }
+
+  @Transactional
+  public SessionStartOutcome startSessionWithOutcome(
+      String accountName,
+      String scriptName,
+      Boolean recordingEnabled,
+      RecordingTriggerSource triggerSource,
+      String preferredSessionId,
+      String taskKey,
+      com.fasterxml.jackson.databind.JsonNode taskArgs,
+      com.fasterxml.jackson.databind.JsonNode runContext,
+      com.fasterxml.jackson.databind.JsonNode captureIdentity) {
+    var clientIdentity = DebuggerCaptureIdentity.validateClient(captureIdentity);
+    // Serialize identity binding with tick admission and closure, before any recording mutation.
+    if (clientIdentity != null && preferredSessionId != null) {
+      sessionRepository
+          .findBySessionIdForUpdate(preferredSessionId)
+          .ifPresent(
+              session ->
+                  bindCaptureIdentity(
+                      session, clientIdentity, runContext == null || runContext.isNull() ? 2 : 3));
+    }
     var provenance =
         com.chromascape.web.recording.provenance.RecordingProvenance.capture(taskKey, taskArgs);
     com.fasterxml.jackson.databind.node.ObjectNode contextSnapshot = null;
@@ -218,6 +251,9 @@ public class DebugSessionService {
     }
     ResolveResult resolved = resolveOrCreateSession(accountName, scriptName, preferredSessionId);
     DebugSession session = resolved.session();
+    if (clientIdentity != null) {
+      bindCaptureIdentity(session, clientIdentity, contextSnapshot == null ? 2 : 3);
+    }
     boolean createdNewSession = resolved.createdNewSession();
     boolean reusedPreferredSession = resolved.reusedPreferredSession();
     if (contextSnapshot != null && createdNewSession)
@@ -848,6 +884,25 @@ public class DebugSessionService {
     return sessionRepository.findBySessionId(sessionId);
   }
 
+  private void bindCaptureIdentity(
+      DebugSession session, com.fasterxml.jackson.databind.node.ObjectNode client, int version) {
+    var existing = session.getCaptureIdentity();
+    if (existing != null) {
+      if (!client.equals(existing.get("client"))
+          || existing.path("tickBatchVersion").asInt() != version) {
+        throw new com.chromascape.web.recording.provenance.ProvenanceException(
+            "IMMUTABLE_CAPTURE_IDENTITY");
+      }
+      return;
+    }
+    if (!session.acceptsTickEvidence()
+        || snapshotRepository.countBySessionId(session.getSessionId()) > 0) {
+      throw new com.chromascape.web.recording.provenance.ProvenanceException(
+          "CAPTURE_IDENTITY_TOO_LATE");
+    }
+    session.bindCaptureIdentity(DebuggerCaptureIdentity.snapshot(client, version));
+  }
+
   private boolean shouldStartRecording(RecordingTriggerSource triggerSource) {
     return switch (triggerSource) {
       case MANUAL -> true;
@@ -936,6 +991,8 @@ public class DebugSessionService {
   }
 
   private boolean maybeRelinkRecordingToTickBearingSession(DebugSession current) {
+    // Heuristic repair is legacy-only. Never move a known recording identity to another producer.
+    if (current.getCaptureIdentity() != null) return false;
     String recordingId = current.getRecordingId();
     if (recordingId == null || recordingId.isBlank()) {
       return false;
@@ -959,6 +1016,7 @@ public class DebugSessionService {
     long bestTickCount = 0;
     for (DebugSession candidate :
         sessionRepository.findByStartTimeBetweenOrderByStartTimeDesc(start, end)) {
+      if (candidate.getCaptureIdentity() != null) continue;
       if (candidate.getId().equals(current.getId())) {
         continue;
       }

@@ -516,16 +516,8 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       SessionStartOutcome outcome;
       try {
         outcome =
-            request.getTaskKey() == null
-                    && request.getTaskArgs() == null
-                    && request.getRunContext() == null
+            request.getCaptureIdentity() != null
                 ? sessionService.startSessionWithOutcome(
-                    request.getAccountName(),
-                    request.getScriptName(),
-                    recordingEnabled,
-                    request.getTriggerSource(),
-                    preferred)
-                : sessionService.startSessionWithOutcome(
                     request.getAccountName(),
                     request.getScriptName(),
                     recordingEnabled,
@@ -533,7 +525,26 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
                     preferred,
                     request.getTaskKey(),
                     request.getTaskArgs(),
-                    request.getRunContext());
+                    request.getRunContext(),
+                    request.getCaptureIdentity())
+                : request.getTaskKey() == null
+                        && request.getTaskArgs() == null
+                        && request.getRunContext() == null
+                    ? sessionService.startSessionWithOutcome(
+                        request.getAccountName(),
+                        request.getScriptName(),
+                        recordingEnabled,
+                        request.getTriggerSource(),
+                        preferred)
+                    : sessionService.startSessionWithOutcome(
+                        request.getAccountName(),
+                        request.getScriptName(),
+                        recordingEnabled,
+                        request.getTriggerSource(),
+                        preferred,
+                        request.getTaskKey(),
+                        request.getTaskArgs(),
+                        request.getRunContext());
       } catch (com.chromascape.web.recording.provenance.ProvenanceException e) {
         releasePreferredReservation(preferred, wsId);
         sendErrorResponse(wsSession, e.getCode(), "Invalid recording provenance", clientRequestId);

@@ -41,6 +41,58 @@ import org.springframework.http.ResponseEntity;
 /** Tests for {@link TickReplayController}. */
 @ExtendWith(MockitoExtension.class)
 class TickReplayControllerTest {
+  @Test
+  void provenanceBindsMediaDigestAndRejectsChangedMediaBytes(
+      @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) throws Exception {
+    var session = new DebugSession("identity-media", null, "combat", LocalDateTime.now(), 0L);
+    session.setRecordingId("recording-identity");
+    var video = directory.resolve("capture.mp4");
+    java.nio.file.Files.writeString(video, "abc");
+    var index =
+        new com.chromascape.web.recording.service.MeasuredVideoIndex.Index(
+            "measured-video-index/v1",
+            "recording-identity",
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            true,
+            List.of(),
+            List.of(
+                new com.chromascape.web.recording.service.MeasuredVideoIndex.PhysicalFrame(
+                    0, 0, 1000, 1000, 0, 0)),
+            50000);
+    new ObjectMapper()
+        .writeValue(
+            com.chromascape.web.recording.service.MeasuredVideoIndex.sidecar(video).toFile(),
+            index);
+    var recording = new RecordingSession();
+    recording.setVideoPath(video.toString());
+    when(sessionRepository.findBySessionId("identity-media")).thenReturn(Optional.of(session));
+    when(recordingSessionRepository.findByRecordingId("recording-identity"))
+        .thenReturn(Optional.of(recording));
+    var response = controller.captureProvenance("identity-media").getBody();
+    assertEquals(index.mediaSha256(), response.get("mediaSha256"));
+    assertEquals("VERIFIED", response.get("mediaStatus"));
+    java.nio.file.Files.writeString(video, "changed");
+    var corrupt = controller.captureProvenance("identity-media").getBody();
+    assertNull(corrupt.get("mediaSha256"));
+    assertEquals("UNAVAILABLE", corrupt.get("mediaStatus"));
+    assertTrue(((List<?>) corrupt.get("qualityCodes")).contains("VIDEO_INDEX_OR_MEDIA_INVALID"));
+  }
+
+  @Test
+  void provenanceExposesPersistedIdentityAndExplicitLegacyMissingMedia() {
+    var session = new DebugSession("identity", null, "combat", LocalDateTime.now(), 0L);
+    when(sessionRepository.findBySessionId("identity")).thenReturn(Optional.of(session));
+    var response = controller.captureProvenance("identity");
+    assertNull(response.getBody().get("captureIdentity"));
+    assertEquals(
+        List.of("LEGACY_CAPTURE_IDENTITY_MISSING", "VIDEO_INDEX_MISSING"),
+        response.getBody().get("qualityCodes"));
+    var identity = new ObjectMapper().createObjectNode().put("schema", "test-persisted");
+    session.bindCaptureIdentity(identity);
+    assertEquals(
+        identity, controller.captureProvenance("identity").getBody().get("captureIdentity"));
+    assertEquals(HttpStatus.NOT_FOUND, controller.captureProvenance("missing").getStatusCode());
+  }
 
   @Mock private DebugSessionRepository sessionRepository;
   @Mock private TickSnapshotRepository snapshotRepository;

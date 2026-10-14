@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
@@ -35,7 +36,42 @@ public final class MeasuredVideoIndex {
       boolean finalized,
       List<String> qualityCodes,
       List<PhysicalFrame> frames,
-      long mediaDurationMicros) {
+      long mediaDurationMicros,
+      @com.fasterxml.jackson.annotation.JsonIgnore List<PhysicalFrame> captureFrames) {
+    public Index {
+      frames = frames == null ? null : List.copyOf(frames);
+      // Presentation order is physical media order. Capture callbacks can arrive out of order,
+      // and cadence-fill frames can repeat an older image. Build this lookup once, not per tick.
+      captureFrames =
+          frames == null
+              ? List.of()
+              : frames.stream()
+                  .sorted(
+                      Comparator.comparingDouble(PhysicalFrame::capturedEpochMillis)
+                          .thenComparingDouble(PhysicalFrame::imageAgeMillis)
+                          .thenComparingInt(PhysicalFrame::index))
+                  .toList();
+    }
+
+    public Index(
+        String schema,
+        String recordingId,
+        String mediaSha256,
+        boolean finalized,
+        List<String> qualityCodes,
+        List<PhysicalFrame> frames,
+        long mediaDurationMicros) {
+      this(
+          schema,
+          recordingId,
+          mediaSha256,
+          finalized,
+          qualityCodes,
+          frames,
+          mediaDurationMicros,
+          null);
+    }
+
     public Index(
         String schema,
         String recordingId,
@@ -190,10 +226,11 @@ public final class MeasuredVideoIndex {
         || serverTickMillis > finalPresentationEnd) {
       return unavailable("TICK_OUTSIDE_VIDEO_RANGE");
     }
-    int low = 0, high = frames.size() - 1;
+    List<PhysicalFrame> captured = index.captureFrames();
+    int low = 0, high = captured.size() - 1;
     while (low < high) {
       int mid = (low + high) >>> 1;
-      if (frames.get(mid).presentedEpochMillis() < serverTickMillis) {
+      if (captured.get(mid).capturedEpochMillis() < serverTickMillis) {
         low = mid + 1;
       } else {
         high = mid;
@@ -201,11 +238,23 @@ public final class MeasuredVideoIndex {
     }
     int closest = low;
     if (low > 0
-        && Math.abs(frames.get(low - 1).presentedEpochMillis() - serverTickMillis)
-            <= Math.abs(frames.get(low).presentedEpochMillis() - serverTickMillis)) {
+        && Math.abs(captured.get(low - 1).capturedEpochMillis() - serverTickMillis)
+            <= Math.abs(captured.get(low).capturedEpochMillis() - serverTickMillis)) {
       closest--;
     }
-    PhysicalFrame frame = frames.get(closest);
+    // lower_bound also selects the original/freshest physical copy of a repeated image.
+    double selectedCapture = captured.get(closest).capturedEpochMillis();
+    low = 0;
+    high = closest;
+    while (low < high) {
+      int mid = (low + high) >>> 1;
+      if (captured.get(mid).capturedEpochMillis() < selectedCapture) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    PhysicalFrame frame = captured.get(low);
     double residual = serverTickMillis - frame.capturedEpochMillis();
     List<String> codes =
         Math.abs(residual) + clockUncertainty > 100

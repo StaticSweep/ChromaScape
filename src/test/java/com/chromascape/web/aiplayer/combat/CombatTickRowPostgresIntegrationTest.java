@@ -63,6 +63,34 @@ class CombatTickRowPostgresIntegrationTest {
           }
           statement.execute(migration);
           statement.execute(migration); // Idempotent when the table already has the new columns.
+          statement.execute("ALTER TABLE debug_sessions DROP COLUMN capture_identity");
+          statement.execute(
+              "INSERT INTO debug_sessions (session_id,start_time,start_tick,created_at) "
+                  + "VALUES ('legacy-identity',CURRENT_TIMESTAMP,0,CURRENT_TIMESTAMP)");
+          try (var in =
+              getClass().getResourceAsStream("/db/migration/V70__sc1976_recording_identity.sql")) {
+            String identityMigration = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            statement.execute(identityMigration);
+            statement.execute(identityMigration);
+          }
+          try (var legacy =
+              statement.executeQuery(
+                  "SELECT capture_identity FROM debug_sessions WHERE session_id='legacy-identity'")) {
+            assertThat(legacy.next()).isTrue();
+            assertThat(legacy.getString(1)).isNull();
+          }
+          assertThatThrownBy(
+                  () ->
+                      statement.execute(
+                          "UPDATE debug_sessions SET capture_identity='[]'::jsonb WHERE session_id='legacy-identity'"))
+              .isInstanceOf(SQLException.class)
+              .hasMessageContaining("ck_debug_sessions_capture_identity");
+          assertThatThrownBy(
+                  () ->
+                      statement.execute(
+                          "UPDATE debug_sessions SET capture_identity=jsonb_build_object('raw',repeat('x',16384)) WHERE session_id='legacy-identity'"))
+              .isInstanceOf(SQLException.class)
+              .hasMessageContaining("ck_debug_sessions_capture_identity");
           try (var in =
               getClass().getResourceAsStream("/db/migration/V69__sc751_capture_quality.sql")) {
             String qualityMigration = new String(in.readAllBytes(), StandardCharsets.UTF_8);
@@ -100,6 +128,31 @@ class CombatTickRowPostgresIntegrationTest {
           fixture = mapper.readTree(in);
         }
         try (SessionFactory factory = factory(scopedUrl, user, password, "validate")) {
+          var identity = mapper.createObjectNode().put("schema", "debugger-recording-identity/v1");
+          var recorded =
+              new com.chromascape.web.debug.tickdebugger.entity.DebugSession(
+                  "identity-roundtrip", null, "combat", java.time.LocalDateTime.now(), 1L);
+          recorded.bindCaptureIdentity(identity);
+          try (var session = factory.openSession()) {
+            var tx = session.beginTransaction();
+            session.persist(recorded);
+            tx.commit();
+          }
+          try (var session = factory.openSession()) {
+            var reloaded =
+                session.find(
+                    com.chromascape.web.debug.tickdebugger.entity.DebugSession.class,
+                    recorded.getId());
+            assertThat(reloaded.getCaptureIdentity()).isEqualTo(identity);
+            assertThatThrownBy(
+                    () ->
+                        reloaded.bindCaptureIdentity(
+                            mapper.createObjectNode().put("schema", "other")))
+                .hasMessageContaining("IMMUTABLE_CAPTURE_IDENTITY");
+            var copy = reloaded.getCaptureIdentity();
+            ((com.fasterxml.jackson.databind.node.ObjectNode) copy).put("schema", "mutated");
+            assertThat(reloaded.getCaptureIdentity()).isEqualTo(identity);
+          }
           verifyClosureLock(factory);
           TickSnapshot snapshot =
               new TickSnapshot(

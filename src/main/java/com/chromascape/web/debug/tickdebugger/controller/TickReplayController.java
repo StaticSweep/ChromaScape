@@ -101,6 +101,43 @@ public class TickReplayController {
             tickVideoSyncService.measurements(sessionId)));
   }
 
+  /** Persisted identity plus the exact finalized media binding; never backfills legacy identity. */
+  @GetMapping("/{sessionId}/provenance")
+  public ResponseEntity<Map<String, Object>> captureProvenance(@PathVariable String sessionId) {
+    var session = sessionRepository.findBySessionId(sessionId).orElse(null);
+    if (session == null) return ResponseEntity.notFound().build();
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("sessionId", sessionId);
+    result.put("recordingId", session.getRecordingId());
+    result.put("captureIdentity", session.getCaptureIdentity());
+    List<String> codes = new ArrayList<>();
+    if (session.getCaptureIdentity() == null) codes.add("LEGACY_CAPTURE_IDENTITY_MISSING");
+    result.put("mediaSha256", null);
+    result.put("mediaStatus", "UNAVAILABLE");
+    try {
+      var recording =
+          session.getRecordingId() == null
+              ? null
+              : recordingSessionRepository.findByRecordingId(session.getRecordingId()).orElse(null);
+      if (recording == null || recording.getVideoPath() == null) {
+        codes.add("VIDEO_INDEX_MISSING");
+      } else {
+        var index =
+            com.chromascape.web.recording.service.MeasuredVideoIndex.read(
+                java.nio.file.Path.of(recording.getVideoPath()), session.getRecordingId());
+        result.put("mediaSha256", index.mediaSha256());
+        result.put("videoIndexSchema", index.schema());
+        result.put("physicalFrameCount", index.frames().size());
+        codes.addAll(index.qualityCodes());
+        result.put("mediaStatus", index.qualityCodes().isEmpty() ? "VERIFIED" : "UNAVAILABLE");
+      }
+    } catch (Exception invalid) {
+      codes.add("VIDEO_INDEX_OR_MEDIA_INVALID");
+    }
+    result.put("qualityCodes", List.copyOf(codes));
+    return ResponseEntity.ok(result);
+  }
+
   /**
    * Get tick range data for a session.
    *
