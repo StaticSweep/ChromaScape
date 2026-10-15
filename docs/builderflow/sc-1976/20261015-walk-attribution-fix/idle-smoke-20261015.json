@@ -1,0 +1,76 @@
+{
+  "schema": "sc1976-idle-smoke-evidence/v1",
+  "checkedAtUtc": "2026-10-15T09:31:49.232541+00:00",
+  "recordingId": "recording_50f23644",
+  "sessionId": "debug_33916f6a6ccd4a9a9ad98b760517a60d",
+  "lifecycleState": "FINALIZED",
+  "captureType": "user-idle-readiness-only",
+  "tickCount": 150,
+  "firstTick": 107,
+  "lastTick": 256,
+  "missingTicks": 0,
+  "duplicateTicks": 0,
+  "requiredFieldsPresentEveryTick": [
+    "inputs",
+    "tiles",
+    "hazards",
+    "phase",
+    "inventory",
+    "equipment",
+    "npcs",
+    "projectiles",
+    "groundObjects",
+    "playerState.specialAttack",
+    "playerState.prayersActive"
+  ],
+  "calibratedTicks": 150,
+  "maxAlignmentErrorMillis": 38.571270703125,
+  "p95AlignmentErrorMillis": 25.154541015625,
+  "qualityCodes": [],
+  "physicalFrameCount": 2566,
+  "mediaSha256": "d086b3789cdf469e15700abfe803c56ed77be7fce644ce6d4afe06fe881570ac",
+  "mediaStatus": "VERIFIED",
+  "fullVideoDecode": "passed",
+  "sampleShowsGameWorld": true,
+  "captureIdentity": {
+    "client": {
+      "schema": "debugger-client-identity/v1",
+      "gameRevision": 241,
+      "qualityCodes": [],
+      "cacheRevision": 241,
+      "clientBuildId": "429e32978b1027ca913660ef38f69b92d35bb3c0",
+      "clientVersion": "1.13.3-SNAPSHOT",
+      "artifactSha256": "893c4f6942ac32ad466ba9c5e86fe436ee4ceca783a81743bbced16d41b4a72b",
+      "cacheRevisionSource": "CLIENT_GET_REVISION"
+    },
+    "schema": "debugger-recording-identity/v1",
+    "server": {
+      "dirty": "false",
+      "version": "0.2.0-SNAPSHOT",
+      "gitRevision": "7f507c8f83f5d5148922ec95625f0d0604084108",
+      "artifactKind": "APPLICATION_CLASS_DIRECTORY",
+      "qualityCodes": [],
+      "artifactSha256": "6517383181266cc8e47c018286e7b0552bf024ae361eeecc11f4e470b0151732"
+    },
+    "combatRowSchema": "combat-tick-row/v1",
+    "tickBatchVersion": 2,
+    "videoIndexSchema": "measured-video-index/v1",
+    "captureQualitySchema": "capture-quality/v1"
+  },
+  "combatActions": 0,
+  "acceptedCombatFixture": false,
+  "remaining": [
+    "Fresh user-performed movement/attack/prayer recording",
+    "Live movement provenance and label validation",
+    "Accepted sanitized combat fixture",
+    "Final story review and delivery gates"
+  ],
+  "checksNotRun": [
+    "No new builds or unit suites in this runtime follow-up",
+    "Docker debugger suites",
+    "Production migration-chain certification",
+    "Hosted Actions excluded by user"
+  ],
+  "felixState": "spec_ready/in_progress; unchanged",
+  "shortcutState": "In Progress; unchanged"
+}
