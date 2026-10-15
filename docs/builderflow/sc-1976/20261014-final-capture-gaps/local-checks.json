@@ -57,7 +57,7 @@
   "hostedActions": "excluded by user",
   "productionMigrationChain": "unrun",
   "dockerDebuggerSuites": "four unrun",
-  "liveNewIdentityCapture": "pending user login/capture",
+  "liveNewIdentityCapture": "verified in idle smoke; genuine combat and restart survival pending",
   "restart": {
     "verifiedAt": "2026-10-14T20:44:13.404634+00:00",
     "oldPid": 57284,
@@ -138,5 +138,65 @@
     "sourceChangesInThisFollowup": false,
     "fullSuiteRerun": false,
     "original8090Recording": "preserved; no stop command sent"
+  },
+  "idleReadinessSmoke20261015": {
+    "verifiedAt": "2026-10-15T00:54:40.502345+00:00",
+    "recordingId": "recording_0442e08a",
+    "sessionId": "debug_0bf5f5150c5d401f8b814abfb503b482",
+    "startStop": "passed",
+    "replayable": true,
+    "ticks": 19,
+    "tickBounds": [
+      155,
+      173
+    ],
+    "noGapsOrDuplicates": true,
+    "requiredFieldsPresent": true,
+    "finalized": true,
+    "captureIdentity": {
+      "client": {
+        "schema": "debugger-client-identity/v1",
+        "gameRevision": 241,
+        "qualityCodes": [],
+        "cacheRevision": 241,
+        "clientBuildId": "836b97123a2f2606643c3ee3e3373062da91dd2d",
+        "clientVersion": "1.13.3-SNAPSHOT",
+        "artifactSha256": "6dedde2e485df4c6d9a00cec8794701882f96b47bb0ff6e662a9cf6bb68f6b59",
+        "cacheRevisionSource": "CLIENT_GET_REVISION"
+      },
+      "schema": "debugger-recording-identity/v1",
+      "server": {
+        "dirty": "false",
+        "version": "0.2.0-SNAPSHOT",
+        "gitRevision": "92b496adebd7bfef8bacaf1f0e3ababa08b4cc13",
+        "artifactKind": "APPLICATION_CLASS_DIRECTORY",
+        "qualityCodes": [],
+        "artifactSha256": "2c677e8e5d898a678f28f98276de2ed190e8592c57ce9855d496fb19568052f9"
+      },
+      "combatRowSchema": "combat-tick-row/v1",
+      "tickBatchVersion": 2,
+      "videoIndexSchema": "measured-video-index/v1",
+      "captureQualitySchema": "capture-quality/v1"
+    },
+    "qualityCodes": [],
+    "calibratedTicks": 19,
+    "maxAlignmentErrorMillis": 28.677296875,
+    "mediaStatus": "VERIFIED",
+    "mediaSha256": "c1722e1df51806e79a5131485400a74fb1c1aabd2e5f0699d5cb4cac5040ffc9",
+    "physicalFrameCount": 394,
+    "actualJarSha256Matches": true,
+    "actualMediaSha256Matches": true,
+    "fullVideoDecode": "passed",
+    "visualGameWorld": "confirmed from private frame",
+    "unchangedFinalizedApi": {
+      "session": true,
+      "ticks": true,
+      "provenance": true
+    },
+    "serverRestartForThisIdentity": "unrun",
+    "combatAcceptance": "unrun - idle smoke only",
+    "sourceChanges": false,
+    "fullSuiteRerun": false,
+    "finalizedApiUnchangedAfterSeconds": 124.781
   }
 }
