@@ -1,0 +1,89 @@
+{
+  "sourceCommits": {
+    "ChromaScape": "7f507c8f83f5d5148922ec95625f0d0604084108",
+    "micro6": "429e32978b1027ca913660ef38f69b92d35bb3c0"
+  },
+  "chromaTests": {
+    "tests": 21,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "initialMicroFull": {
+    "counts": {
+      "tests": 1725,
+      "failures": 4,
+      "errors": 0,
+      "skipped": 0
+    },
+    "failedSuites": [
+      [
+        "net.runelite.client.plugins.microbot.accountbuilder.RemoteAccountBuilderManagerTest",
+        "4",
+        "0"
+      ]
+    ]
+  },
+  "configuredAttemptWhilePriorRunnerActive": "failed output.bin lock; no test result claimed",
+  "microFinal": {
+    "tests": 1725,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "historicalGate": {
+    "rejectedLegacyMovementTicks": [
+      535,
+      541,
+      545,
+      552,
+      557
+    ],
+    "ticks": 101,
+    "eligibleActionCounts": {
+      "INTERACT_NPC": 1,
+      "INTERACT_WIDGET": 2
+    }
+  },
+  "restart": {
+    "sessionUnchanged": true,
+    "ticksUnchanged": true,
+    "provenanceUnchanged": true,
+    "debuggerHttp": 200
+  },
+  "runtime": {
+    "serverPort": 18090,
+    "serverPid": 29920,
+    "original8090Pid": 132360,
+    "serverBuild": "7f507c8f83f5d5148922ec95625f0d0604084108",
+    "client": {
+      "pid": 242640,
+      "buildId": "429e32978b1027ca913660ef38f69b92d35bb3c0",
+      "sha256": "893c4f6942ac32ad466ba9c5e86fe436ee4ceca783a81743bbced16d41b4a72b",
+      "gameState": "LOGIN_SCREEN",
+      "sourceMode": "disabled",
+      "recorderReady": true,
+      "connected": true,
+      "recoveryState": "ACTIVE",
+      "queueDepth": 0,
+      "pending": 0,
+      "dropped": 0,
+      "incomplete": 0,
+      "reconnectCircuitOpen": false,
+      "endpoint": "ws://127.0.0.1:18090/ws/micro6/tick-stream"
+    }
+  },
+  "newRealCombatAcceptance": "unrun",
+  "acceptedCombatFixture": "not created",
+  "hostedActions": "excluded by user",
+  "dockerDebuggerSuites": "unrun",
+  "productionMigrationChain": "unrun; no new migration",
+  "microCaptureContract": "passed in final full-suite invocation",
+  "verifiedAt": "2026-10-15T01:38:19.401673+00:00",
+  "package": {
+    "export": "passed",
+    "sha256": "893c4f6942ac32ad466ba9c5e86fe436ee4ceca783a81743bbced16d41b4a72b",
+    "revision": 241,
+    "captureContract": "passed"
+  }
+}
