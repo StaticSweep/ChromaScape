@@ -41,6 +41,58 @@ import org.springframework.http.ResponseEntity;
 /** Tests for {@link TickReplayController}. */
 @ExtendWith(MockitoExtension.class)
 class TickReplayControllerTest {
+  @Test
+  void provenanceBindsMediaDigestAndRejectsChangedMediaBytes(
+      @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) throws Exception {
+    var session = new DebugSession("identity-media", null, "combat", LocalDateTime.now(), 0L);
+    session.setRecordingId("recording-identity");
+    var video = directory.resolve("capture.mp4");
+    java.nio.file.Files.writeString(video, "abc");
+    var index =
+        new com.chromascape.web.recording.service.MeasuredVideoIndex.Index(
+            "measured-video-index/v1",
+            "recording-identity",
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            true,
+            List.of(),
+            List.of(
+                new com.chromascape.web.recording.service.MeasuredVideoIndex.PhysicalFrame(
+                    0, 0, 1000, 1000, 0, 0)),
+            50000);
+    new ObjectMapper()
+        .writeValue(
+            com.chromascape.web.recording.service.MeasuredVideoIndex.sidecar(video).toFile(),
+            index);
+    var recording = new RecordingSession();
+    recording.setVideoPath(video.toString());
+    when(sessionRepository.findBySessionId("identity-media")).thenReturn(Optional.of(session));
+    when(recordingSessionRepository.findByRecordingId("recording-identity"))
+        .thenReturn(Optional.of(recording));
+    var response = controller.captureProvenance("identity-media").getBody();
+    assertEquals(index.mediaSha256(), response.get("mediaSha256"));
+    assertEquals("VERIFIED", response.get("mediaStatus"));
+    java.nio.file.Files.writeString(video, "changed");
+    var corrupt = controller.captureProvenance("identity-media").getBody();
+    assertNull(corrupt.get("mediaSha256"));
+    assertEquals("UNAVAILABLE", corrupt.get("mediaStatus"));
+    assertTrue(((List<?>) corrupt.get("qualityCodes")).contains("VIDEO_INDEX_OR_MEDIA_INVALID"));
+  }
+
+  @Test
+  void provenanceExposesPersistedIdentityAndExplicitLegacyMissingMedia() {
+    var session = new DebugSession("identity", null, "combat", LocalDateTime.now(), 0L);
+    when(sessionRepository.findBySessionId("identity")).thenReturn(Optional.of(session));
+    var response = controller.captureProvenance("identity");
+    assertNull(response.getBody().get("captureIdentity"));
+    assertEquals(
+        List.of("LEGACY_CAPTURE_IDENTITY_MISSING", "VIDEO_INDEX_MISSING"),
+        response.getBody().get("qualityCodes"));
+    var identity = new ObjectMapper().createObjectNode().put("schema", "test-persisted");
+    session.bindCaptureIdentity(identity);
+    assertEquals(
+        identity, controller.captureProvenance("identity").getBody().get("captureIdentity"));
+    assertEquals(HttpStatus.NOT_FOUND, controller.captureProvenance("missing").getStatusCode());
+  }
 
   @Mock private DebugSessionRepository sessionRepository;
   @Mock private TickSnapshotRepository snapshotRepository;
@@ -52,6 +104,10 @@ class TickReplayControllerTest {
   @Mock private LogRepository standardLogRepository;
   @Mock private DebugSessionService debugSessionService;
   @Mock private PacketObservationRepository packetObservationRepository;
+
+  @Mock
+  private com.chromascape.web.debug.tickdebugger.service.ManualRecordingCoordinator
+      manualRecordingCoordinator;
 
   private TickReplayController controller;
 
@@ -69,6 +125,80 @@ class TickReplayControllerTest {
             standardLogRepository,
             debugSessionService,
             new ObjectMapper());
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        controller, "manualRecordingCoordinator", manualRecordingCoordinator);
+  }
+
+  @Test
+  void unavailableRecorderCannotStartAVideoOrSession() {
+    when(manualRecordingCoordinator.selectRecorder(null))
+        .thenThrow(new IllegalStateException("RECORDER_UNAVAILABLE"));
+    var response = controller.startRecording(new TickReplayController.RecordingStartRequest());
+    assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
+    verifyNoInteractions(debugSessionService);
+  }
+
+  private DebugSessionService.SessionStartOutcome manualStart(boolean created) {
+    var response =
+        new com.chromascape.web.debug.tickdebugger.dto.SessionStartResponse(
+            "debug_manual", true, "rec_manual", 0L, null);
+    var token =
+        new DebugSessionService.SessionStartRollbackToken(
+            "debug_manual", created, created ? "rec_manual" : null, null, null, null);
+    var outcome =
+        new DebugSessionService.SessionStartOutcome(response, token, created, !created, created);
+    when(manualRecordingCoordinator.selectRecorder(null)).thenReturn("socket");
+    when(debugSessionService.startSessionWithOutcome(
+            any(), any(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(outcome);
+    return outcome;
+  }
+
+  @Test
+  void recordingSuccessWaitsForBindingAndACommittedTick() {
+    var outcome = manualStart(true);
+    var response = controller.startRecording(new TickReplayController.RecordingStartRequest());
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    assertSame(outcome.response(), response.getBody());
+    var ordered = inOrder(manualRecordingCoordinator, debugSessionService);
+    ordered.verify(manualRecordingCoordinator).selectRecorder(null);
+    ordered
+        .verify(debugSessionService)
+        .startSessionWithOutcome(any(), any(), any(), any(), any(), any(), any(), any());
+    ordered
+        .verify(manualRecordingCoordinator)
+        .startAndAwaitTick("socket", "debug_manual", "Manual Recording");
+  }
+
+  @Test
+  void readinessFailureDrainsAndCompensatesOnlyTheNewSession() {
+    var outcome = manualStart(true);
+    doThrow(new IllegalStateException("RECORDER_TICK_TIMEOUT"))
+        .when(manualRecordingCoordinator)
+        .startAndAwaitTick(any(), any(), any());
+    doThrow(new IllegalStateException("RECORDER_DISCONNECTED"))
+        .when(manualRecordingCoordinator)
+        .stopAndAwaitDrain(any());
+    var response = controller.startRecording(new TickReplayController.RecordingStartRequest());
+    assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
+    verify(debugSessionService)
+        .rollbackSessionStart(outcome.rollbackToken(), "manual capture readiness failed");
+  }
+
+  @Test
+  void readinessFailureCannotStopAReusedSession() {
+    var outcome = manualStart(false);
+    doThrow(new IllegalStateException("RECORDER_TICK_TIMEOUT"))
+        .when(manualRecordingCoordinator)
+        .startAndAwaitTick(any(), any(), any());
+    assertEquals(
+        HttpStatus.SERVICE_UNAVAILABLE,
+        controller
+            .startRecording(new TickReplayController.RecordingStartRequest())
+            .getStatusCode());
+    verify(manualRecordingCoordinator, never()).stopAndAwaitDrain(any());
+    verify(debugSessionService)
+        .rollbackSessionStart(outcome.rollbackToken(), "manual capture readiness failed");
   }
 
   private DebugSession createSession(String sessionId) {

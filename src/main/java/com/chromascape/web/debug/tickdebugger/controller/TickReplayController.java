@@ -62,6 +62,10 @@ public class TickReplayController {
   private final DebugSessionService debugSessionService;
   private final ObjectMapper objectMapper;
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.chromascape.web.debug.tickdebugger.service.ManualRecordingCoordinator
+      manualRecordingCoordinator;
+
   public TickReplayController(
       DebugSessionRepository sessionRepository,
       TickSnapshotRepository snapshotRepository,
@@ -83,6 +87,55 @@ public class TickReplayController {
     this.standardLogRepository = standardLogRepository;
     this.debugSessionService = debugSessionService;
     this.objectMapper = objectMapper;
+  }
+
+  @GetMapping("/{sessionId}/quality")
+  public ResponseEntity<Map<String, Object>> captureQuality(@PathVariable String sessionId) {
+    if (sessionRepository.findBySessionId(sessionId).isEmpty()) {
+      return ResponseEntity.notFound().build();
+    }
+    return ResponseEntity.ok(
+        com.chromascape.web.debug.tickdebugger.service.CaptureQualityReport.summarize(
+            sessionId,
+            snapshotRepository.findBySessionIdOrderByTick(sessionId),
+            tickVideoSyncService.measurements(sessionId)));
+  }
+
+  /** Persisted identity plus the exact finalized media binding; never backfills legacy identity. */
+  @GetMapping("/{sessionId}/provenance")
+  public ResponseEntity<Map<String, Object>> captureProvenance(@PathVariable String sessionId) {
+    var session = sessionRepository.findBySessionId(sessionId).orElse(null);
+    if (session == null) return ResponseEntity.notFound().build();
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("sessionId", sessionId);
+    result.put("recordingId", session.getRecordingId());
+    result.put("captureIdentity", session.getCaptureIdentity());
+    List<String> codes = new ArrayList<>();
+    if (session.getCaptureIdentity() == null) codes.add("LEGACY_CAPTURE_IDENTITY_MISSING");
+    result.put("mediaSha256", null);
+    result.put("mediaStatus", "UNAVAILABLE");
+    try {
+      var recording =
+          session.getRecordingId() == null
+              ? null
+              : recordingSessionRepository.findByRecordingId(session.getRecordingId()).orElse(null);
+      if (recording == null || recording.getVideoPath() == null) {
+        codes.add("VIDEO_INDEX_MISSING");
+      } else {
+        var index =
+            com.chromascape.web.recording.service.MeasuredVideoIndex.read(
+                java.nio.file.Path.of(recording.getVideoPath()), session.getRecordingId());
+        result.put("mediaSha256", index.mediaSha256());
+        result.put("videoIndexSchema", index.schema());
+        result.put("physicalFrameCount", index.frames().size());
+        codes.addAll(index.qualityCodes());
+        result.put("mediaStatus", index.qualityCodes().isEmpty() ? "VERIFIED" : "UNAVAILABLE");
+      }
+    } catch (Exception invalid) {
+      codes.add("VIDEO_INDEX_OR_MEDIA_INVALID");
+    }
+    result.put("qualityCodes", List.copyOf(codes));
+    return ResponseEntity.ok(result);
   }
 
   /**
@@ -575,9 +628,9 @@ public class TickReplayController {
    * @return session start response with sessionId and recordingId
    */
   @PostMapping("/start-recording")
-  public ResponseEntity<SessionStartResponse> startRecording(
-      @RequestBody RecordingStartRequest request) {
+  public ResponseEntity<?> startRecording(@RequestBody RecordingStartRequest request) {
 
+    DebugSessionService.SessionStartOutcome started = null;
     try {
       String accountName = request.getAccountName();
       String scriptName = request.getScriptName();
@@ -593,18 +646,20 @@ public class TickReplayController {
         recordingEnabled = true;
       }
 
-      SessionStartResponse response =
-          debugSessionService
-              .startSessionWithOutcome(
-                  accountName,
-                  scriptName,
-                  recordingEnabled,
-                  RecordingTriggerSource.MANUAL,
-                  request.getSessionId(),
-                  request.getTaskKey(),
-                  request.getTaskArgs(),
-                  request.getRunContext())
-              .response();
+      String recorderClientId = manualRecordingCoordinator.selectRecorder(request.getSessionId());
+      started =
+          debugSessionService.startSessionWithOutcome(
+              accountName,
+              scriptName,
+              recordingEnabled,
+              RecordingTriggerSource.MANUAL,
+              request.getSessionId(),
+              request.getTaskKey(),
+              request.getTaskArgs(),
+              request.getRunContext());
+      SessionStartResponse response = started.response();
+      manualRecordingCoordinator.startAndAwaitTick(
+          recorderClientId, response.getSessionId(), scriptName);
 
       log.info(
           "Started recording via replay page: sessionId={}, recordingId={}",
@@ -614,8 +669,27 @@ public class TickReplayController {
       return ResponseEntity.ok(response);
 
     } catch (Exception e) {
+      if (started != null) {
+        // A readiness timeout must never close a pre-existing session reused by this request.
+        if (started.createdNewSession()) {
+          try {
+            manualRecordingCoordinator.stopAndAwaitDrain(started.response().getSessionId());
+          } catch (Exception cleanupFailure) {
+            log.warn("Recorder cleanup after failed start: {}", cleanupFailure.getMessage());
+          }
+        }
+        try {
+          debugSessionService.rollbackSessionStart(
+              started.rollbackToken(), "manual capture readiness failed");
+        } catch (Exception cleanupFailure) {
+          log.error("Failed to compensate manual recording start", cleanupFailure);
+        }
+      }
       log.error("Failed to start recording: {}", e.getMessage(), e);
-      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+      return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+          .body(
+              Map.of(
+                  "message", e.getMessage() == null ? "Recorder failed to start" : e.getMessage()));
     }
   }
 
@@ -639,6 +713,13 @@ public class TickReplayController {
         return ResponseEntity.badRequest().body(error);
       }
 
+      try {
+        manualRecordingCoordinator.stopAndAwaitDrain(sessionId);
+      } catch (IllegalStateException drainFailed) {
+        debugSessionService.stopSession(sessionId, endTick);
+        return ResponseEntity.status(HttpStatus.GATEWAY_TIMEOUT)
+            .body(Map.of("message", drainFailed.getMessage(), "sessionId", sessionId));
+      }
       debugSessionService.stopSession(sessionId, endTick);
       DebugSession stoppedSession = sessionRepository.findBySessionId(sessionId).orElse(null);
       String recordingId = stoppedSession != null ? stoppedSession.getRecordingId() : null;

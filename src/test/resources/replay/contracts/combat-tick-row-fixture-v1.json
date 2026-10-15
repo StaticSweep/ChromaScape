@@ -1,0 +1,65 @@
+{
+  "comment": "SC-1976 golden fixture: one combat tick (Abyssal demon fight). fps=30, startTick=100.",
+  "tick": 110,
+  "timestamp": "2026-10-05T14:00:01",
+  "startTick": 100,
+  "fps": 30,
+  "playerState": {
+    "position": { "x": 3200, "y": 3205, "plane": 0 },
+    "worldX": 3200,
+    "worldY": 3205,
+    "plane": 0,
+    "hp": { "current": 87, "max": 99 },
+    "prayer": { "current": 40, "max": 99 },
+    "energy": 65,
+    "animation": 5816,
+    "interacting": { "type": "NPC", "id": 415, "index": 0, "name": "Abyssal demon" }
+  },
+  "npcs": [
+    {
+      "index": 0,
+      "id": 415,
+      "name": "Abyssal demon",
+      "hp": { "current": 120, "max": 150 },
+      "animation": 1537,
+      "x": 3202,
+      "y": 3206,
+      "plane": 0
+    },
+    {
+      "index": 1,
+      "id": 100,
+      "name": "Goblin",
+      "hp": { "current": 5, "max": 5 },
+      "animation": -1,
+      "x": 3210,
+      "y": 3210,
+      "plane": 0
+    }
+  ],
+  "inventory": [
+    { "slot": 0, "itemId": 385, "quantity": 3 },
+    { "slot": 2, "itemId": 4151, "quantity": 1 }
+  ],
+  "equipment": [
+    { "slot": 3, "itemId": 4151, "quantity": 1 }
+  ],
+  "projectiles": [
+    { "id": 335, "remainingCycles": 5 }
+  ],
+  "groundObjects": [
+    { "id": 1234, "x": 3201, "y": 3205, "plane": 0 }
+  ],
+  "action": {
+    "schema": "recording-action/v1",
+    "sessionId": "debug_combat_1",
+    "tick": 110,
+    "sequence": 0,
+    "actionType": "INTERACT_NPC",
+    "target": { "kind": "NPC", "stableId": "npc:415:0" },
+    "arguments": { "option": "Attack" },
+    "source": "MICRO6_SEMANTIC_DISPATCH",
+    "confidence": 1,
+    "capturedAt": "2026-10-05T14:00:01Z"
+  }
+}

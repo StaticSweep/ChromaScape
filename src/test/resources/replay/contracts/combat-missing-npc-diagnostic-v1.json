@@ -1,0 +1,43 @@
+{
+  "provenance": {
+    "recordingId": "recording_885d8b93",
+    "source": "served persisted snapshots from actual revision-241 Micro6 combat capture",
+    "status": "PARTIAL_DIAGNOSTIC_NOT_ACCEPTED",
+    "sanitization": "Allowlisted player combat state, NPC interaction, empty NPC array and raw mouse scalars; account/character/session identity and unrelated payload omitted. No replacement data or inferred labels.",
+    "limitation": "NPC streaming disabled; real NPC interaction cannot resolve; excerpt is not a complete combat golden fixture."
+  },
+  "snapshots": [
+    {
+      "tick": 1442,
+      "timestamp": "2026-10-12T22:18:20.504115",
+      "playerState": {
+        "specialAttack": 100,
+        "prayersActive": [],
+        "interacting": {
+          "id": 3017,
+          "name": "Giant spider",
+          "type": "NPC",
+          "index": 24358
+        }
+      },
+      "npcs": [],
+      "inputs": {
+        "mouseX": 452,
+        "mouseY": 88,
+        "mouseButton": 1
+      }
+    },
+    {
+      "tick": 1434,
+      "timestamp": "2026-10-12T22:18:15.709841",
+      "playerState": {
+        "specialAttack": 100,
+        "prayersActive": []
+      },
+      "npcs": [],
+      "inputs": {
+        "mouseButton": -1
+      }
+    }
+  ]
+}

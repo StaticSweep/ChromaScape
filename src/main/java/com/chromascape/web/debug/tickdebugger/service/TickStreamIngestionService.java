@@ -247,7 +247,7 @@ public class TickStreamIngestionService {
       String sessionId = batch.getSessionId();
 
       // Verify session exists
-      Optional<DebugSession> session = sessionService.getSession(sessionId);
+      Optional<DebugSession> session = sessionService.getSessionForIngestion(sessionId);
       if (session.isEmpty()) {
         throw new IllegalArgumentException("Unknown debug session: " + sessionId);
       }
@@ -269,6 +269,10 @@ public class TickStreamIngestionService {
           ensureReceiptMatches(tickWinner.get(), batch);
           return acknowledgment(tickWinner.get());
         }
+      }
+
+      if (batchReceiptRepository != null && !canonicalProjection) {
+        validateCaptureBoundary(session.get(), batch);
         int inserted =
             batchReceiptRepository.insertIfAbsent(
                 sessionId,
@@ -291,6 +295,10 @@ public class TickStreamIngestionService {
           ensureReceiptMatches(winner, batch);
           return acknowledgment(winner);
         }
+      }
+
+      if (batchReceiptRepository == null || canonicalProjection) {
+        validateCaptureBoundary(session.get(), batch);
       }
 
       // Persist typed actions before any derived replay artifact is built. The ingestion service
@@ -392,6 +400,37 @@ public class TickStreamIngestionService {
       nullFields.forEach(object::remove);
     } else if (node.isArray()) {
       node.forEach(this::removeNullFieldsForLegacyCaller);
+    }
+  }
+
+  private void validateCaptureBoundary(DebugSession captureSession, TickBatchMessage batch) {
+    if (!captureSession.isActive()
+        || captureSession.getLifecycleStateOrDefault()
+            == com.chromascape.web.debug.tickdebugger.entity.DebugSessionLifecycleState.FINALIZED
+        || captureSession.getLifecycleStateOrDefault()
+            == com.chromascape.web.debug.tickdebugger.entity.DebugSessionLifecycleState.FAILED) {
+      // Delayed packets within the immutable interval remain admissible. Both tick and
+      // capture time must fit: a stale/reused tick number is not evidence for this recording.
+      LocalDateTime capturedAt;
+      try {
+        capturedAt =
+            java.time.Instant.parse(batch.getTimestamp())
+                .atZone(ZoneId.systemDefault())
+                .toLocalDateTime();
+      } catch (Exception invalidTimestamp) {
+        throw new IllegalArgumentException(
+            "BATCH_SESSION_CLOSED: FINALIZED_SESSION_BOUNDARY: invalid capture timestamp");
+      }
+      if (captureSession.getStartTick() == null
+          || captureSession.getEndTick() == null
+          || captureSession.getEndTime() == null
+          || batch.getTick() < captureSession.getStartTick()
+          || batch.getTick() > captureSession.getEndTick()
+          || capturedAt.isBefore(captureSession.getStartTime())
+          || capturedAt.isAfter(captureSession.getEndTime())) {
+        throw new IllegalArgumentException(
+            "BATCH_SESSION_CLOSED: FINALIZED_SESSION_BOUNDARY: batch outside recording interval");
+      }
     }
   }
 
@@ -510,6 +549,12 @@ public class TickStreamIngestionService {
     JsonNode spells =
         batch.getSpells() != null ? objectMapper.valueToTree(batch.getSpells()) : null;
     JsonNode vars = batch.getVars() != null ? objectMapper.valueToTree(batch.getVars()) : null;
+    JsonNode inputs =
+        batch.getInputs() != null ? objectMapper.valueToTree(batch.getInputs()) : null;
+    JsonNode tiles = batch.getTiles() != null ? objectMapper.valueToTree(batch.getTiles()) : null;
+    JsonNode hazards =
+        batch.getHazards() != null ? objectMapper.valueToTree(batch.getHazards()) : null;
+    JsonNode phase = batch.getPhase() != null ? objectMapper.valueToTree(batch.getPhase()) : null;
 
     // NEW: Convert expanded world state to JSON
     JsonNode npcs = batch.getNpcs() != null ? objectMapper.valueToTree(batch.getNpcs()) : null;
@@ -549,6 +594,10 @@ public class TickStreamIngestionService {
     if (batch.getDialogue() == null) missingSections.add("dialogue");
     if (batch.getSpells() == null) missingSections.add("spells");
     if (batch.getVars() == null) missingSections.add("vars");
+    if (batch.getInputs() == null) missingSections.add("inputs");
+    if (batch.getTiles() == null) missingSections.add("tiles");
+    if (batch.getHazards() == null) missingSections.add("hazards");
+    if (batch.getPhase() == null) missingSections.add("phase");
 
     if (!missingSections.isEmpty()) {
       log.debug(
@@ -568,6 +617,12 @@ public class TickStreamIngestionService {
     snapshot.setDialogue(dialogue);
     snapshot.setSpells(spells);
     snapshot.setVars(vars);
+    snapshot.setInputs(inputs);
+    snapshot.setTiles(tiles);
+    snapshot.setHazards(hazards);
+    snapshot.setPhase(phase);
+    snapshot.setCaptureQuality(CaptureQualityContract.validate(batch, objectMapper));
+
     snapshot.setNpcs(npcs);
     snapshot.setGameObjects(gameObjects);
     snapshot.setGroundObjects(groundObjects);
@@ -586,8 +641,10 @@ public class TickStreamIngestionService {
       return;
 
     if (batch.getSchemaVersion() == null
-        || (batch.getSchemaVersion() != 2 && batch.getSchemaVersion() != 3)) {
-      throw new IllegalArgumentException("Unsupported schemaVersion; expected 2 or 3");
+        || (batch.getSchemaVersion() != 2
+            && batch.getSchemaVersion() != 3
+            && batch.getSchemaVersion() != 4)) {
+      throw new IllegalArgumentException("Unsupported schemaVersion; expected 2, 3, or 4");
     }
     if (batch.getSchemaVersion() == 2
         && batch.getPackets() != null
@@ -719,7 +776,7 @@ public class TickStreamIngestionService {
     if (packets == null || packets.isEmpty()) {
       return;
     }
-    if (batch.getSchemaVersion() != 3) {
+    if (batch.getSchemaVersion() != 3 && batch.getSchemaVersion() != 4) {
       throw new IllegalArgumentException("SCHEMA_V2_PACKETS_UNSUPPORTED");
     }
     if (packets.size() > MAX_PACKETS_PER_BATCH) {

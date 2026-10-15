@@ -42,6 +42,10 @@ class DebugSessionServiceTest {
 
   @BeforeEach
   void setUp() {
+    org.mockito.Mockito.lenient()
+        .when(sessionRepository.findBySessionIdForUpdate(org.mockito.ArgumentMatchers.anyString()))
+        .thenAnswer(invocation -> sessionRepository.findBySessionId(invocation.getArgument(0)));
+
     service =
         new DebugSessionService(
             sessionRepository,
@@ -57,6 +61,131 @@ class DebugSessionServiceTest {
   private DebugSession createSession(String sessionId) {
     return new DebugSession(
         sessionId, "testAccount", "testScript", LocalDateTime.of(2025, 6, 15, 12, 0), 0L);
+  }
+
+  private com.fasterxml.jackson.databind.node.ObjectNode recorderIdentity() {
+    var identity =
+        new ObjectMapper()
+            .createObjectNode()
+            .put("schema", "debugger-client-identity/v1")
+            .put("clientBuildId", "commit")
+            .put("clientVersion", "1.0")
+            .put("artifactSha256", "a".repeat(64))
+            .put("gameRevision", 241)
+            .put("cacheRevision", 241)
+            .put("cacheRevisionSource", "CLIENT_GET_REVISION");
+    identity.putArray("qualityCodes");
+    return identity;
+  }
+
+  @Test
+  void manualRecorderIdentityBindsOnceUnderSessionLockAndRejectsChangedReconnect() {
+    var session = createSession("preferred");
+    session.setRecordingId("existing-video");
+    when(sessionRepository.findBySessionId("preferred")).thenReturn(Optional.of(session));
+    when(sessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    var client = recorderIdentity();
+    service.startSessionWithOutcome(
+        null,
+        "combat",
+        false,
+        RecordingTriggerSource.MANUAL,
+        "preferred",
+        null,
+        null,
+        null,
+        client);
+    var persisted = session.getCaptureIdentity();
+    assertEquals(241, persisted.path("client").path("gameRevision").asInt());
+    verify(sessionRepository).findBySessionIdForUpdate("preferred");
+    service.startSessionWithOutcome(
+        null,
+        "combat",
+        false,
+        RecordingTriggerSource.MANUAL,
+        "preferred",
+        null,
+        null,
+        null,
+        client);
+    assertEquals(persisted, session.getCaptureIdentity());
+    clearInvocations(sessionRepository, recordingService);
+    client.put("artifactSha256", "b".repeat(64));
+    var failure =
+        assertThrows(
+            com.chromascape.web.recording.provenance.ProvenanceException.class,
+            () ->
+                service.startSessionWithOutcome(
+                    null,
+                    "combat",
+                    true,
+                    RecordingTriggerSource.MANUAL,
+                    "preferred",
+                    null,
+                    null,
+                    null,
+                    client));
+    assertEquals("IMMUTABLE_CAPTURE_IDENTITY", failure.getCode());
+    verify(sessionRepository, never()).save(any());
+    verifyNoInteractions(recordingService);
+    assertEquals(persisted, session.getCaptureIdentity());
+  }
+
+  @Test
+  void cannotBackfillIdentityAfterTicksOrClosure() {
+    var session = createSession("legacy");
+    when(sessionRepository.findBySessionId("legacy")).thenReturn(Optional.of(session));
+    when(snapshotRepository.countBySessionId("legacy")).thenReturn(1L);
+    assertThrows(
+        com.chromascape.web.recording.provenance.ProvenanceException.class,
+        () ->
+            service.startSessionWithOutcome(
+                null,
+                "combat",
+                false,
+                RecordingTriggerSource.MANUAL,
+                "legacy",
+                null,
+                null,
+                null,
+                recorderIdentity()));
+    assertNull(session.getCaptureIdentity());
+    verify(sessionRepository, never()).save(any());
+    verifyNoInteractions(recordingService);
+  }
+
+  @Test
+  void heuristicLinkRepairCannotMoveKnownRecordingProvenance() {
+    var current = createSession("known-identity");
+    current.setRecordingId("video-identity");
+    current.bindCaptureIdentity(
+        DebuggerCaptureIdentity.snapshot(
+            DebuggerCaptureIdentity.validateClient(recorderIdentity()), 2));
+    when(sessionRepository.findByRecordingIdForUpdate("video-identity"))
+        .thenReturn(Optional.of(current));
+    assertFalse(service.repairRecordingLink("video-identity"));
+    verifyNoInteractions(snapshotRepository);
+    verify(sessionRepository, never()).save(any());
+    assertEquals("video-identity", current.getRecordingId());
+  }
+
+  @Test
+  void finalizedBoundsCannotGrowEvenWhenCalledDirectly() {
+    DebugSession session = createSession("closed");
+    session.setLifecycleState(DebugSessionLifecycleState.FINALIZED);
+    session.setEndTick(322L);
+    when(sessionRepository.findBySessionIdForUpdate("closed")).thenReturn(Optional.of(session));
+    service.updateSessionTickBounds("closed", 824L);
+    assertEquals(322L, session.getEndTick());
+    verify(sessionRepository, never()).save(any());
+  }
+
+  @Test
+  void ingestionUsesTheTransactionLockedSessionLookup() {
+    DebugSession session = createSession("active");
+    doReturn(Optional.of(session)).when(sessionRepository).findBySessionIdForUpdate("active");
+    assertEquals(session, service.getSessionForIngestion("active").orElseThrow());
+    verify(sessionRepository, never()).findBySessionId(any());
   }
 
   private SessionCountProjection projection(String sessionId, long count) {
@@ -324,5 +453,34 @@ class DebugSessionServiceTest {
     assertFalse(outcome.recordingStartedByOperation());
     assertNull(outcome.rollbackToken().recordingIdStartedByOperation());
     assertNotNull(outcome.response().getRecordingFailureReason());
+  }
+
+  @Test
+  void finalizedBoundsNeverGrowFromLateBatches() {
+    DebugSession session = createSession("closed");
+    session.setEndTime(LocalDateTime.of(2025, 6, 15, 12, 1));
+    session.setStartTick(10L);
+    session.setEndTick(100L);
+    when(sessionRepository.findBySessionIdForUpdate("closed")).thenReturn(Optional.of(session));
+    service.updateSessionTickBounds("closed", 2815L);
+    assertEquals(10L, session.getStartTick());
+    assertEquals(100L, session.getEndTick());
+    org.mockito.Mockito.verify(sessionRepository, org.mockito.Mockito.never()).save(session);
+  }
+
+  @Test
+  void activeBoundsContinueAndNewRecordingHasIndependentBounds() {
+    DebugSession old = createSession("old");
+    old.setStartTick(10L);
+    old.setEndTick(100L);
+    old.setEndTime(LocalDateTime.of(2025, 6, 15, 12, 1));
+    DebugSession fresh = createSession("new");
+    when(sessionRepository.findBySessionIdForUpdate("old")).thenReturn(Optional.of(old));
+    when(sessionRepository.findBySessionIdForUpdate("new")).thenReturn(Optional.of(fresh));
+    service.updateSessionTickBounds("old", 150L);
+    service.updateSessionTickBounds("new", 151L);
+    assertEquals(100L, old.getEndTick());
+    assertEquals(151L, fresh.getStartTick());
+    assertEquals(151L, fresh.getEndTick());
   }
 }

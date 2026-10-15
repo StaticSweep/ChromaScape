@@ -52,6 +52,24 @@ public class DebugSession {
   @Column(length = 100)
   private String recordingId;
 
+  @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+  @Column(name = "capture_identity", columnDefinition = "jsonb")
+  private com.fasterxml.jackson.databind.JsonNode captureIdentity;
+
+  public com.fasterxml.jackson.databind.JsonNode getCaptureIdentity() {
+    return captureIdentity == null ? null : captureIdentity.deepCopy();
+  }
+
+  /** Identity may be bound once; subsequent starts must agree with the original snapshot. */
+  public void bindCaptureIdentity(com.fasterxml.jackson.databind.JsonNode identity) {
+    if (identity == null) return;
+    if (captureIdentity != null && !captureIdentity.equals(identity)) {
+      throw new com.chromascape.web.recording.provenance.ProvenanceException(
+          "IMMUTABLE_CAPTURE_IDENTITY");
+    }
+    if (captureIdentity == null) captureIdentity = identity.deepCopy();
+  }
+
   /** When this record was created. */
   @Column(nullable = false)
   private LocalDateTime createdAt;
@@ -181,6 +199,13 @@ public class DebugSession {
   /** Returns true if this session is still active (no end time set). */
   public boolean isActive() {
     return endTime == null;
+  }
+
+  /** Terminal sessions never accept new evidence, even if legacy end-time data is absent. */
+  public boolean acceptsTickEvidence() {
+    return isActive()
+        && lifecycleState != DebugSessionLifecycleState.FINALIZED
+        && lifecycleState != DebugSessionLifecycleState.FAILED;
   }
 
   public DebugSessionLifecycleState getLifecycleState() {

@@ -1,0 +1,202 @@
+{
+  "date": "2026-10-14",
+  "chromascapeCodeCommit": "0a6cbaf6",
+  "micro6CodeCommit": "93aa4810a0",
+  "chromaSelected": {
+    "tests": 408,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "chromaFinalIdentity": {
+    "tests": 23,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "microFull": {
+    "tests": 1707,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "actualRecordingReview": {
+    "coverage": {
+      "schema": "combat-recording-coverage/v1",
+      "sessionId": "debug_9be3927adc564fdda74ac79cf7054a2b",
+      "distinctTicks": 102,
+      "distinctRows": 102,
+      "invalidLabels": 93,
+      "actionCounts": {
+        "INTERACT_NPC": 1,
+        "INTERACT_WIDGET": 8
+      },
+      "deferredTickCounts": {}
+    },
+    "resolvedTargetTicks": 36,
+    "combatSchemaErrors": 0,
+    "schemaErrorTicks": [],
+    "measuredFrameRanges": 101,
+    "missingRangeTicks": [
+      135
+    ],
+    "databaseRowsCompared": 102,
+    "databaseFieldMismatches": 0
+  },
+  "timingRegression": {
+    "recording_eeed6066": {
+      "ticks": 102,
+      "measured": 102
+    },
+    "recording_3ba1931c": {
+      "ticks": 92,
+      "measured": 89,
+      "genuineImageGaps": 3
+    }
+  },
+  "hostedActions": "excluded by user",
+  "productionMigrationChain": "unrun",
+  "dockerDebuggerSuites": "four unrun",
+  "liveNewIdentityCapture": "verified in idle smoke; genuine combat and restart survival pending",
+  "restart": {
+    "verifiedAt": "2026-10-14T20:44:13.404634+00:00",
+    "oldPid": 57284,
+    "newPid": 132368,
+    "port": 18090,
+    "original8090Pid": 69980,
+    "runningBuildRevision": "92b496adebd7bfef8bacaf1f0e3ababa08b4cc13",
+    "debuggerHttp": 200,
+    "newProvenanceHttp": 200,
+    "sessionExactJsonEquality": true,
+    "ticksExactJsonEquality": true,
+    "consecutiveTicks": 102,
+    "bounds": [
+      34,
+      135
+    ],
+    "mediaSha256": "a93d42a93b0fdc349489fca395e72ef0f483e9ad83f20eec9a42aad863cba3ac",
+    "physicalFrameCount": 1159,
+    "mediaStatus": "VERIFIED",
+    "legacyIdentityQualityCodes": [
+      "LEGACY_CAPTURE_IDENTITY_MISSING"
+    ],
+    "sync": {
+      "calibrationSchema": "tick-video-calibration/v1",
+      "calibrationStatus": "MEASURED",
+      "calibrationQualityCodes": [],
+      "calibratedTicks": 102,
+      "maxAlignmentErrorMillis": 98.694326953125,
+      "p95AlignmentErrorMillis": 71.41879765625
+    },
+    "micro6Reconnected": true,
+    "freshIdentityCapture": "unrun - manual world entry and capture required"
+  },
+  "microExport": {
+    "status": "passed",
+    "artifactSha256": "9ba0f10b82db69fce41f4429d43f8fab035c38d738217613e169c57c11263802",
+    "buildId": "93aa4810a0"
+  },
+  "microLaunch": {
+    "status": "verified",
+    "buildId": "93aa4810a0aa972b44a0c6e2467fa2e4a647031f",
+    "gameState": "LOGIN_SCREEN",
+    "sourceMode": "disabled",
+    "recorderReady": true,
+    "connected": true,
+    "recoveryState": "ACTIVE",
+    "pending": 0,
+    "queue": 0,
+    "incomplete": 0,
+    "dropped": 0,
+    "clock": "transport measurement resumed after reconnect; game-world capture unrun"
+  },
+  "shortcut": {
+    "state": "In Progress",
+    "comment1976": 2063,
+    "comment751": 2064,
+    "description1976": "updated"
+  },
+  "recorderRoutingRecovery": {
+    "verifiedAt": "2026-10-14T21:59:49.224108+00:00",
+    "failure": "RECORDER_UNAVAILABLE",
+    "cause": "replacement Micro6 connected to ws://192.168.1.6:8090/ws/micro6/tick-stream while recording page uses 18090",
+    "oldClientPid": 182528,
+    "oldClientSessionHadRecording": false,
+    "newClientPid": 20816,
+    "launchScript": "C:\\Dev\\IdeaProjects\\.worktrees\\sc1976-micro6\\launch-sc1976-debug-capture.ps1",
+    "endpoint": "ws://127.0.0.1:18090/ws/micro6/tick-stream",
+    "buildId": "836b97123a2f2606643c3ee3e3373062da91dd2d",
+    "artifactDigest": "sha256:6dedde2e485df4c6d9a00cec8794701882f96b47bb0ff6e662a9cf6bb68f6b59",
+    "sourceMode": "disabled",
+    "gameState": "LOGIN_SCREEN",
+    "recorderReady": true,
+    "connected": true,
+    "pending": 0,
+    "dropped": 0,
+    "captureContract": "passed during launch preparation",
+    "startStop": "unrun - user must enter world",
+    "sourceChangesInThisFollowup": false,
+    "fullSuiteRerun": false,
+    "original8090Recording": "preserved; no stop command sent"
+  },
+  "idleReadinessSmoke20261015": {
+    "verifiedAt": "2026-10-15T00:54:40.502345+00:00",
+    "recordingId": "recording_0442e08a",
+    "sessionId": "debug_0bf5f5150c5d401f8b814abfb503b482",
+    "startStop": "passed",
+    "replayable": true,
+    "ticks": 19,
+    "tickBounds": [
+      155,
+      173
+    ],
+    "noGapsOrDuplicates": true,
+    "requiredFieldsPresent": true,
+    "finalized": true,
+    "captureIdentity": {
+      "client": {
+        "schema": "debugger-client-identity/v1",
+        "gameRevision": 241,
+        "qualityCodes": [],
+        "cacheRevision": 241,
+        "clientBuildId": "836b97123a2f2606643c3ee3e3373062da91dd2d",
+        "clientVersion": "1.13.3-SNAPSHOT",
+        "artifactSha256": "6dedde2e485df4c6d9a00cec8794701882f96b47bb0ff6e662a9cf6bb68f6b59",
+        "cacheRevisionSource": "CLIENT_GET_REVISION"
+      },
+      "schema": "debugger-recording-identity/v1",
+      "server": {
+        "dirty": "false",
+        "version": "0.2.0-SNAPSHOT",
+        "gitRevision": "92b496adebd7bfef8bacaf1f0e3ababa08b4cc13",
+        "artifactKind": "APPLICATION_CLASS_DIRECTORY",
+        "qualityCodes": [],
+        "artifactSha256": "2c677e8e5d898a678f28f98276de2ed190e8592c57ce9855d496fb19568052f9"
+      },
+      "combatRowSchema": "combat-tick-row/v1",
+      "tickBatchVersion": 2,
+      "videoIndexSchema": "measured-video-index/v1",
+      "captureQualitySchema": "capture-quality/v1"
+    },
+    "qualityCodes": [],
+    "calibratedTicks": 19,
+    "maxAlignmentErrorMillis": 28.677296875,
+    "mediaStatus": "VERIFIED",
+    "mediaSha256": "c1722e1df51806e79a5131485400a74fb1c1aabd2e5f0699d5cb4cac5040ffc9",
+    "physicalFrameCount": 394,
+    "actualJarSha256Matches": true,
+    "actualMediaSha256Matches": true,
+    "fullVideoDecode": "passed",
+    "visualGameWorld": "confirmed from private frame",
+    "unchangedFinalizedApi": {
+      "session": true,
+      "ticks": true,
+      "provenance": true
+    },
+    "serverRestartForThisIdentity": "unrun",
+    "combatAcceptance": "unrun - idle smoke only",
+    "sourceChanges": false,
+    "fullSuiteRerun": false,
+    "finalizedApiUnchangedAfterSeconds": 124.781
+  }
+}

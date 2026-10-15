@@ -58,6 +58,15 @@ public class SessionStartRequest {
   private String taskKey;
   private JsonNode taskArgs;
   private JsonNode runContext;
+  private JsonNode captureIdentity;
+
+  public JsonNode getCaptureIdentity() {
+    return captureIdentity;
+  }
+
+  public void setCaptureIdentity(JsonNode value) {
+    captureIdentity = value;
+  }
 
   public String getTaskKey() {
     return taskKey;

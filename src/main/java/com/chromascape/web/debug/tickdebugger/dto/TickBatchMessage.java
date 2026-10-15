@@ -101,6 +101,28 @@ public class TickBatchMessage {
   /** Captured var/varbit values used by the replay initial state and expectations. */
   private Map<String, Object> vars;
 
+  /** Inputs actually taken this tick (cursor, button, menu option, clicked entity/tile). */
+  private Map<String, Object> inputs;
+
+  /** Walkable-tile collision flags around the player (SC-1976 combat row). */
+  private List<Map<String, Object>> tiles;
+
+  /** Active hazards: NPC attackers and incoming projectiles (SC-1976 combat row). */
+  private List<Map<String, Object>> hazards;
+
+  /** Encounter phase envelope (SC-1976 combat row). */
+  private Map<String, Object> phase;
+
+  private Map<String, Object> captureQuality;
+
+  public Map<String, Object> getCaptureQuality() {
+    return captureQuality;
+  }
+
+  public void setCaptureQuality(Map<String, Object> value) {
+    captureQuality = value;
+  }
+
   /** All NPCs in render distance. */
   private List<Map<String, Object>> npcs;
 
@@ -169,6 +191,10 @@ public class TickBatchMessage {
       @JsonProperty("dialogue") Map<String, Object> dialogue,
       @JsonProperty("spells") List<Map<String, Object>> spells,
       @JsonProperty("vars") Map<String, Object> vars,
+      @JsonProperty("inputs") Map<String, Object> inputs,
+      @JsonProperty("tiles") List<Map<String, Object>> tiles,
+      @JsonProperty("hazards") List<Map<String, Object>> hazards,
+      @JsonProperty("phase") Map<String, Object> phase,
       @JsonProperty("packets") List<TickPacketEntry> packets,
       @JsonProperty("transport") TransportDiagnostics transport) {
     this.type = type;
@@ -201,6 +227,11 @@ public class TickBatchMessage {
     this.dialogue = dialogue;
     this.spells = spells;
     this.vars = vars;
+    this.inputs = inputs;
+    this.tiles = tiles;
+    this.hazards = hazards;
+    this.phase = phase;
+
     this.packets = packets != null ? packets : new ArrayList<>();
     this.transport = transport;
   }
@@ -492,6 +523,38 @@ public class TickBatchMessage {
 
   public void setWidgets(List<Map<String, Object>> widgets) {
     this.widgets = widgets;
+  }
+
+  public Map<String, Object> getInputs() {
+    return inputs;
+  }
+
+  public void setInputs(Map<String, Object> inputs) {
+    this.inputs = inputs;
+  }
+
+  public List<Map<String, Object>> getTiles() {
+    return tiles;
+  }
+
+  public void setTiles(List<Map<String, Object>> tiles) {
+    this.tiles = tiles;
+  }
+
+  public List<Map<String, Object>> getHazards() {
+    return hazards;
+  }
+
+  public void setHazards(List<Map<String, Object>> hazards) {
+    this.hazards = hazards;
+  }
+
+  public Map<String, Object> getPhase() {
+    return phase;
+  }
+
+  public void setPhase(Map<String, Object> phase) {
+    this.phase = phase;
   }
 
   /** Individual log entry within a tick batch. */

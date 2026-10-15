@@ -337,6 +337,29 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
         String type = root.has("type") ? root.get("type").asText() : "";
 
         switch (type) {
+          case "CALIBRATION_PING":
+            long receivedMillis = System.currentTimeMillis();
+            String probeId = root.path("requestId").asText();
+            if (probeId.length() > 64
+                || !probeId.matches("[a-zA-Z0-9-]{1,64}")
+                || !root.path("clientSendMillis").isIntegralNumber()) {
+              throw new IllegalArgumentException("Invalid clock probe");
+            }
+            session.sendMessage(
+                new TextMessage(
+                    objectMapper.writeValueAsString(
+                        Map.of(
+                            "type",
+                            "CALIBRATION_PONG",
+                            "requestId",
+                            probeId,
+                            "clientSendMillis",
+                            root.get("clientSendMillis").longValue(),
+                            "serverReceiveMillis",
+                            receivedMillis,
+                            "serverSendMillis",
+                            System.currentTimeMillis()))));
+            break;
           case "SESSION_START":
             handleSessionStart(session, root);
             break;
@@ -493,16 +516,8 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       SessionStartOutcome outcome;
       try {
         outcome =
-            request.getTaskKey() == null
-                    && request.getTaskArgs() == null
-                    && request.getRunContext() == null
+            request.getCaptureIdentity() != null
                 ? sessionService.startSessionWithOutcome(
-                    request.getAccountName(),
-                    request.getScriptName(),
-                    recordingEnabled,
-                    request.getTriggerSource(),
-                    preferred)
-                : sessionService.startSessionWithOutcome(
                     request.getAccountName(),
                     request.getScriptName(),
                     recordingEnabled,
@@ -510,7 +525,26 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
                     preferred,
                     request.getTaskKey(),
                     request.getTaskArgs(),
-                    request.getRunContext());
+                    request.getRunContext(),
+                    request.getCaptureIdentity())
+                : request.getTaskKey() == null
+                        && request.getTaskArgs() == null
+                        && request.getRunContext() == null
+                    ? sessionService.startSessionWithOutcome(
+                        request.getAccountName(),
+                        request.getScriptName(),
+                        recordingEnabled,
+                        request.getTriggerSource(),
+                        preferred)
+                    : sessionService.startSessionWithOutcome(
+                        request.getAccountName(),
+                        request.getScriptName(),
+                        recordingEnabled,
+                        request.getTriggerSource(),
+                        preferred,
+                        request.getTaskKey(),
+                        request.getTaskArgs(),
+                        request.getRunContext());
       } catch (com.chromascape.web.recording.provenance.ProvenanceException e) {
         releasePreferredReservation(preferred, wsId);
         sendErrorResponse(wsSession, e.getCode(), "Invalid recording provenance", clientRequestId);
@@ -1076,6 +1110,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     if (message.contains("BATCH_CHECKSUM_CONFLICT")) return "BATCH_CHECKSUM_CONFLICT";
     if (message.contains("BATCH_WIRE_IDENTITY_MISMATCH")) return "BATCH_WIRE_IDENTITY_MISMATCH";
     if (message.contains("BATCH_SESSION_MISMATCH")) return "BATCH_SESSION_MISMATCH";
+    if (message.contains("BATCH_SESSION_CLOSED")) return "BATCH_SESSION_CLOSED";
     if (message.contains("BATCH_ORDER_INVALID")) return "BATCH_ORDER_INVALID";
     if (message.contains("ACTION_CHECKSUM_CONFLICT")) return "ACTION_CHECKSUM_CONFLICT";
     if (message.contains("PACKET_")) return "BATCH_PACKET_INVALID";
@@ -1791,5 +1826,81 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       log.error("Failed to broadcast FEED_CONTROL: {}", e.getMessage(), e);
     }
     return sent;
+  }
+
+  /** Select exactly one recorder without touching unrelated task-owned connections. */
+  public String selectManualRecorder(String preferredSessionId) {
+    synchronized (ownershipLock) {
+      String owner = preferredSessionId == null ? null : sessionOwners.get(preferredSessionId);
+      var candidates =
+          micro6Clients.stream()
+              .filter(WebSocketSession::isOpen)
+              .filter(
+                  client ->
+                      owner != null
+                          ? owner.equals(client.getId())
+                          : !sessionBindings.containsKey(client.getId())
+                              && !hasStartReservation(client.getId()))
+              .toList();
+      if (candidates.size() != 1) {
+        throw new IllegalStateException(
+            candidates.isEmpty()
+                ? "RECORDER_UNAVAILABLE: connect an idle Micro6 recorder before starting"
+                : "RECORDER_AMBIGUOUS: select a single Micro6 recorder before starting");
+      }
+      return candidates.get(0).getId();
+    }
+  }
+
+  /** Send a targeted command; authoritative ownership still comes from SESSION_START/STOP. */
+  public void sendRecordingControl(
+      String clientId, String action, String sessionId, String scriptName) {
+    WebSocketSession client =
+        micro6Clients.stream()
+            .filter(socket -> socket.getId().equals(clientId))
+            .findFirst()
+            .orElseThrow(() -> new IllegalStateException("RECORDER_DISCONNECTED"));
+    synchronized (client) {
+      synchronized (ownershipLock) {
+        SessionBinding binding = sessionBindings.get(clientId);
+        if (!client.isOpen()
+            || hasStartReservation(clientId)
+            || (binding != null && !sessionId.equals(binding.sessionId()))
+            || ("STOP".equals(action) && binding == null)) {
+          throw new IllegalStateException("RECORDER_BINDING_CHANGED");
+        }
+      }
+      try {
+        client.sendMessage(
+            new TextMessage(
+                objectMapper.writeValueAsString(
+                    Map.of(
+                        "type",
+                        "RECORDING_CONTROL",
+                        "action",
+                        action,
+                        "sessionId",
+                        sessionId,
+                        "scriptName",
+                        scriptName == null ? "Manual Recording" : scriptName))));
+      } catch (java.io.IOException failure) {
+        throw new IllegalStateException("RECORDER_COMMAND_FAILED", failure);
+      }
+    }
+  }
+
+  public boolean isRecorderBound(String clientId, String sessionId) {
+    synchronized (ownershipLock) {
+      SessionBinding binding = sessionBindings.get(clientId);
+      return binding != null
+          && binding.phase() == BindingPhase.ACTIVE
+          && sessionId.equals(binding.sessionId());
+    }
+  }
+
+  public String recorderOwner(String sessionId) {
+    synchronized (ownershipLock) {
+      return sessionOwners.get(sessionId);
+    }
   }
 }

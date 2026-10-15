@@ -46,6 +46,32 @@ springBoot {
 	mainClass.set("com.chromascape.web.ChromaScapeApplication")
 }
 
+// The revision is embedded at build time. Recording reads must never consult a moving Git HEAD.
+val debuggerBuildMetadata = tasks.register("debuggerBuildMetadata") {
+	val destination = layout.buildDirectory.dir("generated/debugger-build")
+	outputs.dir(destination)
+	outputs.upToDateWhen { false }
+	doLast {
+		fun gitValue(vararg arguments: String): String = try {
+			val output = ByteArrayOutputStream()
+			val result = project.exec {
+				commandLine("git", *arguments)
+				standardOutput = output
+				errorOutput = ByteArrayOutputStream()
+				isIgnoreExitValue = true
+			}
+			if (result.exitValue == 0) output.toString(Charsets.UTF_8).trim() else "unknown"
+		} catch (_: Exception) { "unknown" }
+		val revision = gitValue("rev-parse", "HEAD")
+		val changes = gitValue("status", "--porcelain", "--untracked-files=no")
+		val dirty = if (changes == "unknown") "unknown" else changes.isNotEmpty().toString()
+		val file = destination.get().file("debugger-build.properties").asFile
+		file.parentFile.mkdirs()
+		file.writeText("version=${project.version}\ngitRevision=$revision\ndirty=$dirty\n")
+	}
+}
+sourceSets.main { resources.srcDir(debuggerBuildMetadata) }
+
 repositories {
 	mavenCentral()
 }
@@ -516,13 +542,6 @@ tasks.register<Test>("replayStressCertificationTest") {
 			}
 		}
 	}
-}
-
-// The worktree carries a pre-existing broken test source (it stubs a void method with
-// thenThrow). It is unrelated to SC-572 and blocks the stabilization test suite from compiling;
-// keep it out of test compilation so the stabilization tests can run.
-tasks.named<JavaCompile>("compileTestJava") {
-	exclude("com/chromascape/web/debug/tickdebugger/websocket/TickStreamWebSocketHandlerSessionStartTest.java")
 }
 
 checkstyle {

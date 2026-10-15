@@ -88,6 +88,34 @@ public class TickSnapshot {
   @JdbcTypeCode(SqlTypes.JSON)
   private JsonNode vars;
 
+  /** Inputs actually taken this tick (cursor, button, menu option, clicked entity/tile). */
+  @JdbcTypeCode(SqlTypes.JSON)
+  private JsonNode inputs;
+
+  /** Walkable-tile collision flags around the player (SC-1976 combat row). */
+  @JdbcTypeCode(SqlTypes.JSON)
+  private JsonNode tiles;
+
+  /** Active hazards: NPC attackers and incoming projectiles (SC-1976 combat row). */
+  @JdbcTypeCode(SqlTypes.JSON)
+  private JsonNode hazards;
+
+  /** Encounter phase envelope (SC-1976 combat row). */
+  @JdbcTypeCode(SqlTypes.JSON)
+  private JsonNode phase;
+
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "capture_quality")
+  private JsonNode captureQuality;
+
+  public JsonNode getCaptureQuality() {
+    return captureQuality;
+  }
+
+  public void setCaptureQuality(JsonNode value) {
+    captureQuality = value;
+  }
+
   /** NPCs in render distance as JSON array. */
   @JdbcTypeCode(SqlTypes.JSON)
   private JsonNode npcs;
@@ -250,6 +278,38 @@ public class TickSnapshot {
 
   public void setVars(JsonNode vars) {
     this.vars = vars;
+  }
+
+  public JsonNode getInputs() {
+    return inputs;
+  }
+
+  public void setInputs(JsonNode inputs) {
+    this.inputs = inputs;
+  }
+
+  public JsonNode getTiles() {
+    return tiles;
+  }
+
+  public void setTiles(JsonNode tiles) {
+    this.tiles = tiles;
+  }
+
+  public JsonNode getHazards() {
+    return hazards;
+  }
+
+  public void setHazards(JsonNode hazards) {
+    this.hazards = hazards;
+  }
+
+  public JsonNode getPhase() {
+    return phase;
+  }
+
+  public void setPhase(JsonNode phase) {
+    this.phase = phase;
   }
 
   public JsonNode getNpcs() {

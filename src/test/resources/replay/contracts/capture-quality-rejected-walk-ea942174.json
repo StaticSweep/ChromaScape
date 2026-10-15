@@ -1,0 +1,401 @@
+{
+  "source": "recording_ea942174",
+  "description": "Rejected real-capture movement regression. Session/event/producer IDs and clock replaced; world coordinates translated to base3200 preserving canvas operands and relative mutations. No corrected target or movement proof invented.",
+  "qualities": [
+    {
+      "schema": "capture-quality/v1",
+      "sessionId": "session",
+      "producerId": "fixture-producer",
+      "epochTick": 1,
+      "epochCapturedAtEpochMillis": 1600,
+      "tick": 535,
+      "tickCapturedAtEpochMillis": 322000,
+      "clock": {
+        "status": "MEASURED",
+        "qualityCode": null,
+        "measuredAtEpochMillis": 321900,
+        "serverOffsetMillis": 0,
+        "uncertaintyMillis": 7
+      },
+      "rawEvents": [
+        {
+          "family": "MENU_CALLBACK",
+          "source": "CLIENT_EVENT",
+          "eventId": "fixture-walk-1",
+          "payload": {
+            "opcode": 23,
+            "param0": 468,
+            "param1": 74,
+            "identifier": 0
+          },
+          "producer": "micro6-combat-menu/v1",
+          "sequence": 7,
+          "sessionId": "session",
+          "producerId": "fixture-producer",
+          "sourceTick": 534,
+          "payloadHash": "8dcccb2a88f782e69759a6406c3582672d3413a64406c57fe3368c1d8579c2b5",
+          "capturedAtEpochMillis": 321400
+        }
+      ],
+      "settlements": [
+        {
+          "reason": "END_OF_TICK_MUTATION",
+          "source": "CLIENT_EVENT",
+          "status": "CONFIRMED",
+          "target": {
+            "x": 3668,
+            "y": 3274,
+            "plane": 0
+          },
+          "eventId": "fixture-walk-1",
+          "sequence": 7,
+          "sessionId": "session",
+          "actionType": "WALK_TO",
+          "confidence": 1,
+          "derivation": "AUTHORITATIVE_END_OF_TICK_MUTATION",
+          "producerId": "fixture-producer",
+          "sourceTick": 534,
+          "rawEventIds": [
+            "fixture-walk-1"
+          ],
+          "stateEvidence": {
+            "after": {
+              "x": 3247,
+              "y": 3256,
+              "plane": 0
+            },
+            "before": {
+              "x": 3245,
+              "y": 3256,
+              "plane": 0
+            },
+            "afterTick": 535,
+            "beforeTick": 533
+          },
+          "settlementTick": 535,
+          "observationTick": 535,
+          "outcomeHorizonTick": 538
+        }
+      ],
+      "pendingCount": 0,
+      "qualityCodes": [],
+      "terminal": false
+    },
+    {
+      "schema": "capture-quality/v1",
+      "sessionId": "session",
+      "producerId": "fixture-producer",
+      "epochTick": 1,
+      "epochCapturedAtEpochMillis": 1600,
+      "tick": 541,
+      "tickCapturedAtEpochMillis": 325600,
+      "clock": {
+        "status": "MEASURED",
+        "qualityCode": null,
+        "measuredAtEpochMillis": 325500,
+        "serverOffsetMillis": 0,
+        "uncertaintyMillis": 7
+      },
+      "rawEvents": [
+        {
+          "family": "MENU_CALLBACK",
+          "source": "CLIENT_EVENT",
+          "eventId": "fixture-walk-2",
+          "payload": {
+            "opcode": 23,
+            "param0": 314,
+            "param1": 55,
+            "identifier": 0
+          },
+          "producer": "micro6-combat-menu/v1",
+          "sequence": 8,
+          "sessionId": "session",
+          "producerId": "fixture-producer",
+          "sourceTick": 541,
+          "payloadHash": "16e80fba74e4dbf8fd53d4dc48326fa9b896a401940c1e900ba828333bca42d9",
+          "capturedAtEpochMillis": 325600
+        }
+      ],
+      "settlements": [
+        {
+          "reason": "END_OF_TICK_MUTATION",
+          "source": "CLIENT_EVENT",
+          "status": "CONFIRMED",
+          "target": {
+            "x": 3514,
+            "y": 3255,
+            "plane": 0
+          },
+          "eventId": "fixture-walk-2",
+          "sequence": 8,
+          "sessionId": "session",
+          "actionType": "WALK_TO",
+          "confidence": 1,
+          "derivation": "AUTHORITATIVE_END_OF_TICK_MUTATION",
+          "producerId": "fixture-producer",
+          "sourceTick": 541,
+          "rawEventIds": [
+            "fixture-walk-2"
+          ],
+          "stateEvidence": {
+            "after": {
+              "x": 3250,
+              "y": 3245,
+              "plane": 0
+            },
+            "before": {
+              "x": 3248,
+              "y": 3247,
+              "plane": 0
+            },
+            "afterTick": 541,
+            "beforeTick": 540
+          },
+          "settlementTick": 541,
+          "observationTick": 541,
+          "outcomeHorizonTick": 545
+        }
+      ],
+      "pendingCount": 0,
+      "qualityCodes": [],
+      "terminal": false
+    },
+    {
+      "schema": "capture-quality/v1",
+      "sessionId": "session",
+      "producerId": "fixture-producer",
+      "epochTick": 1,
+      "epochCapturedAtEpochMillis": 1600,
+      "tick": 545,
+      "tickCapturedAtEpochMillis": 328000,
+      "clock": {
+        "status": "MEASURED",
+        "qualityCode": null,
+        "measuredAtEpochMillis": 327900,
+        "serverOffsetMillis": 0,
+        "uncertaintyMillis": 7
+      },
+      "rawEvents": [
+        {
+          "family": "MENU_CALLBACK",
+          "source": "CLIENT_EVENT",
+          "eventId": "fixture-walk-3",
+          "payload": {
+            "opcode": 23,
+            "param0": 120,
+            "param1": 251,
+            "identifier": 0
+          },
+          "producer": "micro6-combat-menu/v1",
+          "sequence": 9,
+          "sessionId": "session",
+          "producerId": "fixture-producer",
+          "sourceTick": 545,
+          "payloadHash": "87613ec228f1e85644cf713b5615d00677c136902cbd62e2b6ad9abcbe11299e",
+          "capturedAtEpochMillis": 328000
+        }
+      ],
+      "settlements": [
+        {
+          "reason": "END_OF_TICK_MUTATION",
+          "source": "CLIENT_EVENT",
+          "status": "CONFIRMED",
+          "target": {
+            "x": 3320,
+            "y": 3451,
+            "plane": 0
+          },
+          "eventId": "fixture-walk-3",
+          "sequence": 9,
+          "sessionId": "session",
+          "actionType": "WALK_TO",
+          "confidence": 1,
+          "derivation": "AUTHORITATIVE_END_OF_TICK_MUTATION",
+          "producerId": "fixture-producer",
+          "sourceTick": 545,
+          "rawEventIds": [
+            "fixture-walk-3"
+          ],
+          "stateEvidence": {
+            "after": {
+              "x": 3250,
+              "y": 3246,
+              "plane": 0
+            },
+            "before": {
+              "x": 3250,
+              "y": 3244,
+              "plane": 0
+            },
+            "afterTick": 545,
+            "beforeTick": 544
+          },
+          "settlementTick": 545,
+          "observationTick": 545,
+          "outcomeHorizonTick": 549
+        }
+      ],
+      "pendingCount": 0,
+      "qualityCodes": [],
+      "terminal": false
+    },
+    {
+      "schema": "capture-quality/v1",
+      "sessionId": "session",
+      "producerId": "fixture-producer",
+      "epochTick": 1,
+      "epochCapturedAtEpochMillis": 1600,
+      "tick": 552,
+      "tickCapturedAtEpochMillis": 332200,
+      "clock": {
+        "status": "MEASURED",
+        "qualityCode": null,
+        "measuredAtEpochMillis": 332100,
+        "serverOffsetMillis": 0,
+        "uncertaintyMillis": 7
+      },
+      "rawEvents": [
+        {
+          "family": "MENU_CALLBACK",
+          "source": "CLIENT_EVENT",
+          "eventId": "fixture-walk-4",
+          "payload": {
+            "opcode": 23,
+            "param0": 219,
+            "param1": 273,
+            "identifier": 0
+          },
+          "producer": "micro6-combat-menu/v1",
+          "sequence": 12,
+          "sessionId": "session",
+          "producerId": "fixture-producer",
+          "sourceTick": 552,
+          "payloadHash": "d3f3555ebf92737fa344474b993b2110c2e4664d5fba898809c761dfe7187496",
+          "capturedAtEpochMillis": 332200
+        }
+      ],
+      "settlements": [
+        {
+          "reason": "END_OF_TICK_MUTATION",
+          "source": "CLIENT_EVENT",
+          "status": "CONFIRMED",
+          "target": {
+            "x": 3419,
+            "y": 3473,
+            "plane": 0
+          },
+          "eventId": "fixture-walk-4",
+          "sequence": 12,
+          "sessionId": "session",
+          "actionType": "WALK_TO",
+          "confidence": 1,
+          "derivation": "AUTHORITATIVE_END_OF_TICK_MUTATION",
+          "producerId": "fixture-producer",
+          "sourceTick": 552,
+          "rawEventIds": [
+            "fixture-walk-4"
+          ],
+          "stateEvidence": {
+            "after": {
+              "x": 3248,
+              "y": 3255,
+              "plane": 0
+            },
+            "before": {
+              "x": 3248,
+              "y": 3253,
+              "plane": 0
+            },
+            "afterTick": 552,
+            "beforeTick": 551
+          },
+          "settlementTick": 552,
+          "observationTick": 552,
+          "outcomeHorizonTick": 556
+        }
+      ],
+      "pendingCount": 0,
+      "qualityCodes": [],
+      "terminal": false
+    },
+    {
+      "schema": "capture-quality/v1",
+      "sessionId": "session",
+      "producerId": "fixture-producer",
+      "epochTick": 1,
+      "epochCapturedAtEpochMillis": 1600,
+      "tick": 557,
+      "tickCapturedAtEpochMillis": 335200,
+      "clock": {
+        "status": "MEASURED",
+        "qualityCode": null,
+        "measuredAtEpochMillis": 335100,
+        "serverOffsetMillis": 0,
+        "uncertaintyMillis": 7
+      },
+      "rawEvents": [
+        {
+          "family": "MENU_CALLBACK",
+          "source": "CLIENT_EVENT",
+          "eventId": "fixture-walk-5",
+          "payload": {
+            "opcode": 23,
+            "param0": 245,
+            "param1": 122,
+            "identifier": 0
+          },
+          "producer": "micro6-combat-menu/v1",
+          "sequence": 17,
+          "sessionId": "session",
+          "producerId": "fixture-producer",
+          "sourceTick": 556,
+          "payloadHash": "fc33b6c3e259ffe64112fc61e386d439db1182ad7a3df2e58467b0de9140bad7",
+          "capturedAtEpochMillis": 334600
+        }
+      ],
+      "settlements": [
+        {
+          "reason": "END_OF_TICK_MUTATION",
+          "source": "CLIENT_EVENT",
+          "status": "CONFIRMED",
+          "target": {
+            "x": 3445,
+            "y": 3322,
+            "plane": 0
+          },
+          "eventId": "fixture-walk-5",
+          "sequence": 17,
+          "sessionId": "session",
+          "actionType": "WALK_TO",
+          "confidence": 1,
+          "derivation": "AUTHORITATIVE_END_OF_TICK_MUTATION",
+          "producerId": "fixture-producer",
+          "sourceTick": 556,
+          "rawEventIds": [
+            "fixture-walk-5"
+          ],
+          "stateEvidence": {
+            "after": {
+              "x": 3251,
+              "y": 3254,
+              "plane": 0
+            },
+            "before": {
+              "x": 3249,
+              "y": 3255,
+              "plane": 0
+            },
+            "afterTick": 557,
+            "beforeTick": 555
+          },
+          "settlementTick": 557,
+          "observationTick": 557,
+          "outcomeHorizonTick": 560
+        }
+      ],
+      "pendingCount": 0,
+      "qualityCodes": [],
+      "terminal": false
+    }
+  ]
+}

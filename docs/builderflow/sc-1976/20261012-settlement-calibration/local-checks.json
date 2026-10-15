@@ -1,0 +1,78 @@
+{
+  "schema": "sc1976-local-checks/v1",
+  "hosted_actions": "excluded_by_user",
+  "micro6": {
+    "full_tests": 1700,
+    "full_pass_precedes_final_refinements": true,
+    "focused_after_context": 124,
+    "transport_after_health": 61,
+    "final_settlement_clock": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "capture_contract": "passed",
+    "clock_race_focused": 81,
+    "clock_race_commit": "8717d3ee34cc2de49df9e18952475fcd6f6eb769",
+    "export_after_clock_race": "passed",
+    "capture_contract_after_clock_race": "passed",
+    "packaged_jar_sha256": "2e5e6cfa606a97c9ad3b3f233ffa95b950fbaafba774e4f243fd2f1ec7ef3ddd",
+    "full_after_clock_race": {
+      "tests": 1704,
+      "passed": 1700,
+      "failures": 4,
+      "errors": 0,
+      "skipped": 0,
+      "failure_reason": "SC967_VECTORS_PATH omitted in test invocation",
+      "failed_class": "RemoteAccountBuilderManagerTest",
+      "source_revision": "8717d3ee34cc2de49df9e18952475fcd6f6eb769"
+    },
+    "setup_recovery": {
+      "tests": 20,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "class": "RemoteAccountBuilderManagerTest",
+      "all_four_failures_resolved": true,
+      "single_clean_full_invocation": false
+    }
+  },
+  "chromascape": {
+    "broad_selected": 374,
+    "later_schema_media_projection_controller": 62,
+    "schema_boundary": 4,
+    "final_media_owner_index": 6,
+    "counts_overlap": true,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "real_postgresql": [
+      "V68",
+      "V69",
+      "legacy_NULL",
+      "size_limits",
+      "Hibernate_reload",
+      "closure_lock"
+    ]
+  },
+  "style": {
+    "spotless": "scoped_apply_passed",
+    "checkstyle_version": "10.26.1",
+    "repository_rules": "passed"
+  },
+  "not_verified": [
+    "genuine_new_combat",
+    "accepted_fixture",
+    "production_migration_chain",
+    "four_Docker_debugger_suites",
+    "hosted_Actions"
+  ],
+  "idle_smoke": "idle-smoke-results.json",
+  "shortcut_progress_comments": {
+    "1976": 2053,
+    "751": 2054
+  },
+  "shortcut_final_validation_comments": {
+    "1976": 2055,
+    "751": 2056
+  }
+}

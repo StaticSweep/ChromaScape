@@ -1,0 +1,168 @@
+{
+  "reviewedAt": "2026-10-15T01:03:32.437326+00:00",
+  "recordingId": "recording_ea942174",
+  "sessionId": "debug_7ec1c30e1d664c15bc357224f50253a9",
+  "verdict": "blocked - incorrect movement targets accepted as training labels",
+  "ticks": 101,
+  "bounds": [
+    491,
+    591
+  ],
+  "consecutive": true,
+  "databaseReview": {
+    "coverage": {
+      "schema": "combat-recording-coverage/v1",
+      "sessionId": "debug_7ec1c30e1d664c15bc357224f50253a9",
+      "distinctTicks": 101,
+      "distinctRows": 101,
+      "invalidLabels": 93,
+      "actionCounts": {
+        "INTERACT_NPC": 1,
+        "INTERACT_WIDGET": 2,
+        "WALK_TO": 5
+      },
+      "deferredTickCounts": {}
+    },
+    "resolvedTargetTicks": 55,
+    "combatSchemaErrors": 0,
+    "schemaErrorTicks": [],
+    "measuredFrameRanges": 100,
+    "missingRangeTicks": [
+      591
+    ],
+    "databaseRowsCompared": 101,
+    "databaseFieldMismatches": 0
+  },
+  "calibratedTicks": 101,
+  "maxAlignmentErrorMillis": 46.50927890625,
+  "p95AlignmentErrorMillis": 26.042805859375,
+  "reportedQualityCodes": [],
+  "producerReportedActions": {
+    "INTERACT_NPC": 1,
+    "INTERACT_WIDGET": 2,
+    "WALK_TO": 5
+  },
+  "reviewAcceptedActions": {
+    "INTERACT_NPC": 1,
+    "INTERACT_WIDGET": 2
+  },
+  "rejectedMovementConfirmations": [
+    {
+      "tick": 535,
+      "sourceTick": 534,
+      "opcode": 23,
+      "callbackOutsideSceneTileBounds": true,
+      "distanceBeforeTiles": 423,
+      "distanceAfterTiles": 421,
+      "reportedStatus": "CONFIRMED",
+      "reviewEligible": false
+    },
+    {
+      "tick": 541,
+      "sourceTick": 541,
+      "opcode": 23,
+      "callbackOutsideSceneTileBounds": true,
+      "distanceBeforeTiles": 266,
+      "distanceAfterTiles": 264,
+      "reportedStatus": "CONFIRMED",
+      "reviewEligible": false
+    },
+    {
+      "tick": 545,
+      "sourceTick": 545,
+      "opcode": 23,
+      "callbackOutsideSceneTileBounds": true,
+      "distanceBeforeTiles": 207,
+      "distanceAfterTiles": 205,
+      "reportedStatus": "CONFIRMED",
+      "reviewEligible": false
+    },
+    {
+      "tick": 552,
+      "sourceTick": 552,
+      "opcode": 23,
+      "callbackOutsideSceneTileBounds": true,
+      "distanceBeforeTiles": 220,
+      "distanceAfterTiles": 218,
+      "reportedStatus": "CONFIRMED",
+      "reviewEligible": false
+    },
+    {
+      "tick": 557,
+      "sourceTick": 556,
+      "opcode": 23,
+      "callbackOutsideSceneTileBounds": true,
+      "distanceBeforeTiles": 196,
+      "distanceAfterTiles": 194,
+      "reportedStatus": "CONFIRMED",
+      "reviewEligible": false
+    }
+  ],
+  "settlementOutcomes": {
+    "AMBIGUOUS": 12,
+    "CONFIRMED": 8,
+    "UNCONFIRMED": 7
+  },
+  "provenance": {
+    "sessionId": "debug_7ec1c30e1d664c15bc357224f50253a9",
+    "recordingId": "recording_ea942174",
+    "captureIdentity": {
+      "client": {
+        "schema": "debugger-client-identity/v1",
+        "gameRevision": 241,
+        "qualityCodes": [],
+        "cacheRevision": 241,
+        "clientBuildId": "836b97123a2f2606643c3ee3e3373062da91dd2d",
+        "clientVersion": "1.13.3-SNAPSHOT",
+        "artifactSha256": "6dedde2e485df4c6d9a00cec8794701882f96b47bb0ff6e662a9cf6bb68f6b59",
+        "cacheRevisionSource": "CLIENT_GET_REVISION"
+      },
+      "schema": "debugger-recording-identity/v1",
+      "server": {
+        "dirty": "false",
+        "version": "0.2.0-SNAPSHOT",
+        "gitRevision": "92b496adebd7bfef8bacaf1f0e3ababa08b4cc13",
+        "artifactKind": "APPLICATION_CLASS_DIRECTORY",
+        "qualityCodes": [],
+        "artifactSha256": "2c677e8e5d898a678f28f98276de2ed190e8592c57ce9855d496fb19568052f9"
+      },
+      "combatRowSchema": "combat-tick-row/v1",
+      "tickBatchVersion": 2,
+      "videoIndexSchema": "measured-video-index/v1",
+      "captureQualitySchema": "capture-quality/v1"
+    },
+    "mediaSha256": "b97bc198a159fb93c64ce686e19688a4cca25df8c0302a6e8710c4c7c2c19bc5",
+    "mediaStatus": "VERIFIED",
+    "videoIndexSchema": "measured-video-index/v1",
+    "physicalFrameCount": 1540,
+    "qualityCodes": []
+  },
+  "actualJarAndMediaHashesMatch": true,
+  "videoFullDecode": "passed",
+  "visualReview": "Giant spider combat visible in private extracted frame",
+  "restart": {
+    "passed": true,
+    "unchanged": [
+      "session",
+      "ticks",
+      "provenance",
+      "quality"
+    ],
+    "oldVerificationPid": 132368,
+    "newVerificationPid": 127588,
+    "newServerBuild": "e3ba21e6902bc1969b4a80b311bcf997089490eb",
+    "recordedServerBuild": "92b496adebd7bfef8bacaf1f0e3ababa08b4cc13",
+    "original8090CurrentPid": 132360,
+    "original8090Untouched": true
+  },
+  "acceptedCombatFixture": "not created - movement target integrity fails",
+  "codeChanges": "none in this review",
+  "buildSuiteReruns": "none; runtime/production review only",
+  "hostedActions": "excluded by user",
+  "remaining": [
+    "Fix WALK target acquisition in Micro6; never interpret canvas operands as scene tile coordinates.",
+    "Harden ChromaScape movement attribution to reject missing/invalid/unproven destinations.",
+    "Regression-test the actual canvas-coordinate failure and consumed/ambiguous/unresolved paths.",
+    "Rebuild/relaunch and obtain a short genuine corrected movement/attack/prayer capture, then create the accepted sanitized real-capture fixture."
+  ]
+}

@@ -171,6 +171,39 @@ public class DebugSessionService {
       String taskKey,
       com.fasterxml.jackson.databind.JsonNode taskArgs,
       com.fasterxml.jackson.databind.JsonNode runContext) {
+    return startSessionWithOutcome(
+        accountName,
+        scriptName,
+        recordingEnabled,
+        triggerSource,
+        preferredSessionId,
+        taskKey,
+        taskArgs,
+        runContext,
+        null);
+  }
+
+  @Transactional
+  public SessionStartOutcome startSessionWithOutcome(
+      String accountName,
+      String scriptName,
+      Boolean recordingEnabled,
+      RecordingTriggerSource triggerSource,
+      String preferredSessionId,
+      String taskKey,
+      com.fasterxml.jackson.databind.JsonNode taskArgs,
+      com.fasterxml.jackson.databind.JsonNode runContext,
+      com.fasterxml.jackson.databind.JsonNode captureIdentity) {
+    var clientIdentity = DebuggerCaptureIdentity.validateClient(captureIdentity);
+    // Serialize identity binding with tick admission and closure, before any recording mutation.
+    if (clientIdentity != null && preferredSessionId != null) {
+      sessionRepository
+          .findBySessionIdForUpdate(preferredSessionId)
+          .ifPresent(
+              session ->
+                  bindCaptureIdentity(
+                      session, clientIdentity, runContext == null || runContext.isNull() ? 2 : 3));
+    }
     var provenance =
         com.chromascape.web.recording.provenance.RecordingProvenance.capture(taskKey, taskArgs);
     com.fasterxml.jackson.databind.node.ObjectNode contextSnapshot = null;
@@ -218,6 +251,9 @@ public class DebugSessionService {
     }
     ResolveResult resolved = resolveOrCreateSession(accountName, scriptName, preferredSessionId);
     DebugSession session = resolved.session();
+    if (clientIdentity != null) {
+      bindCaptureIdentity(session, clientIdentity, contextSnapshot == null ? 2 : 3);
+    }
     boolean createdNewSession = resolved.createdNewSession();
     boolean reusedPreferredSession = resolved.reusedPreferredSession();
     if (contextSnapshot != null && createdNewSession)
@@ -397,7 +433,7 @@ public class DebugSessionService {
       return;
     }
     Optional<DebugSession> sessionOpt =
-        sessionRepository.findBySessionId(rollbackToken.sessionId());
+        sessionRepository.findBySessionIdForUpdate(rollbackToken.sessionId());
     if (sessionOpt.isEmpty()) {
       // Nothing to compensate; idempotent no-op.
       log.warn("Start rollback found no debug session for token; nothing to compensate");
@@ -581,8 +617,7 @@ public class DebugSessionService {
    */
   @Transactional
   public void stopSession(String sessionId, Long endTick, boolean stopRecording) {
-    if (canonicalFrames != null) canonicalFrames.close(sessionId, "EXPLICIT_STOP");
-    Optional<DebugSession> sessionOpt = sessionRepository.findBySessionId(sessionId);
+    Optional<DebugSession> sessionOpt = sessionRepository.findBySessionIdForUpdate(sessionId);
 
     if (sessionOpt.isEmpty()) {
       log.warn("Attempted to stop non-existent session: {}", sessionId);
@@ -590,6 +625,9 @@ public class DebugSessionService {
     }
 
     DebugSession session = sessionOpt.get();
+    if (canonicalFrames != null) {
+      canonicalFrames.close(sessionId, "EXPLICIT_STOP");
+    }
 
     // Idempotency: if already finalized or failed, still attempt recording metadata backfill
     // (handles edge case where SESSION_STOP ran but recording metadata update failed)
@@ -740,8 +778,7 @@ public class DebugSessionService {
    */
   @Transactional
   public void finalizeSessionOnDisconnect(String sessionId, String cause) {
-    if (canonicalFrames != null) canonicalFrames.close(sessionId, "DISCONNECT");
-    Optional<DebugSession> sessionOpt = sessionRepository.findBySessionId(sessionId);
+    Optional<DebugSession> sessionOpt = sessionRepository.findBySessionIdForUpdate(sessionId);
 
     if (sessionOpt.isEmpty()) {
       log.warn("Attempted to finalize non-existent session on {}: {}", cause, sessionId);
@@ -749,6 +786,9 @@ public class DebugSessionService {
     }
 
     DebugSession session = sessionOpt.get();
+    if (canonicalFrames != null) {
+      canonicalFrames.close(sessionId, "DISCONNECT");
+    }
 
     // Idempotency: if already finalized or failed, still attempt recording metadata backfill
     if (session.getLifecycleState() == DebugSessionLifecycleState.FINALIZED
@@ -833,9 +873,34 @@ public class DebugSessionService {
         tickCount);
   }
 
-  /** Get a debug session by ID. */
+  /** Must be called inside the ingestion transaction; lock is held through all evidence writes. */
+  @Transactional(propagation = Propagation.MANDATORY)
+  public Optional<DebugSession> getSessionForIngestion(String sessionId) {
+    return sessionRepository.findBySessionIdForUpdate(sessionId);
+  }
+
+  /** Get a debug session by ID without acquiring a capture mutation lock. */
   public Optional<DebugSession> getSession(String sessionId) {
     return sessionRepository.findBySessionId(sessionId);
+  }
+
+  private void bindCaptureIdentity(
+      DebugSession session, com.fasterxml.jackson.databind.node.ObjectNode client, int version) {
+    var existing = session.getCaptureIdentity();
+    if (existing != null) {
+      if (!client.equals(existing.get("client"))
+          || existing.path("tickBatchVersion").asInt() != version) {
+        throw new com.chromascape.web.recording.provenance.ProvenanceException(
+            "IMMUTABLE_CAPTURE_IDENTITY");
+      }
+      return;
+    }
+    if (!session.acceptsTickEvidence()
+        || snapshotRepository.countBySessionId(session.getSessionId()) > 0) {
+      throw new com.chromascape.web.recording.provenance.ProvenanceException(
+          "CAPTURE_IDENTITY_TOO_LATE");
+    }
+    session.bindCaptureIdentity(DebuggerCaptureIdentity.snapshot(client, version));
   }
 
   private boolean shouldStartRecording(RecordingTriggerSource triggerSource) {
@@ -877,7 +942,7 @@ public class DebugSessionService {
    */
   @Transactional
   public boolean repairRecordingLink(String recordingId) {
-    Optional<DebugSession> currentOpt = sessionRepository.findByRecordingId(recordingId);
+    Optional<DebugSession> currentOpt = sessionRepository.findByRecordingIdForUpdate(recordingId);
     if (currentOpt.isEmpty()) {
       return false;
     }
@@ -926,6 +991,8 @@ public class DebugSessionService {
   }
 
   private boolean maybeRelinkRecordingToTickBearingSession(DebugSession current) {
+    // Heuristic repair is legacy-only. Never move a known recording identity to another producer.
+    if (current.getCaptureIdentity() != null) return false;
     String recordingId = current.getRecordingId();
     if (recordingId == null || recordingId.isBlank()) {
       return false;
@@ -949,6 +1016,7 @@ public class DebugSessionService {
     long bestTickCount = 0;
     for (DebugSession candidate :
         sessionRepository.findByStartTimeBetweenOrderByStartTimeDesc(start, end)) {
+      if (candidate.getCaptureIdentity() != null) continue;
       if (candidate.getId().equals(current.getId())) {
         continue;
       }
@@ -1118,7 +1186,7 @@ public class DebugSessionService {
    */
   @Transactional
   public void updateSessionTickBounds(String sessionId, long tick) {
-    Optional<DebugSession> sessionOpt = sessionRepository.findBySessionId(sessionId);
+    Optional<DebugSession> sessionOpt = sessionRepository.findBySessionIdForUpdate(sessionId);
 
     if (sessionOpt.isEmpty()) {
       log.warn("Attempted to update tick bounds for non-existent session: {}", sessionId);
@@ -1126,6 +1194,12 @@ public class DebugSessionService {
     }
 
     DebugSession session = sessionOpt.get();
+    // Finalized bounds describe the recording, not the lifetime of the client connection.
+    if (!session.isActive()
+        || session.getLifecycleStateOrDefault() == DebugSessionLifecycleState.FINALIZED
+        || session.getLifecycleStateOrDefault() == DebugSessionLifecycleState.FAILED) {
+      return;
+    }
     boolean updated = false;
 
     // Set startTick if it's null or 0 (only on first tick)
@@ -1311,7 +1385,8 @@ public class DebugSessionService {
         }
 
         // Find the debug session linked to this recording
-        Optional<DebugSession> sessionOpt = sessionRepository.findByRecordingId(recordingId);
+        Optional<DebugSession> sessionOpt =
+            sessionRepository.findByRecordingIdForUpdate(recordingId);
 
         // Backfill RecordingSession metadata
         if (rec.getVideoPath() == null || rec.getVideoPath().isBlank()) {
@@ -1396,7 +1471,7 @@ public class DebugSessionService {
         return false;
       }
 
-      Optional<DebugSession> sessionOpt = sessionRepository.findByRecordingId(recordingId);
+      Optional<DebugSession> sessionOpt = sessionRepository.findByRecordingIdForUpdate(recordingId);
 
       if (rec.getVideoPath() == null || rec.getVideoPath().isBlank()) {
         rec.setVideoPath(videoFile.toAbsolutePath().toString());

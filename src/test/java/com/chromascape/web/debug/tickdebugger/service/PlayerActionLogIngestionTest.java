@@ -53,7 +53,7 @@ class PlayerActionLogIngestionTest {
     TimelineMarkerRepository markerRepository = mock(TimelineMarkerRepository.class);
 
     DebugSession session = new DebugSession("debug_1234", "acct", "script", null, 0L);
-    when(sessionService.getSession("debug_1234")).thenReturn(Optional.of(session));
+    when(sessionService.getSessionForIngestion("debug_1234")).thenReturn(Optional.of(session));
 
     ingestionService =
         new TickStreamIngestionService(
