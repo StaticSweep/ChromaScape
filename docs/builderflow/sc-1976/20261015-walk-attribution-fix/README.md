@@ -9,7 +9,7 @@ Existing work: Felix `task_1791760667867_s74wdsgf` and shared SC-751 `task_17918
 - Physical video-frame selection, measured clock alignment, durable finalization and per-recording build/revision/schema/media identity: implemented; the original recording passed video/identity/restart verification.
 - Correct movement attribution and conservative training eligibility: implemented by the producer, schema and consumer changes below, with native and historical-data regressions.
 - Scoped build/package/relaunch and PR/tracker evidence: recorded in local-checks.json and the existing Felix notes.
-- Corrected real movement/attack/prayer capture, accepted sanitized fixture and final review/delivery gates: still required. Eating and hosted Actions are excluded; unrun certification is explicitly listed below.
+- Corrected real movement/attack/prayer capture and accepted sanitized fixture: verified by recording_2b0178ae; see ../20261015-2b0178ae-acceptance/README.md. Final PR review/merge remains. Eating and hosted Actions are excluded.
 
 ## Cause and implemented plan
 
@@ -43,13 +43,7 @@ Micro6: `CombatSemanticCapture.java`, new `WalkDestinationEvidence.java`, `Debug
 
 ## Remaining work
 
-Fresh user-performed movement/attack/prayer capture and an accepted sanitized combat fixture remain required. Passing mocked regressions does not certify live movement attribution. SC-1976 and shared SC-751 stay `spec_ready/in_progress`; Shortcut stays In Progress until the required acceptance evidence and review gates pass.
-
-After the updated client is open, the user logs in and enters the game. Micro6 AGENTS.md says, "Do not handle game credentials or automate authentication dialogs. The user performs login."
-
-Open http://127.0.0.1:18090/debugger. Start recording; move to an unobstructed tile several tiles away, wait about five seconds, attack a spider, wait, toggle a prayer, wait, then perform another separate movement. Stop after1–2minutes and send the recording URL. Eating is optional/excluded. Keep actions separated to avoid ambiguous simultaneous labels. Use this verification client; the normal account launcher restores 8090 routing.
-
-Review must confirm actual destination provenance and correct movement, attack/prayer labels, contiguous ticks, required fields/database comparison, video alignment, immutable saved identities and accepted fixture eligibility. The previous recording's video/ticks/restart checks already passed, but its five incorrect movements cannot be reused as corrected movement acceptance.
+[recording_2b0178ae acceptance](../20261015-2b0178ae-acceptance/README.md) verifies the corrected real movement/attack/prayer capture and accepted sanitized fixture. The standalone combat schema's embedded quality definition is corrected and protected by parity/real-fixture regressions;27 focused tests and all101 actual row validations pass. No further capture or client restart is needed for this subset. Final tracker review reconciliation and paired PR review/merge remain. Full SC751 Fishing remains outside this delivery; see current evidence for actual state transitions and certification limits.
 
 ## Risks
 

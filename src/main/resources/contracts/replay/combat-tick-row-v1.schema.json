@@ -1157,6 +1157,86 @@
                       }
                     },
                     "required": []
+                  },
+                  "movementIntent": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source": {
+                        "const": "SELECTED_SCENE_TILE_AND_CHANGED_LOCAL_DESTINATION"
+                      },
+                      "coordinateSpace": {
+                        "const": "TOP_LEVEL_SCENE"
+                      },
+                      "baseX": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "baseY": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "plane": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 3
+                      },
+                      "selectedSceneX": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 103
+                      },
+                      "selectedSceneY": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 103
+                      },
+                      "destinationSceneX": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 103
+                      },
+                      "destinationSceneY": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 103
+                      },
+                      "previousDestinationSceneX": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 103
+                      },
+                      "previousDestinationSceneY": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 103
+                      },
+                      "sourceTick": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "observedTick": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "previousDestinationPresent": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "coordinateSpace",
+                      "baseX",
+                      "baseY",
+                      "plane",
+                      "selectedSceneX",
+                      "selectedSceneY",
+                      "destinationSceneX",
+                      "destinationSceneY",
+                      "sourceTick",
+                      "observedTick",
+                      "previousDestinationPresent"
+                    ]
                   }
                 },
                 "required": [

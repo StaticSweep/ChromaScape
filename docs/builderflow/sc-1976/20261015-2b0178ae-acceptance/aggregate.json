@@ -1,0 +1,145 @@
+{
+  "schema": "sc1976-real-capture-acceptance/v1",
+  "recordingId": "recording_2b0178ae",
+  "checkedAtUtc": "2026-10-15T09:49:51.869802+00:00",
+  "lifecycleState": "FINALIZED",
+  "tickCount": 101,
+  "startTick": 509,
+  "endTick": 609,
+  "missingTicks": 0,
+  "duplicateTicks": 0,
+  "requiredFieldsPresentAllTicks": true,
+  "captureQualityAndCapturedStateValidation": "101/101 passed",
+  "databaseRowsCompared": 101,
+  "databaseCapturedSectionsPerRow": 11,
+  "databaseFieldMismatches": 0,
+  "resolvedTargetTicks": 49,
+  "rawEvents": 36,
+  "settledEvents": 36,
+  "outcomeCounts": {
+    "AMBIGUOUS": 13,
+    "CONFIRMED": 22,
+    "UNCONFIRMED": 1
+  },
+  "eligibleActionCounts": {
+    "INTERACT_NPC": 4,
+    "INTERACT_WIDGET": 14,
+    "WALK_TO": 4
+  },
+  "rowsWithoutEligibleLabel": 79,
+  "deferredTickCounts": {},
+  "combatSchemaErrorsBeforeFix": 4,
+  "combatSchemaErrorTicksBeforeFix": [
+    556,
+    574,
+    592,
+    606
+  ],
+  "combatSchemaErrorsAfterFix": 0,
+  "calibratedTicks": 101,
+  "maxAlignmentErrorMillis": 37.3246234375,
+  "p95AlignmentErrorMillis": 25.833661328125,
+  "measuredFrameRanges": 100,
+  "terminalTickWithoutNextTickRange": 609,
+  "videoFullDecode": "passed",
+  "physicalFrameCount": 1539,
+  "durationMs": 61152,
+  "mediaSha256": "080465678ccfbfc16e7f92953bad89cbe5c91de6856d2d9a1c6aabc516c886ca",
+  "captureIdentity": {
+    "client": {
+      "schema": "debugger-client-identity/v1",
+      "gameRevision": 241,
+      "qualityCodes": [],
+      "cacheRevision": 241,
+      "clientBuildId": "429e32978b1027ca913660ef38f69b92d35bb3c0",
+      "clientVersion": "1.13.3-SNAPSHOT",
+      "artifactSha256": "893c4f6942ac32ad466ba9c5e86fe436ee4ceca783a81743bbced16d41b4a72b",
+      "cacheRevisionSource": "CLIENT_GET_REVISION"
+    },
+    "schema": "debugger-recording-identity/v1",
+    "server": {
+      "dirty": "false",
+      "version": "0.2.0-SNAPSHOT",
+      "gitRevision": "7f507c8f83f5d5148922ec95625f0d0604084108",
+      "artifactKind": "APPLICATION_CLASS_DIRECTORY",
+      "qualityCodes": [],
+      "artifactSha256": "6517383181266cc8e47c018286e7b0552bf024ae361eeecc11f4e470b0151732"
+    },
+    "combatRowSchema": "combat-tick-row/v1",
+    "tickBatchVersion": 2,
+    "videoIndexSchema": "measured-video-index/v1",
+    "captureQualitySchema": "capture-quality/v1"
+  },
+  "stability": {
+    "sessionUnchanged": true,
+    "ticksUnchanged": true,
+    "provenanceUnchanged": true,
+    "checkedAtUtc": "2026-10-15T09:41:54.341265+00:00",
+    "mediaHashMatches": true
+  },
+  "tests": [
+    {
+      "name": "com.chromascape.web.aiplayer.combat.CombatRealCaptureContractTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.chromascape.web.aiplayer.combat.CombatRecordingCoverageTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.chromascape.web.aiplayer.combat.CombatTickRowIngestionRoundTripTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.chromascape.web.aiplayer.combat.CombatTickRowServiceTest",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.service.CaptureQualityContractTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    }
+  ],
+  "acceptedSanitizedCombatFixture": true,
+  "fixtureSha256": "aef9c35c9b6bf4dfc746adea0921d79b477453923473aa1162ff27e71e75901a",
+  "fixtureSelectedTicks": [
+    530,
+    534,
+    556,
+    561,
+    574,
+    576,
+    592,
+    606
+  ],
+  "fixtureExpectedEligibleActions": {
+    "INTERACT_NPC": 1,
+    "INTERACT_WIDGET": 1,
+    "WALK_TO": 4
+  },
+  "fixtureExpectedIneligibleRows": 2,
+  "runtimeRestartThisFollowup": false,
+  "newMicro6SourceChanges": false,
+  "hostedActions": "excluded by user",
+  "checksNotRun": [
+    "New restart of this particular recording; prior immutable identity/restart proof is separate existing evidence",
+    "Four Docker debugger suites",
+    "Production migration-chain certification",
+    "Full SC-751 Fishing acceptance"
+  ],
+  "deliveryState": "capture and implementation accepted; review transition pending actual gate"
+}
