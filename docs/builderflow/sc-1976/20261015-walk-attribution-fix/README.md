@@ -56,3 +56,8 @@ Revert the focused changes and rebuild/relaunch only the owned verification proc
 ## Tracker and PR handoff
 
 All six existing Felix plans/Implementation Evidence/Verification Evidence notes were updated and read back. Both existing tasks remain spec_ready/in_progress. The movement implementation and new native-regression items are checked; real capture/fixture and composite live acceptance remain unchecked. No duplicate task or review/done transition. Shortcut SC1976 description and comments 2070/2071 (SC1976/shared SC751) were updated successfully with marker `[sc1976-walk-attribution-fix:20261015]`; both stories remain In Progress500000008. Both existing PR descriptions were updated and remain draft. Chroma source 7f507c8f, evidence fbb49590; Micro6 source 429e32978b.
+
+
+## Final accepted capture and review handoff
+
+recording_2b0178ae closes the corrected movement/attack/prayer and accepted sanitized fixture gates. Chroma86c0b2f0 fixes standalone schema drift and adds real regression examples;27 focused tests and all101 original actual snapshots validate. FelixSC1976 is now spec_ready/in_review after the real gate; Shortcut InReview500000009/comment2072 with one review marker. Both paired PRs59/162 are OPEN and ready for review. SharedSC751 remains in_progress/ShortcutInProgress with comment2073; fullFishing acceptance remains open. See [the current complete acceptance/handoff](../20261015-2b0178ae-acceptance/README.md) for exact files/results/checks/risks/rollback. No new recording/client restart required for this subset; review/merge and normal rollout remain. No merge/deployment/Done claim.

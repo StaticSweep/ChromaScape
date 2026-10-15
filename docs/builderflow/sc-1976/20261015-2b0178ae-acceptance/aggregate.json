@@ -141,5 +141,25 @@
     "Production migration-chain certification",
     "Full SC-751 Fishing acceptance"
   ],
-  "deliveryState": "capture and implementation accepted; review transition pending actual gate"
+  "deliveryState": "SC1976 spec_ready/in_review; Shortcut In Review500000009; paired PRs open/ready for review; not merged/deployed/done",
+  "tracker": {
+    "felixTaskId": "task_1791760667867_s74wdsgf",
+    "felixStatus": "in_review",
+    "specState": "spec_ready",
+    "checklists": "all implementation/acceptance/test items checked with evidence",
+    "notesUpdatedAndReadBack": 6,
+    "shortcutStoryId": 1976,
+    "shortcutStateId": 500000009,
+    "shortcutReviewCommentId": 2072,
+    "shortcutReviewMarkerCount": 1,
+    "sharedFelixTaskId": "task_1791840092160_ekr5gv6a",
+    "sharedFelixStatus": "in_progress",
+    "sharedShortcutStoryId": 751,
+    "sharedShortcutStateId": 500000008,
+    "sharedShortcutCommentId": 2073,
+    "fullFishingAcceptance": "open",
+    "pr59": "open/ready for review",
+    "pr162": "open/ready for review",
+    "sourceFixtureCommit": "86c0b2f00b27d46508b4cf5af5efb2f953e296b1"
+  }
 }
