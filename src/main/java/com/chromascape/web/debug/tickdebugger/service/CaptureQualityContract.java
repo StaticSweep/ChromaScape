@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -257,15 +258,82 @@ public final class CaptureQualityContract {
           && after.path("active").isBoolean()
           && !before.path("active").equals(after.path("active"))
           && target.path("prayer").isTextual();
-      case "WALK_TO" -> before.path("x").isIntegralNumber()
-          && before.path("y").isIntegralNumber()
-          && after.path("x").isIntegralNumber()
-          && after.path("y").isIntegralNumber()
+      case "WALK_TO" -> validMovementIntent(e)
           && before.path("plane").equals(after.path("plane"))
           && after.path("plane").equals(target.path("plane"))
           && distance(after, target) < distance(before, target);
       default -> false;
     };
+  }
+
+  /** Historical WALK operands cannot prove intent, even when distance happens to decrease. */
+  private static boolean validMovementIntent(JsonNode event) {
+    JsonNode evidence = event.path("stateEvidence"), intent = evidence.path("movementIntent");
+    if (!"SELECTED_SCENE_TILE_AND_CHANGED_LOCAL_DESTINATION".equals(intent.path("source").asText())
+        || !"TOP_LEVEL_SCENE".equals(intent.path("coordinateSpace").asText())
+        || !intent.path("previousDestinationPresent").isBoolean()) {
+      return false;
+    }
+    for (String key :
+        Set.of(
+            "baseX",
+            "baseY",
+            "plane",
+            "selectedSceneX",
+            "selectedSceneY",
+            "destinationSceneX",
+            "destinationSceneY",
+            "sourceTick",
+            "observedTick")) {
+      if (!intent.path(key).isIntegralNumber() || !intent.path(key).canConvertToInt()) {
+        return false;
+      }
+    }
+    int x = intent.path("selectedSceneX").intValue(), y = intent.path("selectedSceneY").intValue();
+    if (!sceneCoordinate(x)
+        || !sceneCoordinate(y)
+        || intent.path("plane").intValue() < 0
+        || intent.path("plane").intValue() > 3
+        || intent.path("baseX").intValue() < 0
+        || intent.path("baseY").intValue() < 0
+        || !intent.path("selectedSceneX").equals(intent.path("destinationSceneX"))
+        || !intent.path("selectedSceneY").equals(intent.path("destinationSceneY"))
+        || !intent.path("sourceTick").equals(event.path("sourceTick"))
+        || intent.path("observedTick").longValue() < event.path("sourceTick").longValue()
+        || intent.path("observedTick").longValue() > event.path("settlementTick").longValue()) {
+      return false;
+    }
+    if (intent.path("previousDestinationPresent").booleanValue()) {
+      JsonNode oldX = intent.path("previousDestinationSceneX"),
+          oldY = intent.path("previousDestinationSceneY");
+      if (!oldX.isIntegralNumber()
+          || !oldY.isIntegralNumber()
+          || !oldX.canConvertToInt()
+          || !oldY.canConvertToInt()
+          || !sceneCoordinate(oldX.intValue())
+          || !sceneCoordinate(oldY.intValue())
+          || oldX.intValue() == x && oldY.intValue() == y) {
+        return false;
+      }
+    } else if (intent.has("previousDestinationSceneX") || intent.has("previousDestinationSceneY")) {
+      return false;
+    }
+    for (JsonNode point :
+        List.of(event.path("target"), evidence.path("before"), evidence.path("after"))) {
+      if (!point.path("x").isIntegralNumber()
+          || !point.path("y").isIntegralNumber()
+          || !point.path("plane").equals(intent.path("plane"))
+          || !sceneCoordinate(point.path("x").asLong() - intent.path("baseX").asLong())
+          || !sceneCoordinate(point.path("y").asLong() - intent.path("baseY").asLong())) {
+        return false;
+      }
+    }
+    return event.path("target").path("x").asLong() == intent.path("baseX").asLong() + x
+        && event.path("target").path("y").asLong() == intent.path("baseY").asLong() + y;
+  }
+
+  private static boolean sceneCoordinate(long coordinate) {
+    return coordinate >= 0 && coordinate < 104;
   }
 
   private static long distance(JsonNode point, JsonNode target) {

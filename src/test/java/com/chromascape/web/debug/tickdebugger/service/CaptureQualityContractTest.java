@@ -37,6 +37,130 @@ class CaptureQualityContractTest {
     }
   }
 
+  private ObjectNode walkFixture() throws Exception {
+    try (var in =
+        getClass()
+            .getResourceAsStream(
+                "/replay/contracts/capture-quality-walk-current-serializer-v1.json")) {
+      ObjectNode q = (ObjectNode) mapper.readTree(in);
+      q.remove("qualityCodes");
+      q.putArray("qualityCodes");
+      q.putObject("clock")
+          .put("status", "MEASURED")
+          .putNull("qualityCode")
+          .put("measuredAtEpochMillis", q.path("tickCapturedAtEpochMillis").asLong() - 100)
+          .put("serverOffsetMillis", 0)
+          .put("uncertaintyMillis", 7);
+      return q;
+    }
+  }
+
+  @Test
+  void currentWalkSerializerRequiresSelectedTileChangedDestinationAndActualMovement()
+      throws Exception {
+    var q = walkFixture();
+    TickBatchMessage batch = new TickBatchMessage();
+    batch.setSessionId("session");
+    batch.setTick(2L);
+    batch.setCaptureQuality(mapper.convertValue(q, Map.class));
+    batch.setPlayerState(Map.of("worldX", 11, "worldY", 10, "plane", 0));
+    assertThat(CaptureQualityContract.validate(batch, mapper)).isEqualTo(q);
+    TickSnapshot snapshot =
+        new TickSnapshot("session", 2L, java.time.LocalDateTime.now(), mapper.createObjectNode());
+    snapshot.setCaptureQuality(q);
+    var row =
+        CombatTickRowService.build(snapshot, null, null, CombatTickRowService.VideoSync.absent(0));
+    CombatTickRowService.requireLabelSafe(row);
+    assertThat(((Map<?, ?>) row.get("label")).get("canonicalType")).isEqualTo("WALK_TO");
+    batch.setPlayerState(Map.of("worldX", 40, "worldY", 40, "plane", 0));
+    assertThatThrownBy(() -> CaptureQualityContract.validate(batch, mapper))
+        .hasMessageContaining("captured movement");
+  }
+
+  @Test
+  void missingStaleOutOfSceneMismatchedAndFutureMovementProvenanceFailClosed() throws Exception {
+    for (String field :
+        List.of(
+            "source",
+            "coordinateSpace",
+            "baseX",
+            "baseY",
+            "plane",
+            "selectedSceneX",
+            "selectedSceneY",
+            "destinationSceneX",
+            "destinationSceneY",
+            "previousDestinationPresent",
+            "sourceTick",
+            "observedTick")) {
+      var q = walkFixture();
+      ((ObjectNode) q.path("settlements").get(0).path("stateEvidence").path("movementIntent"))
+          .remove(field);
+      assertThatThrownBy(() -> CaptureQualityContract.validate(q, "session", 2, mapper))
+          .isInstanceOf(IllegalArgumentException.class);
+    }
+    for (String mutation :
+        List.of(
+            "stale",
+            "outside",
+            "mismatch",
+            "future",
+            "source",
+            "plane",
+            "target",
+            "base",
+            "unchanged",
+            "legacy")) {
+      var q = walkFixture();
+      ObjectNode e = (ObjectNode) q.path("settlements").get(0);
+      ObjectNode state = (ObjectNode) e.path("stateEvidence");
+      ObjectNode intent = (ObjectNode) state.path("movementIntent");
+      switch (mutation) {
+        case "stale" -> intent
+            .put("previousDestinationPresent", true)
+            .put("previousDestinationSceneX", 12)
+            .put("previousDestinationSceneY", 10);
+        case "outside" -> intent.put("selectedSceneX", 468).put("destinationSceneX", 468);
+        case "mismatch" -> intent.put("destinationSceneX", 13);
+        case "future" -> intent.put("observedTick", 3);
+        case "source" -> intent.put("sourceTick", 1);
+        case "plane" -> intent.put("plane", 1);
+        case "target" -> ((ObjectNode) e.path("target")).put("x", 468);
+        case "base" -> intent.put("baseX", 3200);
+        case "unchanged" -> state.set("after", state.path("before").deepCopy());
+        case "legacy" -> state.remove("movementIntent");
+      }
+      assertThatThrownBy(() -> CaptureQualityContract.validate(q, "session", 2, mapper))
+          .isInstanceOf(IllegalArgumentException.class);
+    }
+  }
+
+  @Test
+  void allFiveRealCanvasCoordinateFailuresAreRejectedWithoutRewritingHistory() throws Exception {
+    try (var in =
+        getClass()
+            .getResourceAsStream("/replay/contracts/capture-quality-rejected-walk-ea942174.json")) {
+      var qualities = mapper.readTree(in).path("qualities");
+      assertThat(qualities.size()).isEqualTo(5);
+      for (var q : qualities) {
+        var unchanged = q.deepCopy();
+        long tick = q.path("tick").longValue();
+        assertThatThrownBy(() -> CaptureQualityContract.validate(q, "session", tick, mapper))
+            .hasMessageContaining("state mutation");
+        TickSnapshot snapshot =
+            new TickSnapshot(
+                "session", tick, java.time.LocalDateTime.now(), mapper.createObjectNode());
+        snapshot.setCaptureQuality(q);
+        var row =
+            CombatTickRowService.build(
+                snapshot, null, null, CombatTickRowService.VideoSync.absent(0));
+        assertThatThrownBy(() -> CombatTickRowService.requireLabelSafe(row))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThat(q).isEqualTo(unchanged);
+      }
+    }
+  }
+
   @Test
   void additiveDtoKeepsImmutableEvidenceAndConfirmedClientEventLabel() throws Exception {
     ObjectNode q = fixture();
