@@ -1,0 +1,60 @@
+{
+  "source_commit": "d599690150bb8d9cd5db9c1225375eb427a8338e",
+  "tests": {
+    "tests": 1797,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "repair_suites": [
+    {
+      "suite": "net.runelite.client.plugins.microbot.accountbuilder.integration.DebugRecorderIntegrationBridgeTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "net.runelite.client.plugins.microbot.drozulrah.ZulrahDeathRecoveryTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "net.runelite.client.plugins.microbot.drozulrah.ZulrahFeroxReturnTest",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "net.runelite.client.plugins.microbot.drozulrah.ZulrahRecoveryBankRouteTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "net.runelite.client.plugins.microbot.drozulrah.ZulrahRetrievalTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "package": "C:\\Dev\\IdeaProjects\\.worktrees\\sc1976-micro6-merge\\runelite-client\\build\\libs\\client-1.13.3-SNAPSHOT-shaded.jar",
+  "package_sha256": "4024dd0fddf126686794e6e476f4928a4a971bf7568d8dbc91be20e95b44bb95",
+  "package_classes_and_license": true,
+  "orphan_fightcave_absent": true,
+  "upstream_manifest_hashes_verified": 8,
+  "exact_upstream_blob_count": 7,
+  "capture_contract": true,
+  "injected_client_revision": 241,
+  "injected_client_sha256": "981eba4888f4cf0ec8fd74f09b9ed85728d7b2bc8c1f57194883aed64dec768a",
+  "scoped_style": true,
+  "diff_check": true,
+  "hosted_actions": "skipped by user",
+  "deployed": false,
+  "jar_build_manifest": "Manifest-Version: 1.0\r\nMain-Class: net.runelite.client.RuneLite\r\nMicro6-Build-Id: d599690150bb8d9cd5db9c1225375eb427a8338e\r\n\r\n"
+}
