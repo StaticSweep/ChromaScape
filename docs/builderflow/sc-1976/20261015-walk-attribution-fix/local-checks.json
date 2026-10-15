@@ -85,5 +85,39 @@
     "sha256": "893c4f6942ac32ad466ba9c5e86fe436ee4ceca783a81743bbced16d41b4a72b",
     "revision": 241,
     "captureContract": "passed"
+  },
+  "felix": {
+    "task1976": "task_1791760667867_s74wdsgf",
+    "sharedTask751": "task_1791840092160_ekr5gv6a",
+    "specState": "spec_ready",
+    "status": "in_progress",
+    "plansAndEvidence": "six existing notes updated and read back",
+    "movementImplementationChecked": true,
+    "nativeMovementRegressionsChecked": true,
+    "realCaptureAndFixture": "unchecked"
+  },
+  "shortcut": {
+    "state": "In Progress",
+    "workflowStateId": 500000008,
+    "description1976": "updated successfully",
+    "comment1976": 2070,
+    "comment751": 2071,
+    "marker": "[sc1976-walk-attribution-fix:20261015]",
+    "reviewDoneTransition": "none"
+  },
+  "pullRequests": {
+    "ChromaScape": {
+      "number": 59,
+      "isDraft": true,
+      "sourceCommit": "7f507c8f",
+      "evidenceCommit": "fbb49590",
+      "body": "updated successfully"
+    },
+    "micro6": {
+      "number": 162,
+      "isDraft": true,
+      "sourceCommit": "429e32978b",
+      "body": "updated successfully"
+    }
   }
 }

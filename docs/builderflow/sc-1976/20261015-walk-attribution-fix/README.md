@@ -58,3 +58,7 @@ Conservative attribution can leave legitimate movement unconfirmed when selected
 ## Rollback
 
 Revert the focused changes and rebuild/relaunch only the owned verification processes. Keep recordings and database data. Do not re-admit legacy movement targets as training labels. Preserve the original 8090 instance, user reservation snapshot/locks and saved account profiles.
+
+## Tracker and PR handoff
+
+All six existing Felix plans/Implementation Evidence/Verification Evidence notes were updated and read back. Both existing tasks remain spec_ready/in_progress. The movement implementation and new native-regression items are checked; real capture/fixture and composite live acceptance remain unchecked. No duplicate task or review/done transition. Shortcut SC1976 description and comments 2070/2071 (SC1976/shared SC751) were updated successfully with marker `[sc1976-walk-attribution-fix:20261015]`; both stories remain In Progress500000008. Both existing PR descriptions were updated and remain draft. Chroma source 7f507c8f, evidence fbb49590; Micro6 source 429e32978b.
