@@ -1,0 +1,11 @@
+{
+  "checks": [
+    "visible point, independent-page conflict, draft retention, reload/save, source-use, history",
+    "source-pixel region selection and persisted review",
+    "keyboard frame navigation and 390px layout",
+    "browser export creation, immutable repeat GET, pinned previews, training remains ineligible",
+    "lost-worker cancellation stays reconciliation-required, next-job polling restarts, settled polling stops"
+  ],
+  "errors": [],
+  "pass": true
+}

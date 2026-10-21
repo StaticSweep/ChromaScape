@@ -1,0 +1,8 @@
+gradle.projectsEvaluated {
+    rootProject.allprojects { p ->
+        p.layout.buildDirectory.set(new File("/tmp/sc2150-analysis-preview-review/build"))
+        if (gradle.startParameter.projectProperties.containsKey("reviewProbes")) {
+            p.sourceSets.test.java.srcDir("/tmp/sc2150-analysis-preview-review/probes")
+        }
+    }
+}

@@ -1,0 +1,61 @@
+--- a/src/main/java/com/chromascape/web/debug/tickdebugger/video/MouseVideoPublicErrors.java
++++ b/src/main/java/com/chromascape/web/debug/tickdebugger/video/MouseVideoPublicErrors.java
+@@ -74,8 +74,10 @@
+ 
+   /** Bounded public message for a persisted job failure with an operator correlation reference. */
+   public static String jobFailure(String code, UUID jobId) {
++    // Legacy rows may have no code; immutable maps reject null before applying the fallback.
++    String publicCode = code == null ? MouseVideoException.CODE_DECODER_FAILED : code;
+     String message =
+-        MESSAGES.getOrDefault(code, MESSAGES.get(MouseVideoException.CODE_DECODER_FAILED));
++        MESSAGES.getOrDefault(publicCode, MESSAGES.get(MouseVideoException.CODE_DECODER_FAILED));
+     return bounded(message + " (reference " + jobId + ")");
+   }
+ 
+--- a/src/test/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoJobServiceTest.java
++++ b/src/test/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoJobServiceTest.java
+@@ -391,6 +391,44 @@
+   }
+ 
+   @Test
++  void viewSanitizesFailedJobWithoutAnErrorCode() {
++    MouseVideoJob job = runningJob();
++    String privateMessage = "Traceback: /tmp/sc2150/private-file secret=abc";
++    job.fail(null, privateMessage);
++
++    MouseVideoJobService.JobView view = service.view(job);
++
++    assertThat(view.status()).isEqualTo(MouseVideoJob.STATUS_FAILED);
++    assertThat(view.errorCode()).isNull();
++    assertThat(view.errorMessage())
++        .startsWith("The media could not be decoded or probed")
++        .contains("reference " + job.getId())
++        .doesNotContain("/tmp", "Traceback", "secret")
++        .hasSizeLessThanOrEqualTo(320);
++    assertThat(view.cleanupReason()).isNull();
++    assertThat(job.getErrorMessage()).isEqualTo(privateMessage);
++  }
++
++  @Test
++  void viewSanitizesTimedOutJobWithoutAnErrorCode() {
++    MouseVideoJob job = runningJob();
++    String privateMessage = "Timeout: C:\\private\\probe.py secret=abc";
++    job.timeout(null, privateMessage);
++
++    MouseVideoJobService.JobView view = service.view(job);
++
++    assertThat(view.status()).isEqualTo(MouseVideoJob.STATUS_TIMED_OUT);
++    assertThat(view.errorCode()).isNull();
++    assertThat(view.errorMessage())
++        .startsWith("The media could not be decoded or probed")
++        .contains("reference " + job.getId())
++        .doesNotContain("C:", "probe.py", "secret")
++        .hasSizeLessThanOrEqualTo(320);
++    assertThat(view.cleanupReason()).isNull();
++    assertThat(job.getErrorMessage()).isEqualTo(privateMessage);
++  }
++
++  @Test
+   void viewSanitizesLegacyStoredReconciliationDiagnostics() {
+     MouseVideoJob job = runningJob();
+     job.reconciliationRequired(

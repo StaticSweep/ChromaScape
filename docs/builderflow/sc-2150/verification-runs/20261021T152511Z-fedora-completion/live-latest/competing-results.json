@@ -1,0 +1,67 @@
+{
+  "previews": [
+    {
+      "previewId": "22df0a00-cfa0-4a87-8462-4b6df015035e",
+      "analysisId": "31a08a7a-70f8-4ad5-aa9e-a389b9516e7b",
+      "jobId": "786264e9-f59d-4ea4-b87f-777ccf97cede",
+      "state": "PENDING",
+      "frameOrdinal": 20,
+      "pts": "10240",
+      "metadataUrl": "/api/debug/mouse-videos/frame-previews/22df0a00-cfa0-4a87-8462-4b6df015035e",
+      "statusUrl": "/api/debug/mouse-videos/jobs/786264e9-f59d-4ea4-b87f-777ccf97cede"
+    },
+    {
+      "previewId": "53428a8f-dbd6-4b57-b203-0c7e72c42051",
+      "analysisId": "31a08a7a-70f8-4ad5-aa9e-a389b9516e7b",
+      "jobId": "5696cd96-3250-4ce9-afab-13429129768f",
+      "state": "PENDING",
+      "frameOrdinal": 21,
+      "pts": "10752",
+      "metadataUrl": "/api/debug/mouse-videos/frame-previews/53428a8f-dbd6-4b57-b203-0c7e72c42051",
+      "statusUrl": "/api/debug/mouse-videos/jobs/5696cd96-3250-4ce9-afab-13429129768f"
+    },
+    {
+      "previewId": "28666927-1d01-4a02-8534-cb04942fcdd0",
+      "analysisId": "31a08a7a-70f8-4ad5-aa9e-a389b9516e7b",
+      "jobId": "a977701e-d950-434d-98dd-64d58796752e",
+      "state": "PENDING",
+      "frameOrdinal": 22,
+      "pts": "11264",
+      "metadataUrl": "/api/debug/mouse-videos/frame-previews/28666927-1d01-4a02-8534-cb04942fcdd0",
+      "statusUrl": "/api/debug/mouse-videos/jobs/a977701e-d950-434d-98dd-64d58796752e"
+    },
+    {
+      "previewId": "4d15ec6b-64bd-47b3-91ec-f4f0cb30ade4",
+      "analysisId": "31a08a7a-70f8-4ad5-aa9e-a389b9516e7b",
+      "jobId": "24f89395-c05f-44e4-b2e1-39e770771b53",
+      "state": "PENDING",
+      "frameOrdinal": 23,
+      "pts": "11776",
+      "metadataUrl": "/api/debug/mouse-videos/frame-previews/4d15ec6b-64bd-47b3-91ec-f4f0cb30ade4",
+      "statusUrl": "/api/debug/mouse-videos/jobs/24f89395-c05f-44e4-b2e1-39e770771b53"
+    },
+    {
+      "previewId": "bfee3124-808f-47b6-882c-c664447a5783",
+      "analysisId": "31a08a7a-70f8-4ad5-aa9e-a389b9516e7b",
+      "jobId": "f0940bf3-32a5-42bf-b1dc-2fabb3b25866",
+      "state": "PENDING",
+      "frameOrdinal": 24,
+      "pts": "12288",
+      "metadataUrl": "/api/debug/mouse-videos/frame-previews/bfee3124-808f-47b6-882c-c664447a5783",
+      "statusUrl": "/api/debug/mouse-videos/jobs/f0940bf3-32a5-42bf-b1dc-2fabb3b25866"
+    },
+    {
+      "previewId": "4d82bf9b-c787-4112-a5e5-05964af9d0e8",
+      "analysisId": "31a08a7a-70f8-4ad5-aa9e-a389b9516e7b",
+      "jobId": "6702d748-b7b3-41e0-b726-0d7651803f77",
+      "state": "PENDING",
+      "frameOrdinal": 25,
+      "pts": "12800",
+      "metadataUrl": "/api/debug/mouse-videos/frame-previews/4d82bf9b-c787-4112-a5e5-05964af9d0e8",
+      "statusUrl": "/api/debug/mouse-videos/jobs/6702d748-b7b3-41e0-b726-0d7651803f77"
+    }
+  ],
+  "eachClaimedExactlyOnce": true,
+  "allReady": true,
+  "observedLeaseOwners": []
+}

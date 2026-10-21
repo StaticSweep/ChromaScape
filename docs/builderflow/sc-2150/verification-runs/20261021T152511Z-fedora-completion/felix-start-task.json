@@ -1,0 +1,1388 @@
+{
+  "id": "task_1792382767281_cd8dbu69",
+  "parent_id": null,
+  "title": "SC-2150 External video upload, YouTube import and human-behavior analysis",
+  "description": "Deliver bounded uploaded-video and supported YouTube import into Mouse Research, with immutable media/provenance, durable idempotent jobs, bounded probe/decode/cursor analysis, source-linked estimates and unknowns, append-only review, catalog inspection and evidence export. SC-2151 owns exact video-to-tick alignment; SC-309 owns movement diagnosis; SC-712 owns published training admission. Full authoritative scope, rules, architecture, ERD, API, security, UX, observability, acceptance, implementation and test checklists are in the linked documentation notes and C:\\Dev\\IdeaProjects\\ChromaScape\\docs\\builderflow\\sc-2150\\full-plan.md. No Micro6 source/runtime, model activation or gameplay changes.\n\nReview remediation amendment (2026-10-19): authoritative note note_1792415546201_405e9ad1 and C:\\Dev\\IdeaProjects\\ChromaScape\\docs\\builderflow\\sc-2150\\review-remediation-and-completion-plan.md. Resolve seven correctness/security findings before qualification; 15 remediation/completion items, 14 verification items and 10 additional Given/When/Then acceptance gates are attached. Original I3/I6/I11 are reopened; historical evidence and unrelated content are preserved. This amendment was planned only: no corrective code, new test pass or workflow transition is claimed. Preserve actual in_progress/draft state; do not claim whole-story acceptance.\n\nIndependent-review completion amendment (2026-10-19): authoritative complete plan note note_1792422547746_2a3a30c8 and C:\\Dev\\IdeaProjects\\ChromaScape\\docs\\builderflow\\sc-2150\\completion-plan-after-independent-review.md. Covers the confirmed derivative-process cancellation leak and incorrect PTS parsing, missing periodic heartbeat, unsafe live-instance startup recovery and blocking-output bounds; retains every original/remediation scope and acceptance obligation. Adds 11 implementation, 13 verification and 8 Given/When/Then acceptance items, all unchecked. Packages P0–P10 cover lifecycle/process/tool correctness, real HTTP/database/browser closure, qualified cursor/quality evidence, accessible append-only correction/source-use UI, successful pinned YouTube import, operations and final qualification. Planning only: preserve actual in_progress/draft; no new implementation, software test result, feature enablement, restart, deployment or Shortcut state/marker is claimed.\n\nLatest process/lease/output review amendment (2026-10-19): existing authoritative note note_1792422547746_2a3a30c8 and C:\\Dev\\IdeaProjects\\ChromaScape\\docs\\builderflow\\sc-2150\\completion-plan-after-independent-review.md now include sections 21–24. Q0–Q5 close F1 escaped descendants, F2 reconciliation not stopping owned work, F3 premature drain closure and F4 heartbeat/progress version conflicts. Design requires pre-launch execution-owned containment, identity-aware lease-loss cancellation, EOF/completed-callback proof and consistent short job-row locking with DB-clock expiry. Added 6 implementation, 8 verification and 6 Given/When/Then acceptance items, all unchecked. Latest review baseline: 75 selected Java tests, 69 passed/6 skipped, JS 6 and Python 2; these are prior review results, not tests executed by this planning amendment. Full P5–P10 story scope and historical evidence remain intact. Keep in_progress/draft; no feature enablement, software implementation, runtime restart/deploy or Shortcut state/marker is claimed.\n\n2026-10-20 planning amendment: Full post-verification remediation and completion plan is authoritative for remaining F1–F5, missing browser/cursor implementation, provider qualification and release gates. Documentation note note_1792456808172_c693b7fe; file C:\\Dev\\IdeaProjects\\ChromaScape\\docs\\builderflow\\sc-2150\\post-verification-remediation-and-full-completion-plan.md. PI0–PI13, PA1–PA14 and PT1–PT14 are newly unchecked amendments; historical evidence and checklist states are preserved. Planning only: no application changes, no state transition or Shortcut synchronization marker.\n\n2026-10-20 Fedora implementation planning amendment: note_1792481537939_e57d7b49 and C:\\Dev\\IdeaProjects\\ChromaScape\\docs\\builderflow\\sc-2150\\fedora-implementation-and-qualification-plan.md define W0–W9 for remaining browser/review APIs and controls, exact previews, restricted Fedora workers, cursor and other visible observations, durable integration, ownership/lifecycle/browser qualification, approved held-out/YouTube qualification, operations and final handoff. FI0–FI13, FA1–FA14 and FT0–FT13 are unchecked detail amendments. Completed F1–F5/RV1–RV3 evidence and prior checklist states remain preserved. Planning only: application code/runtime unchanged; no transition or Shortcut marker.\n\n2026-10-21 remaining-plan amendment after the frame-index/correction-contract/review-panel increment: note_1792547064079_464d905e and C:\\Dev\\IdeaProjects\\ChromaScape\\docs\\builderflow\\sc-2150\\full-remaining-plan-after-frame-review.md define R0–R9 for unfinished work. Delivered V44, corrections/v1, frame/observation reads and partial review controls are retained; exact previews, restricted launch, scheduling, visual producers, live/browser/lifecycle qualification, approved corpus/YouTube and final handoff remain. RI0–RI9, RA1–RA10 and RT0–RT9 are newly unchecked detail gates. This is planning only; previous checklist states/evidence are preserved, no application/runtime change or Felix/Shortcut transition is claimed.",
+  "task_type": "feature",
+  "task_status": "in_progress",
+  "task_priority": "medium",
+  "estimated_effort": null,
+  "actual_effort": null,
+  "due_date": null,
+  "assigned_to": null,
+  "entity_type": null,
+  "entity_id": null,
+  "entity_links": [
+    {
+      "entity_type": "rule",
+      "entity_id": "rule_1792384572818_kvbix29u"
+    },
+    {
+      "entity_type": "shortcut_story",
+      "entity_id": "2150",
+      "entity_name": "SC-2150",
+      "link_strength": "primary"
+    },
+    {
+      "entity_type": "file",
+      "entity_id": "C:\\Dev\\IdeaProjects\\ChromaScape\\docs\\builderflow\\sc-2150\\review-remediation-and-completion-plan.md",
+      "entity_name": "SC-2150 Review Remediation and Completion Plan",
+      "link_strength": "reference"
+    },
+    {
+      "entity_type": "file",
+      "entity_id": "C:\\Dev\\IdeaProjects\\ChromaScape\\docs\\builderflow\\sc-2150\\completion-plan-after-independent-review.md",
+      "entity_name": "SC-2150 complete delivery plan after independent review",
+      "link_strength": "reference"
+    },
+    {
+      "entity_type": "file",
+      "entity_id": "C:\\Dev\\IdeaProjects\\ChromaScape\\docs\\builderflow\\sc-2150\\post-verification-remediation-and-full-completion-plan.md",
+      "entity_name": "SC-2150 post-verification full completion plan",
+      "link_strength": "reference"
+    },
+    {
+      "entity_type": "file",
+      "entity_id": "C:\\Dev\\IdeaProjects\\ChromaScape\\docs\\builderflow\\sc-2150\\fedora-implementation-and-qualification-plan.md",
+      "entity_name": "SC-2150 full Fedora implementation and qualification plan",
+      "link_strength": "reference"
+    },
+    {
+      "entity_type": "file",
+      "entity_id": "C:\\Dev\\IdeaProjects\\ChromaScape\\docs\\builderflow\\sc-2150\\full-remaining-plan-after-frame-review.md",
+      "entity_name": "SC-2150 full remaining plan after frame/review increment",
+      "link_strength": "reference"
+    }
+  ],
+  "stable_links": null,
+  "fragile_links": null,
+  "semantic_context": null,
+  "stable_tags": [
+    "shortcut:sc-2150",
+    "change:ui",
+    "offline-sync:d824c1a2-03e0-4a7e-9ec8-b5a96efed667"
+  ],
+  "auto_tags": null,
+  "contextual_tags": null,
+  "sort_order": 0,
+  "depth_level": 0,
+  "checklists": [
+    {
+      "name": "Scope Definition",
+      "items": [
+        {
+          "text": "Include bounded upload/YouTube import, immutable media, durable bounded analysis, visible cursor evidence, manual review, catalog inspection and export within ChromaScape.",
+          "checked": false
+        },
+        {
+          "text": "Exclude live input, Micro6 changes, exact tick alignment, physical-click inference, causal simulation, detector verdicts and model activation.",
+          "checked": false
+        }
+      ]
+    },
+    {
+      "name": "Acceptance Criteria",
+      "items": [
+        {
+          "text": "AC1 Given a valid bounded upload, when submitted, then one immutable source/original hash and playable proxy/index become inspectable.",
+          "checked": false
+        },
+        {
+          "text": "AC2 Given a supported accessible YouTube video, when imported, then the canonical provider ID/acquisition metadata and exact downloaded digest are retained; unavailable/protected/live sources fail explicitly.",
+          "checked": false
+        },
+        {
+          "text": "AC3 Given identical request UUID/body, when concurrently retried, then one source/job exists; conflicting content receives 409 without partial publication.",
+          "checked": false
+        },
+        {
+          "text": "AC4 Given malformed/oversized/overlong/pathological media, when processed, then bounded failure occurs with no unbounded memory/disk/CPU or complete-artifact claim.",
+          "checked": false
+        },
+        {
+          "text": "AC5 Given a qualified visible cursor clip and pinned tools/config/templates, when analyzed, then source-linked tracks/metrics meet the declared held-out threshold and repeated outputs have the same normalized hash.",
+          "checked": false
+        },
+        {
+          "text": "AC6 Given hidden/unsupported cursors, overlays, crop/resize, cuts or frame-rate variation, when analyzed, then gaps and feature eligibility are accurate and unsupported observations remain unknown.",
+          "checked": false
+        },
+        {
+          "text": "AC7 Given manual point/event corrections, when saved, then the original video/predictions remain immutable and the new reviewer/reason/base-revision lineage is resolvable.",
+          "checked": false
+        },
+        {
+          "text": "AC8 Given imported footage, when training is requested, then no import/source declaration alone grants human or training eligibility; published curation and independent policy gates are required.",
+          "checked": false
+        },
+        {
+          "text": "AC9 Given cancel/restart/lease loss at each stage, when reconciled, then no late/duplicate publication occurs, source evidence is preserved and cleanup/outcome is truthful.",
+          "checked": false
+        },
+        {
+          "text": "AC10 Given another owner or unauthenticated caller, when requesting media/status/review/export, then access is denied without private metadata disclosure.",
+          "checked": false
+        },
+        {
+          "text": "AC11 Given no native telemetry/alignment, when inspecting/exporting, then PTS/frame evidence is available but native ticks/physical clicks/hidden state are not invented.",
+          "checked": false
+        },
+        {
+          "text": "AC12 Given catalog filters, refresh, keyboard navigation and error states, when used, then source/status/coverage are clear and existing native mouse capture/inspection still works.",
+          "checked": false
+        },
+        {
+          "text": "AC13 Given browser/worker differing representations, when seeking/exporting, then original/proxy time mapping and hashes identify the actual frame evidence, within one source-frame interval on qualified ranges.",
+          "checked": false
+        },
+        {
+          "text": "AC14 Given a bad-movement or human-origin claim, when shown, then it is supported by a separate reviewed source/report identity; tracker confidence never substitutes for detector calibration or human verification.",
+          "checked": false
+        },
+        {
+          "text": "PA1 — Given multiple analyses, when media or source details are requested, then one owner/source-bound completed analysis supplies the derivative set without cross-analysis fallback; ORIGINAL remains source-scoped.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PA2 — Given concurrent controller and worker cancellation, when either settles first, then HTTP is truthful and no optimistic-lock 500, stale-generation mutation or false cleanup success occurs.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PA3 — Given malformed multipart input or configured byte overflow, when intake rejects it, then typed 400 or 413 is returned and reservations/staging are released; genuine storage failure remains a sanitized 5xx.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PA4 — Given process or decoder failure, when any public job/source/export representation is read, then stable bounded messages disclose no internal path or private diagnostics.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PA5 — Given unknown native targets, when the inspector renders, then uncertainty remains explicit and the native template regression passes.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PA6 — Given anonymous and independent local owners, when protected objects are accessed, then anonymous access is 401 and cross-owner source/media/job/review/export access is 404 without disclosure.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PA7 — Given limits, interruption, expiry, process escape, restart or competing instances, when work terminates or recovers, then ownership, containment, bounded resources and artifact publication remain correct.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PA8 — Given CFR/VFR input and frame caps, when indexing or deriving media, then exact PTS/timebase and complete-output checks prevent partial or invalid results from being published.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PA9 — Given a real browser and backend, when upload, playback, cancellation, review, correction, conflict and export flows execute, then the visible state and persisted revision/analysis agree.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PA10 — Given cursor-absent or ambiguous frames, when tracking and review run, then unknown remains explicit and no physical clicks, native ticks or training eligibility are inferred.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PA11 — Given approved held-out source-disjoint clips, when cursor qualification runs, then median error is at most 4 equivalent 1080p source pixels, p95 at most 12, visible recall at least 90% and absent-span false detections at most 1%.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PA12 — Given identical media, tools, configuration and templates, when analysis repeats, then normalized outputs and identities are deterministic; changed inputs create distinct identities.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PA13 — Given approved downloader pins and a public clip, when YouTube acquisition succeeds or fails, then provenance, quotas, constrained egress, cancellation and cleanup are verified without cookies or authentication bypass.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PA14 — Given all required implementation, acceptance and test evidence, when release is considered, then required gates have no unresolved failures or blockers and unsupported hosts/capabilities are not advertised.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "FA1 — Given a Fedora verification run, when started, then isolated ports/database/storage/build outputs and a complete source/tool/input manifest make results attributable without altering the existing 8090 service.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FA2 — Given frame-index/observation reads, when paged or analysis-pinned, then only bounded owner/source/analysis-bound immutable data is returned and GET creates no work.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FA3 — Given a review retry, concurrent revision or invalid correction, when submitted, then identical requests are idempotent, changed bodies/stale bases conflict, and invalid frame/type/coordinate data is rejected without changing original predictions or old revision content.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FA4 — Given browser review, when corrections/source-use decisions are saved or conflict, then exact frame/analysis lineage is retained, unsaved work survives, and training eligibility stays false until the separate admission policy authorizes it.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FA5 — Given a restricted Fedora worker, when it attempts process escape, secret reads, network access or resource exhaustion, then enforced boundaries hold and publication/cleanup states remain truthful.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FA6 — Given supported visible/hidden/ambiguous cursor frames, when tracked, then exact source PTS, transform, hotspot, visibility and confidence are recorded without interpolation over unknown spans or cuts.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FA7 — Given declared supported observation cases, when analyzed, then visible action indicators, pauses, target-region/camera/activity estimates and cuts have source-frame evidence; unsupported semantics, physical inputs and native ticks remain unknown.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FA8 — Given identical media, method/config/tool/template identities, when analysis repeats, then normalized results match; changed identities create distinct analyses and never mix derivative sets.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FA9 — Given anonymous and independent owners, when protected HTTP objects are requested, then anonymous access is 401 and cross-owner access is nondisclosing 404 across source/media/job/analysis/review/export.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FA10 — Given a real browser/backend, when upload/playback/cancel/recovery/review/export and keyboard/narrow-screen flows run, then browser state, persisted revisions, bytes and selected analysis agree.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FA11 — Given crashes, expiry, competing workers, sweep or configured caps, when the lifecycle resolves, then leases fence stale work, admission is atomic, referenced bytes survive and incomplete artifacts are never published as complete.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FA12 — Given approved source-disjoint held-out clips, when evaluated once against frozen methods, then cursor median error is at most 4 equivalent 1080p pixels, p95 at most 12, visible recall at least 90% and absent-span false detections at most 1%, with the additional detector gates met.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FA13 — Given approved downloader pins/public clip and constrained egress, when YouTube acquisition succeeds or fails, then provenance, stable outcomes, limits, cancellation and cleanup are verified with no cookies/authentication bypass.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FA14 — Given all required evidence, when delivery is considered, then no required gate is waived, unsupported hosts/capabilities remain unavailable, rollback is rehearsed and tracker transitions reflect actual validation.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "RA1 — Given the current dirty Fedora checkout, when verification starts, then isolated build/database/media/ports and exact manifests protect the existing 8090 service and make each result attributable.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RA2 — Given untrusted media workers, when they attempt secret/network/process escape or exceed CPU/memory/PID/disk/time/output limits, then enforced boundaries hold and readiness/publication fail closed.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RA3 — Given repeated or changed analysis/preview requests and competing workers, when dispatched or settled, then identities coalesce identical work, changed bodies conflict and only the current unexpired execution may publish.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RA4 — Given a source frame, when an exact preview is requested and read, then frame ordinal/PTS/index digest/transforms are pinned, pending state is honest, GET creates no work and referenced bytes survive sweeping.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RA5 — Given real browser corrections and concurrent revisions, when saving/retrying/reapplying/exporting, then drafts survive conflicts, original predictions and old revisions/exports remain immutable and training admission is not implied.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RA6 — Given declared supported visual cases, when analyzed, then cursor/action/pause/target-region/camera/activity/cut observations retain exact source evidence, confidence and unknowns without invented physical/native telemetry.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RA7 — Given anonymous/foreign owners, large artifacts, crashes, expiry, cancellation or competing instances, when APIs and lifecycle operations run, then access is nondisclosing, reads remain bounded and stale or partial results never become complete.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RA8 — Given approved source-disjoint held-out clips, when evaluated against frozen methods, then the existing cursor and additional-observation gates pass with coverage, counts and uncertainty reported.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RA9 — Given approved downloader pins/public clip, when acquisition succeeds or fails, then constrained egress, provenance, quotas, stable outcomes and cleanup are verified without authentication bypass.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RA10 — Given final evidence and all required hosts, when release is considered, then no required gate is waived, global check failures are resolved honestly and Felix/Shortcut reflect only successful validated transitions.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        }
+      ],
+      "updated_at": "2026-10-21T01:44:36.415Z"
+    },
+    {
+      "name": "Implementation Checklist",
+      "items": [
+        {
+          "text": "I1 Inventory scoped changes/base and prerequisites; read nested rules; reserve the migration version on the actual target base.",
+          "checked": true,
+          "completed_at": "2026-10-19T04:38:14.876Z"
+        },
+        {
+          "text": "I2 Freeze v1 schemas for import, source, evidence, job/error, review and SC-2151 handoff; add golden manifests.",
+          "checked": false
+        },
+        {
+          "text": "I3 Add PostgreSQL source/job/analysis/review/ref/event schema, unique constraints, fenced transitions and migration tests.",
+          "checked": false
+        },
+        {
+          "text": "I4 Extract/reuse bounded streaming artifact bytes with checksum/publication/recovery; keep replay adapters working.",
+          "checked": true,
+          "completed_at": "2026-10-19T04:38:14.876Z"
+        },
+        {
+          "text": "I5 Add typed video handlers to research runtime with limits/leases/cancellation and no silent startup rerun.",
+          "checked": false
+        },
+        {
+          "text": "I6 Implement authenticated streaming upload and source/use metadata with UUID/body idempotency.",
+          "checked": false
+        },
+        {
+          "text": "I7 Implement pinned YouTube adapter, canonicalization and constrained acquisition environment; persist truthful provider outcomes.",
+          "checked": false
+        },
+        {
+          "text": "I8 Implement probe/proxy/thumbnail/frame PTS index; verify original/proxy mapping and bounded temporary storage.",
+          "checked": false
+        },
+        {
+          "text": "I9 Add reviewed cursor-template pack provenance and tracker, quality/gap report and descriptive feature/annotation capability manifest.",
+          "checked": false
+        },
+        {
+          "text": "I10 Add append-only manual corrections/source review and export adapter; training defaults remain false.",
+          "checked": false
+        },
+        {
+          "text": "I11 Add external-source catalog adapter and video inspector/API/media Range handling with ownership.",
+          "checked": false
+        },
+        {
+          "text": "I12 Add accessible import/progress/cancel/inspection/review UX and explicit uncertainty/error states.",
+          "checked": false
+        },
+        {
+          "text": "I13 Add observability, reference-aware cleanup, operator configuration/tool lock/setup and rollback runbook.",
+          "checked": false
+        },
+        {
+          "text": "I14 Run focused contracts, real PostgreSQL, worker media tests and native regression; fix scope-related failures.",
+          "checked": true,
+          "completed_at": "2026-10-19T04:38:14.876Z"
+        },
+        {
+          "text": "I15 Run browser and supported-host public-source smoke with exact tool hashes; archive results and all unrun gates.",
+          "checked": false
+        },
+        {
+          "text": "I16 Link Implementation Evidence with changed files/tests/remaining work; check only proved items before in_review. Link Verification Evidence with acceptance/tests/risks/rollback before done. Synchronize only successful Felix states using repository mapping.",
+          "checked": true,
+          "completed_at": "2026-10-19T04:38:14.876Z"
+        },
+        {
+          "text": "PI0 — Freeze the expanded baseline, reconcile prior evidence and retain a reproducible isolated test configuration.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.055Z"
+        },
+        {
+          "text": "PI1 — Resolve source listing and derivative media from one explicitly selected completed analysis; preserve source-scoped ORIGINAL and immutable exports.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.055Z"
+        },
+        {
+          "text": "PI2 — Reproduce and fix concurrent cancellation using fresh locked state across transaction boundaries; preserve execution ownership and truthful cleanup state.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.055Z"
+        },
+        {
+          "text": "PI3 — Introduce typed multipart validation failures and preserve storage failures as sanitized server errors with complete reservation/staging cleanup.",
+          "checked": true,
+          "created_at": "2026-10-20T00:40:16.055Z",
+          "completed_at": "2026-10-20T05:36:44.321Z"
+        },
+        {
+          "text": "PI4 — Separate bounded public failure messages from private decoder/process diagnostics across all public representations.",
+          "checked": true,
+          "created_at": "2026-10-20T00:40:16.055Z",
+          "completed_at": "2026-10-20T05:36:44.321Z"
+        },
+        {
+          "text": "PI5 — Restore native inspector uncertainty semantics and repair the failing native regression without weakening its intent.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.055Z"
+        },
+        {
+          "text": "PI6 — Add real HTTP and PostgreSQL coverage for the defects, anonymous access and independent owners.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.055Z"
+        },
+        {
+          "text": "PI7 — Complete lifecycle, resource, isolation, admission, recovery and artifact integrity verification; fix failures found.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PI8 — Implement browser review/correction and source-use controls with revision conflicts, history, accessibility and analysis-consistent playback.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PI9 — Implement bounded cursor tracking with exact source timing, pinned tools and provenance-bearing templates.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PI10 — Qualify cursor accuracy and determinism against approved source-disjoint held-out clips.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PI11 — Pin and qualify the approved YouTube downloader, constrained acquisition and approved public-clip flow.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PI12 — Complete real-browser and native regression runs with retained evidence and truthful capability/readiness states.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PI13 — Complete operator documentation, rollback rehearsal and Felix/Shortcut handoff only after all applicable gates pass.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "FI0 — Freeze the Fedora baseline and run manifest; establish isolated build, database/media, browser and trusted-identity test harnesses.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.349Z"
+        },
+        {
+          "text": "FI1 — Define versioned observation, correction and capability contracts, stable request identities and bounded owner-scoped read/analysis APIs.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.349Z"
+        },
+        {
+          "text": "FI2 — Implement validated append-only correction/review behavior, changed-body retry conflicts and immutable revision lineage.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.349Z"
+        },
+        {
+          "text": "FI3 — Implement browser frame inspection, correction/source-use controls, conflict recovery, history and analysis-consistent export.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.349Z"
+        },
+        {
+          "text": "FI4 — Implement and qualify the Fedora restricted worker launcher, enforced cgroup budgets, workspace quotas and capability/readiness failures.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.349Z"
+        },
+        {
+          "text": "FI5 — Implement versioned bounded cursor tracking with pinned tools/templates and exact source-frame/PTS mapping.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.349Z"
+        },
+        {
+          "text": "FI6 — Implement bounded visible-action, pause, target-region, camera/activity and scene-cut observations with explicit unsupported/unknown states.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FI7 — Integrate analysis scheduling, identity/deduplication, fenced publication and immutable observation/quality/export artifacts.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FI8 — Verify anonymous and independent-owner HTTP behavior without introducing production test authentication.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FI9 — Implement the real-backend browser suite and lifecycle/resource/recovery qualification matrix; fix observed failures.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FI10 — Obtain approved corpus/template provenance, freeze detector thresholds and complete held-out accuracy/determinism qualification.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FI11 — Verify approved YouTube pins/CLI compatibility, constrained acquisition egress, live clip provenance and failure/cleanup behavior.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FI12 — Complete Fedora/native regressions, operator documentation, recovery and rollback rehearsal; reconcile repository-wide check failures honestly.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FI13 — Persist final evidence and reconcile Felix/Shortcut only after actual validation gates; retain Windows qualification as a separate unresolved host requirement.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "RI0 — Freeze the current increment and establish an isolated Fedora real-server/browser harness with anonymous and independent-owner smoke checks.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RI1 — Implement and qualify the restricted Fedora launcher, enforced resource/disk budgets and fail-closed readiness.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RI2 — Add durable analysis/preview scheduling, request/content identities, admission and additive schema changes after V44.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RI3 — Implement exact-frame preview creation/read/media, immutable cache coalescing, source transforms and GC reference protection.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RI4 — Complete precise correction/region UI, observation overlays and conflict/history/export behavior against the real backend.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RI5 — Implement pinned cursor and other visual observation workers, quality artifacts and fenced immutable publication.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RI6 — Complete lifecycle, read-path memory, quota, crash/restart, expiry/sweep and multi-instance qualification; fix observed failures.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RI7 — Obtain approved corpus/templates and complete source-disjoint held-out accuracy and determinism qualification.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RI8 — Qualify approved pinned YouTube acquisition with constrained egress, actual public clip and complete failure/cleanup coverage.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RI9 — Complete final regression, operator/rollback evidence, required-host qualification and truthful Felix/Shortcut handoff.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        }
+      ],
+      "updated_at": "2026-10-21T01:44:36.415Z"
+    },
+    {
+      "name": "Test Verification",
+      "items": [
+        {
+          "text": "T1 Contract: valid/invalid/unknown fields, stable typed errors, rational PTS and canonical manifest hashes.",
+          "checked": true,
+          "completed_at": "2026-10-19T04:38:14.876Z"
+        },
+        {
+          "text": "T2 PostgreSQL: clean migration plus upgrade from actual base, uniqueness, concurrent retry/conflict, fenced publication, revision races and immutable history.",
+          "checked": false
+        },
+        {
+          "text": "T3 Artifact: streaming byte limits without full-file allocation, digest mismatch, simultaneous reuse, failure between move/DB bind, orphan/ref-aware cleanup and denied traversal/symlink.",
+          "checked": true,
+          "completed_at": "2026-10-19T04:38:14.876Z"
+        },
+        {
+          "text": "T4 Upload: real small valid media, truncated/no-video/unsupported codec, false extension, quota/rate limit, disconnect and Range 200/206/416.",
+          "checked": false
+        },
+        {
+          "text": "T5 Provider: fake adapter for deterministic success/removal/auth/rate limit/redirect/download overflow; real accessible controlled public YouTube video on release host, exact version/log proof.",
+          "checked": false
+        },
+        {
+          "text": "T6 Isolation: arbitrary URL/host/port/userinfo, private IP/redirect/media protocol and config/plugin/cookie/exec injection refusal; no decoder egress or secret reads.",
+          "checked": false
+        },
+        {
+          "text": "T7 Real-tool media corpus: fixed and variable FPS, dropped/duplicate frames, rotation/crop/resize, cuts, speed changes and proxy mapping.",
+          "checked": false
+        },
+        {
+          "text": "T8 Tracking: manually annotated owned OSRS clips with visible standard/OSRS cursor, menu/overlay, occlusion and unsupported styles; held-out thresholds.",
+          "checked": false
+        },
+        {
+          "text": "T9 Repeatability: identical tool/config/media on same supported build produces same normalized observations/manifests; cross-platform tool differences get distinct toolchain identities.",
+          "checked": false
+        },
+        {
+          "text": "T10 Review: correction precedence, revision conflict/idempotency, reviewer authority, raw immutability, source-use/curation rejection and export lineage.",
+          "checked": false
+        },
+        {
+          "text": "T11 Lifecycle: cancel/timeout/restart/lease theft before/during each stage/publication; owned process cleanup and slot release, late-worker refusal.",
+          "checked": false
+        },
+        {
+          "text": "T12 API ownership: anonymous, foreign owner, forged audit header, authorized owner, private logs/title escaping, media/export access.",
+          "checked": false
+        },
+        {
+          "text": "T13 JS/browser: import fields/limits, empty/progress/error/no-cursor/gap states, durable refresh, inspect/overlay/seek/review/export, keyboard and narrow viewport.",
+          "checked": false
+        },
+        {
+          "text": "T14 Regression: existing MouseResearchService/worker/controller, MouseRecordingInspection, catalog JS, campaign/training/capture and replay artifact tests, plus Spotless/Checkstyle and scoped diff check.",
+          "checked": true,
+          "completed_at": "2026-10-19T04:38:14.876Z"
+        },
+        {
+          "text": "T15 Supported-host smoke: upload and public-source import, inspect/correct/export, cancel mid-job, restart recovery and deny cross-owner media; record native commands and actual binary hashes.",
+          "checked": false
+        },
+        {
+          "text": "PT1 — Reproduce the frozen Java, JS, Python and style baselines; retain exact selection, toolchain, reports and expanded source hashes.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PT2 — Verify derivative selection and listing with two completed analyses, incomplete/failed analyses, wrong-source/owner analysis IDs and missing roles through real HTTP.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PT3 — Exercise barrier-controlled real-PostgreSQL controller/worker cancellation races through the actual HTTP persistence-context path.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PT4 — Exercise multipart missing/unknown/duplicate/malformed/truncated fields, chunked size overflow and genuine disk failure; inspect reservation and staging cleanup.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PT5 — Assert safe public failures across jobs, source details, reviews and exports; retain private correlated diagnostics separately.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PT6 — Verify anonymous 401 and independent owner 404 behavior with embedded HTTP fixtures and isolated JVM operator checks.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PT7 — Verify CFR/VFR, invalid timing, read/callback failure and frame cap/cap+1 using small fixtures and lowered test limits.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PT8 — Verify cancellation, crash/restart, expiry/replacement/reconciliation, stale registry completion, sweep and concurrent-instance admission.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PT9 — Verify process containment, output/disk/memory/CPU/PID budgets and decoder secret/network isolation on each intended release host.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PT10 — Run actual-browser upload/media/review/correction/export flows, conflict preservation, keyboard and narrow-viewport checks with traces/screenshots.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PT11 — Evaluate approved held-out cursor clips against all frozen thresholds and reproduce output hashes without tuning against held-out labels.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PT12 — Verify approved pinned YouTube success and refusal/failure corpus, redirects/address checks, limits, timeout, cancellation and cleanup.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PT13 — Rerun the complete native regression selection, expanded video suites, JS/Python, Spotless and Checkstyle; retain all reports and explain skips.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "PT14 — Rehearse rollback/feature-disable and complete evidence reconciliation, implementation handoff and verification handoff.",
+          "checked": false,
+          "created_at": "2026-10-20T00:40:16.056Z"
+        },
+        {
+          "text": "FT0 — Reproduce the 153-test video/native-page baseline and five retained probes with real PostgreSQL, isolated outputs and zero unexplained skips.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FT1 — Contract-test frame/observation paging, integer PTS transport, analysis/digest/owner binding, stable cursors and bounded JSON responses.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FT2 — Test correction schema, finite/ranged coordinates, actual frame membership, request-body identity, stale-base conflicts and immutable revision/export history using real PostgreSQL races.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FT3 — Test browser review/source-use workflows, unsaved conflict recovery, keyboard access, narrow viewports and analysis-consistent overlays against the real backend.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FT4 — Test Fedora launcher filesystem/network/process isolation and configured memory/CPU/PID/disk/time/output limits with independent child attempts.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FT5 — Test cursor exact timing, scale/hotspot transforms, absence/ambiguity/occlusion, cuts, output failure/caps and deterministic synthetic results.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FT6 — Test visual-action/pause/target-region/camera/activity/cut detectors against golden synthetic cases and pre-registered held-out gates.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FT7 — Test fenced analysis publication, duplicate/retry identity, cancellation at every stage, crash/restart, expiry/replacement/reconciliation and stale registry completion.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FT8 — Test anonymous 401 and owner-B 404 through embedded real-server fixtures and isolated operator JVMs.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FT9 — Test quotas/admission across instances, upload/download/frame cap plus one, malformed/hostile media, incomplete drain and referenced/orphan sweep behavior.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FT10 — Evaluate approved held-out cursor/other-observation corpus with source-disjoint splits, timing/visibility labels, error distributions, coverage and reproducibility hashes.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FT11 — Verify pinned YouTube argv/version compatibility, approved live acquisition, private-address/redirect/DNS-rebinding refusals, network restrictions and cleanup.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FT12 — Run full native/JS/Python/browser regressions, changed-file and global style checks; retain every failure/skip and reconcile unrelated failures without overwriting user work.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "FT13 — Rehearse disable/restart/recovery/rollback and verify feature readiness and Felix/Shortcut handoff evidence.",
+          "checked": false,
+          "created_at": "2026-10-20T07:32:27.350Z"
+        },
+        {
+          "text": "RT0 — Reproduce scoped Java/PostgreSQL, JS and retained-probe baselines; launch actual Spring/Chromium and verify anonymous/second-owner smoke cases.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RT1 — Attack the Fedora launcher and independent cgroup/filesystem/network limits with bounded hostile fixtures and actual effective-limit inspection.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RT2 — Test analysis/preview request identities, migrations from V44, cross-instance admission, generation/lease fences and cancellation races using real PostgreSQL.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RT3 — Test exact preview ordinal/PTS/rotation/crop identity, repeated/concurrent requests, media headers, failed publication and GC protection.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RT4 — Run real-backend Playwright corrections/source-use/conflict/history/export flows with keyboard/narrow-screen checks, traces and persisted-state assertions.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RT5 — Run deterministic synthetic cursor/observation golden cases, VFR/cuts/occlusion/transforms and malformed/incomplete worker-output regressions.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RT6 — Exercise lifecycle crash points, resource/frame cap plus one, bounded concurrent artifact reads, sweeper grace and multi-instance recovery.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RT7 — Evaluate approved held-out cursor/other observations against all frozen gates, per-source coverage and identical-input output hashes.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RT8 — Verify pinned downloader CLI compatibility, approved live import and address/redirect/DNS/timeout/limit/cancellation failure corpus.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        },
+        {
+          "text": "RT9 — Run final native/video/JS/Python/browser/style checks, rehearse disable/recovery/rollback and reconcile required-host and delivery evidence.",
+          "checked": false,
+          "created_at": "2026-10-21T01:44:36.415Z"
+        }
+      ],
+      "updated_at": "2026-10-21T01:44:36.415Z"
+    },
+    {
+      "name": "Review Remediation",
+      "items": [
+        {
+          "text": "R1 Fix configuration and implement route-scoped authenticated bounded multipart intake; preserve stabilization contract.",
+          "checked": false
+        },
+        {
+          "text": "R2 Enforce trusted principal, owner predicates, authoritative actor and browser write protection on the full API closure.",
+          "checked": false
+        },
+        {
+          "text": "R3 Quarantine originals and serve only verified safe inline media; add attachment/CSP/type policy.",
+          "checked": false
+        },
+        {
+          "text": "R4 Bind request identity to actual content and normalize/validate bounded metadata and UUID.",
+          "checked": false
+        },
+        {
+          "text": "R5 Add reservation/quota locking, atomic source/ref/job/event registration, after-commit scheduling and orphan reconciliation.",
+          "checked": false
+        },
+        {
+          "text": "R6 Make claims/leases/finalization atomic and cancellation/process cleanup truthful; reject all stale/terminal writes.",
+          "checked": false
+        },
+        {
+          "text": "R7 Replace one-shot GET export with immutable repeatable export snapshots and retrieval.",
+          "checked": false
+        },
+        {
+          "text": "R8 Add forward migrations and clean/V42-upgrade real PostgreSQL coverage without rewriting applied migrations.",
+          "checked": false
+        },
+        {
+          "text": "R9 Prove all seven corrected findings with retained regressions and actual HTTP/browser/database boundaries.",
+          "checked": false
+        },
+        {
+          "text": "C1 Finish qualified proxy/thumbnail/frame PTS, resource isolation and bounded probe output.",
+          "checked": false
+        },
+        {
+          "text": "C2 Finish reviewed cursor tracking, quality/gaps/feature capability reports and independent clip qualification.",
+          "checked": false
+        },
+        {
+          "text": "C3 Finish append-only review API and accessible correction/source-use UI.",
+          "checked": false
+        },
+        {
+          "text": "C4 Finish pinned constrained YouTube acquisition and successful supported-source evidence.",
+          "checked": false
+        },
+        {
+          "text": "C5 Finish observability, reference-aware cleanup, complete browser flow and supported-host smoke.",
+          "checked": false
+        },
+        {
+          "text": "H1 Update docs/API/operator configuration/rollback, implementation evidence and verification evidence; reconcile original checklists only when each full item is proved.",
+          "checked": false
+        }
+      ]
+    },
+    {
+      "name": "Remediation Verification",
+      "items": [
+        {
+          "text": "V1 Real YAML/bootstrap and embedded-server streaming upload; stabilization regression and no pre-auth body materialization.",
+          "checked": false
+        },
+        {
+          "text": "V2 Registered-filter principal/owner/nonce/Origin matrix for all routes, including Range, export and cancellation.",
+          "checked": false
+        },
+        {
+          "text": "V3 Browser active-content refusal plus genuine video MIME/playback/Range qualification.",
+          "checked": false
+        },
+        {
+          "text": "V4 Content retry/conflict and two-instance concurrent registration/quota tests against PostgreSQL.",
+          "checked": false
+        },
+        {
+          "text": "V5 Failure injection and rollback at every source/ref/job/event/publication boundary, including after-commit queue gap and orphan sweep.",
+          "checked": false
+        },
+        {
+          "text": "V6 Actual PostgreSQL independent-session claim/heartbeat/expiry/cancel/finalize races with barriers and visible-artifact assertions.",
+          "checked": false
+        },
+        {
+          "text": "V7 Real slow process cancellation, bounded cleanup, shutdown/restart and live second-instance lease preservation.",
+          "checked": false
+        },
+        {
+          "text": "V8 Repeated/concurrent versioned export create/get, old/new analysis/review snapshots and UTF-8 hash roundtrip.",
+          "checked": false
+        },
+        {
+          "text": "V9 Forward migration on clean and V42-populated databases, including existing partial rows and immutable old evidence.",
+          "checked": false
+        },
+        {
+          "text": "V10 Existing mouse/replay/stabilization tests, focused Java/Python/JS suites, touched Spotless/Checkstyle and scoped whitespace checks.",
+          "checked": false
+        },
+        {
+          "text": "V11 Real-tool PTS/proxy/quality corpus, source-video-held-out cursor qualification and no invented telemetry.",
+          "checked": false
+        },
+        {
+          "text": "V12 Review corrections/conflicts/admission policy, browser persistence/keyboard/narrow layout and complete catalog flow.",
+          "checked": false
+        },
+        {
+          "text": "V13 Fake provider faults plus an approved successful real public YouTube import and corresponding acquisition manifest.",
+          "checked": false
+        },
+        {
+          "text": "V14 Release-host smoke of upload/probe/preview/cancel/restart/review/repeated export and native regression with exact tested tool/code identities.",
+          "checked": false
+        }
+      ]
+    },
+    {
+      "name": "Review Acceptance Criteria",
+      "items": [
+        {
+          "text": "RA1 Given the ordinary configuration, when the application loads it, then YAML has no duplicate key and both video intake and stabilization preserve bounded streaming behavior.",
+          "checked": false
+        },
+        {
+          "text": "RA2 Given no trusted principal or a forged owner header, when any protected video operation is requested, then it is refused before reading private data or upload bytes.",
+          "checked": false
+        },
+        {
+          "text": "RA3 Given active HTML/SVG disguised as video, when imported or navigated to, then it cannot execute on the application origin or be served as trusted inline media.",
+          "checked": false
+        },
+        {
+          "text": "RA4 Given identical owner/request/file/metadata under concurrent retry, when registered, then one authoritative source/job exists; different bytes or metadata return 409.",
+          "checked": false
+        },
+        {
+          "text": "RA5 Given a failure/crash at any registration step, when recovered, then no partial metadata graph or unsafe shared-byte deletion remains.",
+          "checked": false
+        },
+        {
+          "text": "RA6 Given two workers and cancellation/lease expiry at any publication point, when transactions compete, then only the valid winner can finalize the complete analysis/ref/event/job result.",
+          "checked": false
+        },
+        {
+          "text": "RA7 Given a running worker, when cancel returns CANCELLED, then owned process cleanup is confirmed; ambiguity is NEEDS_RECONCILIATION, not success.",
+          "checked": false
+        },
+        {
+          "text": "RA8 Given repeat export/download and later analysis/review revisions, when used, then old results remain repeatable and new evidence produces a distinct immutable export.",
+          "checked": false
+        },
+        {
+          "text": "RA9 Given invalid/failed media, when catalog/media/export is inspected, then quarantine and missing evidence are explicit and no completion/control/training flag is fabricated.",
+          "checked": false
+        },
+        {
+          "text": "RA10 Given the corrected increment on a real host, when the original native recording and stabilization regression flows run, then their prior behavior and limits remain intact.",
+          "checked": false
+        }
+      ]
+    },
+    {
+      "name": "Independent Review Acceptance",
+      "items": [
+        {
+          "text": "NA1 Given a running derivative and its descendants, when cancellation interrupts any wait/read, then CANCELLED is visible only after verified owned cleanup; ambiguity is reconciliation and capacity remains occupied.",
+          "checked": false
+        },
+        {
+          "text": "NA2 Given a healthy job running longer than multiple lease intervals, when heartbeats run, then its valid lease persists through every stage and it can finalize; lost ownership stops work and prevents publication.",
+          "checked": false
+        },
+        {
+          "text": "NA3 Given an unexpired foreign-instance lease, when another instance starts or polls, then it does not change that job, generation, lease or workspace.",
+          "checked": false
+        },
+        {
+          "text": "NA4 Given a silent, noisy or stalled tool, when a deadline/output/resource cap is reached, then it stops within bounded cleanup and no partial index/analysis is presented as complete.",
+          "checked": false
+        },
+        {
+          "text": "NA5 Given CFR/VFR source frames, when indexed and inspected through a proxy, then named PTS/timebase/key fields are correct and qualified seeking resolves within one source-frame interval.",
+          "checked": false
+        },
+        {
+          "text": "NA6 Given concurrent intake/expiry/registration/sweep, when operations compete, then quota accounting remains correct, one request winner exists and no referenced byte object is deleted.",
+          "checked": false
+        },
+        {
+          "text": "NA7 Given the same review UUID with changed corrections or conflicting base revision, when submitted, then it conflicts without rewriting historical evidence; identical retry is stable.",
+          "checked": false
+        },
+        {
+          "text": "NA8 Given the supported complete workflow, when an approved public import and held-out clip review are exercised in a real browser, then source-linked evidence, corrections and immutable exports satisfy original acceptance with unsupported facts explicit.",
+          "checked": false
+        },
+        {
+          "text": "QA1 Given a tool that spawns a child/grandchild and exits before sampling, when execution settles, then every owned containment member is confirmed stopped and unrelated processes remain untouched; uncertainty prevents successful cleanup/capacity release.",
+          "checked": false,
+          "created_at": "2026-10-19T16:14:50.558Z"
+        },
+        {
+          "text": "QA2 Given a poller-fenced or remotely cancelled execution, when the owner next checks its lease, then that exact old execution stops and cleans up even if the row is already NEEDS_RECONCILIATION or another generation is terminal.",
+          "checked": true,
+          "created_at": "2026-10-19T16:14:50.558Z",
+          "completed_at": "2026-10-19T18:32:43.224Z"
+        },
+        {
+          "text": "QA3 Given successful tool output spanning multiple buffers and delayed consumers, when run returns success, then all required lines reached EOF in order, readers/callbacks are finished and the returned output never changes afterward.",
+          "checked": true,
+          "created_at": "2026-10-19T16:14:50.558Z",
+          "completed_at": "2026-10-19T18:32:43.224Z"
+        },
+        {
+          "text": "QA4 Given overlapping healthy heartbeat/progress/finalization transactions, when PostgreSQL serializes them, then benign version conflicts do not fail/cancel the job; actual cancellation, expiry or replacement still fences publication.",
+          "checked": false,
+          "created_at": "2026-10-19T16:14:50.558Z"
+        },
+        {
+          "text": "QA5 Given missing containment, uncertain cleanup, drain/read/callback failure or stalled database ownership checks, when a budget expires, then a bounded truthful error/reconciliation occurs with no complete evidence or unsafe admission release.",
+          "checked": false,
+          "created_at": "2026-10-19T16:14:50.558Z"
+        },
+        {
+          "text": "QA6 Given corrected runtime and frame-index code, when the integration matrix runs, then cancellation/process ownership, full frame count/timebase, DB visibility and native regressions are demonstrated with retained host/tool/code identities before implementation claims are closed.",
+          "checked": false,
+          "created_at": "2026-10-19T16:14:50.558Z"
+        }
+      ],
+      "updated_at": "2026-10-19T18:32:43.224Z"
+    },
+    {
+      "name": "Completion Implementation",
+      "items": [
+        {
+          "text": "N0 Reinventory owned changes, pins/builds/migrations; align all conditional design notes and validate amended specification before implementation claims.",
+          "checked": false
+        },
+        {
+          "text": "N1 Add execution-identity-bound registry, always-run process/descendant cleanup and verified cleanup receipts.",
+          "checked": false
+        },
+        {
+          "text": "N2 Add periodic DB-clock lease renewal, consistent fencing and safe expired-claim/startup/shutdown recovery.",
+          "checked": false
+        },
+        {
+          "text": "N3 Add bounded concurrent drains, independent watchdog, disk/memory/CPU/PID limits and verified tool isolation/pins.",
+          "checked": false
+        },
+        {
+          "text": "N4 Replace positional PTS parser; version complete original/proxy mapping and preserve legacy evidence unqualified.",
+          "checked": false
+        },
+        {
+          "text": "N5 Close intake/JSON/quota/reservation/registration/admission/sweeper/media/export guarantees at actual boundaries.",
+          "checked": false
+        },
+        {
+          "text": "N6 Implement reviewed template tracker, gaps/quality/capabilities and held-out qualification without invented telemetry.",
+          "checked": false
+        },
+        {
+          "text": "N7 Finish bounded append-only correction/source-use API, conflict identity and accessible browser workflow.",
+          "checked": false
+        },
+        {
+          "text": "N8 Qualify pinned constrained YouTube import including approved successful public-source acquisition.",
+          "checked": false
+        },
+        {
+          "text": "N9 Complete persistent catalog/inspection/export UI, observability, configuration/reconciliation and rollback docs.",
+          "checked": false
+        },
+        {
+          "text": "N10 Reconcile every original and amended checklist against actual evidence and satisfy review/done gates truthfully.",
+          "checked": false
+        },
+        {
+          "text": "QI0 Freeze exact execution keys and typed stop/drain/cleanup/completeness contracts; align design notes and update specification validation.",
+          "checked": false,
+          "created_at": "2026-10-19T16:14:50.558Z"
+        },
+        {
+          "text": "QI1 Implement fail-closed pre-launch containment, persistent identity and verified empty-group cleanup with admission/registry binding.",
+          "checked": false,
+          "created_at": "2026-10-19T16:14:50.558Z"
+        },
+        {
+          "text": "QI2 Replace settled-row heartbeat shortcuts and serialize all job mutations under consistent row locks, DB-clock leases and bounded ownership checks.",
+          "checked": true,
+          "created_at": "2026-10-19T16:14:50.558Z",
+          "completed_at": "2026-10-19T18:32:43.224Z"
+        },
+        {
+          "text": "QI3 Implement EOF-first normal drainage, quiescent immutable results and explicit read/callback/overflow/timeout outcomes; update frame-index completeness consumers.",
+          "checked": true,
+          "created_at": "2026-10-19T16:14:50.558Z",
+          "completed_at": "2026-10-19T18:32:43.224Z"
+        },
+        {
+          "text": "QI4 Integrate every tool-launch path and prove the corrected process/DB/index/API boundaries with retained regressions.",
+          "checked": false,
+          "created_at": "2026-10-19T16:14:50.558Z"
+        },
+        {
+          "text": "QI5 Publish implementation/verification evidence and operator/rollback changes; reconcile Q gates without dropping P5–P10 or historical acceptance obligations.",
+          "checked": false,
+          "created_at": "2026-10-19T16:14:50.558Z"
+        }
+      ],
+      "updated_at": "2026-10-19T18:32:43.224Z"
+    },
+    {
+      "name": "Completion Verification",
+      "items": [
+        {
+          "text": "NV1 Real slow root/descendant cancellation, interrupted wait/read, cleanup failure/timeout and capacity assertions.",
+          "checked": false
+        },
+        {
+          "text": "NV2 Long-stage periodic heartbeat, DB interruption, expiry/cancel/finalize races and stale terminal mutation refusal against PostgreSQL.",
+          "checked": false
+        },
+        {
+          "text": "NV3 Live second-instance startup/polling, graceful shutdown, crash/restart and safe abandoned execution recovery.",
+          "checked": false
+        },
+        {
+          "text": "NV4 Silent/flooded/long-line output, unread-pipe prevention, bounded watchdog/drain cleanup and partial-output refusal.",
+          "checked": false
+        },
+        {
+          "text": "NV5 Resource/isolation/egress/secret-read and exact configured tool-pin verification on supported host.",
+          "checked": false
+        },
+        {
+          "text": "NV6 Exact named frame fields, rational timebase and qualified original/proxy mapping on CFR/VFR/rotation/cut corpus.",
+          "checked": false
+        },
+        {
+          "text": "NV7 Registered-filter embedded-server auth/intake/size/nonce matrix plus actual browser active-content and Range/playback.",
+          "checked": false
+        },
+        {
+          "text": "NV8 Real database concurrent retry/quota/reservation expiry, graph rollback and reference/sweep race barriers.",
+          "checked": false
+        },
+        {
+          "text": "NV9 Review content identity/base conflicts, raw/history immutability and exact export snapshot/retrieval concurrency.",
+          "checked": false
+        },
+        {
+          "text": "NV10 Held-out cursor error/recall/false detection/coverage report and normalized repeatability.",
+          "checked": false
+        },
+        {
+          "text": "NV11 Provider fault/isolation corpus and retained successful approved public import manifest on release host.",
+          "checked": false
+        },
+        {
+          "text": "NV12 Full keyboard/narrow-layout/refresh/correction/source-use/export browser flow and native regression.",
+          "checked": false
+        },
+        {
+          "text": "NV13 Clean and populated migration upgrades, scoped formatting/static checks and evidence handoff integrity.",
+          "checked": false
+        },
+        {
+          "text": "QV1 Reproduce fast-parent exit, reparented/session-changing descendants, late spawn and unrelated-child isolation against the actual supported containment launcher.",
+          "checked": false,
+          "created_at": "2026-10-19T16:14:50.558Z"
+        },
+        {
+          "text": "QV2 Test denied launch acknowledgement, failed containment enumeration/termination, occupied admission retention and bounded graceful/forced cleanup.",
+          "checked": false,
+          "created_at": "2026-10-19T16:14:50.558Z"
+        },
+        {
+          "text": "QV3 Test NEEDS_RECONCILIATION, remote cancel, foreign terminal generation and missing/unavailable row ownership with exact execution cancellation and no late publication.",
+          "checked": false,
+          "created_at": "2026-10-19T16:14:50.558Z"
+        },
+        {
+          "text": "QV4 Run PostgreSQL barrier races for heartbeat/progress/finalize/cancel/expiry/startup with DB-clock leases and no false healthy-job failure.",
+          "checked": false,
+          "created_at": "2026-10-19T16:14:50.558Z"
+        },
+        {
+          "text": "QV5 Test 2000-line delayed drainage, multi-buffer EOF, stable post-return callbacks, throwing consumer/read errors and bounded drain shutdown.",
+          "checked": false,
+          "created_at": "2026-10-19T16:14:50.558Z"
+        },
+        {
+          "text": "QV6 Test frame-index completeness, exact cap/cap+1, partial output/missing timebase refusal, preserved named PTS and no mutable frame list after return.",
+          "checked": false,
+          "created_at": "2026-10-19T16:14:50.559Z"
+        },
+        {
+          "text": "QV7 Run all tool-path cancellation/lease-loss/launch/pipe/deadline fixtures plus actual API cancellation and original mouse/replay/stabilization regression.",
+          "checked": false,
+          "created_at": "2026-10-19T16:14:50.559Z"
+        },
+        {
+          "text": "QV8 Verify JDK-17 rerun counts/skips, formatting/whitespace for owned tracked and untracked files, evidence headings and unchanged immutable historical artifacts.",
+          "checked": true,
+          "created_at": "2026-10-19T16:14:50.559Z",
+          "completed_at": "2026-10-19T18:32:43.224Z"
+        }
+      ],
+      "updated_at": "2026-10-19T18:32:43.224Z"
+    },
+    {
+      "name": "Remaining Review Corrections",
+      "items": [
+        {
+          "text": "RC1 Refuse Linux tool launch without systemd/cgroup-v2 containment; unavailable-containment and escaped-session reproductions verified.",
+          "checked": true
+        },
+        {
+          "text": "RC2 Fence worker reconciliation and cancellation settlement by original generation, cancellation revision and lease owner; replacement rows remain unchanged.",
+          "checked": true
+        },
+        {
+          "text": "RC3 Validate positive rational timebases and finite/integral timing; invalid fields remain incomplete and JSON-valid.",
+          "checked": true
+        },
+        {
+          "text": "RC4 Assert process death before emergency teardown; live-survivor assertion regression and real child/session cleanup pass.",
+          "checked": true
+        },
+        {
+          "text": "RC5 Select ordered reconciliation candidate IDs before locked entity reads; real PostgreSQL startup/expiry heartbeat conflict regression corrected.",
+          "checked": true
+        },
+        {
+          "text": "RC6 Correct reservation fixture and retain 123 passing Java tests (15 PostgreSQL, zero skips), JS 6, Python 2, formatting/static checks and source-hash evidence in note_1792450504659_743eeeee.",
+          "checked": true
+        }
+      ]
+    },
+    {
+      "name": "Verification Execution Plan",
+      "items": [
+        {
+          "text": "VP0 Freeze baseline, inventory functionality and prepare isolated authenticated prerequisites.",
+          "checked": true,
+          "completed_at": "2026-10-19T23:55:25.462Z"
+        },
+        {
+          "text": "VP1 Reproduce the 123-test baseline, PostgreSQL execution and static checks without application changes.",
+          "checked": true,
+          "completed_at": "2026-10-19T23:55:25.462Z"
+        },
+        {
+          "text": "VP2 Verify upload/media/lifecycle/resource and remaining database boundaries with retained evidence.",
+          "checked": false
+        },
+        {
+          "text": "VP3 Verify real browser, ownership, append-only review and immutable export flows.",
+          "checked": false
+        },
+        {
+          "text": "VP4 Measure cursor/quality/coverage/repeatability against frozen held-out criteria.",
+          "checked": false
+        },
+        {
+          "text": "VP5 Qualify pinned approved live YouTube acquisition and provider failures/isolation.",
+          "checked": false
+        },
+        {
+          "text": "VP6 Run native regressions and reconcile full acceptance, Felix gates and conditional Shortcut synchronization.",
+          "checked": false
+        }
+      ],
+      "updated_at": "2026-10-19T23:55:25.462Z"
+    },
+    {
+      "name": "Analysis Preview Review Corrections",
+      "items": [
+        {
+          "text": "NR1 Sandbox mounts only the job workspace writable and exact inputs read-only; sibling-original truncate regression passes on real bwrap (note_1792574081306_adff069e).",
+          "checked": true
+        },
+        {
+          "text": "NR2 Raced recovery validates the full expected identity; aliases durable and mandatory; changed body is CONFLICT (note_1792574081306_adff069e).",
+          "checked": true
+        },
+        {
+          "text": "NR3 One advisory-locked admission authority for scheduling and import registration; deterministic real-PostgreSQL barrier race and shared limit pass (note_1792574081306_adff069e).",
+          "checked": true
+        },
+        {
+          "text": "NR4 Cancellation settles the bound preview atomically; reconciliation reported truthfully; UI stops polling terminal previews (note_1792574081306_adff069e).",
+          "checked": true
+        },
+        {
+          "text": "NR5 Template contents, output settings and executable contents in identity; worker refuses drifted configuration with IDENTITY_CHANGED (note_1792574081306_adff069e).",
+          "checked": true
+        },
+        {
+          "text": "NR6 PostgreSQL fixtures at V46; 220 video tests pass with zero skips (note_1792574081306_adff069e).",
+          "checked": true
+        },
+        {
+          "text": "NR7 Video PostgreSQL test configs no longer component-scanned into full application contexts (note_1792574081306_adff069e).",
+          "checked": true
+        }
+      ]
+    }
+  ],
+  "created_at": "2026-10-19T04:06:07.281Z",
+  "updated_at": "2026-10-21T09:18:47.316Z",
+  "workflow": "shortcut_delivery",
+  "spec_state": "draft",
+  "spec_waivers": null,
+  "last_validated_at": null,
+  "validated_by": null
+}

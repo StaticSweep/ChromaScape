@@ -1,0 +1,14 @@
+gradle.projectsEvaluated {
+    rootProject.allprojects { p ->
+        p.layout.buildDirectory.set(new File("/tmp/sc2150-rereview-isolated/build"))
+        if (gradle.startParameter.projectProperties.containsKey("sc2150ScopedStyle")) {
+            p.extensions.getByName("spotless").java {
+                target(p.file("src/main/java/com/chromascape/web/debug/tickdebugger/video/MouseVideoPublicErrors.java"),
+                       p.file("src/test/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoJobServiceTest.java"))
+            }
+        }
+        if (gradle.startParameter.projectProperties.containsKey("reviewProbes")) {
+            p.sourceSets.test.java.srcDir("/tmp/sc2150-rereview-isolated/probes")
+        }
+    }
+}

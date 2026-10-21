@@ -1,0 +1,57 @@
+--- docs/builderflow/sc-2150/verification-runs/20261021T091303Z-nr1-nr6-corrections/probes/com/chromascape/web/debug/tickdebugger/video/MouseVideoPreviewIndependentReviewTest.java
++++ /tmp/sc2150-fedora-completion/probes/com/chromascape/web/debug/tickdebugger/video/MouseVideoPreviewIndependentReviewTest.java
+@@ -50,6 +50,12 @@
+  */
+ @Testcontainers(disabledWithoutDocker = true)
+ class MouseVideoPreviewIndependentReviewTest {
++  private static com.chromascape.web.debug.tickdebugger.video.MouseVideoProperties enabledProperties() {
++    var properties = new com.chromascape.web.debug.tickdebugger.video.MouseVideoProperties();
++    properties.setEnabled(true);
++    return properties;
++  }
++
+ 
+   @Container
+   static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16");
+@@ -225,7 +231,7 @@
+     var sourceRepository=context.getBean(MouseVideoSourceRepository.class);
+     var source=sourceRepository.findById(claim.getSourceId()).orElseThrow();
+     source.bindOriginal("sha256:"+"a".repeat(64),100L,"video/mp4");source.qualifyOriginal("video/mp4");sourceRepository.save(source);
+-    var properties=new com.chromascape.web.debug.tickdebugger.video.MouseVideoProperties();properties.setWaitingSlots(1);
++    var properties=enabledProperties();properties.setWaitingSlots(1);
+     var byteStore=org.mockito.Mockito.mock(com.chromascape.web.debug.tickdebugger.video.store.MouseVideoByteStore.class);
+     org.mockito.Mockito.when(byteStore.locate(org.mockito.ArgumentMatchers.anyString())).thenReturn(java.util.Optional.of(java.nio.file.Path.of("/tmp/review-media")));
+     var barrier=new java.util.concurrent.CyclicBarrier(4);
+--- docs/builderflow/sc-2150/verification-runs/20261021T091303Z-nr1-nr6-corrections/probes/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoSchedulingIndependentReviewTest.java
++++ /tmp/sc2150-fedora-completion/probes/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoSchedulingIndependentReviewTest.java
+@@ -42,6 +42,12 @@
+ @ExtendWith(MockitoExtension.class)
+ @MockitoSettings(strictness = Strictness.LENIENT)
+ class MouseVideoSchedulingIndependentReviewTest {
++  private static com.chromascape.web.debug.tickdebugger.video.MouseVideoProperties enabledProperties() {
++    var properties = new com.chromascape.web.debug.tickdebugger.video.MouseVideoProperties();
++    properties.setEnabled(true);
++    return properties;
++  }
++
+ 
+   @TempDir Path root;
+ 
+@@ -59,7 +65,7 @@
+ 
+   @BeforeEach
+   void setUp() {
+-    MouseVideoProperties properties = new MouseVideoProperties();
++    MouseVideoProperties properties = enabledProperties();
+     properties.setWaitingSlots(8);
+     when(byteStore.locate(anyString())).thenReturn(Optional.of(root.resolve("media")));
+     PlatformTransactionManager transactions = mock(PlatformTransactionManager.class);
+@@ -224,7 +230,7 @@
+ 
+   @Test
+   void sandboxCannotOverwriteAnotherJobsOriginal() throws Exception {
+-    var properties = new MouseVideoProperties();
++    var properties = enabledProperties();
+     var mediaRoot = root.resolve("media-root");
+     java.nio.file.Files.createDirectories(mediaRoot.resolve("jobs/current"));
+     java.nio.file.Files.createDirectories(mediaRoot.resolve("bytes"));

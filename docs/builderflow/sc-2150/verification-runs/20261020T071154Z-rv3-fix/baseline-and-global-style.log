@@ -1,0 +1,103 @@
+Picked up JAVA_TOOL_OPTIONS: -Dapi.version=1.44
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+> Task :compileJava
+Note: Processing Log4j annotations
+Note: Annotations processed
+Note: Processing Log4j annotations
+Note: No elements to process
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+
+> Task :copyNativeLibraries SKIPPED
+> Task :processResources UP-TO-DATE
+> Task :classes
+> Task :compileTestJava
+> Task :processTestResources UP-TO-DATE
+> Task :testClasses
+
+> Task :test
+SC-967 vectors: /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/contracts/sc967/ed25519-vectors.json
+Picked up JAVA_TOOL_OPTIONS: -Dapi.version=1.44
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :spotlessInternalRegisterDependencies
+> Task :spotlessJava
+> Task :spotlessJavaCheck FAILED
+
+[Incubating] Problems report is available at: file:///run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':spotlessJavaCheck'.
+> The following files had format violations:
+      src/main/java/com/chromascape/web/aiplayer/contract/CurrentSliceIdentity.java
+          @@ -93,8 +93,8 @@
+           ···*
+           ···*·<p>The·v2·schema·deliberately·signs·only·{@code·source_snapshot_id}·and·{@code
+           ···*·source_manifest_hash};·the·repository/commit/tree/build/artifact·enrichment·fields·belong·to
+          -···*·live·execution·identities·and·are·forbidden·inside·a·v2·manifest.·Everything·else·is
+          -···*·identical·to·{@link·#validate()},·so·a·signed·manifest·cannot·bypass·the·nested·group·rules.
+          +···*·live·execution·identities·and·are·forbidden·inside·a·v2·manifest.·Everything·else·is·identical
+          +···*·to·{@link·#validate()},·so·a·signed·manifest·cannot·bypass·the·nested·group·rules.
+           ···*/
+           ··public·void·validateSignedProjection()·{
+           ····validate(true);
+          @@ -211,8 +211,7 @@
+           ····if·(source.artifactDigest()·!=·null)·hash(source.artifactDigest(),·"source.artifact_digest");
+           ····if·(source.signatureVerified()·!=·null·&&·!source.signatureVerified())·{
+           ······fail(
+          -··········CurrentSliceFailureCode.IDENTITY_FIELD_MISSING,
+          -··········"source.signature_verified·must·be·true");
+          +··········CurrentSliceFailureCode.IDENTITY_FIELD_MISSING,·"source.signature_verified·must·be·true");
+           ····}
+           ··}
+           
+      src/main/java/com/chromascape/web/aiplayer/routine/service/CandidateExecutionClosureV1.java
+          @@ -42,7 +42,8 @@
+           ··public·static·final·long·MAX_CLOSURE_BYTES·=·1L·<<·20;
+           ··public·static·final·long·MAX_INFLATED_BYTES·=·1L·<<·30;
+           
+          -··private·static·final·String·SCHEMA_RESOURCE·=·"contracts/candidate-execution-closure-v1.schema.json";
+          +··private·static·final·String·SCHEMA_RESOURCE·=
+          +······"contracts/candidate-execution-closure-v1.schema.json";
+           ··private·static·final·JsonSchema·CLOSURE_SCHEMA·=·load();
+           
+           ··private·CandidateExecutionClosureV1()·{}
+          @@ -134,8 +135,7 @@
+           ··private·static·void·validateUnsigned(
+           ······byte[]·closureBytes,·JsonNode·signedManifest,·byte[]·signedJarBytes,·Inputs·inputs)·{
+           ····JsonNode·closure·=·parseAndBind(closureBytes,·signedManifest);
+          -····List<byte[]>·dependencies·=
+          -········inputs.dependencies().stream().map(ArtifactBytes::bytes).toList();
+          +····List<byte[]>·dependencies·=·inputs.dependencies().stream().map(ArtifactBytes::bytes).toList();
+           ····requireArtifacts(
+           ········closure,·signedJarBytes,·inputs.runner().bytes(),·inputs.core().bytes(),·dependencies);
+           ··}
+          @@ -155,7 +155,11 @@
+           ····if·(!messages.isEmpty())·{
+           ······fail("EXECUTION_CLOSURE_SCHEMA_INVALID:"·+·messages.iterator().next().getMessage());
+           ····}
+          -····bind(closure.path("candidate"),·"candidate_id",·signedManifest.path("candidate"),·"candidate_id");
+          +····bind(
+          +········closure.path("candidate"),
+      ... (6 more lines that didn't fit)
+  Violations also present in:
+      src/main/java/com/chromascape/web/aiplayer/routine/service/PatchCandidateWorkflowService.java
+      src/test/java/com/chromascape/web/aiplayer/routine/service/CandidateExecutionClosureV1Test.java
+      src/test/java/com/chromascape/web/aiplayer/routine/service/PatchCandidateWorkflowServiceTest.java
+  Run './gradlew :spotlessApply' to fix these violations.
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 2m 24s
+8 actionable tasks: 6 executed, 2 up-to-date

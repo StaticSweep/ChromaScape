@@ -1,0 +1,44 @@
+{
+  "status": 201,
+  "body": {
+    "id": "e940461e-9a60-466a-8ba3-6b67af1fa85b",
+    "sourceId": "58d65069-2552-4fc1-ad46-e800b7649383",
+    "analysisId": "1fbad528-1219-4a05-80b9-ccb7967088dd",
+    "predecessorId": "c720fd9e-4962-454f-8ecd-ed677a285ca0",
+    "supersededBy": null,
+    "actor": "sc2150-fedora-a",
+    "reason": "Synthetic negative qualification: outside the 160px source",
+    "expectedBaseRevision": 10,
+    "sourceUse": "INSPECTION_ONLY",
+    "state": "REVIEWED",
+    "contract": "corrections/v1",
+    "corrections": [
+      {
+        "kind": "CURSOR_VISIBILITY",
+        "frameOrdinal": 5,
+        "visibility": "VISIBLE",
+        "x": 1000,
+        "y": 1,
+        "confidence": 1.0
+      }
+    ],
+    "createdAt": "2026-10-21T17:10:57.861450421Z"
+  },
+  "submitted": {
+    "requestId": "93a90c1e-e39c-4980-886f-c93763855d62",
+    "analysisId": "1fbad528-1219-4a05-80b9-ccb7967088dd",
+    "expectedBaseRevision": 10,
+    "reason": "Synthetic negative qualification: outside the 160px source",
+    "sourceUse": "INSPECTION_ONLY",
+    "corrections": [
+      {
+        "kind": "CURSOR_VISIBILITY",
+        "frameOrdinal": 5,
+        "visibility": "VISIBLE",
+        "x": 1000,
+        "y": 1
+      }
+    ]
+  },
+  "expectedSourceWidth": 160
+}
