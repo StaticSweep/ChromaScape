@@ -146,6 +146,12 @@ public class CandidateExecutionJobService {
     }
   }
 
+  /** Compares a baseline and a candidate job only when their conditions are equivalent. */
+  public CandidateExecutionComparison.Comparison compare(
+      ExecutionJob baseline, ExecutionJob candidate) {
+    return CandidateExecutionComparison.compare(baseline, candidate);
+  }
+
   /** Asks a running job to stop; false when no such job is running here. */
   public boolean cancel(String jobId) {
     AtomicBoolean cancel = active.get(jobId);
