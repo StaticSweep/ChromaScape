@@ -1781,6 +1781,47 @@ tasks.register<Test>("sc663ManifestTest") {
 	systemProperty("sc663.packaged.runelite", providers.gradleProperty("sc663PackagedRuneLite").getOrElse(""))
 }
 
+// SC-2106 R9.1 end to end: ChromaScape signs a candidate over the real Micro6 shaded JAR and
+// closure JARs, then runs it through the real Micro6 host process and XRSPS worker. Its inputs are
+// companion-repository build outputs, so it is a separate required task that fails, never skips,
+// when one is missing; the ordinary suite does not discover it.
+tasks.test {
+	exclude("com/chromascape/web/aiplayer/routine/service/CandidateExecutionHostIntegrationTest*")
+}
+tasks.register<Test>("sc2106HostIntegrationTest") {
+	group = "verification"
+	description = "Runs a ChromaScape-signed candidate through the real Micro6 host and XRSPS worker"
+	testClassesDirs = sourceSets.test.get().output.classesDirs
+	classpath = sourceSets.test.get().runtimeClasspath
+	useJUnitPlatform()
+	filter {
+		isFailOnNoMatchingTests = true
+		includeTestsMatching("com.chromascape.web.aiplayer.routine.service.CandidateExecutionHostIntegrationTest")
+	}
+	val micro6Build = providers.gradleProperty("sc2106Micro6Build")
+		.orElse("../micro6/runelite-client/build")
+	systemProperty("sc2106.micro6.build", file(micro6Build.get()).absolutePath)
+	systemProperty("sc2106.xrsps.package", providers.gradleProperty("sc2106XrspsPackage")
+		.orElse(providers.environmentVariable("XRSPS_PACKAGE_DIR")).getOrElse(""))
+	doFirst {
+		systemProperty("sc967.vectors.path", file(sc967VectorsPath.get()).canonicalFile.absolutePath)
+	}
+	sc967ReportDir.orNull?.takeIf { it.isNotBlank() }?.let { directory ->
+		val root = file(directory).resolve("sc2106-host")
+		reports.junitXml.outputLocation.set(root.resolve("junit"))
+		reports.html.outputLocation.set(root.resolve("html"))
+		binaryResultsDirectory.set(root.resolve("binary"))
+	}
+	afterSuite(KotlinClosure2<TestDescriptor, TestResult, Unit>({ descriptor, result ->
+		if (descriptor.parent == null && result.testCount == 0L) {
+			throw GradleException("SC-2106 host integration executed zero tests")
+		}
+		if (descriptor.parent == null && result.skippedTestCount > 0L) {
+			throw GradleException("SC-2106 host integration must not skip")
+		}
+	}))
+}
+
 // SC-663: embed source identity in the packaged backend; runtime measures the actual JAR bytes.
 val sc663BackendCommit = providers.exec {
 	commandLine("git", "rev-parse", "HEAD")

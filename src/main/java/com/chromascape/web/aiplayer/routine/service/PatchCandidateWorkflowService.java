@@ -651,6 +651,45 @@ public class PatchCandidateWorkflowService {
   }
 
   /**
+   * An approved, {@code REGISTERED} candidate whose persisted bundle was just re-verified byte for
+   * byte, signature and execution closure included (SC-2106 R9.1). Every other state is refused: a
+   * built, registering or uncertain candidate never executes.
+   */
+  public RegisteredCandidate registeredCandidate(String id) {
+    PatchCandidateRun entity = proposal(id);
+    if (!"REGISTERED".equals(entity.getState())) {
+      throw error(
+          HttpStatus.CONFLICT,
+          "CANDIDATE_NOT_REGISTERED",
+          "only a registered candidate can execute; state is " + entity.getState());
+    }
+    if (entity.getApprovalHash() == null || entity.getApproverId() == null) {
+      throw error(HttpStatus.CONFLICT, "PATCH_NOT_APPROVED", "candidate has no recorded approval");
+    }
+    requireCurrentCandidate(entity);
+    Path bundle;
+    try {
+      bundle = revalidatePersistedBundle(entity);
+    } catch (IOException e) {
+      throw error(HttpStatus.CONFLICT, "CANDIDATE_BUNDLE_INVALID", String.valueOf(e.getMessage()));
+    }
+    Map<String, Object> manifest = read(entity.getCandidateManifestJson());
+    return new RegisteredCandidate(
+        entity.getProposalId(),
+        entity.getCandidateId(),
+        bundle,
+        String.valueOf(manifest.get("jar_name")),
+        String.valueOf(manifest.get("sbom_name")));
+  }
+
+  /**
+   * A verified registered bundle: {@code manifest.json}, {@code certification.json}, the signed JAR
+   * and SBOM, {@code execution-closure.json} and every closure JAR, all under {@code bundle}.
+   */
+  public record RegisteredCandidate(
+      String proposalId, String candidateId, Path bundle, String jarName, String sbomName) {}
+
+  /**
    * Reconciles an uncertain registration. Lookup first; accept only after exact canonical manifest
    * comparison, candidate id/hash match, certified state, and download SHA-256 verification.
    * Re-post only on a confirmed registry 404 using the exact persisted bundle.
