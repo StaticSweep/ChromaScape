@@ -1,0 +1,50 @@
+{
+  "story_id": 2150,
+  "felix_task_id": "task_1792382767281_cd8dbu69",
+  "felix_status": "in_progress",
+  "felix_workflow": "shortcut_delivery",
+  "felix_spec_state": "draft",
+  "shortcut_state": "In Progress",
+  "shortcut_workflow_state_id": 500000008,
+  "plan_sha256": "4d0465e1a3f068dff19f5ccd5b9f4b9d599caa8591bd5912fb6f97880bfa6d1f",
+  "acceptance_items": 14,
+  "implementation_items": 16,
+  "verification_items": 15,
+  "outbox_records": [
+    "synced/sc-2150/20261019T035916Z--sc-2150--create_note--authoritative-plan.md",
+    "synced/sc-2150/20261019T035916Z--sc-2150--create_note--architecture.md",
+    "synced/sc-2150/20261019T035916Z--sc-2150--create_note--erd.md",
+    "synced/sc-2150/20261019T035916Z--sc-2150--create_note--api-contract.md",
+    "synced/sc-2150/20261019T035916Z--sc-2150--create_note--security-decision.md",
+    "synced/sc-2150/20261019T035916Z--sc-2150--create_note--observability.md",
+    "synced/sc-2150/20261019T035916Z--sc-2150--create_note--ux-mockup.md",
+    "synced/sc-2150/20261019T035916Z--sc-2150--reconcile_task--task-reconciliation.md"
+  ],
+  "intended_status": "in_progress",
+  "implementation_started": true,
+  "implemented_increment": [
+    "I1",
+    "I3",
+    "I4",
+    "I6",
+    "I11",
+    "I14",
+    "I16"
+  ],
+  "remaining_implementation": [
+    "I2",
+    "I5",
+    "I7",
+    "I8",
+    "I9",
+    "I10",
+    "I12",
+    "I13",
+    "I15"
+  ],
+  "shortcut_comment_id": 2154,
+  "shortcut_comment_url": "https://app.shortcut.com/leeuwbot/story/2150/msevideo01-external-video-upload-youtube-import-and-humanbehavior-analysis#activity-2154",
+  "notes": "Implementation increment delivered and verified; not submitted for review because I7/I8/I9/I10/I13/I15 remain. Felix in_review/done gates are intentionally unmet. Fedora completion run 20261021T152511Z sealed; real Felix read-back showed spec_state draft. Open: FA12/FA13 (corpus, yt-dlp pins), Windows, 72 pre-existing repo failures.",
+  "latest_run": "verification-runs/20261021T152511Z-fedora-completion",
+  "felix_implementation_evidence_note": "note_1792608623534_4ee6616c"
+}

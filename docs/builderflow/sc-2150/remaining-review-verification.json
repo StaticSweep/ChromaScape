@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-10-19T23:09:54.623404+00:00",
+  "project": "C:\\Dev\\IdeaProjects\\ChromaScape",
+  "felix_task_id": "task_1792382767281_cd8dbu69",
+  "felix_note_id": "note_1792450504659_743eeeee",
+  "java_version": "17.0.20.1+1",
+  "java": {
+    "tests": 123,
+    "skipped": 0,
+    "failures": 0,
+    "errors": 0
+  },
+  "postgresql_tests": 15,
+  "javascript": {
+    "tests": 6,
+    "passed": 6
+  },
+  "python": {
+    "tests": 2,
+    "passed": 2
+  },
+  "spotlessCheck": "passed",
+  "checkstyle": {
+    "main": {
+      "error": 0,
+      "warning": 4552
+    },
+    "test": {
+      "error": 0,
+      "warning": 694
+    }
+  },
+  "suites": [
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.MouseVideoConfigurationTest",
+      "tests": "1",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:07:33.469Z"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.MouseVideoMediaRangeTest",
+      "tests": "3",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:07:34.361Z"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.MouseVideoMigrationTest",
+      "tests": "4",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:07:49.155Z"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.MouseVideoMultipartReaderTest",
+      "tests": "4",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:07:50.966Z"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.MouseVideoPostgresConcurrencyTest",
+      "tests": "2",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:08:00.074Z"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.MouseVideoRequestIdentityTest",
+      "tests": "4",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:08:01.652Z"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.MouseVideoServicePostgresRaceTest",
+      "tests": "9",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:08:16.184Z"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.MouseVideoYouTubeTest",
+      "tests": "2",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:08:20.688Z"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoAccessTest",
+      "tests": "3",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:08:20.694Z"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoCatalogServiceTest",
+      "tests": "5",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:08:20.717Z"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoDerivativeWorkerTest",
+      "tests": "22",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:08:22.329Z"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoExportServiceTest",
+      "tests": "2",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:08:27.091Z"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoImportServiceTest",
+      "tests": "7",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:08:27.361Z"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoJobServiceTest",
+      "tests": "20",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:08:27.850Z"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoLeaseHeartbeatTest",
+      "tests": "6",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:08:28.060Z"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoProcessRunnerTest",
+      "tests": "9",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:08:36.143Z"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoRequestGuardTest",
+      "tests": "5",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:08:41.254Z"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoReviewServiceTest",
+      "tests": "3",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:08:41.282Z"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoWorkerRegistryTest",
+      "tests": "2",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:08:41.298Z"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoWriteNonceServiceTest",
+      "tests": "3",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:08:41.352Z"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoYouTubeAcquirerTest",
+      "tests": "2",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:08:41.360Z"
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.store.MouseVideoByteStoreTest",
+      "tests": "5",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-19T23:08:42.596Z"
+    }
+  ],
+  "changed_source_sha256": {
+    "C:\\Dev\\IdeaProjects\\ChromaScape\\src\\main\\java\\com\\chromascape\\web\\debug\\tickdebugger\\video\\service\\MouseVideoProcessRunner.java": "932a47ca8ae21147678c2675a070356c7fd1938ff5021b84b84d6af209b98a79",
+    "C:\\Dev\\IdeaProjects\\ChromaScape\\src\\main\\java\\com\\chromascape\\web\\debug\\tickdebugger\\video\\service\\MouseVideoJobService.java": "27c112b6044f0588c92d20b10f76afab0a90638fc4f992868bf216485865a457",
+    "C:\\Dev\\IdeaProjects\\ChromaScape\\src\\main\\java\\com\\chromascape\\web\\debug\\tickdebugger\\video\\service\\MouseVideoImportService.java": "efd034ecec18fbdfbee165098a98a88b3268b620b0f6fc050e88e649b8c2b4e8",
+    "C:\\Dev\\IdeaProjects\\ChromaScape\\src\\main\\java\\com\\chromascape\\web\\debug\\tickdebugger\\video\\service\\MouseVideoDerivativeWorker.java": "1f0540c1dfe0dc1c28b7bb8decca073e4f7249fa6efb26eb0b74d8b3e6068479",
+    "C:\\Dev\\IdeaProjects\\ChromaScape\\src\\main\\java\\com\\chromascape\\web\\debug\\tickdebugger\\video\\entity\\MouseVideoJobRepository.java": "15a1c7ba2fa39bd819358ffbb3211e5562b2ef1a19de9ee1658cc40e66fd7f54",
+    "C:\\Dev\\IdeaProjects\\ChromaScape\\src\\test\\java\\com\\chromascape\\web\\debug\\tickdebugger\\video\\service\\MouseVideoProcessRunnerTest.java": "f07564f88d1b116a0917a075b8450ca60a1f00344695591c327e0e99192d604b",
+    "C:\\Dev\\IdeaProjects\\ChromaScape\\src\\test\\java\\com\\chromascape\\web\\debug\\tickdebugger\\video\\service\\MouseVideoJobServiceTest.java": "75214a43cbbf4e001550d7c2e877a2669708cf94ce0b0d549f3a9cbedf620df2",
+    "C:\\Dev\\IdeaProjects\\ChromaScape\\src\\test\\java\\com\\chromascape\\web\\debug\\tickdebugger\\video\\service\\MouseVideoImportServiceTest.java": "3b3c9ad3bc568e9967cf484020871c4b17c50c83c7d2deb09680d613d3cec79e",
+    "C:\\Dev\\IdeaProjects\\ChromaScape\\src\\test\\java\\com\\chromascape\\web\\debug\\tickdebugger\\video\\service\\MouseVideoDerivativeWorkerTest.java": "61c8a3b5764ddc6792196cac50a22e8dfdffc582e9bc16246608c3572dcc93d5",
+    "C:\\Dev\\IdeaProjects\\ChromaScape\\src\\test\\java\\com\\chromascape\\web\\debug\\tickdebugger\\video\\MouseVideoMigrationTest.java": "482a83c2568e6a527c3b72c32dc623e0075eee09a1507ea3bee29b42a6d34b9b",
+    "C:\\Dev\\IdeaProjects\\ChromaScape\\src\\test\\java\\com\\chromascape\\web\\debug\\tickdebugger\\video\\MouseVideoServicePostgresRaceTest.java": "d7b004e82427601f0e20bf618144f27f88d294ca2404431a03c1623126ac258a"
+  }
+}

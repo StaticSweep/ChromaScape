@@ -1,0 +1,24 @@
+{
+  "story_id": 2150,
+  "felix_task_id": "task_1792382767281_cd8dbu69",
+  "felix_note_id": "note_1792415546201_405e9ad1",
+  "felix_status": "in_progress",
+  "felix_spec_state": "draft",
+  "shortcut_state": "In Progress",
+  "shortcut_comment_id": 2156,
+  "plan_sha256": "6ea0e2ff882fe93d7784be08cc14f20909973948ef8166541e98aaf0a32ec9d0",
+  "checklists": {
+    "acceptance": 10,
+    "implementation": 15,
+    "verification": 14
+  },
+  "reopened_implementation_items": [
+    "I3",
+    "I6",
+    "I11"
+  ],
+  "planning_only": true,
+  "software_changed": false,
+  "new_software_tests_run": false,
+  "older_unrelated_outbox_conflicts_preserved": 20
+}
