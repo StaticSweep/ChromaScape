@@ -63,6 +63,7 @@ public class FishingShadowDecisionService {
   private final FishingActiveModelService activeModelService;
   private final ObjectMapper objectMapper;
   private final FishingShadowDecisionWriter writer;
+  private final FishingDatasetBuilderService modelStore;
 
   @Value("${ai-player.dataset.output-dir:.chromascape/datasets}")
   private String outputDir;
@@ -126,6 +127,16 @@ public class FishingShadowDecisionService {
       FishingActiveModelService activeModelService,
       ObjectMapper objectMapper,
       FishingShadowDecisionWriter writer) {
+    this(activeModelService, objectMapper, writer, null);
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public FishingShadowDecisionService(
+      FishingActiveModelService activeModelService,
+      ObjectMapper objectMapper,
+      FishingShadowDecisionWriter writer,
+      FishingDatasetBuilderService modelStore) {
+    this.modelStore = modelStore;
     this.activeModelService = activeModelService;
     this.objectMapper = objectMapper;
     this.writer = writer;
@@ -151,6 +162,8 @@ public class FishingShadowDecisionService {
           safeDescription(shadowRunId));
       return false;
     }
+    if (modelStore != null && enabled && shadowMode && !controlEnabled)
+      modelStore.requireShadowSession(sessionId, activeModelService.getActiveModel());
     ShadowRunKey key = new ShadowRunKey(sessionId, shadowRunId);
     SessionState existing = sessions.putIfAbsent(key, new SessionState());
     if (existing != null) {
@@ -199,6 +212,8 @@ public class FishingShadowDecisionService {
           safeDescription(shadowRunId));
       return;
     }
+    if (modelStore != null && enabled && shadowMode && !controlEnabled)
+      modelStore.requireShadowSession(sessionId, activeModelService.getActiveModel());
     ShadowRunKey key = new ShadowRunKey(sessionId, shadowRunId);
     SessionState state = sessions.get(key);
     if (state == null) {

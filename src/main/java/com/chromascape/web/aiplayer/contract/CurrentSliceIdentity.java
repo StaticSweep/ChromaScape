@@ -17,7 +17,10 @@ public record CurrentSliceIdentity(
     @JsonProperty("graph") Graph graph,
     @JsonProperty("model") Model model,
     @JsonProperty("candidate") Candidate candidate,
-    @JsonProperty("control_allowed") boolean controlAllowed) {
+    @JsonProperty(value = "control_allowed", required = true)
+        @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
+            using = StrictFalseBooleanDeserializer.class)
+        boolean controlAllowed) {
 
   private static final Pattern HASH = Pattern.compile("sha256:[0-9a-f]{64}");
   private static final Pattern SNAPSHOT = Pattern.compile("srcsnap_[0-9a-f]{24}");
@@ -82,6 +85,22 @@ public record CurrentSliceIdentity(
       @JsonProperty("signature") String signature) {}
 
   public void validate() {
+    validate(false);
+  }
+
+  /**
+   * Validates the signed {@code certified-candidate/v2} identity projection.
+   *
+   * <p>The v2 schema deliberately signs only {@code source_snapshot_id} and {@code
+   * source_manifest_hash}; the repository/commit/tree/build/artifact enrichment fields belong to
+   * live execution identities and are forbidden inside a v2 manifest. Everything else is
+   * identical to {@link #validate()}, so a signed manifest cannot bypass the nested group rules.
+   */
+  public void validateSignedProjection() {
+    validate(true);
+  }
+
+  private void validate(boolean signedProjection) {
     if (!"current-slice-identity/v1".equals(schema))
       fail(
           CurrentSliceFailureCode.IDENTITY_FIELD_MISSING,
@@ -136,22 +155,22 @@ public record CurrentSliceIdentity(
       if (!matches(SNAPSHOT, source.sourceSnapshotId()))
         fail(CurrentSliceFailureCode.HASH_FORMAT_INVALID, "invalid source_snapshot_id");
       hash(source.sourceManifestHash(), "source.source_manifest_hash");
-      required(source.repositoryId(), "source.repository_id");
-      required(source.commitId(), "source.commit_id");
-      required(source.treeId(), "source.tree_id");
-      required(source.buildId(), "source.build_id");
-      hash(source.artifactDigest(), "source.artifact_digest");
-      if (!source.repositoryId().matches("[A-Za-z0-9][A-Za-z0-9._-]{0,199}")) {
-        fail(CurrentSliceFailureCode.IDENTITY_FIELD_MISSING, "source.repository_id is invalid");
-      }
-      if (!source.commitId().matches("[0-9a-f]{7,64}")
-          || !source.treeId().matches("[0-9a-f]{7,64}")) {
-        fail(CurrentSliceFailureCode.HASH_FORMAT_INVALID, "source commit/tree identity is invalid");
-      }
-      if (!Boolean.TRUE.equals(source.signatureVerified())) {
-        fail(
-            CurrentSliceFailureCode.IDENTITY_FIELD_MISSING,
-            "source.signature_verified must be true");
+      if (signedProjection) {
+        // Enrichment fields are absent from the signed projection by schema. When present they
+        // still have to be well formed, but they are never required here.
+        validateOptionalSourceEnrichment(source);
+      } else {
+        required(source.repositoryId(), "source.repository_id");
+        required(source.commitId(), "source.commit_id");
+        required(source.treeId(), "source.tree_id");
+        required(source.buildId(), "source.build_id");
+        hash(source.artifactDigest(), "source.artifact_digest");
+        validateOptionalSourceEnrichment(source);
+        if (!Boolean.TRUE.equals(source.signatureVerified())) {
+          fail(
+              CurrentSliceFailureCode.IDENTITY_FIELD_MISSING,
+              "source.signature_verified must be true");
+        }
       }
     }
     if (graph != null) {
@@ -178,6 +197,23 @@ public record CurrentSliceIdentity(
     }
     if (controlAllowed)
       fail(CurrentSliceFailureCode.CONTROL_FORBIDDEN, "control_allowed must be false");
+  }
+
+  private static void validateOptionalSourceEnrichment(Source source) {
+    if (source.repositoryId() != null
+        && !source.repositoryId().matches("[A-Za-z0-9][A-Za-z0-9._-]{0,199}")) {
+      fail(CurrentSliceFailureCode.IDENTITY_FIELD_MISSING, "source.repository_id is invalid");
+    }
+    if ((source.commitId() != null && !source.commitId().matches("[0-9a-f]{7,64}"))
+        || (source.treeId() != null && !source.treeId().matches("[0-9a-f]{7,64}"))) {
+      fail(CurrentSliceFailureCode.HASH_FORMAT_INVALID, "source commit/tree identity is invalid");
+    }
+    if (source.artifactDigest() != null) hash(source.artifactDigest(), "source.artifact_digest");
+    if (source.signatureVerified() != null && !source.signatureVerified()) {
+      fail(
+          CurrentSliceFailureCode.IDENTITY_FIELD_MISSING,
+          "source.signature_verified must be true");
+    }
   }
 
   /**

@@ -102,6 +102,61 @@ class PatchCandidateManifestV2Test {
   }
 
   @Test
+  void committedPositiveVectorsPassFullProductionValidation() throws Exception {
+    JsonNode doc = readVectors();
+    PublicKey publicKey = readPublicKey(doc);
+    CertifiedCandidateV2Validator productionValidator =
+        new CertifiedCandidateV2Validator(doc.path("key_id").asText());
+    byte[] certification =
+        Base64.getDecoder()
+            .decode(doc.path("artifacts").path("certification").path("content").asText());
+    byte[] jar =
+        Base64.getDecoder().decode(doc.path("artifacts").path("jar").path("content").asText());
+    byte[] sbom =
+        Base64.getDecoder().decode(doc.path("artifacts").path("sbom").path("content").asText());
+    boolean sawPositive = false;
+    for (JsonNode vector : doc.path("vectors")) {
+      String name = vector.path("name").asText();
+      if (!name.startsWith("valid-")) {
+        continue;
+      }
+      sawPositive = true;
+      ObjectNode signedManifest = (ObjectNode) vector.path("manifest").deepCopy();
+      ObjectNode candidate = (ObjectNode) signedManifest.with("candidate");
+      candidate.put("candidate_id", vector.path("candidate_id").asText());
+      candidate.put("candidate_hash", vector.path("candidate_hash").asText());
+      candidate.put("signature", vector.path("signature").asText());
+      byte[] manifestBytes = MAPPER.writeValueAsBytes(signedManifest);
+      JsonNode validated =
+          assertDoesNotThrow(
+              () -> productionValidator.validate(manifestBytes, certification, jar, sbom),
+              name + ": valid vector must pass the full production validator (G8)");
+      assertDoesNotThrow(
+          () -> productionValidator.validateSignature(validated, publicKey),
+          name + ": valid vector signature must verify");
+    }
+    assertTrue(sawPositive, "shared vectors must include at least one positive vector");
+  }
+
+  @Test
+  void signedProjectionRejectsExplicitlyUnverifiedSource() throws Exception {
+    JsonNode doc = readVectors();
+    JsonNode valid =
+        java.util.stream.StreamSupport.stream(doc.path("vectors").spliterator(), false)
+            .filter(v -> v.path("name").asText().startsWith("valid-"))
+            .findFirst()
+            .orElseThrow();
+    ObjectNode identity = (ObjectNode) valid.path("manifest").path("identity").deepCopy();
+    ((ObjectNode) identity.with("source")).put("signature_verified", false);
+    com.chromascape.web.aiplayer.contract.CurrentSliceIdentity converted =
+        MAPPER.treeToValue(
+            identity, com.chromascape.web.aiplayer.contract.CurrentSliceIdentity.class);
+    assertThrows(
+        com.chromascape.web.aiplayer.contract.CurrentSliceContractException.class,
+        converted::validateSignedProjection);
+  }
+
+  @Test
   void committedNegativeVectorsAreRejectedBySchemaOrHash() throws Exception {
     JsonNode doc = readVectors();
     String publicKeyPem = doc.path("public_key_pem").asText();
@@ -189,6 +244,18 @@ class PatchCandidateManifestV2Test {
           Sc967CanonicalJson.canonical(parsed),
           vector.path("name").asText());
     }
+  }
+
+  private static PublicKey readPublicKey(JsonNode doc) throws Exception {
+    String publicKeyPem = doc.path("public_key_pem").asText();
+    byte[] publicKeyDer =
+        Base64.getDecoder()
+            .decode(
+                publicKeyPem
+                    .replace("-----BEGIN PUBLIC KEY-----", "")
+                    .replace("-----END PUBLIC KEY-----", "")
+                    .replaceAll("\\s", ""));
+    return KeyFactory.getInstance("Ed25519").generatePublic(new X509EncodedKeySpec(publicKeyDer));
   }
 
   private static JsonNode readVectors() throws Exception {

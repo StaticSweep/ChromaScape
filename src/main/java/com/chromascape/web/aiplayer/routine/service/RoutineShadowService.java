@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 /** Owns durable, read-only shadow state. It has no control or input-dispatch dependency. */
 @Service
 public class RoutineShadowService {
+  private final com.chromascape.web.aiplayer.contract.CurrentSliceIdentityValidator identities;
   private final ObjectMapper mapper;
   private final RoutineModelRepository models;
   private final RoutineReplayTraceRepository traces;
@@ -42,6 +43,26 @@ public class RoutineShadowService {
       RoutineShadowRunRepository runs,
       RoutineShadowDecisionRepository decisions,
       RoutineCaptureIngestionService captures) {
+    this(
+        mapper,
+        models,
+        traces,
+        runs,
+        decisions,
+        captures,
+        new com.chromascape.web.aiplayer.contract.CurrentSliceIdentityValidator());
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public RoutineShadowService(
+      ObjectMapper mapper,
+      RoutineModelRepository models,
+      RoutineReplayTraceRepository traces,
+      RoutineShadowRunRepository runs,
+      RoutineShadowDecisionRepository decisions,
+      RoutineCaptureIngestionService captures,
+      com.chromascape.web.aiplayer.contract.CurrentSliceIdentityValidator identities) {
+    this.identities = identities;
     this.mapper = mapper;
     this.models = models;
     this.traces = traces;
@@ -75,6 +96,8 @@ public class RoutineShadowService {
 
     CurrentSliceIdentity modelIdentity = read(model.getIdentityJson());
     CurrentSliceIdentity sessionIdentity = read(map(session.get("identity")));
+    identities.requireOperation(modelIdentity, "shadow");
+    identities.requireOperation(sessionIdentity, "shadow");
     compatibility.requireCompatible(modelIdentity, sessionIdentity);
     RoutineShadowRun run = new RoutineShadowRun();
     run.setShadowRunId("shadow_" + UUID.randomUUID().toString().replace("-", ""));
@@ -119,6 +142,7 @@ public class RoutineShadowService {
     if (!"COMPLETED".equals(capture.get("status"))) {
       throw error("CAPTURE_NOT_COMPLETED", "capture must be completed before shadow completion");
     }
+    requirePinned(run);
     int expected = number(capture.get("tick_count")) + number(capture.get("action_count"));
     List<RoutineShadowDecision> values =
         decisions.findByShadowRunIdOrderByDecisionOrdinal(shadowRunId);
@@ -158,6 +182,7 @@ public class RoutineShadowService {
       RoutineShadowRun run =
           runs.findWithLockByShadowRunId(candidate.getShadowRunId()).orElse(null);
       if (run == null || !"ACTIVE".equals(run.getState())) continue;
+      requirePinned(run);
       List<JsonNode> expectedActions = expectedActions(run);
       List<RoutineShadowDecision> existing =
           decisions.findByShadowRunIdOrderByDecisionOrdinal(run.getShadowRunId());
@@ -259,6 +284,11 @@ public class RoutineShadowService {
 
   public List<RoutineShadowRun> active(String sessionId) {
     return runs.findBySessionIdAndState(sessionId, "ACTIVE");
+  }
+
+  private void requirePinned(RoutineShadowRun run) {
+    identities.requireOperation(read(run.getModelIdentityJson()), "shadow");
+    identities.requireOperation(read(run.getSessionIdentityJson()), "shadow");
   }
 
   private Map<String, Object> response(RoutineShadowRun run) {

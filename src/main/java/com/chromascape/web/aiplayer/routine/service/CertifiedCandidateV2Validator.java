@@ -171,7 +171,7 @@ public final class CertifiedCandidateV2Validator {
     }
     try {
       CurrentSliceIdentity converted = mapper.treeToValue(identity, CurrentSliceIdentity.class);
-      converted.validate();
+      converted.validateSignedProjection();
     } catch (RuntimeException | IOException e) {
       fail("IDENTITY_INVALID");
     }
@@ -233,7 +233,7 @@ public final class CertifiedCandidateV2Validator {
     compare(identity.path("source"), "source_manifest_hash", manifest, "source_manifest_hash");
     compare(identity.path("client"), "client_build_id", manifest, "base_commit");
     try {
-      mapper.treeToValue(identity, CurrentSliceIdentity.class).validate();
+      mapper.treeToValue(identity, CurrentSliceIdentity.class).validateSignedProjection();
     } catch (RuntimeException | IOException e) {
       fail("IDENTITY_INVALID");
     }

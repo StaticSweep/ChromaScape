@@ -21,4 +21,37 @@ public record FishingModel(
     @JsonProperty("actionVocabulary") List<SemanticAction> actionVocabulary,
     @JsonProperty("examples") List<TrainingExample> examples,
     @JsonProperty("featureWeights") Map<String, Object> featureWeights,
-    @JsonProperty("maxAcceptedPositionDistance") int maxAcceptedPositionDistance) {}
+    @JsonProperty("maxAcceptedPositionDistance") int maxAcceptedPositionDistance,
+    @JsonProperty("identity") com.chromascape.web.aiplayer.contract.CurrentSliceIdentity identity) {
+  /**
+   * Structural-only fixture constructor; production artifact loading requires current provenance.
+   */
+  public FishingModel(
+      int schemaVersion,
+      String modelId,
+      String kind,
+      String createdAt,
+      String trainingDatasetId,
+      String trainingRecordingId,
+      String trainingSessionId,
+      int requiredCatchCount,
+      List<SemanticAction> actionVocabulary,
+      List<TrainingExample> examples,
+      Map<String, Object> featureWeights,
+      int maxAcceptedPositionDistance) {
+    this(
+        schemaVersion,
+        modelId,
+        kind,
+        createdAt,
+        trainingDatasetId,
+        trainingRecordingId,
+        trainingSessionId,
+        requiredCatchCount,
+        actionVocabulary,
+        examples,
+        featureWeights,
+        maxAcceptedPositionDistance,
+        null);
+  }
+}

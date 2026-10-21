@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.leeuwbot.dev/sc967/candidate-execution-closure/v1",
+  "title": "candidate-execution-closure/v1",
+  "description": "Producer-signed companion of a certified-candidate/v2 manifest naming the headless runner package, shared Fishing core and dependency JARs that SC-2106 executes. It binds candidate_hash, candidate_id, certification_document_hash, jar_sha256 and key_id of the signed manifest. closure.closure_hash is the SC-967 canonical SHA-256 of the document without the closure member; closure.signature is Ed25519 over its raw 32 bytes with the manifest's key. Every entry of every closure JAR, except non-versioned META-INF metadata, must be byte-identical to the same entry of the signed candidate JAR. The closure grants no approval of its own.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "candidate",
+    "certification_document_hash",
+    "jar_sha256",
+    "key_id",
+    "signature_algorithm",
+    "task_key",
+    "task_core_entry",
+    "runner_version",
+    "adapter_version",
+    "protocol_version",
+    "package",
+    "core",
+    "dependencies",
+    "control_allowed",
+    "closure"
+  ],
+  "properties": {
+    "schema": { "const": "candidate-execution-closure/v1" },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_id", "candidate_hash"],
+      "properties": {
+        "candidate_id": { "type": "string", "pattern": "^cand_[0-9a-f]{24}$" },
+        "candidate_hash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "certification_document_hash": { "$ref": "#/$defs/hash" },
+    "jar_sha256": { "$ref": "#/$defs/hash" },
+    "key_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9._-]+$" },
+    "signature_algorithm": { "const": "Ed25519" },
+    "task_key": { "const": "FISHING_TRAINING" },
+    "task_core_entry": { "$ref": "#/$defs/className" },
+    "runner_version": { "$ref": "#/$defs/text" },
+    "adapter_version": { "$ref": "#/$defs/text" },
+    "protocol_version": { "$ref": "#/$defs/text" },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sha256", "size", "entrypoint"],
+      "properties": {
+        "name": { "$ref": "#/$defs/jarName" },
+        "sha256": { "$ref": "#/$defs/hash" },
+        "size": { "$ref": "#/$defs/size" },
+        "entrypoint": { "$ref": "#/$defs/className" }
+      }
+    },
+    "core": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "source_digest", "name", "sha256", "size", "entry_class"],
+      "properties": {
+        "id": { "$ref": "#/$defs/text" },
+        "version": { "$ref": "#/$defs/text" },
+        "source_digest": { "$ref": "#/$defs/hash" },
+        "name": { "$ref": "#/$defs/jarName" },
+        "sha256": { "$ref": "#/$defs/hash" },
+        "size": { "$ref": "#/$defs/size" },
+        "entry_class": { "$ref": "#/$defs/className" }
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "sha256", "size"],
+        "properties": {
+          "name": { "$ref": "#/$defs/jarName" },
+          "sha256": { "$ref": "#/$defs/hash" },
+          "size": { "$ref": "#/$defs/size" }
+        }
+      }
+    },
+    "control_allowed": { "const": false },
+    "closure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["closure_hash", "signature"],
+      "properties": {
+        "closure_hash": { "$ref": "#/$defs/hash" },
+        "signature": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "text": { "type": "string", "minLength": 1, "pattern": "\\S" },
+    "size": { "type": "integer", "minimum": 1 },
+    "jarName": { "type": "string", "pattern": "^[^/\\\\]+\\.jar$" },
+    "className": { "type": "string", "pattern": "^[A-Za-z0-9_$.]+$" }
+  }
+}

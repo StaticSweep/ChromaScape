@@ -51,14 +51,21 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  */
 @Service
 public class PatchCandidateWorkflowService {
+  /**
+   * Canonical hash of {@code src/test/resources/sc967/sc572-seeded-failure-v1.json}. The seeded
+   * failure manifest carries the failure code and the resolved source symbol, so renaming either
+   * requires regenerating this value with the fixture.
+   */
   private static final String SEEDED_FAIL =
-      "sha256:b201629e712be24815e43551a5185a2b45fe3a0b77b2aca8f2a51dd250917956";
+      "sha256:10f1e4d0f27c18472ff4193317eeaf8a1aa42751e4cefe0060b156e92cba5a3e";
+
+  private static final String SEEDED_FAILURE_CODE = "BLANK_FISH_ALIAS_ACCEPTED";
+  private static final String SOURCE_SYMBOL =
+      "FishingTaskDefinitionNormalizer#normalize(String, Map)";
   private static final String SOURCE_FILE =
-      "runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java";
+      "runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizer.java";
   private static final String TEST_FILE =
-      "runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTaskTest.java";
-  private static final String EXCEPTION_FILE =
-      "runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/UnsupportedFishTypeException.java";
+      "runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizerTest.java";
   private static final String SCHEMA_V2 = "certified-candidate/v2";
   private static final java.time.Duration LEASE_DURATION = java.time.Duration.ofMinutes(15);
   private static final List<String> BUILD_GATES =
@@ -68,92 +75,43 @@ public class PatchCandidateWorkflowService {
           ":client:shadowJar", ":client:generateRuntimeSbom");
   private static final String PATCH =
       """
-      diff --git a/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java
-      --- a/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java
-      +++ b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java
-      @@ -93,8 +93,11 @@ public class FishingExecutionTask extends AccountBuilderTask implements Configur
-      !     }
-      !\u0020
-      !     private Fish getFishType(String fishName) {
-      +        if (fishName == null || fishName.isBlank()) {
-      +            throw new UnsupportedFishTypeException(fishName);
-      +        }
-      !         // Convert fish name to Fish enum - simple mapping
-      -        switch (fishName.toLowerCase()) {
-      +        switch (fishName.trim().toLowerCase()) {
-      !             case "shrimp":
-      !             case "raw shrimp":
-      !                 return Fish.SHRIMP;
-      @@ -120,8 +123,7 @@ public class FishingExecutionTask extends AccountBuilderTask implements Configur
-      !             case "raw shark":
-      !                 return Fish.SHARK;
-      !             default:
-      -                System.out.println("[FishingExecutionTask] Warning: Unknown fish name '" + fishName + "', defaulting to SHRIMP");
-      -                return Fish.SHRIMP;
-      +                throw new UnsupportedFishTypeException(fishName);
-      !         }
-      !     }
-      !\u0020
-      diff --git a/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/UnsupportedFishTypeException.java b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/UnsupportedFishTypeException.java
-      new file mode 100644
-      --- /dev/null
-      +++ b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/UnsupportedFishTypeException.java
-      @@ -0,0 +1,12 @@
-      +package net.runelite.client.plugins.microbot.accountbuilder.builderPlanStep.fishing;
-      +
-      +/**
-      + * Raised when a Fishing plan names a null, blank, or unsupported fish.
-      + */
-      +public final class UnsupportedFishTypeException extends IllegalArgumentException
-      +{
-      +	public UnsupportedFishTypeException(String fishName)
-      +	{
-      +		super("Unsupported fish type: " + fishName);
-      +	}
-      +}
-      diff --git a/runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTaskTest.java b/runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTaskTest.java
-      new file mode 100644
-      --- /dev/null
-      +++ b/runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTaskTest.java
-      @@ -0,0 +1,38 @@
-      +package net.runelite.client.plugins.microbot.accountbuilder.builderPlanStep.fishing;
-      +
-      +import net.runelite.api.coords.WorldPoint;
-      +import org.junit.Test;
-      +
-      +public class FishingExecutionTaskTest
-      +{
-      +	@Test(expected = UnsupportedFishTypeException.class)
-      +	public void nullFishIsRejected()
-      +	{
-      +		new FishingExecutionTask(step(null));
-      +	}
-      +
-      +	@Test(expected = UnsupportedFishTypeException.class)
-      +	public void blankFishIsRejected()
-      +	{
-      +		new FishingExecutionTask(step("  "));
-      +	}
-      +
-      +	@Test(expected = UnsupportedFishTypeException.class)
-      +	public void unknownFishIsRejected()
-      +	{
-      +		new FishingExecutionTask(step("not-a-fish"));
-      +	}
-      +
+      diff --git a/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizer.java b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizer.java
+      index 4fd9a0d83c..5dc6e2af46 100644
+      --- a/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizer.java
+      +++ b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizer.java
+      @@ -180,6 +180,14 @@ public final class FishingTaskDefinitionNormalizer
+      !
+      ! 		String targetFish = text(s, "targetFish");
+      ! 		String fishType = text(s, "fishType");
+      +		if (s.get("targetFish") != null && targetFish == null)
+      +		{
+      +			return Result.error(FishingCoreCode.INVALID_SETTING, "targetFish must not be blank", "targetFish");
+      +		}
+      +		if (s.get("fishType") != null && fishType == null)
+      +		{
+      +			return Result.error(FishingCoreCode.INVALID_SETTING, "fishType must not be blank", "fishType");
+      +		}
+      ! 		String fish;
+      ! 		if (isExplicitFish(targetFish))
+      ! 		{
+      diff --git a/runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizerTest.java b/runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizerTest.java
+      index 622c04f0e3..1602e198c5 100644
+      --- a/runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizerTest.java
+      +++ b/runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizerTest.java
+      @@ -137,6 +137,13 @@ class FishingTaskDefinitionNormalizerTest
+      ! 			FishingTaskDefinitionNormalizer.normalize("WOODCUTTING_TRAINING", initialCaseSettings()), "taskKey");
+      ! 	}
+      !
       +	@Test
-      +	public void canonicalFishRemainsSupported()
+      +	void blankFishAliasesAreInvalidRatherThanMissing()
       +	{
-      +		new FishingExecutionTask(step("Shrimp"));
-      +		new FishingExecutionTask(step("raw shrimp"));
+      +		assertRejected(FishingCoreCode.INVALID_SETTING, normalize(with("targetFish", "  ")), "targetFish");
+      +		assertRejected(FishingCoreCode.INVALID_SETTING, normalize(with("fishType", "")), "fishType");
       +	}
       +
-      +	private static FishingPlanStep step(String fish)
-      +	{
-      +		return new FishingPlanStep(1, 2, fish, 1, 10.0, 10, 1,
-      +			new WorldPoint(3087, 3228, 0));
-      +	}
-      +}
+      ! 	@Test
+      ! 	void malformedValuesAreInvalid()
+      ! 	{
       """
           .replace("\n!", "\n");
 
@@ -247,6 +205,12 @@ public class PatchCandidateWorkflowService {
         new CertifiedCandidateV2Validator());
   }
 
+  private void requireCurrentCandidate(PatchCandidateRun entity) {
+    identities.requireOperation(
+        mapper.convertValue(read(entity.getIdentityJson()), CurrentSliceIdentity.class),
+        "candidate");
+  }
+
   private String stagingRoot() {
     return candidateProperties == null ? "" : candidateProperties.getStagingRoot();
   }
@@ -268,19 +232,23 @@ public class PatchCandidateWorkflowService {
     }
     if (operator == null || operator.getToken() == null || operator.getToken().isBlank()) {
       throw new IllegalStateException(
-          "ai-routine.operator.token (AI_ROUTINE_OPERATOR_TOKEN) is required when candidate builds are enabled");
+          "ai-routine.operator.token (AI_ROUTINE_OPERATOR_TOKEN) is required when candidate builds"
+              + " are enabled");
     }
     if (operator.getId() == null || operator.getId().isBlank()) {
       throw new IllegalStateException(
-          "ai-routine.operator.id (AI_ROUTINE_OPERATOR_ID) is required when candidate builds are enabled");
+          "ai-routine.operator.id (AI_ROUTINE_OPERATOR_ID) is required when candidate builds are"
+              + " enabled");
     }
     if (signingKeyPath == null || signingKeyPath.isBlank()) {
       throw new IllegalStateException(
-          "leeuwbot.signing.private-key-path (CANDIDATE_SIGNING_PRIVATE_KEY_PATH) is required when candidate builds are enabled");
+          "leeuwbot.signing.private-key-path (CANDIDATE_SIGNING_PRIVATE_KEY_PATH) is required when"
+              + " candidate builds are enabled");
     }
     if (signingKeyId == null || signingKeyId.isBlank()) {
       throw new IllegalStateException(
-          "leeuwbot.signing.key-id (CANDIDATE_SIGNING_KEY_ID) is required when candidate builds are enabled");
+          "leeuwbot.signing.key-id (CANDIDATE_SIGNING_KEY_ID) is required when candidate builds are"
+              + " enabled");
     }
     try {
       new CandidateSigner(signingKeyId, Path.of(signingKeyPath));
@@ -290,15 +258,18 @@ public class PatchCandidateWorkflowService {
     }
     if (registry == null || registry.baseUrl() == null || registry.baseUrl().isBlank()) {
       throw new IllegalStateException(
-          "leeuwbot.candidate-registry.base-url (LEEUWBOT_CANDIDATE_REGISTRY_URL) is required when candidate builds are enabled");
+          "leeuwbot.candidate-registry.base-url (LEEUWBOT_CANDIDATE_REGISTRY_URL) is required when"
+              + " candidate builds are enabled");
     }
     if (registry.token() == null || registry.token().isBlank()) {
       throw new IllegalStateException(
-          "leeuwbot.candidate-registry.token (STATIC_API_TOKEN) is required when candidate builds are enabled");
+          "leeuwbot.candidate-registry.token (STATIC_API_TOKEN) is required when candidate builds"
+              + " are enabled");
     }
     if (stagingRoot().isBlank()) {
       throw new IllegalStateException(
-          "sc967.candidate.staging-root (SC967_CANDIDATE_STAGING_ROOT) is required when candidate builds are enabled");
+          "sc967.candidate.staging-root (SC967_CANDIDATE_STAGING_ROOT) is required when candidate"
+              + " builds are enabled");
     }
     try {
       Files.createDirectories(Path.of(stagingRoot()).toAbsolutePath().normalize());
@@ -308,7 +279,8 @@ public class PatchCandidateWorkflowService {
     }
     if (expectedArtifactName == null || expectedArtifactName.isBlank()) {
       throw new IllegalStateException(
-          "micro6.expected-artifact-name (MICRO6_EXPECTED_ARTIFACT_NAME) is required when candidate builds are enabled");
+          "micro6.expected-artifact-name (MICRO6_EXPECTED_ARTIFACT_NAME) is required when candidate"
+              + " builds are enabled");
     }
   }
 
@@ -317,7 +289,8 @@ public class PatchCandidateWorkflowService {
       throw error(
           HttpStatus.FORBIDDEN,
           "CANDIDATE_BUILDS_DISABLED",
-          "candidate builds are disabled (sc967.candidate.builds-enabled=false); nothing can be queued or executed");
+          "candidate builds are disabled (sc967.candidate.builds-enabled=false); nothing can be"
+              + " queued or executed");
     }
   }
 
@@ -330,7 +303,7 @@ public class PatchCandidateWorkflowService {
           "FAILURE_FIXTURE_MISMATCH",
           "only the canonical seeded SC-572 FAIL manifest is eligible");
     }
-    if (!"UNSUPPORTED_FISH_DEFAULTED".equals(String.valueOf(request.get("failure_code")))) {
+    if (!SEEDED_FAILURE_CODE.equals(String.valueOf(request.get("failure_code")))) {
       throw error(
           HttpStatus.UNPROCESSABLE_ENTITY,
           "FAILURE_CODE_MISMATCH",
@@ -346,6 +319,8 @@ public class PatchCandidateWorkflowService {
     try {
       candidateIdentity =
           identities.validate(mapper.convertValue(identityValue, CurrentSliceIdentity.class));
+    } catch (com.chromascape.web.aiplayer.contract.CurrentSliceContractException e) {
+      throw e;
     } catch (RuntimeException e) {
       throw error(HttpStatus.UNPROCESSABLE_ENTITY, "CANDIDATE_IDENTITY_INVALID", e.getMessage());
     }
@@ -362,12 +337,13 @@ public class PatchCandidateWorkflowService {
           "CANDIDATE_IDENTITY_INCOMPLETE",
           "identity through graph and model is required before proposal creation");
     }
+    identities.requireOperation(candidateIdentity, "candidate");
     Micro6SourceManifestClient.SourceBinding resolved =
         source.resolve(
             new Micro6SourceManifestClient.SourceRequest(
                 "FISHING_TRAINING",
-                "net.runelite.client.plugins.microbot.accountbuilder.builderPlanStep.fishing.FishingExecutionTask",
-                "FishingExecutionTask#getFishType(String)",
+                "net.runelite.client.plugins.microbot.accountbuilder.sharedcore.fishing.FishingTaskDefinitionNormalizer",
+                SOURCE_SYMBOL,
                 Micro6SourceManifestClient.expectedIdentity(candidateIdentity)));
     if (!resolved.signatureVerified()
         || !SourceManifestContract.isGitObjectId(resolved.commitId())
@@ -376,7 +352,8 @@ public class PatchCandidateWorkflowService {
       throw error(
           HttpStatus.UNPROCESSABLE_ENTITY,
           "SOURCE_PROVENANCE_UNVERIFIED",
-          "only a signed source manifest with exact commit, tree, and artifact identity may enter the patch loop");
+          "only a signed source manifest with exact commit, tree, and artifact identity may enter"
+              + " the patch loop");
     }
     if (!resolved.clientBuildId().equals(candidateIdentity.client().clientBuildId())) {
       throw error(
@@ -385,7 +362,7 @@ public class PatchCandidateWorkflowService {
           "candidate identity client build differs from the authoritative source manifest");
     }
     candidateIdentity = withCandidateSource(candidateIdentity, resolved);
-    identities.validate(candidateIdentity);
+    identities.requireOperation(candidateIdentity, "candidate");
     String requestedBase = text(request, "base_commit");
     if (requestedBase != null && !requestedBase.equals(resolved.commitId())) {
       throw error(
@@ -401,30 +378,7 @@ public class PatchCandidateWorkflowService {
           "verified Micro6 source commit is required");
     }
 
-    Map<String, Object> binding = new LinkedHashMap<>();
-    binding.put("schema", "seeded-failure-source-binding/v1");
-    binding.put("derivation", "SEEDED_FIXTURE");
-    binding.put("failure_manifest_hash", SEEDED_FAIL);
-    binding.put("failure_code", "UNSUPPORTED_FISH_DEFAULTED");
-    binding.put("task_key", "FISHING_TRAINING");
-    binding.put("source_snapshot_id", resolved.sourceSnapshotId());
-    binding.put("source_manifest_hash", resolved.sourceManifestHash());
-    binding.put("file_id", resolved.fileId());
-    binding.put("relative_path", resolved.relativePath());
-    binding.put("clone_relative_path", resolved.cloneRelativePath());
-    binding.put("content_hash", resolved.contentHash());
-    binding.put("manifest_json", parse(resolved.manifestJson()));
-    binding.put("pinned_files", resolved.pinnedFiles());
-    binding.put("symbol", "FishingExecutionTask#getFishType(String)");
-    binding.put("start_line", resolved.startLine());
-    binding.put("end_line", resolved.endLine());
-    binding.put("preimage_hash", resolved.preimageHash());
-    binding.put("repository_id", resolved.repositoryId());
-    binding.put("commit_id", resolved.commitId());
-    binding.put("tree_id", resolved.treeId());
-    binding.put("build_id", resolved.clientBuildId());
-    binding.put("artifact_digest", resolved.artifactDigest());
-    binding.put("signature_verified", resolved.signatureVerified());
+    Map<String, Object> binding = seededFailureBinding(resolved, parse(resolved.manifestJson()));
 
     ObjectNode content = mapper.createObjectNode();
     content.put("schema", "patch-proposal/v1");
@@ -456,6 +410,39 @@ public class PatchCandidateWorkflowService {
     entity.setState("PATCH_PROPOSED");
     repository.save(entity);
     return response(entity);
+  }
+
+  /**
+   * Builds the seeded failure binding from the resolved source. The symbol and failure code are the
+   * resolved values, never a stale copy of the pre-normalizer code path.
+   */
+  static Map<String, Object> seededFailureBinding(
+      Micro6SourceManifestClient.SourceBinding resolved, JsonNode manifestJson) {
+    Map<String, Object> binding = new LinkedHashMap<>();
+    binding.put("schema", "seeded-failure-source-binding/v1");
+    binding.put("derivation", "SEEDED_FIXTURE");
+    binding.put("failure_manifest_hash", SEEDED_FAIL);
+    binding.put("failure_code", SEEDED_FAILURE_CODE);
+    binding.put("task_key", "FISHING_TRAINING");
+    binding.put("source_snapshot_id", resolved.sourceSnapshotId());
+    binding.put("source_manifest_hash", resolved.sourceManifestHash());
+    binding.put("file_id", resolved.fileId());
+    binding.put("relative_path", resolved.relativePath());
+    binding.put("clone_relative_path", resolved.cloneRelativePath());
+    binding.put("content_hash", resolved.contentHash());
+    binding.put("manifest_json", manifestJson);
+    binding.put("pinned_files", resolved.pinnedFiles());
+    binding.put("symbol", SOURCE_SYMBOL);
+    binding.put("start_line", resolved.startLine());
+    binding.put("end_line", resolved.endLine());
+    binding.put("preimage_hash", resolved.preimageHash());
+    binding.put("repository_id", resolved.repositoryId());
+    binding.put("commit_id", resolved.commitId());
+    binding.put("tree_id", resolved.treeId());
+    binding.put("build_id", resolved.clientBuildId());
+    binding.put("artifact_digest", resolved.artifactDigest());
+    binding.put("signature_verified", resolved.signatureVerified());
+    return binding;
   }
 
   /** Binds candidate provenance to the authoritative patch source without changing prior groups. */
@@ -495,6 +482,7 @@ public class PatchCandidateWorkflowService {
   @Transactional
   public Map<String, Object> approve(String id, String operatorId) {
     PatchCandidateRun entity = lockedProposal(id);
+    requireCurrentCandidate(entity);
     if (operatorId == null || operatorId.isBlank())
       throw error(
           HttpStatus.UNPROCESSABLE_ENTITY,
@@ -542,6 +530,7 @@ public class PatchCandidateWorkflowService {
   public Map<String, Object> enqueueBuild(String id) {
     requireBuildsEnabled();
     PatchCandidateRun entity = lockedProposal(id);
+    requireCurrentCandidate(entity);
     if (!"APPROVED".equals(entity.getState()))
       throw error(
           HttpStatus.CONFLICT, "PATCH_NOT_APPROVED", "explicit operator approval is required");
@@ -576,6 +565,9 @@ public class PatchCandidateWorkflowService {
     if (!buildsEnabled()) {
       return;
     }
+    PatchCandidateRun pending = repository.findByProposalId(id).orElse(null);
+    if (pending == null) return;
+    requireCurrentCandidate(pending);
     String attemptId = dispatcher.claim(id, Instant.now().plus(LEASE_DURATION));
     if (attemptId == null) {
       return;
@@ -588,12 +580,13 @@ public class PatchCandidateWorkflowService {
         dispatcher.persistFailure(id, attemptId, "PROPOSAL_NOT_FOUND");
         return;
       }
+      requireCurrentCandidate(entity);
       IsolatedPatchWorker.BuildRequest request =
           new IsolatedPatchWorker.BuildRequest(
               Path.of(micro6Root),
               entity.getBaseCommit(),
               entity.getPatchText(),
-              Set.of(SOURCE_FILE, EXCEPTION_FILE, TEST_FILE),
+              Set.of(SOURCE_FILE, TEST_FILE),
               List.of(),
               entity.getSourceSnapshotId(),
               entity.getSourceRelativePath(),
@@ -681,6 +674,7 @@ public class PatchCandidateWorkflowService {
     if (entity == null) {
       return Map.of("control_allowed", false);
     }
+    requireCurrentCandidate(entity);
     PatchCandidateRegistrationDispatcher.RegistrationClaim claim = claimRegistration(id);
     if (registrationDispatcher != null && claim == null) {
       return response(repository.findByProposalId(id).orElse(entity));
@@ -697,6 +691,7 @@ public class PatchCandidateWorkflowService {
     CandidateRegistryClient.RegistryManifestResponse lookup = null;
     CandidateRegistryClient.ArtifactDownload downloaded = null;
     try {
+      requireCurrentCandidate(entity);
       Path bundle = revalidatePersistedBundle(entity);
       lookup = registry.lookupEvidence(entity.getCandidateId(), entity.getManifestFileHash());
       Map<String, Object> localManifest = read(entity.getCandidateManifestJson());
@@ -773,6 +768,7 @@ public class PatchCandidateWorkflowService {
     if (entity == null) {
       return Map.of("control_allowed", false);
     }
+    requireCurrentCandidate(entity);
     PatchCandidateRegistrationDispatcher.RegistrationClaim claim = claimRegistration(id);
     if (registrationDispatcher != null && claim == null) {
       return response(repository.findByProposalId(id).orElse(entity));
@@ -787,6 +783,7 @@ public class PatchCandidateWorkflowService {
     CandidateRegistryClient.RegistryManifestResponse lookup = null;
     CandidateRegistryClient.ArtifactDownload downloaded = null;
     try {
+      requireCurrentCandidate(entity);
       Path bundle = revalidatePersistedBundle(entity);
       Map<String, Object> manifest = read(entity.getCandidateManifestJson());
       Path manifestPath = bundle.resolve("manifest.json");
@@ -947,6 +944,7 @@ public class PatchCandidateWorkflowService {
     if (entity == null || !"BUILT".equals(entity.getState())) {
       return;
     }
+    requireCurrentCandidate(entity);
     if (signingKeyPath == null
         || signingKeyPath.isBlank()
         || signingKeyId == null
@@ -1217,6 +1215,7 @@ public class PatchCandidateWorkflowService {
     if (entity == null || !"REGISTERING".equals(entity.getState())) {
       return;
     }
+    requireCurrentCandidate(entity);
     PatchCandidateRegistrationDispatcher.RegistrationClaim claim = claimRegistration(id);
     if (registrationDispatcher != null && claim == null) {
       return;
@@ -1236,6 +1235,7 @@ public class PatchCandidateWorkflowService {
     CandidateRegistryClient.RegistryManifestResponse lookup = null;
     CandidateRegistryClient.ArtifactDownload downloaded = null;
     try {
+      requireCurrentCandidate(entity);
       Path bundle = revalidatePersistedBundle(entity);
       Map<String, Object> manifest = read(entity.getCandidateManifestJson());
       Path manifestPath = bundle.resolve("manifest.json");

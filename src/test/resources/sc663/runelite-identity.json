@@ -1,0 +1,19 @@
+{
+  "schema": "current-slice-identity/v1",
+  "task": {
+    "task_key": "FISHING_TRAINING",
+    "settings_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "profile_id": "fixture-profile",
+    "profile_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "catalog_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "client": {
+    "client_id": "fixture-client",
+    "client_kind": "RUNELITE_CAPTURE",
+    "client_build_id": "fixture-runelite",
+    "artifact_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "adapter_contract": "runelite-capture/v1",
+    "domain": "RUNELITE"
+  },
+  "control_allowed": false
+}

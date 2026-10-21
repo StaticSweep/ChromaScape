@@ -1,0 +1,25 @@
+{
+  "schema": "current-slice-identity/v1",
+  "task": {
+    "task_key": "FISHING_TRAINING",
+    "settings_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "profile_id": "fixture-profile",
+    "profile_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "catalog_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "client": {
+    "client_id": "fixture-client",
+    "client_kind": "MICRO6_MANAGED",
+    "client_build_id": "fixture-micro6",
+    "artifact_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "adapter_contract": "micro6-builder/v2",
+    "domain": "MICRO6"
+  },
+  "control_allowed": false,
+  "run": {
+    "run_id": "fixture-run",
+    "attempt_id": "fixture-attempt",
+    "entry_id": 1,
+    "executor_instance_id": "fixture-executor"
+  }
+}

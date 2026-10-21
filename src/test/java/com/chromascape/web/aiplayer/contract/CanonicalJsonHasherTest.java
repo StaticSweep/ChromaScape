@@ -9,7 +9,14 @@ class CanonicalJsonHasherTest {
   void equivalentDocumentsHaveSameHash() {
     assertEquals(
         CanonicalJsonHasher.hashUtf8("{\"b\":2,\"a\":\"x\\r\\ny\"}", null),
-        CanonicalJsonHasher.hashUtf8("{ \"a\": \"x\\ny\", \"b\": 2 }", null));
+        CanonicalJsonHasher.hashUtf8("{ \"a\": \"x\\r\\ny\", \"b\": 2 }", null));
+  }
+
+  @Test
+  void stringLineEndingsRemainIdentityBearing() {
+    assertNotEquals(
+        CanonicalJsonHasher.hashUtf8("{\"a\":\"x\\r\\ny\"}", null),
+        CanonicalJsonHasher.hashUtf8("{\"a\":\"x\\ny\"}", null));
   }
 
   @Test

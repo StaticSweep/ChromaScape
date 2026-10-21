@@ -53,6 +53,8 @@ public class RoutineReplayShadowService {
     }
     CurrentSliceIdentity graphIdentity =
         mapper.convertValue(definition.get("identity"), CurrentSliceIdentity.class);
+    runService.requireOperation(requestedIdentity, "model");
+    runService.requireOperation(graphIdentity, "model");
     requestedIdentity.requireSameIdentity(graphIdentity);
 
     ObjectNode modelContent = mapper.createObjectNode();
@@ -94,6 +96,7 @@ public class RoutineReplayShadowService {
   public Map<String, Object> replay(String modelId, String recordingId) {
     RoutineModel model = model(modelId);
     CurrentSliceIdentity modelIdentity = readIdentity(model.getIdentityJson());
+    runService.requireOperation(modelIdentity, "replay");
     Map<String, Object> recording = captures.recording(recordingId);
     CurrentSliceIdentity recordingIdentity =
         mapper.convertValue(recording.get("identity"), CurrentSliceIdentity.class);
@@ -127,6 +130,7 @@ public class RoutineReplayShadowService {
   public Map<String, Object> shadow(String modelId, String sessionId) {
     RoutineModel model = model(modelId);
     CurrentSliceIdentity modelIdentity = readIdentity(model.getIdentityJson());
+    runService.requireOperation(modelIdentity, "shadow");
     Map<String, Object> session = captures.status(sessionId);
     CurrentSliceIdentity sessionIdentity =
         mapper.convertValue(session.get("identity"), CurrentSliceIdentity.class);

@@ -32,6 +32,7 @@ public class CaptureOperationDispatcher {
   private final CaptureRecordingGateway gateway;
   private final CaptureOperationResultService results;
   private final TransactionTemplate transactions;
+  private final com.chromascape.web.aiplayer.contract.CurrentSliceIdentityValidator identities;
   private final ExecutorService executor =
       new ThreadPoolExecutor(
           0,
@@ -46,6 +47,17 @@ public class CaptureOperationDispatcher {
       CaptureRecordingGateway gateway,
       CaptureOperationResultService results,
       PlatformTransactionManager transactionManager) {
+    this(operations, gateway, results, transactionManager, null);
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public CaptureOperationDispatcher(
+      RoutineCaptureOperationRepository operations,
+      CaptureRecordingGateway gateway,
+      CaptureOperationResultService results,
+      PlatformTransactionManager transactionManager,
+      com.chromascape.web.aiplayer.contract.CurrentSliceIdentityValidator identities) {
+    this.identities = identities;
     this.operations = operations;
     this.gateway = gateway;
     this.results = results;
@@ -82,6 +94,24 @@ public class CaptureOperationDispatcher {
   private Claim claimInTransaction(Long operationId) {
     RoutineCaptureOperation operation = operations.findWithLockById(operationId).orElse(null);
     if (operation == null || !claimable(operation, Instant.now())) return null;
+    if (identities != null) {
+      try {
+        var payload = OPERATION_MAPPER.readTree(operation.getRequestJson());
+        var identity =
+            OPERATION_MAPPER.treeToValue(
+                payload.path("identity"),
+                com.chromascape.web.aiplayer.contract.CurrentSliceIdentity.class);
+        identities.requireOperation(identity, "capture");
+        if ("START".equals(operation.getOperation()))
+          identities.requireOperation(identity, "video");
+      } catch (com.chromascape.web.aiplayer.contract.CurrentSliceContractException e) {
+        throw e;
+      } catch (Exception e) {
+        throw new com.chromascape.web.aiplayer.contract.CurrentSliceContractException(
+            com.chromascape.web.aiplayer.contract.CurrentSliceFailureCode.IDENTITY_GROUP_MISSING,
+            "CAPTURE_OPERATION_IDENTITY_INVALID");
+      }
+    }
     String attemptId = java.util.UUID.randomUUID().toString();
     operation.setState("LEASED");
     operation.setAttemptId(attemptId);

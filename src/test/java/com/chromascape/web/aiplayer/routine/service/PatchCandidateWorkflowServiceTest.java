@@ -8,10 +8,12 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.chromascape.web.aiplayer.contract.CanonicalJsonHasher;
 import com.chromascape.web.aiplayer.contract.CurrentSliceIdentity;
 import com.chromascape.web.aiplayer.routine.config.AiRoutineOperatorProperties;
 import com.chromascape.web.aiplayer.routine.config.Sc967CandidateProperties;
 import com.chromascape.web.aiplayer.routine.repository.PatchCandidateRunRepository;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
@@ -115,6 +117,64 @@ class PatchCandidateWorkflowServiceTest {
   }
 
   @Test
+  void seededFailureBindingUsesTheResolvedNormalizerSymbol() throws Exception {
+    String hash = "sha256:" + "b".repeat(64);
+    Micro6SourceManifestClient.SourceBinding resolved =
+        new Micro6SourceManifestClient.SourceBinding(
+            "build",
+            "srcsnap_bbbbbbbbbbbbbbbbbbbbbbbb",
+            hash,
+            "file_aaaaaaaaaaaaaaaa",
+            "FishingTaskDefinitionNormalizer.java",
+            "runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizer.java",
+            hash,
+            180,
+            195,
+            hash,
+            "class FishingTaskDefinitionNormalizer {}",
+            "{}",
+            java.util.Map.of(),
+            "micro6",
+            "0123456789a",
+            "fedcba987",
+            hash,
+            true);
+
+    java.util.Map<String, Object> binding =
+        PatchCandidateWorkflowService.seededFailureBinding(
+            resolved, new ObjectMapper().readTree(resolved.manifestJson()));
+
+    assertEquals("FishingTaskDefinitionNormalizer#normalize(String, Map)", binding.get("symbol"));
+    assertEquals("BLANK_FISH_ALIAS_ACCEPTED", binding.get("failure_code"));
+    assertEquals(
+        "sha256:10f1e4d0f27c18472ff4193317eeaf8a1aa42751e4cefe0060b156e92cba5a3e",
+        binding.get("failure_manifest_hash"));
+  }
+
+  @Test
+  void seededFailureFixturesFollowTheRenamedCodeAndManifest() throws Exception {
+    ObjectMapper mapper = new ObjectMapper();
+    JsonNode manifest;
+    JsonNode sourceBinding;
+    try (java.io.InputStream manifestStream =
+            getClass().getResourceAsStream("/sc967/sc572-seeded-failure-v1.json");
+        java.io.InputStream bindingStream =
+            getClass().getResourceAsStream("/sc967/fishing-seeded-fail-source-v1.json")) {
+      assertTrue(manifestStream != null, "seeded failure manifest fixture is missing");
+      assertTrue(bindingStream != null, "seeded failure source binding fixture is missing");
+      manifest = mapper.readTree(manifestStream);
+      sourceBinding = mapper.readTree(bindingStream);
+    }
+    assertEquals(
+        CanonicalJsonHasher.hash(manifest, null),
+        sourceBinding.path("failure_manifest_hash").asText());
+    assertEquals("BLANK_FISH_ALIAS_ACCEPTED", sourceBinding.path("failure_code").asText());
+    assertEquals(
+        "FishingTaskDefinitionNormalizer#normalize(String, Map)",
+        sourceBinding.path("symbol").asText());
+  }
+
+  @Test
   void canonicalCandidatePatchRetainsExactUnifiedDiffContext() throws Exception {
     Field patchField = PatchCandidateWorkflowService.class.getDeclaredField("PATCH");
     patchField.setAccessible(true);
@@ -122,30 +182,26 @@ class PatchCandidateWorkflowServiceTest {
 
     assertTrue(
         patch.contains(
-            "@@ -93,8 +93,11 @@ public class FishingExecutionTask"
-                + " extends AccountBuilderTask implements Configur\n"
-                + "     }\n"
-                + "\n"
-                + "     private Fish getFishType(String fishName) {\n"));
-    assertTrue(patch.contains("\n         // Convert fish name to Fish enum - simple mapping\n"));
+            "@@ -180,6 +180,14 @@ public final class FishingTaskDefinitionNormalizer\n"));
     assertTrue(
         patch.contains(
-            "@@ -120,8 +123,7 @@ public class FishingExecutionTask"
-                + " extends AccountBuilderTask implements Configur\n"
-                + "             case \"raw shark\":\n"
-                + "                 return Fish.SHARK;\n"
-                + "             default:\n"));
+            " \t\tString targetFish = text(s, \"targetFish\");\n"
+                + " \t\tString fishType = text(s, \"fishType\");\n"
+                + "+\t\tif (s.get(\"targetFish\") != null && targetFish == null)\n"));
     assertTrue(
         patch.contains(
-            "+                throw new UnsupportedFishTypeException(fishName);\n"
-                + "         }\n"
-                + "     }\n"
-                + "\n"
-                + "diff --git a/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/"));
+            "+\t\t\treturn Result.error(FishingCoreCode.INVALID_SETTING, "
+                + "\"fishType must not be blank\", \"fishType\");\n"));
+    assertTrue(
+        patch.contains("+\t@Test\n" + "+\tvoid blankFishAliasesAreInvalidRatherThanMissing()\n"));
     assertTrue(
         patch.contains(
-            "@@ -0,0 +1,38 @@\n"
-                + "+package net.runelite.client.plugins.microbot.accountbuilder.builderPlanStep.fishing;"));
+            "diff --git a/runelite-client/src/test/java/net/runelite/client/plugins/"
+                + "microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizerTest.java"));
+    assertTrue(
+        patch.contains(
+            "diff --git a/runelite-client/src/main/java/net/runelite/client/plugins/"
+                + "microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizer.java"));
   }
 
   @Test

@@ -78,6 +78,16 @@ public class RoutineCaptureIngestionService {
           "IDENTITY_FIELD_MISSING",
           "capture identity is required");
     }
+    com.chromascape.web.aiplayer.contract.CurrentWireContract.require(
+        request.schema(), "routine-capture-session/v1");
+    identities.requireOperation(request.identity(), "capture");
+    if (!"CHROMASCAPE_WINDOW".equals(request.videoCapture())) {
+      throw error(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "VIDEO_CAPTURE_UNSUPPORTED",
+          "capture must bind CHROMASCAPE_WINDOW");
+    }
+    identities.requireOperation(request.identity(), "video");
     String requestHash =
         CanonicalJsonHasher.hash(
             mapper.valueToTree(Map.of("endpoint", "/capture/sessions", "request", request)), null);
@@ -89,6 +99,7 @@ public class RoutineCaptureIngestionService {
       return response(existing);
     }
     CurrentSliceIdentity identity = identities.validate(request.identity());
+    identities.requireOperation(identity, "capture");
     if (identity.run() == null
         || identity.run().runId() == null
         || identity.run().runId().isBlank()) {
@@ -110,12 +121,6 @@ public class RoutineCaptureIngestionService {
       return response(existing);
     }
     identities.requireUnchanged(readIdentity(boundRun.getIdentityJson()), identity);
-    if (!"CHROMASCAPE_WINDOW".equals(request.videoCapture())) {
-      throw error(
-          HttpStatus.UNPROCESSABLE_ENTITY,
-          "VIDEO_CAPTURE_UNSUPPORTED",
-          "capture must bind CHROMASCAPE_WINDOW");
-    }
 
     RoutineCaptureRecord entity = new RoutineCaptureRecord();
     entity.setSessionId("capture_" + UUID.randomUUID().toString().replace("-", ""));
@@ -177,6 +182,7 @@ public class RoutineCaptureIngestionService {
   public Map<String, Object> reconcile(String sessionId, String idempotencyKey) {
     RoutineCaptureRecord entity =
         repository.findWithLockBySessionId(sessionId).orElseThrow(() -> notFound("session"));
+    identities.requireOperation(readIdentity(entity.getIdentityJson()), "capture");
     RoutineCaptureOperation operation =
         operations
             .findFirstBySessionIdOrderByCreatedAtDesc(sessionId)
@@ -213,8 +219,11 @@ public class RoutineCaptureIngestionService {
           HttpStatus.UNPROCESSABLE_ENTITY,
           "CAPTURE_REQUEST_INVALID",
           "completion request is required");
+    com.chromascape.web.aiplayer.contract.CurrentWireContract.require(
+        request.schema(), "routine-capture-complete/v1");
     RoutineCaptureRecord entity =
         repository.findWithLockBySessionId(sessionId).orElseThrow(() -> notFound("session"));
+    identities.requireOperation(readIdentity(entity.getIdentityJson()), "capture");
     ObjectNode requestNode = mapper.createObjectNode();
     requestNode.put("endpoint", "/capture/sessions/" + sessionId + "/complete");
     requestNode.put("session_id", sessionId);
@@ -252,6 +261,7 @@ public class RoutineCaptureIngestionService {
     Map<String, Object> operationRequest = new LinkedHashMap<>();
     operationRequest.put("endpoint", "/capture/sessions/" + sessionId + "/complete");
     operationRequest.put("session_id", sessionId);
+    operationRequest.put("identity", readIdentity(entity.getIdentityJson()));
     operationRequest.put("recording_id", entity.getRecordingId());
     operationRequest.put("debug_session_id", entity.getDebugSessionId());
     operationRequest.put("final_tick", request.finalTick());
@@ -275,6 +285,42 @@ public class RoutineCaptureIngestionService {
     repository.save(entity);
     dispatcher.dispatchAfterCommit(operation.getId());
     return response(entity);
+  }
+
+  public void requireRecordingOperation(String recordingId, String operation) {
+    RoutineCaptureRecord entity =
+        repository.findByRecordingId(recordingId).orElseThrow(() -> notFound("recording"));
+    identities.requireOperation(readIdentity(entity.getIdentityJson()), operation);
+  }
+
+  /** Current finalized recording provenance used by dataset/model consumers. No mutation occurs. */
+  public CurrentSliceIdentity recordingIdentity(
+      String recordingId, String operation, String debugSessionId) {
+    RoutineCaptureRecord entity =
+        repository.findByRecordingId(recordingId).orElseThrow(() -> notFound("recording"));
+    CurrentSliceIdentity identity = readIdentity(entity.getIdentityJson());
+    identities.requireOperation(identity, operation);
+    if (!entity.isCompleted()
+        || identity.capture() == null
+        || !recordingId.equals(identity.capture().recordingId())
+        || !java.util.Objects.equals(entity.getRecordingHash(), identity.capture().recordingHash())
+        || (debugSessionId != null && !debugSessionId.equals(entity.getDebugSessionId()))) {
+      throw new com.chromascape.web.aiplayer.contract.CurrentSliceContractException(
+          com.chromascape.web.aiplayer.contract.CurrentSliceFailureCode.IDENTITY_MISMATCH,
+          "finalized recording identity differs from its capture binding");
+    }
+    return identity;
+  }
+
+  /** Current live observation binding; a generic debug session cannot masquerade as a capture. */
+  public CurrentSliceIdentity debugSessionIdentity(String debugSessionId, String operation) {
+    RoutineCaptureRecord entity =
+        repository
+            .findByDebugSessionId(debugSessionId)
+            .orElseThrow(() -> notFound("current capture session"));
+    CurrentSliceIdentity identity = readIdentity(entity.getIdentityJson());
+    identities.requireOperation(identity, operation);
+    return identity;
   }
 
   @Transactional(readOnly = true)
@@ -317,8 +363,11 @@ public class RoutineCaptureIngestionService {
     if (request == null)
       throw error(
           HttpStatus.UNPROCESSABLE_ENTITY, "CAPTURE_REQUEST_INVALID", "batch request is required");
+    com.chromascape.web.aiplayer.contract.CurrentWireContract.require(
+        request.schema(), ticks ? "routine-tick-batch/v1" : "routine-action-batch/v1");
     RoutineCaptureRecord entity =
         repository.findWithLockBySessionId(sessionId).orElseThrow(() -> notFound("session"));
+    identities.requireOperation(readIdentity(entity.getIdentityJson()), "capture");
     if (request.sessionId() != null && !sessionId.equals(request.sessionId()))
       conflict("IDENTITY_MISMATCH", "batch session_id does not match path");
     if (!"RECORDING".equals(entity.getCompletionStatus()))
@@ -560,6 +609,8 @@ public class RoutineCaptureIngestionService {
   private CurrentSliceIdentity readIdentity(String json) {
     try {
       return identities.validate(mapper.readValue(json, CurrentSliceIdentity.class));
+    } catch (com.chromascape.web.aiplayer.contract.CurrentSliceContractException e) {
+      throw e;
     } catch (Exception e) {
       throw new IllegalStateException("persisted identity is invalid", e);
     }
