@@ -1731,4 +1731,66 @@ tasks.register<Test>("sc666CompletionTest") {
     classpath = sourceSets["sc666CompletionTest"].runtimeClasspath
     useJUnitPlatform()
     systemProperty("sc666.test.jdbc.url", providers.gradleProperty("sc666TestJdbcUrl").getOrElse(""))
+
+
+// SC-663 cross-repository proof uses original, explicitly staged producer inputs. It must not
+// become a silently skipped ordinary test when a CI checkout lacks the companion repositories.
+tasks.test {
+	exclude("com/chromascape/web/aiplayer/contract/CurrentContractProducerRoundTripTest*")
+	exclude("com/chromascape/web/aiplayer/contract/CurrentContractPackagedFactoryTest*")
+	exclude("com/chromascape/web/aiplayer/contract/CurrentContractReleaseManifestTest*")
+}
+tasks.register<Test>("sc663ContractTest") {
+	group = "verification"
+	description = "Verifies current Micro6 and original RuneLite-capture producer round-trips"
+	testClassesDirs = sourceSets.test.get().output.classesDirs
+	classpath = sourceSets.test.get().runtimeClasspath
+	useJUnitPlatform()
+	filter { includeTestsMatching("com.chromascape.web.aiplayer.contract.CurrentContractProducerRoundTripTest") }
+	systemProperty("sc663.capture.sources", file(providers.gradleProperty("sc663CaptureSources")
+		.orElse("../ai-routine-contracts/java/ai-routine-capture-contract/src/main/java").get()).absolutePath)
+	systemProperty("sc663.micro6.sources", file(providers.gradleProperty("sc663Micro6Sources")
+		.orElse("../micro6/runelite-client/src/main/java").get()).absolutePath)
+	systemProperty("sc663.micro6.fixtures", file(providers.gradleProperty("sc663Micro6Fixtures")
+		.orElse("../micro6/runelite-client/src/test/resources/micro6-fixtures").get()).absolutePath)
+}
+
+// SC-663 packaged-client gate: loads the selected production factories from the exact full JARs.
+tasks.register<Test>("sc663PackageTest") {
+	group = "verification"
+	description = "Loads production capture factories from the selected packaged client JARs"
+	testClassesDirs = sourceSets.test.get().output.classesDirs
+	classpath = sourceSets.test.get().runtimeClasspath
+	useJUnitPlatform()
+	filter { includeTestsMatching("com.chromascape.web.aiplayer.contract.CurrentContractPackagedFactoryTest") }
+	systemProperty("sc663.packaged.micro6", providers.gradleProperty("sc663PackagedMicro6").getOrElse(""))
+	systemProperty("sc663.packaged.runelite", providers.gradleProperty("sc663PackagedRuneLite").getOrElse(""))
+	systemProperty("sc663.stale.micro6", providers.gradleProperty("sc663StaleMicro6").getOrElse(""))
+}
+
+// SC-663 release manifest gate: validates reviewed pins against immutable measured copies.
+tasks.register<Test>("sc663ManifestTest") {
+	group = "verification"
+	description = "Validates the reviewed release manifest against measured artifact copies"
+	testClassesDirs = sourceSets.test.get().output.classesDirs
+	classpath = sourceSets.test.get().runtimeClasspath
+	useJUnitPlatform()
+	filter { includeTestsMatching("com.chromascape.web.aiplayer.contract.CurrentContractReleaseManifestTest") }
+	systemProperty("sc663.manifest", providers.gradleProperty("sc663Manifest").getOrElse(""))
+	systemProperty("sc663.packaged.micro6", providers.gradleProperty("sc663PackagedMicro6").getOrElse(""))
+	systemProperty("sc663.packaged.runelite", providers.gradleProperty("sc663PackagedRuneLite").getOrElse(""))
+}
+
+// SC-663: embed source identity in the packaged backend; runtime measures the actual JAR bytes.
+val sc663BackendCommit = providers.exec {
+	commandLine("git", "rev-parse", "HEAD")
+}.standardOutput.asText.map { it.trim() }
+val sc663BackendDirty = providers.exec {
+	commandLine("git", "status", "--porcelain", "--untracked-files=no")
+}.standardOutput.asText.map { it.isNotBlank() }
+tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
+	manifest.attributes(mapOf(
+		"SC663-Commit-Id" to sc663BackendCommit.get(),
+		"SC663-Build-Id" to "${project.version}@${sc663BackendCommit.get()}${if (sc663BackendDirty.get()) "-dirty" else ""}"
+	))
 }
