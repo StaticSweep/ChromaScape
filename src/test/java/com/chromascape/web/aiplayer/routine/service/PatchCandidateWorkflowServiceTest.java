@@ -175,6 +175,54 @@ class PatchCandidateWorkflowServiceTest {
   }
 
   @Test
+  void closureInputsMapTheCollectedClosureArtifacts() throws Exception {
+    String inputs =
+        "{\"schema\":\"sc2106-execution-closure-inputs/v1\","
+            + "\"taskCoreEntry\":\"example.FishingCore\","
+            + "\"runnerVersion\":\"1.0.0\","
+            + "\"adapterVersion\":\"xrsps-candidate-adapter/v1\","
+            + "\"protocolVersion\":\"xrsps-candidate-session/v2\","
+            + "\"runnerJarName\":\"runner.jar\","
+            + "\"entrypoint\":\"example.CandidateMain\","
+            + "\"coreId\":\"micro6-shared-fishing-core\","
+            + "\"coreVersion\":\"1.0.0\","
+            + "\"coreSourceDigest\":\"sha256:"
+            + "c".repeat(64)
+            + "\","
+            + "\"coreJarName\":\"core.jar\","
+            + "\"coreEntryClass\":\"example.FishingSharedCore\","
+            + "\"dependencyJarNames\":[\"dep.jar\"]}";
+    IsolatedPatchWorker.BuildResult build =
+        new IsolatedPatchWorker.BuildResult(
+            "BUILT",
+            "base",
+            java.util.List.of("file"),
+            null,
+            null,
+            "candidate.jar",
+            new byte[] {1},
+            "runtime-sbom.cdx.json",
+            new byte[] {2},
+            new byte[] {3},
+            new byte[] {4},
+            "execution-closure-inputs.json",
+            inputs.getBytes(StandardCharsets.UTF_8),
+            java.util.List.of(
+                new IsolatedPatchWorker.ClosureArtifact("core.jar", new byte[] {5}),
+                new IsolatedPatchWorker.ClosureArtifact("runner.jar", new byte[] {6}),
+                new IsolatedPatchWorker.ClosureArtifact("dep.jar", new byte[] {7})));
+
+    CandidateExecutionClosureV1.Inputs mapped = PatchCandidateWorkflowService.closureInputs(build);
+
+    assertEquals("runner.jar", mapped.runner().name());
+    assertEquals("core.jar", mapped.core().name());
+    assertEquals(1, mapped.dependencies().size());
+    assertEquals("dep.jar", mapped.dependencies().get(0).name());
+    assertEquals("example.CandidateMain", mapped.entrypoint());
+    assertEquals("example.FishingCore", mapped.taskCoreEntry());
+  }
+
+  @Test
   void canonicalCandidatePatchRetainsExactUnifiedDiffContext() throws Exception {
     Field patchField = PatchCandidateWorkflowService.class.getDeclaredField("PATCH");
     patchField.setAccessible(true);

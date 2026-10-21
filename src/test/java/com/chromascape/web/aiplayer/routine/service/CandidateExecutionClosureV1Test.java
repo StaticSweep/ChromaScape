@@ -162,6 +162,63 @@ class CandidateExecutionClosureV1Test {
   }
 
   @Test
+  void closureBuiltForAnotherCandidateIsRejected() throws Exception {
+    Bundle bundle = Bundle.of(MAPPER.readTree(Files.readAllBytes(
+        vectorsPath().getParent().resolve("execution-closure-vectors.json"))));
+    JsonNode manifest = MAPPER.readTree(bundle.manifest);
+    ObjectNode foreign = (ObjectNode) manifest.deepCopy();
+    ((ObjectNode) foreign.path("candidate")).put("candidate_id", "cand_000000000000000000000000");
+    IllegalArgumentException rejected =
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                CandidateExecutionClosureV1.validate(
+                    bundle.closure,
+                    foreign,
+                    bundle.jar,
+                    bundle.runner,
+                    bundle.core,
+                    List.of(bundle.dependency),
+                    publicKey));
+    assertEquals("EXECUTION_CLOSURE_BINDING_INVALID:candidate_id", rejected.getMessage());
+  }
+
+  @Test
+  void missingOrTamperedClosureJarIsRejected() throws Exception {
+    Bundle bundle = Bundle.of(MAPPER.readTree(Files.readAllBytes(
+        vectorsPath().getParent().resolve("execution-closure-vectors.json"))));
+    JsonNode manifest = MAPPER.readTree(bundle.manifest);
+    IllegalArgumentException missing =
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                CandidateExecutionClosureV1.validate(
+                    bundle.closure,
+                    manifest,
+                    bundle.jar,
+                    bundle.runner,
+                    bundle.core,
+                    List.of(),
+                    publicKey));
+    assertEquals("EXECUTION_CLOSURE_DEPENDENCIES_INCOMPLETE", missing.getMessage());
+
+    byte[] tampered = jar("org/example/Dependency.class", "tampered");
+    IllegalArgumentException changed =
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                CandidateExecutionClosureV1.validate(
+                    bundle.closure,
+                    manifest,
+                    bundle.jar,
+                    bundle.runner,
+                    bundle.core,
+                    List.of(tampered),
+                    publicKey));
+    assertEquals("DEPENDENCY_HASH_MISMATCH", changed.getMessage());
+  }
+
+  @Test
   void tamperedClosureOrWrongKeyIsRejected() throws Exception {
     Bundle bundle =
         Bundle.of(

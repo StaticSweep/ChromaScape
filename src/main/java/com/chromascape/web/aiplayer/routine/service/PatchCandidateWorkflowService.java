@@ -16,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,9 +71,13 @@ public class PatchCandidateWorkflowService {
   private static final java.time.Duration LEASE_DURATION = java.time.Duration.ofMinutes(15);
   private static final List<String> BUILD_GATES =
       List.of(
-          ":client:compileJava", ":client:sc967CandidateCheckstyleMain",
-          ":client:sc967CandidateCheckstyleTest", ":client:sc967CandidateTest",
-          ":client:shadowJar", ":client:generateRuntimeSbom");
+          ":client:compileJava",
+          ":client:sc967CandidateCheckstyleMain",
+          ":client:sc967CandidateCheckstyleTest",
+          ":client:sc967CandidateTest",
+          ":client:shadowJar",
+          ":client:generateRuntimeSbom",
+          ":client:sc2106ExecutionClosureInputs");
   private static final String PATCH =
       """
       diff --git a/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizer.java b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizer.java
@@ -963,6 +968,13 @@ public class PatchCandidateWorkflowService {
       transition(entity, "FAILED", Map.of("failure_code", "CERTIFICATION_ARTIFACT_MISSING"));
       return;
     }
+    if (build.closureInputsBytes() == null
+        || build.closureInputsName() == null
+        || build.closureArtifacts() == null
+        || build.closureArtifacts().isEmpty()) {
+      transition(entity, "FAILED", Map.of("failure_code", "EXECUTION_CLOSURE_INPUTS_MISSING"));
+      return;
+    }
     try {
       Path root = Path.of(stagingRoot()).toAbsolutePath().normalize();
       Files.createDirectories(root);
@@ -1011,12 +1023,27 @@ public class PatchCandidateWorkflowService {
       byte[] manifestBytes = write(manifest).getBytes(java.nio.charset.StandardCharsets.UTF_8);
       candidateValidator.validate(
           manifestBytes, build.certificationBytes(), build.jarBytes(), build.sbomBytes());
+      JsonNode signedManifest = mapper.valueToTree(manifest);
+      CandidateExecutionClosureV1.Inputs closureInputs = closureInputs(build);
+      byte[] closureBytes =
+          CandidateExecutionClosureV1.build(
+              signedManifest, build.jarBytes(), closureInputs, signer);
+      CandidateExecutionClosureV1.validate(
+          closureBytes,
+          signedManifest,
+          build.jarBytes(),
+          closureInputs.runner().bytes(),
+          closureInputs.core().bytes(),
+          closureInputs.dependencies().stream()
+              .map(CandidateExecutionClosureV1.ArtifactBytes::bytes)
+              .toList(),
+          candidateValidator.configuredPublicKey());
       Path finalBundle = root.resolve(candidateId);
       if (Files.exists(finalBundle)) {
         // Reuse only an identical bundle; never overwrite a persisted candidate.
-        verifyBundleContents(finalBundle, build, manifestBytes, candidateId);
+        verifyBundleContents(finalBundle, build, manifestBytes, closureBytes, candidateId);
       } else {
-        finalBundle = stageBundle(root, build, manifestBytes, candidateId);
+        finalBundle = stageBundle(root, build, manifestBytes, closureBytes, candidateId);
       }
       // Registration fingerprint binds the canonical manifest and every artifact evidence field.
       ObjectNode fingerprint = mapper.createObjectNode();
@@ -1026,6 +1053,8 @@ public class PatchCandidateWorkflowService {
       fingerprint.put("sbom_sha256", sbomSha);
       fingerprint.put("sbom_size", (long) build.sbomBytes().length);
       fingerprint.put("certification_document_hash", certificationSha);
+      fingerprint.put("execution_closure_sha256", hash(closureBytes));
+      fingerprint.put("execution_closure_size", (long) closureBytes.length);
       String requestHash = CanonicalJsonHasher.hash(fingerprint, null);
       CurrentSliceIdentity frozen =
           mapper.convertValue(read(entity.getIdentityJson()), CurrentSliceIdentity.class);
@@ -1079,10 +1108,112 @@ public class PatchCandidateWorkflowService {
   }
 
   /**
+   * Maps the build's closure inputs document and JAR bytes onto the producer contract. Every JAR
+   * named by the document must exist exactly once in the collected build output.
+   */
+  static CandidateExecutionClosureV1.Inputs closureInputs(IsolatedPatchWorker.BuildResult build)
+      throws IOException {
+    JsonNode inputs;
+    try {
+      inputs = Sc967CanonicalJson.parse(build.closureInputsBytes());
+    } catch (IllegalArgumentException invalid) {
+      throw new IOException("EXECUTION_CLOSURE_INPUTS_INVALID", invalid);
+    }
+    if (!"sc2106-execution-closure-inputs/v1".equals(requiredText(inputs, "schema"))) {
+      throw new IOException("EXECUTION_CLOSURE_INPUTS_INVALID");
+    }
+    Map<String, byte[]> artifacts = new LinkedHashMap<>();
+    for (IsolatedPatchWorker.ClosureArtifact artifact : build.closureArtifacts()) {
+      if (artifacts.put(artifact.name(), artifact.bytes()) != null) {
+        throw new IOException("EXECUTION_CLOSURE_JAR_AMBIGUOUS:" + artifact.name());
+      }
+    }
+    String runnerName = requiredText(inputs, "runnerJarName");
+    String coreName = requiredText(inputs, "coreJarName");
+    byte[] runner = artifacts.get(runnerName);
+    byte[] core = artifacts.get(coreName);
+    if (runner == null || core == null) {
+      throw new IOException("EXECUTION_CLOSURE_JAR_MISSING");
+    }
+    List<CandidateExecutionClosureV1.ArtifactBytes> dependencies = new ArrayList<>();
+    for (JsonNode dependency : inputs.path("dependencyJarNames")) {
+      if (!dependency.isTextual()) throw new IOException("EXECUTION_CLOSURE_INPUTS_INVALID");
+      String name = dependency.asText();
+      byte[] bytes = artifacts.get(name);
+      if (bytes == null) throw new IOException("EXECUTION_CLOSURE_JAR_MISSING:" + name);
+      dependencies.add(new CandidateExecutionClosureV1.ArtifactBytes(name, bytes));
+    }
+    if (dependencies.isEmpty()) throw new IOException("EXECUTION_CLOSURE_DEPENDENCIES_INCOMPLETE");
+    return new CandidateExecutionClosureV1.Inputs(
+        requiredText(inputs, "taskCoreEntry"),
+        requiredText(inputs, "runnerVersion"),
+        requiredText(inputs, "adapterVersion"),
+        requiredText(inputs, "protocolVersion"),
+        new CandidateExecutionClosureV1.ArtifactBytes(runnerName, runner),
+        requiredText(inputs, "entrypoint"),
+        requiredText(inputs, "coreId"),
+        requiredText(inputs, "coreVersion"),
+        requiredText(inputs, "coreSourceDigest"),
+        new CandidateExecutionClosureV1.ArtifactBytes(coreName, core),
+        requiredText(inputs, "coreEntryClass"),
+        dependencies);
+  }
+
+  /** Re-runs the consumer's exact closure rules against persisted bytes before registry I/O. */
+  private void validateExecutionClosure(
+      byte[] closureBytes, byte[] manifestBytes, byte[] jarBytes, Map<String, byte[]> artifacts)
+      throws IOException {
+    JsonNode closure = Sc967CanonicalJson.parse(closureBytes);
+    String runnerName = requiredText(closure.path("package"), "name");
+    String coreName = requiredText(closure.path("core"), "name");
+    byte[] runner = artifacts.get(runnerName);
+    byte[] core = artifacts.get(coreName);
+    if (runner == null || core == null) throw new IOException("EXECUTION_CLOSURE_JAR_MISSING");
+    List<byte[]> dependencies = new ArrayList<>();
+    for (JsonNode dependency : closure.path("dependencies")) {
+      String name = requiredText(dependency, "name");
+      byte[] bytes = artifacts.get(name);
+      if (bytes == null) throw new IOException("EXECUTION_CLOSURE_JAR_MISSING:" + name);
+      dependencies.add(bytes);
+    }
+    CandidateExecutionClosureV1.validate(
+        closureBytes,
+        Sc967CanonicalJson.parse(manifestBytes),
+        jarBytes,
+        runner,
+        core,
+        dependencies,
+        candidateValidator.configuredPublicKey());
+  }
+
+  private static byte[] readClosureArtifact(Path bundle, String name) throws IOException {
+    if (!name.matches("[A-Za-z0-9._-]+\\.jar")) {
+      throw new IOException("EXECUTION_CLOSURE_JAR_NAME_INVALID");
+    }
+    Path path = bundle.resolve(name);
+    if (!Files.isRegularFile(path) || Files.isSymbolicLink(path)) {
+      throw new IOException("CANDIDATE_STAGING_MISSING");
+    }
+    return Files.readAllBytes(path);
+  }
+
+  private static String requiredText(JsonNode node, String field) throws IOException {
+    JsonNode value = node == null ? null : node.get(field);
+    if (value == null || !value.isTextual() || value.textValue().isBlank()) {
+      throw new IOException("EXECUTION_CLOSURE_INVALID:" + field);
+    }
+    return value.textValue();
+  }
+
+  /**
    * Writes the complete bundle into a private temp directory and atomically renames it into place.
    */
   private Path stageBundle(
-      Path root, IsolatedPatchWorker.BuildResult build, byte[] manifestBytes, String candidateId)
+      Path root,
+      IsolatedPatchWorker.BuildResult build,
+      byte[] manifestBytes,
+      byte[] closureBytes,
+      String candidateId)
       throws IOException {
     Path tmp = Files.createDirectories(root.resolve(".tmp").resolve(UUID.randomUUID().toString()));
     try {
@@ -1090,8 +1221,12 @@ public class PatchCandidateWorkflowService {
       writeNew(tmp.resolve(build.sbomName()), build.sbomBytes());
       writeNew(tmp.resolve("certification.json"), build.certificationBytes());
       writeNew(tmp.resolve("manifest.json"), manifestBytes);
+      writeNew(tmp.resolve("execution-closure.json"), closureBytes);
+      for (IsolatedPatchWorker.ClosureArtifact artifact : build.closureArtifacts()) {
+        writeNew(tmp.resolve(artifact.name()), artifact.bytes());
+      }
       // Re-read and verify every staged byte before the rename.
-      verifyBundleContents(tmp, build, manifestBytes, candidateId);
+      verifyBundleContents(tmp, build, manifestBytes, closureBytes, candidateId);
       Path target = root.resolve(candidateId);
       try {
         Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE);
@@ -1121,7 +1256,11 @@ public class PatchCandidateWorkflowService {
    * Verifies every persisted bundle byte against the built evidence and the exact manifest bytes.
    */
   private void verifyBundleContents(
-      Path bundle, IsolatedPatchWorker.BuildResult build, byte[] manifestBytes, String candidateId)
+      Path bundle,
+      IsolatedPatchWorker.BuildResult build,
+      byte[] manifestBytes,
+      byte[] closureBytes,
+      String candidateId)
       throws IOException {
     boolean finalBundle = bundle.getFileName().toString().equals(candidateId);
     boolean privateTemporaryBundle =
@@ -1137,7 +1276,12 @@ public class PatchCandidateWorkflowService {
     Path sbom = bundle.resolve(build.sbomName());
     Path cert = bundle.resolve("certification.json");
     Path manifestPath = bundle.resolve("manifest.json");
-    for (Path path : List.of(jar, sbom, cert, manifestPath)) {
+    Path closurePath = bundle.resolve("execution-closure.json");
+    List<Path> required = new ArrayList<>(List.of(jar, sbom, cert, manifestPath, closurePath));
+    for (IsolatedPatchWorker.ClosureArtifact artifact : build.closureArtifacts()) {
+      required.add(bundle.resolve(artifact.name()));
+    }
+    for (Path path : required) {
       if (!Files.isRegularFile(path)) throw new IOException("CANDIDATE_STAGING_MISSING");
       if (Files.isSymbolicLink(path)) throw new IOException("STAGING_PATH_INVALID");
     }
@@ -1145,14 +1289,26 @@ public class PatchCandidateWorkflowService {
     byte[] sbomBytes = Files.readAllBytes(sbom);
     byte[] certificationBytes = Files.readAllBytes(cert);
     byte[] persistedManifestBytes = Files.readAllBytes(manifestPath);
+    byte[] persistedClosureBytes = Files.readAllBytes(closurePath);
     if (!java.util.Arrays.equals(jarBytes, build.jarBytes())
         || !java.util.Arrays.equals(sbomBytes, build.sbomBytes())
         || !java.util.Arrays.equals(certificationBytes, build.certificationBytes())
-        || !java.util.Arrays.equals(persistedManifestBytes, manifestBytes)) {
+        || !java.util.Arrays.equals(persistedManifestBytes, manifestBytes)
+        || !java.util.Arrays.equals(persistedClosureBytes, closureBytes)) {
       throw new IOException("STAGING_BUNDLE_CONFLICT");
+    }
+    Map<String, byte[]> closureArtifacts = new LinkedHashMap<>();
+    for (IsolatedPatchWorker.ClosureArtifact artifact : build.closureArtifacts()) {
+      byte[] persisted = Files.readAllBytes(bundle.resolve(artifact.name()));
+      if (!java.util.Arrays.equals(persisted, artifact.bytes())) {
+        throw new IOException("STAGING_BUNDLE_CONFLICT");
+      }
+      closureArtifacts.put(artifact.name(), persisted);
     }
     try {
       candidateValidator.validate(persistedManifestBytes, certificationBytes, jarBytes, sbomBytes);
+      validateExecutionClosure(
+          persistedClosureBytes, persistedManifestBytes, jarBytes, closureArtifacts);
     } catch (IllegalArgumentException e) {
       throw new IOException(e.getMessage(), e);
     }
@@ -1184,7 +1340,8 @@ public class PatchCandidateWorkflowService {
     Path sbom = bundle.resolve(String.valueOf(manifest.get("sbom_name")));
     Path cert = bundle.resolve("certification.json");
     Path manifestPath = bundle.resolve("manifest.json");
-    for (Path path : List.of(jar, sbom, cert, manifestPath)) {
+    Path closurePath = bundle.resolve("execution-closure.json");
+    for (Path path : List.of(jar, sbom, cert, manifestPath, closurePath)) {
       if (!Files.isRegularFile(path) || Files.isSymbolicLink(path))
         throw new IOException("CANDIDATE_STAGING_MISSING");
     }
@@ -1192,6 +1349,7 @@ public class PatchCandidateWorkflowService {
     byte[] jarBytes = Files.readAllBytes(jar);
     byte[] sbomBytes = Files.readAllBytes(sbom);
     byte[] certificationBytes = Files.readAllBytes(cert);
+    byte[] closureBytes = Files.readAllBytes(closurePath);
     if (!entity.getManifestFileHash().equals(hash(manifestBytes))
         || !entity.getJarSha256().equals(hash(jarBytes))
         || !entity.getSbomSha256().equals(hash(sbomBytes))
@@ -1200,6 +1358,19 @@ public class PatchCandidateWorkflowService {
     }
     try {
       candidateValidator.validate(manifestBytes, certificationBytes, jarBytes, sbomBytes);
+      JsonNode closure = Sc967CanonicalJson.parse(closureBytes);
+      Map<String, byte[]> artifacts = new LinkedHashMap<>();
+      artifacts.put(
+          requiredText(closure.path("package"), "name"),
+          readClosureArtifact(bundle, requiredText(closure.path("package"), "name")));
+      artifacts.put(
+          requiredText(closure.path("core"), "name"),
+          readClosureArtifact(bundle, requiredText(closure.path("core"), "name")));
+      for (JsonNode dependency : closure.path("dependencies")) {
+        String name = requiredText(dependency, "name");
+        artifacts.put(name, readClosureArtifact(bundle, name));
+      }
+      validateExecutionClosure(closureBytes, manifestBytes, jarBytes, artifacts);
     } catch (IllegalArgumentException e) {
       throw new IOException(e.getMessage(), e);
     }
