@@ -93,8 +93,8 @@ public record CurrentSliceIdentity(
    *
    * <p>The v2 schema deliberately signs only {@code source_snapshot_id} and {@code
    * source_manifest_hash}; the repository/commit/tree/build/artifact enrichment fields belong to
-   * live execution identities and are forbidden inside a v2 manifest. Everything else is
-   * identical to {@link #validate()}, so a signed manifest cannot bypass the nested group rules.
+   * live execution identities and are forbidden inside a v2 manifest. Everything else is identical
+   * to {@link #validate()}, so a signed manifest cannot bypass the nested group rules.
    */
   public void validateSignedProjection() {
     validate(true);
@@ -211,8 +211,7 @@ public record CurrentSliceIdentity(
     if (source.artifactDigest() != null) hash(source.artifactDigest(), "source.artifact_digest");
     if (source.signatureVerified() != null && !source.signatureVerified()) {
       fail(
-          CurrentSliceFailureCode.IDENTITY_FIELD_MISSING,
-          "source.signature_verified must be true");
+          CurrentSliceFailureCode.IDENTITY_FIELD_MISSING, "source.signature_verified must be true");
     }
   }
 

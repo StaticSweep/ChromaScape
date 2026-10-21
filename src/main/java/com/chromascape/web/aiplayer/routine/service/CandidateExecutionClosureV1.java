@@ -42,7 +42,8 @@ public final class CandidateExecutionClosureV1 {
   public static final long MAX_CLOSURE_BYTES = 1L << 20;
   public static final long MAX_INFLATED_BYTES = 1L << 30;
 
-  private static final String SCHEMA_RESOURCE = "contracts/candidate-execution-closure-v1.schema.json";
+  private static final String SCHEMA_RESOURCE =
+      "contracts/candidate-execution-closure-v1.schema.json";
   private static final JsonSchema CLOSURE_SCHEMA = load();
 
   private CandidateExecutionClosureV1() {}
@@ -134,8 +135,7 @@ public final class CandidateExecutionClosureV1 {
   private static void validateUnsigned(
       byte[] closureBytes, JsonNode signedManifest, byte[] signedJarBytes, Inputs inputs) {
     JsonNode closure = parseAndBind(closureBytes, signedManifest);
-    List<byte[]> dependencies =
-        inputs.dependencies().stream().map(ArtifactBytes::bytes).toList();
+    List<byte[]> dependencies = inputs.dependencies().stream().map(ArtifactBytes::bytes).toList();
     requireArtifacts(
         closure, signedJarBytes, inputs.runner().bytes(), inputs.core().bytes(), dependencies);
   }
@@ -155,7 +155,11 @@ public final class CandidateExecutionClosureV1 {
     if (!messages.isEmpty()) {
       fail("EXECUTION_CLOSURE_SCHEMA_INVALID:" + messages.iterator().next().getMessage());
     }
-    bind(closure.path("candidate"), "candidate_id", signedManifest.path("candidate"), "candidate_id");
+    bind(
+        closure.path("candidate"),
+        "candidate_id",
+        signedManifest.path("candidate"),
+        "candidate_id");
     bind(
         closure.path("candidate"),
         "candidate_hash",

@@ -163,8 +163,11 @@ class CandidateExecutionClosureV1Test {
 
   @Test
   void closureBuiltForAnotherCandidateIsRejected() throws Exception {
-    Bundle bundle = Bundle.of(MAPPER.readTree(Files.readAllBytes(
-        vectorsPath().getParent().resolve("execution-closure-vectors.json"))));
+    Bundle bundle =
+        Bundle.of(
+            MAPPER.readTree(
+                Files.readAllBytes(
+                    vectorsPath().getParent().resolve("execution-closure-vectors.json"))));
     JsonNode manifest = MAPPER.readTree(bundle.manifest);
     ObjectNode foreign = (ObjectNode) manifest.deepCopy();
     ((ObjectNode) foreign.path("candidate")).put("candidate_id", "cand_000000000000000000000000");
@@ -185,8 +188,11 @@ class CandidateExecutionClosureV1Test {
 
   @Test
   void missingOrTamperedClosureJarIsRejected() throws Exception {
-    Bundle bundle = Bundle.of(MAPPER.readTree(Files.readAllBytes(
-        vectorsPath().getParent().resolve("execution-closure-vectors.json"))));
+    Bundle bundle =
+        Bundle.of(
+            MAPPER.readTree(
+                Files.readAllBytes(
+                    vectorsPath().getParent().resolve("execution-closure-vectors.json"))));
     JsonNode manifest = MAPPER.readTree(bundle.manifest);
     IllegalArgumentException missing =
         assertThrows(
