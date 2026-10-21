@@ -22,6 +22,10 @@ val sc967VectorsPath =
 		// property/environment override remains available for CI and WSL path translation.
 		.orElse("C:\\Dev\\IdeaProjects\\contracts\\sc967\\ed25519-vectors.json")
 
+// SC-2106 R0.5: allow a private JUnit report location so concurrent Gradle runs sharing
+// `build/` cannot wipe each other's test evidence.
+val sc967ReportDir = providers.gradleProperty("sc967ReportDir")
+
 plugins {
 	java
 	checkstyle
@@ -158,6 +162,12 @@ tasks.test {
 		}
 		systemProperty("sc967.vectors.path", resolved.absolutePath)
 		logger.lifecycle("SC-967 vectors: ${resolved.absolutePath}")
+	}
+	sc967ReportDir.orNull?.takeIf { it.isNotBlank() }?.let { directory ->
+		val root = file(directory)
+		reports.junitXml.outputLocation.set(root.resolve("junit"))
+		reports.html.outputLocation.set(root.resolve("html"))
+		binaryResultsDirectory.set(root.resolve("binary"))
 	}
 }
 
