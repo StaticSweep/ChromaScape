@@ -795,7 +795,8 @@ public class PatchCandidateWorkflowService {
       Path jar = bundle.resolve(String.valueOf(manifest.get("jar_name")));
       Path sbom = bundle.resolve(String.valueOf(manifest.get("sbom_name")));
       Path cert = bundle.resolve("certification.json");
-      registration = registry.registerEvidence(manifestPath, jar, sbom, cert);
+      registration =
+          registry.registerEvidence(manifestPath, jar, sbom, cert, closureUpload(bundle));
       verifyRegistryReadback(
           Files.readAllBytes(manifestPath),
           manifest,
@@ -815,6 +816,7 @@ public class PatchCandidateWorkflowService {
       if (!downloaded.sha256().equals(String.valueOf(manifest.get("jar_sha256")))) {
         throw new IllegalStateException("REGISTRY_ARTIFACT_HASH_MISMATCH");
       }
+      verifyClosureReadback(registry, bundle, entity.getCandidateId(), registration);
       return transitionClaimed(
           entity,
           claim,
@@ -1197,6 +1199,54 @@ public class PatchCandidateWorkflowService {
     return Files.readAllBytes(path);
   }
 
+  /**
+   * The persisted closure document and the JAR files it names, for registry upload. Names come from
+   * the document the producer just validated, and each must be a plain regular file of the bundle.
+   */
+  static CandidateRegistryClient.ClosureUpload closureUpload(Path bundle) throws IOException {
+    Path document = bundle.resolve("execution-closure.json");
+    JsonNode closure = Sc967CanonicalJson.parse(Files.readAllBytes(document));
+    List<String> names = new ArrayList<>();
+    names.add(requiredText(closure.path("package"), "name"));
+    names.add(requiredText(closure.path("core"), "name"));
+    for (JsonNode dependency : closure.path("dependencies")) {
+      names.add(requiredText(dependency, "name"));
+    }
+    List<Path> jars = new ArrayList<>();
+    for (String name : names) {
+      readClosureArtifact(bundle, name);
+      jars.add(bundle.resolve(name));
+    }
+    return new CandidateRegistryClient.ClosureUpload(document, jars);
+  }
+
+  /**
+   * Reads the registered closure back and requires every byte to equal the persisted bundle: the
+   * registry's advertised digest, the closure document, and each closure JAR.
+   */
+  static void verifyClosureReadback(
+      CandidateRegistryClient registry,
+      Path bundle,
+      String candidateId,
+      CandidateRegistryClient.RegistryManifestResponse registration)
+      throws Exception {
+    CandidateRegistryClient.ClosureUpload upload = closureUpload(bundle);
+    byte[] persisted = Files.readAllBytes(upload.document());
+    if (!CandidateRegistryClient.hash(persisted).equals(registration.closureHash())) {
+      throw new IllegalStateException("REGISTRY_CLOSURE_HASH_MISMATCH");
+    }
+    CandidateRegistryClient.ArtifactDownload document = registry.downloadClosure(candidateId);
+    if (!java.util.Arrays.equals(persisted, document.bytes())) {
+      throw new IllegalStateException("REGISTRY_CLOSURE_READBACK_MISMATCH");
+    }
+    for (Path jar : upload.jars()) {
+      byte[] served = registry.downloadClosureJar(candidateId, jar.getFileName().toString());
+      if (!java.util.Arrays.equals(Files.readAllBytes(jar), served)) {
+        throw new IllegalStateException("REGISTRY_CLOSURE_READBACK_MISMATCH:" + jar.getFileName());
+      }
+    }
+  }
+
   private static String requiredText(JsonNode node, String field) throws IOException {
     JsonNode value = node == null ? null : node.get(field);
     if (value == null || !value.isTextual() || value.textValue().isBlank()) {
@@ -1413,7 +1463,8 @@ public class PatchCandidateWorkflowService {
       Path jar = bundle.resolve(String.valueOf(manifest.get("jar_name")));
       Path sbom = bundle.resolve(String.valueOf(manifest.get("sbom_name")));
       Path cert = bundle.resolve("certification.json");
-      registration = registry.registerEvidence(manifestPath, jar, sbom, cert);
+      registration =
+          registry.registerEvidence(manifestPath, jar, sbom, cert, closureUpload(bundle));
       verifyRegistryReadback(
           Files.readAllBytes(manifestPath),
           manifest,
@@ -1433,6 +1484,7 @@ public class PatchCandidateWorkflowService {
       if (!downloaded.sha256().equals(String.valueOf(manifest.get("jar_sha256")))) {
         throw new IllegalStateException("REGISTRY_ARTIFACT_HASH_MISMATCH");
       }
+      verifyClosureReadback(registry, bundle, entity.getCandidateId(), registration);
       transitionClaimed(
           entity,
           claim,
