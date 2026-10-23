@@ -178,20 +178,12 @@ public class MouseVideoDerivativeWorker {
     java.util.concurrent.atomic.AtomicBoolean missingTiming =
         new java.util.concurrent.atomic.AtomicBoolean();
     long cap = Math.max(1L, properties.getMaxIndexedFrames());
+    // Listing every frame decodes the whole stream, like the proxy encode, so it shares the
+    // analysis budget; the short probe budget only fits a header probe (60 s of 1080p60 ~ 40 s).
     MouseVideoProcessRunner.Result result =
         runner.run(
-            List.of(
-                properties.getFfprobe(),
-                "-v",
-                "error",
-                "-select_streams",
-                "v:0",
-                "-show_entries",
-                "stream=time_base:frame=best_effort_timestamp,best_effort_timestamp_time,pts,pts_time,key_frame,duration_time,pkt_duration_time",
-                "-of",
-                "compact=p=0:nk=0",
-                media.toAbsolutePath().toString()),
-            TimeUnit.SECONDS.toMillis(properties.getProbeBudgetSeconds()),
+            frameIndexCommand(properties.getFfprobe(), media),
+            TimeUnit.SECONDS.toMillis(properties.getAnalysisBudgetSeconds()),
             cancellation,
             line -> {
               Map<String, String> values = parseCompactLine(line);
@@ -263,6 +255,21 @@ public class MouseVideoDerivativeWorker {
     return output;
   }
 
+  /** The ffprobe command whose compact per-frame lines become the frozen frame index. */
+  static List<String> frameIndexCommand(String ffprobe, Path media) {
+    return List.of(
+        ffprobe,
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=time_base:frame=best_effort_timestamp,best_effort_timestamp_time,pts,pts_time,key_frame,duration_time,pkt_duration_time",
+        "-of",
+        "compact=p=0:nk=0",
+        media.toAbsolutePath().toString());
+  }
+
   private boolean runFfmpeg(MouseVideoCancellation cancellation, String... arguments)
       throws IOException, InterruptedException {
     List<String> command = new ArrayList<>();
@@ -296,7 +303,7 @@ public class MouseVideoDerivativeWorker {
     }
   }
 
-  private static Map<String, String> parseCompactLine(String line) {
+  static Map<String, String> parseCompactLine(String line) {
     Map<String, String> values = new LinkedHashMap<>();
     if (line == null || line.isBlank()) {
       return values;
@@ -326,7 +333,7 @@ public class MouseVideoDerivativeWorker {
         + '}';
   }
 
-  private static String firstPresent(Map<String, String> values, String... names) {
+  static String firstPresent(Map<String, String> values, String... names) {
     for (String name : names) {
       String value = values.get(name);
       if (value != null && !value.isBlank() && !"N/A".equalsIgnoreCase(value.trim())) {

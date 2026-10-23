@@ -282,32 +282,15 @@ public class MouseVideoAnalysisWorker {
   private void extractSamples(
       MouseVideoCancellation cancellation, Path media, Path frames, int step)
       throws IOException, InterruptedException {
-    String filter =
-        "select='not(mod(n\\," + step + "))',scale='min(iw,480)':-2:flags=area,format=gray";
     MouseVideoProcessRunner.Result result =
         runner.run(
-            List.of(
+            samplingCommand(
                 properties.getFfmpeg(),
-                "-hide_banner",
-                "-loglevel",
-                "error",
-                "-nostdin",
-                "-y",
-                "-threads",
-                "2",
-                "-filter_threads",
-                "1",
-                "-i",
-                media.toAbsolutePath().toString(),
-                "-map",
-                "0:v:0",
-                "-vf",
-                filter,
-                "-vsync",
-                "0",
-                "-frames:v",
-                Integer.toString(Math.max(1, properties.getMaxVisualFrames())),
-                frames.resolve("%06d.png").toAbsolutePath().toString()),
+                media,
+                frames,
+                step,
+                properties.getMaxVisualFrames(),
+                properties.getVisualSampleMaxWidth()),
             TimeUnit.SECONDS.toMillis(properties.getAnalysisBudgetSeconds()),
             cancellation,
             null,
@@ -317,6 +300,43 @@ public class MouseVideoAnalysisWorker {
           MouseVideoException.CODE_DECODER_FAILED,
           "Visual sampling failed (exit " + result.exitCode() + ")");
     }
+  }
+
+  /**
+   * The exact bounded ffmpeg command that writes the grayscale sample sequence analyzed by {@link
+   * MouseVideoVisualAnalyzer}. Shared with the corpus qualification harness so evaluation decodes
+   * frames the same way production does.
+   */
+  static List<String> samplingCommand(
+      String ffmpeg, Path media, Path frames, int step, int maxVisualFrames, int maxWidth) {
+    String filter =
+        "select='not(mod(n\\,"
+            + step
+            + "))',scale='min(iw,"
+            + Math.max(16, maxWidth)
+            + ")':-2:flags=area,format=gray";
+    return List.of(
+        ffmpeg,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-nostdin",
+        "-y",
+        "-threads",
+        "2",
+        "-filter_threads",
+        "1",
+        "-i",
+        media.toAbsolutePath().toString(),
+        "-map",
+        "0:v:0",
+        "-vf",
+        filter,
+        "-vsync",
+        "0",
+        "-frames:v",
+        Integer.toString(Math.max(1, maxVisualFrames)),
+        frames.resolve("%06d.png").toAbsolutePath().toString());
   }
 
   private Map<String, Object> observations(

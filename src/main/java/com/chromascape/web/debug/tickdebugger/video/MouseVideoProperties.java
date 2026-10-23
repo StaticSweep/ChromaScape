@@ -87,6 +87,9 @@ public class MouseVideoProperties {
   /** Hard cap on frames decoded by the visual producer, independent of the source frame count. */
   private int maxVisualFrames = 3_600;
 
+  /** Maximum width of the grayscale analysis samples; wider sources are area-downscaled. */
+  private int visualSampleMaxWidth = 480;
+
   /** Minimum contiguous low-motion interval that may be described as a pause. */
   private long pauseMinMillis = 250L;
 
@@ -96,6 +99,14 @@ public class MouseVideoProperties {
   /** Normalized delta at or above which a sampled pair is a scene cut candidate. */
   private double cutMinDelta = 0.22d;
 
+  /**
+   * A smaller frame difference is still a cut when it is at least {@code cutSpikeRatio} times both
+   * adjacent sampled differences: an isolated spike, unlike sustained camera motion.
+   */
+  private double cutSpikeMinDelta = 0.04d;
+
+  private double cutSpikeRatio = 4.0d;
+
   /** Normalized delta at or above which a non-cut frame pair is a camera/activity candidate. */
   private double activityMinDelta = 0.05d;
 
@@ -104,7 +115,24 @@ public class MouseVideoProperties {
 
   private int visualCursorHotspotX;
   private int visualCursorHotspotY;
-  private double visualCursorMaxDelta = 0.18d;
+
+  /**
+   * cursor-template/v2 thresholds: minimum masked zero-mean correlation, accepted luma gain range,
+   * minimum patch standard deviation (grey levels) and the runner-up margin below which a frame is
+   * ambiguous. Tuned on the SC-2150 FA12 development split only; see docs/mouse-video-import.md.
+   */
+  private double visualCursorMinScore = 0.85d;
+
+  /** Stricter score a detection needs when it does not continue the previous one (hysteresis). */
+  private double visualCursorStartScore = 0.88d;
+
+  private double visualCursorMinGain = 0.35d;
+  private double visualCursorMaxGain = 1.6d;
+  private double visualCursorMinContrast = 12.0d;
+  private double visualCursorAmbiguityMargin = 0.05d;
+
+  /** Mean absolute luma change below which a placement is unchanged versus its neighbours. */
+  private double visualCursorStaticMaxDelta = 6.0d;
 
   /** Maximum output bounds for an exact-frame preview. */
   private int maxPreviewWidth = 1_920;
@@ -136,6 +164,14 @@ public class MouseVideoProperties {
 
   public int getMaxVisualFrames() {
     return maxVisualFrames;
+  }
+
+  public int getVisualSampleMaxWidth() {
+    return visualSampleMaxWidth;
+  }
+
+  public void setVisualSampleMaxWidth(int visualSampleMaxWidth) {
+    this.visualSampleMaxWidth = visualSampleMaxWidth;
   }
 
   public void setMaxVisualFrames(int maxVisualFrames) {
@@ -198,12 +234,76 @@ public class MouseVideoProperties {
     this.visualCursorHotspotY = visualCursorHotspotY;
   }
 
-  public double getVisualCursorMaxDelta() {
-    return visualCursorMaxDelta;
+  public double getVisualCursorMinScore() {
+    return visualCursorMinScore;
   }
 
-  public void setVisualCursorMaxDelta(double visualCursorMaxDelta) {
-    this.visualCursorMaxDelta = visualCursorMaxDelta;
+  public void setVisualCursorMinScore(double visualCursorMinScore) {
+    this.visualCursorMinScore = visualCursorMinScore;
+  }
+
+  public double getVisualCursorStartScore() {
+    return visualCursorStartScore;
+  }
+
+  public void setVisualCursorStartScore(double visualCursorStartScore) {
+    this.visualCursorStartScore = visualCursorStartScore;
+  }
+
+  public double getVisualCursorMinGain() {
+    return visualCursorMinGain;
+  }
+
+  public void setVisualCursorMinGain(double visualCursorMinGain) {
+    this.visualCursorMinGain = visualCursorMinGain;
+  }
+
+  public double getVisualCursorMaxGain() {
+    return visualCursorMaxGain;
+  }
+
+  public void setVisualCursorMaxGain(double visualCursorMaxGain) {
+    this.visualCursorMaxGain = visualCursorMaxGain;
+  }
+
+  public double getVisualCursorMinContrast() {
+    return visualCursorMinContrast;
+  }
+
+  public void setVisualCursorMinContrast(double visualCursorMinContrast) {
+    this.visualCursorMinContrast = visualCursorMinContrast;
+  }
+
+  public double getVisualCursorAmbiguityMargin() {
+    return visualCursorAmbiguityMargin;
+  }
+
+  public void setVisualCursorAmbiguityMargin(double visualCursorAmbiguityMargin) {
+    this.visualCursorAmbiguityMargin = visualCursorAmbiguityMargin;
+  }
+
+  public double getVisualCursorStaticMaxDelta() {
+    return visualCursorStaticMaxDelta;
+  }
+
+  public void setVisualCursorStaticMaxDelta(double visualCursorStaticMaxDelta) {
+    this.visualCursorStaticMaxDelta = visualCursorStaticMaxDelta;
+  }
+
+  public double getCutSpikeMinDelta() {
+    return cutSpikeMinDelta;
+  }
+
+  public void setCutSpikeMinDelta(double cutSpikeMinDelta) {
+    this.cutSpikeMinDelta = cutSpikeMinDelta;
+  }
+
+  public double getCutSpikeRatio() {
+    return cutSpikeRatio;
+  }
+
+  public void setCutSpikeRatio(double cutSpikeRatio) {
+    this.cutSpikeRatio = cutSpikeRatio;
   }
 
   public int getMaxPreviewWidth() {

@@ -110,6 +110,19 @@ class MouseVideoDerivativeWorkerTest {
   }
 
   @Test
+  void frameIndexRunsUnderTheAnalysisBudgetNotTheProbeBudget() throws Exception {
+    assumeTrue(worker.ffmpegAvailable(), "ffmpeg is required for derivative qualification");
+    Path media = generateClip("clip.mp4", 1);
+    // A 1 ms probe budget would time out any full-stream frame listing.
+    properties.setProbeBudgetSeconds(0L);
+
+    MouseVideoDerivativeWorker.Derivatives derivatives =
+        worker.derive(root.resolve("workspace"), media, new MouseVideoCancellation());
+
+    assertThat(derivatives.indexedFrames()).isEqualTo(10L);
+  }
+
+  @Test
   void cancellationStopsOwnedRootAndDescendantProcesses() throws Exception {
     assumeTrue(worker.ffmpegAvailable(), "ffmpeg is required for derivative qualification");
     Path workspace = root.resolve("cancel-workspace");

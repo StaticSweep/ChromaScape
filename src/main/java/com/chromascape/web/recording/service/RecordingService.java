@@ -86,6 +86,12 @@ public class RecordingService implements FrameListener {
       new java.util.ArrayList<>();
   private final java.util.Set<String> timingQualityCodes = new java.util.LinkedHashSet<>();
   private long lastMediaSlot = -1;
+
+  /**
+   * SC-2150 per-frame capture-time sidecar of the current recording, or {@code null} when disabled
+   * or not creatable. Written only where a frame is actually encoded, with its real media time.
+   */
+  private RecordingFrameTimingWriter frameTiming;
   private long recordingStartTime;
   private volatile long recordingStartTimeNano; // Store nano time at start
   private String currentRecordingId;
@@ -804,6 +810,9 @@ public class RecordingService implements FrameListener {
     long mediaMicros = Math.round(slot * 1_000_000.0 / unifiedConfig.getFps());
     recorder.setTimestamp(mediaMicros);
     recorder.record(frameConverter.convert(frame.image));
+    if (frameTiming != null) {
+      frameTiming.frame(encodedFrameCount, captured, duplicated, mediaMicros);
+    }
     lastMediaSlot = slot;
     encodedMediaMicros = mediaMicros;
     encodedFrameCount++;
@@ -831,6 +840,15 @@ public class RecordingService implements FrameListener {
     // stream produced media that advanced at only ~1/3 of wall time.
     final long pollTimeoutMs = Math.max(1L, 1000L / targetFps);
     long lastTimestampMicros = -1L;
+    frameTiming =
+        config.isFrameTimingSidecar() && currentRecordingFile != null
+            ? RecordingFrameTimingWriter.open(
+                currentRecordingFile.toPath(),
+                String.valueOf(currentRecordingId),
+                recordingStartTime,
+                recordingStartTimeNano,
+                targetFps)
+            : null;
 
     while (encoderRunning || !frameBuffer.isEmpty()) {
       try {
@@ -886,6 +904,10 @@ public class RecordingService implements FrameListener {
     }
 
     encodedMediaMicros = Math.max(0L, lastTimestampMicros);
+    if (frameTiming != null) {
+      frameTiming.close();
+      frameTiming = null;
+    }
     logger.info(
         "Encoder thread finished (encoded {} frames, {} ms media)",
         encodedFrameCount,

@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -28,6 +29,16 @@ public class MouseVideoVisualAnalyzer {
   public static final String OBSERVATIONS_SCHEMA = "observations/v1";
   public static final String QUALITY_SCHEMA = "quality/v1";
   public static final String ALGORITHM_ID = "visual/v1";
+
+  /**
+   * Absolute frame-difference cut, plus a moderate isolated spike: at least {@code cutSpikeRatio}
+   * times every other sampled pair difference within {@link #CUT_WINDOW} samples. A window rather
+   * than the two adjacent pairs keeps duplicated-frame stutter during camera motion from looking
+   * like a run of spikes.
+   */
+  static final String CUT_METHOD = "scene-diff/v3";
+
+  static final int CUT_WINDOW = 5;
 
   private static final int GRID_COLUMNS = 12;
   private static final int GRID_ROWS = 8;
@@ -80,11 +91,25 @@ public class MouseVideoVisualAnalyzer {
 
     BufferedImage template = loadTemplate(cursorTemplate);
     boolean cursorAvailable = template != null;
+    MouseVideoCursorTracker tracker = null;
+    Map<String, Object> calibration = null;
+    int neighborOffset = neighborOffset(samples);
+    if (cursorAvailable) {
+      tracker = new MouseVideoCursorTracker(template, properties);
+      calibration =
+          calibrate(
+              tracker, framesDirectory, samples.size(), neighborOffset, sourceWidth, sourceHeight);
+    }
 
+    double[] pairDeltas = pairDeltas(framesDirectory, samples.size());
+    // Where each sample's forward cursor observation sits in the list, and whether it is visible,
+    // so the backward pass can upgrade a forward miss in place without reordering observations.
+    int[] cursorSlots = new int[samples.size()];
+    boolean[] forwardVisible = new boolean[samples.size()];
+    Arrays.fill(cursorSlots, -1);
     for (int position = 0; position < samples.size(); position++) {
       Sample sample = samples.get(position);
-      Path file = framesDirectory.resolve(String.format(Locale.ROOT, "%06d.png", position + 1));
-      int[][] current = loadGrayscale(file);
+      int[][] current = loadSample(framesDirectory, position);
       if (current == null) {
         gaps.add(gap(sample.ordinal(), "decoded frame could not be read"));
         resetPause(
@@ -116,13 +141,20 @@ public class MouseVideoVisualAnalyzer {
             seconds(index.get((int) Math.min(previousOrdinal, index.size() - 1)));
         double intervalSeconds = Math.max(0.0d, seconds - previousSeconds);
         double brightness = mean(current);
-        if (delta >= properties.getCutMinDelta()) {
+        double localMax = localMaximum(pairDeltas, position);
+        boolean spike =
+            delta >= properties.getCutSpikeMinDelta()
+                && delta >= properties.getCutSpikeRatio() * localMax;
+        if (delta >= properties.getCutMinDelta() || spike) {
           cutCandidates++;
           Map<String, Object> evidence = new LinkedHashMap<>();
           evidence.put("beforeFrameOrdinal", Math.max(0L, sample.ordinal() - 1));
           evidence.put("afterFrameOrdinal", sample.ordinal());
           evidence.put("samplingStep", step);
           evidence.put("meanDelta", round(delta));
+          evidence.put("windowMaxDelta", round(localMax));
+          evidence.put("window", CUT_WINDOW);
+          evidence.put("rule", delta >= properties.getCutMinDelta() ? "absolute" : "spike");
           observations.add(
               observation(
                   "SCENE_CUT",
@@ -132,7 +164,7 @@ public class MouseVideoVisualAnalyzer {
                   clamp(1.0d - properties.getCutMinDelta() + delta, 0.0d, 1.0d),
                   evidence,
                   null,
-                  "scene-diff/v1"));
+                  CUT_METHOD));
           resetPause(
               observations, index, pauseStart, pauseStartSeconds, pauseAccumulated, pauseEmitted);
           pauseStart = -1L;
@@ -199,9 +231,19 @@ public class MouseVideoVisualAnalyzer {
       }
       if (cursorAvailable) {
         Map<String, Object> cursor =
-            cursor(template, current, sample, sourceWidth, sourceHeight, index);
+            cursor(
+                tracker,
+                tracker.track(
+                    new MouseVideoCursorTracker.Context(
+                        current,
+                        neighbors(framesDirectory, position, neighborOffset, samples.size()),
+                        previous)),
+                sample,
+                "forward");
+        cursorSlots[position] = observations.size();
         observations.add(cursor);
         if ("VISIBLE".equals(cursor.get("visibility"))) {
+          forwardVisible[position] = true;
           cursorVisible++;
         } else {
           cursorAmbiguous++;
@@ -213,10 +255,23 @@ public class MouseVideoVisualAnalyzer {
     if (!pauseEmitted) {
       emitPauseIfLongEnough(observations, index, pauseStart, pauseStartSeconds, pauseAccumulated);
     }
+    if (cursorAvailable && tracker.calibrated()) {
+      int recovered =
+          backwardPass(
+              tracker,
+              framesDirectory,
+              samples,
+              neighborOffset,
+              cursorSlots,
+              forwardVisible,
+              observations);
+      cursorVisible += recovered;
+      cursorAmbiguous -= recovered;
+    }
 
     if (!cursorAvailable) {
       Map<String, Object> evidence = new LinkedHashMap<>();
-      evidence.put("method", "cursor-template/v1");
+      evidence.put("method", MouseVideoCursorTracker.METHOD);
       observations.add(
           observation(
               "CURSOR_VISIBILITY",
@@ -226,7 +281,7 @@ public class MouseVideoVisualAnalyzer {
               1.0d,
               evidence,
               null,
-              "cursor-template/v1",
+              MouseVideoCursorTracker.METHOD,
               "No reviewed cursor template pack is configured; cursor position is unknown"));
     }
     observations.add(
@@ -251,6 +306,7 @@ public class MouseVideoVisualAnalyzer {
             sourceHeight,
             sourceDurationSeconds,
             cursorAvailable,
+            calibration,
             cursorVisible,
             cursorAmbiguous,
             cutCandidates,
@@ -281,91 +337,202 @@ public class MouseVideoVisualAnalyzer {
     return samples;
   }
 
-  private Map<String, Object> cursor(
-      BufferedImage template,
-      int[][] current,
-      Sample sample,
+  /**
+   * Calibrates the displayed cursor scale from up to {@link
+   * MouseVideoCursorTracker#calibrationSamples()} evenly spaced extracted samples.
+   */
+  private static Map<String, Object> calibrate(
+      MouseVideoCursorTracker tracker,
+      Path framesDirectory,
+      int sampleCount,
+      int neighborOffset,
       int sourceWidth,
-      int sourceHeight,
-      List<MouseVideoFrameIndexService.Frame> index) {
-    int templateWidth = template.getWidth();
-    int templateHeight = template.getHeight();
-    int imageHeight = current.length;
-    int imageWidth = current[0].length;
-    if (templateWidth >= imageWidth || templateHeight >= imageHeight) {
-      return observation(
-          "CURSOR_VISIBILITY",
-          sample.ordinal(),
-          sample.frame(),
-          "AMBIGUOUS",
-          0.0d,
-          Map.of("reason", "template larger than sampled frame"),
-          null,
-          "cursor-template/v1",
-          "Cursor template does not fit the sampled frame");
+      int sourceHeight)
+      throws IOException {
+    List<MouseVideoCursorTracker.Context> frames = new ArrayList<>();
+    int wanted = Math.min(sampleCount, MouseVideoCursorTracker.calibrationSamples());
+    int width = -1;
+    int height = -1;
+    for (int position = 0; position < wanted; position++) {
+      int sample = (int) ((long) position * sampleCount / Math.max(1, wanted));
+      int[][] frame = loadSample(framesDirectory, sample);
+      if (frame == null) {
+        continue;
+      }
+      if (width < 0) {
+        width = frame[0].length;
+        height = frame.length;
+      }
+      if (frame.length == height && frame[0].length == width) {
+        frames.add(
+            new MouseVideoCursorTracker.Context(
+                frame, neighbors(framesDirectory, sample, neighborOffset, sampleCount), null));
+      }
     }
-    int[][] patch = grayscale(template);
-    double best = Double.MAX_VALUE;
-    int bestX = -1;
-    int bestY = -1;
-    int step = 2;
-    for (int y = 0; y + templateHeight <= imageHeight; y += step) {
-      for (int x = 0; x + templateWidth <= imageWidth; x += step) {
-        double delta = patchDelta(current, patch, x, y);
-        if (delta < best) {
-          best = delta;
-          bestX = x;
-          bestY = y;
+    if (frames.isEmpty()) {
+      Map<String, Object> evidence = new LinkedHashMap<>();
+      evidence.put("method", MouseVideoCursorTracker.METHOD);
+      evidence.put("calibrated", false);
+      return evidence;
+    }
+    return tracker.calibrate(frames, sourceWidth, sourceHeight, width, height);
+  }
+
+  /**
+   * Mean difference of each sample to the one before it ({@code NaN} when either is unreadable or
+   * the sizes differ), decoding each sample once.
+   */
+  private static double[] pairDeltas(Path framesDirectory, int sampleCount) throws IOException {
+    double[] deltas = new double[sampleCount];
+    int[][] before = null;
+    for (int position = 0; position < sampleCount; position++) {
+      int[][] frame = loadSample(framesDirectory, position);
+      deltas[position] =
+          before != null
+                  && frame != null
+                  && before.length == frame.length
+                  && before[0].length == frame[0].length
+              ? meanDelta(before, frame)
+              : Double.NaN;
+      before = frame;
+    }
+    return deltas;
+  }
+
+  private static double localMaximum(double[] deltas, int position) {
+    double max = 0.0d;
+    int from = Math.max(0, position - CUT_WINDOW);
+    int to = Math.min(deltas.length - 1, position + CUT_WINDOW);
+    for (int other = from; other <= to; other++) {
+      if (other != position && !Double.isNaN(deltas[other])) {
+        max = Math.max(max, deltas[other]);
+      }
+    }
+    return max;
+  }
+
+  /** Samples about {@link MouseVideoCursorTracker#NEIGHBOR_SECONDS} apart, at least one. */
+  private static int neighborOffset(List<Sample> samples) {
+    if (samples.size() < 2) {
+      return 1;
+    }
+    double span =
+        seconds(samples.get(samples.size() - 1).frame()) - seconds(samples.get(0).frame());
+    double interval = span / (samples.size() - 1);
+    if (!(interval > 0.0d)) {
+      return 1;
+    }
+    return (int) Math.max(1L, Math.round(MouseVideoCursorTracker.NEIGHBOR_SECONDS / interval));
+  }
+
+  private static List<int[][]> neighbors(
+      Path framesDirectory, int position, int offset, int sampleCount) throws IOException {
+    List<int[][]> neighbors = new ArrayList<>(2);
+    for (int candidate : new int[] {position - offset, position + offset}) {
+      if (candidate >= 0 && candidate < sampleCount) {
+        int[][] frame = loadSample(framesDirectory, candidate);
+        if (frame != null) {
+          neighbors.add(frame);
         }
       }
     }
-    Map<String, Object> evidence = new LinkedHashMap<>();
-    evidence.put("templateWidth", templateWidth);
-    evidence.put("templateHeight", templateHeight);
-    evidence.put("searchStep", step);
-    if (bestX < 0 || best > properties.getVisualCursorMaxDelta()) {
+    return neighbors;
+  }
+
+  private static int[][] loadSample(Path framesDirectory, int position) throws IOException {
+    return loadGrayscale(
+        framesDirectory.resolve(String.format(Locale.ROOT, "%06d.png", position + 1)));
+  }
+
+  /**
+   * Tracks the samples again from last to first and upgrades a forward miss to the backward
+   * detection when that detection continues a backward track (see {@link MouseVideoCursorTracker}).
+   * In this direction the sample after a position plays the role of the preceding sample. Returns
+   * how many samples were upgraded.
+   */
+  private int backwardPass(
+      MouseVideoCursorTracker tracker,
+      Path framesDirectory,
+      List<Sample> samples,
+      int neighborOffset,
+      int[] cursorSlots,
+      boolean[] forwardVisible,
+      List<Map<String, Object>> observations)
+      throws IOException {
+    tracker.restartTrack();
+    int recovered = 0;
+    int[][] later = null;
+    for (int position = samples.size() - 1; position >= 0; position--) {
+      int[][] current = loadSample(framesDirectory, position);
+      if (current == null) {
+        tracker.restartTrack();
+        later = null;
+        continue;
+      }
+      MouseVideoCursorTracker.Detection detection =
+          tracker.track(
+              new MouseVideoCursorTracker.Context(
+                  current,
+                  neighbors(framesDirectory, position, neighborOffset, samples.size()),
+                  later));
+      later = current;
+      if (forwardVisible[position]
+          || cursorSlots[position] < 0
+          || !detection.visible()
+          || !Boolean.TRUE.equals(detection.evidence().get("continuation"))) {
+        continue;
+      }
+      Map<String, Object> forward = observations.get(cursorSlots[position]);
+      Map<String, Object> upgraded = cursor(tracker, detection, samples.get(position), "backward");
+      @SuppressWarnings("unchecked")
+      Map<String, Object> forwardEvidence = (Map<String, Object>) forward.get("evidence");
+      if (forwardEvidence != null) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> evidence = (Map<String, Object>) upgraded.get("evidence");
+        evidence.put("forwardReason", forwardEvidence.get("reason"));
+      }
+      observations.set(cursorSlots[position], upgraded);
+      recovered++;
+    }
+    return recovered;
+  }
+
+  private Map<String, Object> cursor(
+      MouseVideoCursorTracker tracker,
+      MouseVideoCursorTracker.Detection detection,
+      Sample sample,
+      String pass) {
+    if (!detection.visible()) {
       return observation(
           "CURSOR_VISIBILITY",
           sample.ordinal(),
           sample.frame(),
           "AMBIGUOUS",
-          round(clamp(1.0d - Math.min(1.0d, best), 0.0d, 1.0d)),
-          evidence,
+          round(clamp(detection.score(), 0.0d, 1.0d)),
+          detection.evidence(),
           null,
-          "cursor-template/v1",
-          "Cursor template did not match above the reviewed threshold");
+          MouseVideoCursorTracker.METHOD,
+          tracker.calibrated()
+              ? "Cursor template did not match above the reviewed threshold"
+              : "Cursor scale could not be calibrated from this source");
     }
-    double scaleX = sourceWidth / (double) imageWidth;
-    double scaleY = sourceHeight / (double) imageHeight;
-    int x =
-        (int)
-            Math.round(
-                (bestX
-                        + properties.getVisualCursorHotspotX()
-                            * (templateWidth / (double) template.getWidth()))
-                    * scaleX);
-    int y =
-        (int)
-            Math.round(
-                (bestY
-                        + properties.getVisualCursorHotspotY()
-                            * (templateHeight / (double) template.getHeight()))
-                    * scaleY);
-    evidence.put("x", x);
-    evidence.put("y", y);
+    Map<String, Object> evidence = new LinkedHashMap<>(detection.evidence());
+    evidence.put("pass", pass);
+    evidence.put("x", detection.x());
+    evidence.put("y", detection.y());
     Map<String, Object> observation =
         observation(
             "CURSOR_VISIBILITY",
             sample.ordinal(),
             sample.frame(),
             "VISIBLE",
-            round(clamp(1.0d - best, 0.0d, 1.0d)),
+            round(clamp(detection.score(), 0.0d, 1.0d)),
             evidence,
             null,
-            "cursor-template/v1",
+            MouseVideoCursorTracker.METHOD,
             null);
-    observation.put("x", x);
-    observation.put("y", y);
+    observation.put("x", detection.x());
+    observation.put("y", detection.y());
     return observation;
   }
 
@@ -458,6 +625,7 @@ public class MouseVideoVisualAnalyzer {
       int sourceHeight,
       double durationSeconds,
       boolean cursorAvailable,
+      Map<String, Object> cursorCalibration,
       int cursorVisible,
       int cursorAmbiguous,
       int cutCandidates,
@@ -479,18 +647,26 @@ public class MouseVideoVisualAnalyzer {
     quality.put("coverage", coverage);
     Map<String, Object> methods = new LinkedHashMap<>();
     methods.put("pause", "motion/v1");
-    methods.put("cut", "scene-diff/v1");
+    methods.put("cut", CUT_METHOD);
     methods.put("activity", "regional-motion/v1");
     methods.put("indicator", "ui-change/v1");
-    methods.put("cursor", "cursor-template/v1");
+    methods.put("cursor", MouseVideoCursorTracker.METHOD);
     methods.put("targetRegion", "target-region/v1");
     quality.put("methods", methods);
     Map<String, Object> thresholds = new LinkedHashMap<>();
     thresholds.put("pauseMaxDelta", properties.getPauseMaxDelta());
     thresholds.put("pauseMinMillis", properties.getPauseMinMillis());
     thresholds.put("cutMinDelta", properties.getCutMinDelta());
+    thresholds.put("cutSpikeMinDelta", properties.getCutSpikeMinDelta());
+    thresholds.put("cutSpikeRatio", properties.getCutSpikeRatio());
     thresholds.put("activityMinDelta", properties.getActivityMinDelta());
-    thresholds.put("cursorMaxDelta", properties.getVisualCursorMaxDelta());
+    thresholds.put("cursorMinScore", properties.getVisualCursorMinScore());
+    thresholds.put("cursorStartScore", properties.getVisualCursorStartScore());
+    thresholds.put("cursorMinGain", properties.getVisualCursorMinGain());
+    thresholds.put("cursorMaxGain", properties.getVisualCursorMaxGain());
+    thresholds.put("cursorMinContrast", properties.getVisualCursorMinContrast());
+    thresholds.put("cursorAmbiguityMargin", properties.getVisualCursorAmbiguityMargin());
+    thresholds.put("cursorStaticMaxDelta", properties.getVisualCursorStaticMaxDelta());
     quality.put("thresholds", thresholds);
     Map<String, Object> counts = new LinkedHashMap<>();
     counts.put("cutCandidates", cutCandidates);
@@ -499,9 +675,15 @@ public class MouseVideoVisualAnalyzer {
     counts.put("cursorVisible", cursorVisible);
     counts.put("cursorAmbiguous", cursorAmbiguous);
     quality.put("counts", counts);
+    if (cursorCalibration != null) {
+      quality.put("cursorCalibration", cursorCalibration);
+    }
     List<String> unknowns = new ArrayList<>();
     if (!cursorAvailable) {
       unknowns.add("cursor: no reviewed cursor template pack is configured");
+    } else if (cursorCalibration == null
+        || !Boolean.TRUE.equals(cursorCalibration.get("calibrated"))) {
+      unknowns.add("cursor: displayed cursor scale could not be calibrated; positions unknown");
     }
     unknowns.add(
         "target-region: no reviewed target detector; game entity/world coordinates unknown");
@@ -709,18 +891,6 @@ public class MouseVideoVisualAnalyzer {
       }
     }
     return count == 0L ? 0.0d : total / (count * 255.0d);
-  }
-
-  private static double patchDelta(int[][] image, int[][] patch, int offsetX, int offsetY) {
-    long total = 0L;
-    long count = 0L;
-    for (int y = 0; y < patch.length; y++) {
-      for (int x = 0; x < patch[y].length; x++) {
-        total += Math.abs(image[offsetY + y][offsetX + x] - patch[y][x]);
-        count++;
-      }
-    }
-    return count == 0L ? 1.0d : total / (count * 255.0d);
   }
 
   private static double regionDelta(
