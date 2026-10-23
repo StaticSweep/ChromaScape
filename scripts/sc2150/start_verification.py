@@ -24,6 +24,8 @@ def main():
     parser.add_argument("--owner", default="sc2150-fedora-a")
     parser.add_argument("--profile", default="local-development")
     parser.add_argument("--disable-workers", action="store_true")
+    parser.add_argument("--env", action="append", default=[],
+                        help="extra CHROMASCAPE_MOUSE_VIDEO_* setting as KEY=VALUE (repeatable)")
     args = parser.parse_args()
     assert args.database.startswith("sc2150_") and args.database.replace("_", "").isalnum()
     assert 18190 <= args.port <= 18199
@@ -74,6 +76,12 @@ def main():
         CHROMASCAPE_REMOTEINPUT_ATTACHMENT_ENABLED="false",
         OVERLAY_BROADCASTER_ENABLED="false", MCP_AUTO_START="false",
     )
+    extra = {}
+    for item in args.env:
+        key, _, value = item.partition("=")
+        assert key.startswith("CHROMASCAPE_MOUSE_VIDEO_") and "YOUTUBE" not in key, key
+        extra[key] = value
+    env.update(extra)
     command = [args.java, "-Xmx768m", "-Duser.name=" + args.owner, "-cp", os.pathsep.join(entries),
                "com.chromascape.web.ChromaScapeApplication", "--analysis.mcp.auto-start=false",
                "--overlay-broadcaster.enabled=false", "--leeuwbot.integration.enabled=false",
@@ -84,7 +92,8 @@ def main():
     (output / "server.pid").write_text(str(process.pid))
     (output / "launch.json").write_text(json.dumps({"pid": process.pid, "port": args.port,
         "owner": args.owner, "database": args.database, "profile": args.profile,
-        "runtimeSnapshot": str(snapshot), "youtubeEnabled": False}, indent=2))
+        "runtimeSnapshot": str(snapshot), "youtubeEnabled": False,
+        "extraSettings": sorted(extra)}, indent=2))
     print("Started owned verification JVM", process.pid, "on", args.port, flush=True)
     deadline = time.monotonic() + 180
     while process.poll() is None and time.monotonic() < deadline:
