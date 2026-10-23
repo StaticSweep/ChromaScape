@@ -69,6 +69,19 @@ test('describeSource never claims native ticks', () => {
   assert.equal(api.describeSource(null), 'Unknown source');
 });
 
+test('a ?source= deep link opens that exact source', () => {
+  const id = '3f1c9a2e-5b7d-4c81-9e40-2ad6b8c1f0aa';
+  assert.equal(api.linkedSourceId('?source=' + id), id);
+  assert.equal(api.linkedSourceId('?source=' + id.toUpperCase() + '&mode=review'), id.toUpperCase());
+  assert.equal(api.linkedSourceId('?mode=review'), null);
+  assert.equal(api.linkedSourceId(''), null);
+  assert.equal(api.linkedSourceId(undefined), null);
+  assert.equal(api.linkedSourceId('?source='), null);
+  assert.equal(api.linkedSourceId('?source=not-a-uuid'), null);
+  assert.equal(api.linkedSourceId('?source=' + id + '/../jobs'), null, 'a path segment must not pass');
+  assert.equal(api.linkedSourceId('?source=------------------------------------'), null);
+});
+
 test('state persistence survives a storage implementation', () => {
   const backing = new Map();
   globalThis.localStorage = {

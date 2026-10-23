@@ -98,6 +98,17 @@
     );
   }
 
+  /**
+   * Source id carried by a `?source=<uuid>` deep link, or null when the link is absent or malformed.
+   * Only a whole UUID is accepted so a stray query value can never be used as a request path segment.
+   */
+  function linkedSourceId(search) {
+    const raw = new URLSearchParams(search || '').get('source');
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw || '')
+      ? raw
+      : null;
+  }
+
   /** Describes a frozen-index frame without rounding its integer PTS or timebase. */
   function describeFrame(frame) {
     if (!frame) return 'No frame selected';
@@ -1696,11 +1707,14 @@
     });
 
     const resume = loadState();
+    // A `?source=<uuid>` link (from the replay catalog) takes priority over the resumed source.
+    const linked = linkedSourceId(window.location.search);
     toggleMode();
     loadCapabilities()
       .then(async () => {
         await refreshCatalog();
-        if (resume.lastSourceId) await inspect(resume.lastSourceId);
+        const sourceId = linked || resume.lastSourceId;
+        if (sourceId) await inspect(sourceId);
       })
       .catch((error) => setStatus('Unable to load: ' + error.message));
   }
@@ -1713,6 +1727,7 @@
     formatLimits,
     selectedProxyArtifact,
     describeSource,
+    linkedSourceId,
     describeFrame,
     buildCorrection,
     addCorrection,
