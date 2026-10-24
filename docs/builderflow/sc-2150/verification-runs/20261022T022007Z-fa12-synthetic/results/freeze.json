@@ -1,0 +1,129 @@
+{
+  "schema": "sc2150-fa12-freeze/v1",
+  "frozen_at_utc": "2026-10-22T04:29:42Z",
+  "statement": "Method, thresholds, scorer and corpus recipe frozen before any held-out evaluation. The held-out split is evaluated once with these exact files; no change after this point may be reported as the FA12 result.",
+  "methods": {
+    "cursor": "cursor-template/v2",
+    "cut": "scene-diff/v2"
+  },
+  "thresholds": {
+    "visual-cursor-min-score": 0.85,
+    "visual-cursor-min-gain": 0.25,
+    "visual-cursor-max-gain": 1.6,
+    "visual-cursor-min-contrast": 12.0,
+    "visual-cursor-ambiguity-margin": 0.05,
+    "visual-cursor-static-max-delta": 6.0,
+    "cut-min-delta": 0.22,
+    "cut-spike-min-delta": 0.06,
+    "cut-spike-ratio": 4.0
+  },
+  "source_sha256": {
+    "src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoCursorTracker.java": "1f1c13ad3ead934234f872769498c90c0a42c92bf82c23e14321263b0e8e7a97",
+    "src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoVisualAnalyzer.java": "ea7703f1507bb5fa31874162b09aa6eabdb89432f75fb75a698a30b67ab7d5a5",
+    "src/main/java/com/chromascape/web/debug/tickdebugger/video/MouseVideoProperties.java": "1469fd732be6f68a14566c2f985fe8ab71f8d527ddf8a6f06e41e30496285b6a",
+    "src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoAnalysisWorker.java": "a0e449c91198c64b6c0ac255df0505f774f1512bff4c5cc82bd41936abbd0ce2",
+    "src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoDerivativeWorker.java": "e79665e4a5c8102b036c14144b0bfe17ac43292e8fb290c6d7713bb2714ea6a2",
+    "src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoAnalysisIdentity.java": "bf611c53d14fa72ea2a61ffe46362fe6a3ac1aa8c51d2bbd3ee4a54230369443",
+    "src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoSampleStride.java": "f830298d5c00e5f4e0fa325cfeb6b6b81a85bde8dcdcd97ce0430142939dd022",
+    "src/test/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoCursorCorpusHarnessTest.java": "55ae148931228623392eb98e54dc417a4909fbf6f04b7b11bcc43a24d27c2bc0",
+    "docs/builderflow/sc-2150/verification-runs/20261022T022007Z-fa12-synthetic/tools/score.py": "efe045069f7501d7f5f134e30c5e44e59b8533c1073bf37981785514cdd237c0",
+    "docs/builderflow/sc-2150/verification-runs/20261022T022007Z-fa12-synthetic/tools/build_corpus.py": "bded923d5c56dd9e9c269d290cc6914f891a7ea76e9e5b82c482a0545d1d7a5f"
+  },
+  "dev_result_summary": {
+    "gate_results": {
+      "median_px": true,
+      "p95_px": true,
+      "recall": true,
+      "absent_false_rate": true,
+      "cut_f1": true
+    },
+    "overall": {
+      "visible_frames": 3205,
+      "absent_frames": 363,
+      "detected_visible": 3034,
+      "recall": 0.9466458658346334,
+      "median_px": 0.0,
+      "p95_px": 1.3739227319865641,
+      "within_12px_rate": 0.9466458658346334,
+      "absent_false_detections": 1,
+      "absent_false_rate": 0.0027548209366391185
+    },
+    "cuts": {
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    }
+  },
+  "heldout_corpus_manifest": {
+    "schema": "sc2150-fa12-corpus/v1",
+    "sources": {
+      "fa5228cb": {
+        "split": "dev",
+        "sha256": "373c4c00c2a7be1dc1f17afd8131e6fe6a1c575e6480c23992842860256d65bd"
+      },
+      "f9f78ab0": {
+        "split": "dev",
+        "sha256": "48616da772cbb92399323238a28cd6d4bb2bb70a0c22e2622bdf0dc46e787fb1"
+      },
+      "78cde7ca": {
+        "split": "heldout",
+        "sha256": "3fcd63c0fc742b1db1ef40e5020ef162fd0e1e8040d2d98a6fe1f62edeaae618"
+      },
+      "87a88065": {
+        "split": "heldout",
+        "sha256": "2308a37768ceae6d273e883ff52f8adb53eca4a614583b7cf2cf1147dbdcd458"
+      }
+    },
+    "templates": {
+      "arrow": "ac2e3337c770108440c868d03ad3e133c9ed56e83eb9743179634a19f49819fd",
+      "rs3-gold": "2e6d67f8819d34ff6612b6f5f219393a4a0672af1b22c21f15df9b5b631c2ed3",
+      "dragon-dagger": "ad167e2a2cdb4a009cf2d44b43a9c9f522c8247ce1b0d84d768a40768c11b174"
+    },
+    "clips": [
+      "heldout--78cde7ca--native-4m",
+      "heldout--78cde7ca--compressed-300k",
+      "heldout--78cde7ca--capture-1.5x",
+      "heldout--78cde7ca--resized-0.7x",
+      "heldout--78cde7ca--vfr-drop",
+      "heldout--78cde7ca--cut",
+      "heldout--78cde7ca--overlay",
+      "heldout--78cde7ca--login-moving",
+      "heldout--87a88065--native-4m",
+      "heldout--87a88065--compressed-300k",
+      "heldout--87a88065--capture-1.5x",
+      "heldout--87a88065--resized-0.7x",
+      "heldout--87a88065--vfr-drop",
+      "heldout--87a88065--cut",
+      "heldout--87a88065--overlay",
+      "heldout--87a88065--login-moving"
+    ]
+  },
+  "note_formatting": "Re-hashed after spotlessApply (google-java-format only, no behavioural change) and before the held-out run. The tuning-set predictions were produced from the pre-format sources listed in pre_format_source_sha256; a post-format tuning-set rerun is compared by observation hash in results/determinism.json.",
+  "pre_format_source_sha256": {
+    "src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoCursorTracker.java": "bf08a3ffec7627522206320964b80f4ecaca878491c6d6c290ef545e82fb9ece",
+    "src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoVisualAnalyzer.java": "a30456f4bd2e8631541c502a06c821b96152007f141f8b3277f73a565917f0f5",
+    "src/main/java/com/chromascape/web/debug/tickdebugger/video/MouseVideoProperties.java": "1469fd732be6f68a14566c2f985fe8ab71f8d527ddf8a6f06e41e30496285b6a",
+    "src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoAnalysisWorker.java": "a0e449c91198c64b6c0ac255df0505f774f1512bff4c5cc82bd41936abbd0ce2",
+    "src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoDerivativeWorker.java": "e79665e4a5c8102b036c14144b0bfe17ac43292e8fb290c6d7713bb2714ea6a2",
+    "src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoAnalysisIdentity.java": "bf611c53d14fa72ea2a61ffe46362fe6a3ac1aa8c51d2bbd3ee4a54230369443",
+    "src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoSampleStride.java": "f830298d5c00e5f4e0fa325cfeb6b6b81a85bde8dcdcd97ce0430142939dd022",
+    "src/test/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoCursorCorpusHarnessTest.java": "55ae148931228623392eb98e54dc417a4909fbf6f04b7b11bcc43a24d27c2bc0",
+    "docs/builderflow/sc-2150/verification-runs/20261022T022007Z-fa12-synthetic/tools/score.py": "efe045069f7501d7f5f134e30c5e44e59b8533c1073bf37981785514cdd237c0",
+    "docs/builderflow/sc-2150/verification-runs/20261022T022007Z-fa12-synthetic/tools/build_corpus.py": "bded923d5c56dd9e9c269d290cc6914f891a7ea76e9e5b82c482a0545d1d7a5f"
+  },
+  "post_heldout_refactors": {
+    "files": [
+      "MouseVideoCursorTracker.java",
+      "MouseVideoCursorCorpusHarnessTest.java"
+    ],
+    "sha256": {
+      "src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoCursorTracker.java": "86d638e21b3b322b8fe6e5207fd78380a892ae44d7af0b2d73543194510b1de1",
+      "src/test/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoCursorCorpusHarnessTest.java": "e93f71653f3a1070c36d01c235cb891e1dfff40172a51f5f2930ea8dd35cf295"
+    },
+    "description": "After the held-out evaluation: checkstyle-only renames (sumII -> sumSquaresI in the tracker; test method names; moved a timing expression in the harness). No threshold or logic change.",
+    "check": "dev--fa5228cb--native-4m observations_sha256 identical before/after: True"
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "schema": "sc2150-fa12-v3-split/v1",
+  "fixed_at_utc": "20261022T103825Z",
+  "rule": "14 recordings not used by run 20261022T022007Z, sorted by SHA-256, alternating held-out/dev starting with held-out. The 4 sources of run 20261022T022007Z were already evaluated and join dev. Fixed before any v3 tuning.",
+  "sources": {
+    "2e261112": {
+      "path": "ChromaScape-sc1991-local-integration-20261013/recordings/recording_2e261112.mp4",
+      "sha256": "21f0f7a06ad1572e0a96e62b4c5b96262ddfe274dc8d72985549dbc0261c80f1",
+      "split": "heldout"
+    },
+    "4c4898c5": {
+      "path": "ChromaScape-sc1976-pr/recordings/recording_4c4898c5.mp4",
+      "sha256": "22e1079c8050b5bd1e871a051f9d771fc9555825857ff98df219687aebce8ef9",
+      "split": "dev"
+    },
+    "d2ba83a8": {
+      "path": "ChromaScape-sc1976-pr/recordings/recording_d2ba83a8.mp4",
+      "sha256": "437460c19238fccbeda537c845e83c87fd03f04a1c6a9e17e1c2c86cdc71dfe2",
+      "split": "heldout"
+    },
+    "931d13fc": {
+      "path": "ChromaScape-sc1976-pr/recordings/recording_931d13fc.mp4",
+      "sha256": "5b2ee94c5fbe1a9210cc307991779a116bcaa91bac8323d31b569d34e160d05b",
+      "split": "dev"
+    },
+    "16ed9d0e": {
+      "path": "ChromaScape-sc1976-pr/recordings/recording_16ed9d0e.mp4",
+      "sha256": "74f5f7a9f07be438a2688e296d63d4cb7fcb7d7531b501685cb62dc3893d662d",
+      "split": "heldout"
+    },
+    "f16b6dd7": {
+      "path": "ChromaScape-sc1991-local-integration-20261013/recordings/recording_f16b6dd7.mp4",
+      "sha256": "7bcd1f0cf82078009c269df7c6b893af1a11de68d4e67fc9462899a9f5af632d",
+      "split": "dev"
+    },
+    "4a0ad618": {
+      "path": "ChromaScape-sc1991-local-integration-20261013/recordings/recording_4a0ad618.mp4",
+      "sha256": "837e67e1f86f1eb47b4cc1980661b94055af514a18d963418bbe1e9cbe48fe03",
+      "split": "heldout"
+    },
+    "6a594507": {
+      "path": "ChromaScape-sc1976-pr/recordings/recording_6a594507.mp4",
+      "sha256": "a073181ca2875bf4cab28e0b9f9610d8f46a037a34a97cdc35c5fbf32228cb33",
+      "split": "dev"
+    },
+    "7f367df1": {
+      "path": "ChromaScape-sc1976-pr/recordings/recording_7f367df1.mp4",
+      "sha256": "b4f300519b2041391cb4259186fa79968b354651081c32c1899d740f54a22b0b",
+      "split": "heldout"
+    },
+    "11e2eec3": {
+      "path": "ChromaScape-sc1976-pr/recordings/recording_11e2eec3.mp4",
+      "sha256": "c2767b1ecc824595d3b126711e91923e61c427342a38686dbf95926a8c417f66",
+      "split": "dev"
+    },
+    "18b787da": {
+      "path": "ChromaScape-sc1976-pr/recordings/recording_18b787da.mp4",
+      "sha256": "c29e14558ef96c84642711c1d339a28771c6845f903b2f5e034a2889f86b95e5",
+      "split": "heldout"
+    },
+    "3133de8d": {
+      "path": "ChromaScape-sc1976-pr/recordings/recording_3133de8d.mp4",
+      "sha256": "ccc373c75e20539f58bffe77ac7ab8ac7df0273a681baf1ef0a6a12afdebab89",
+      "split": "dev"
+    },
+    "0f78c471": {
+      "path": "ChromaScape-sc1976-pr/recordings/recording_0f78c471.mp4",
+      "sha256": "e1e792c5d451b060ceadb435b5b529a4973b6e1063baff0d3a257706510fe312",
+      "split": "heldout"
+    },
+    "2e64e2fc": {
+      "path": "ChromaScape-sc1991-local-integration-20261013/recordings/recording_2e64e2fc.mp4",
+      "sha256": "fecdd025835bcd7164eb955342aa14ed8158e65bdfb54da3cce13df9daf8e9e9",
+      "split": "dev"
+    },
+    "fa5228cb": {
+      "path": "ChromaScape/recordings/recording_fa5228cb.mp4",
+      "sha256": "373c4c00c2a7be1dc1f17afd8131e6fe6a1c575e6480c23992842860256d65bd",
+      "split": "dev",
+      "note": "spent by run 20261022T022007Z"
+    },
+    "f9f78ab0": {
+      "path": "ChromaScape/recordings/recording_f9f78ab0.mp4",
+      "sha256": "48616da772cbb92399323238a28cd6d4bb2bb70a0c22e2622bdf0dc46e787fb1",
+      "split": "dev",
+      "note": "spent by run 20261022T022007Z"
+    },
+    "78cde7ca": {
+      "path": "ChromaScape/recordings/recording_78cde7ca.mp4",
+      "sha256": "3fcd63c0fc742b1db1ef40e5020ef162fd0e1e8040d2d98a6fe1f62edeaae618",
+      "split": "dev",
+      "note": "spent by run 20261022T022007Z"
+    },
+    "87a88065": {
+      "path": "ChromaScape/recordings/recording_87a88065.mp4",
+      "sha256": "2308a37768ceae6d273e883ff52f8adb53eca4a614583b7cf2cf1147dbdcd458",
+      "split": "dev",
+      "note": "spent by run 20261022T022007Z"
+    }
+  }
+}

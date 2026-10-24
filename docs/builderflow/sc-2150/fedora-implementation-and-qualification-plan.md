@@ -188,7 +188,7 @@ External inputs: approved licensed cursor templates, approved annotated source c
 Frozen existing cursor gates, at 1080p-equivalent source-pixel scale:
 - Median position error <=4 pixels.
 - p95 <=12 pixels.
-- Visible-frame recall >=90%.
+- Visible-frame recall >=99% (owner-raised from 90% on 2026-10-23; see fa12-gate-amendment-20261023.md).
 - False detections on cursor-absent spans <=1%.
 
 Report counts, covered minutes, per-source results, occlusion/scaling/cut/compression/VFR breakdowns, confidence intervals and uncertainty. A zero-detection tracker cannot pass by omitting recall. Evaluate on the required labelled source frames so sampling gaps are visible.
@@ -270,7 +270,7 @@ Proposed additions (not existing files): typed observation/correction contracts,
 - [ ] FA9 — Given anonymous and independent owners, when protected HTTP objects are requested, then anonymous access is 401 and cross-owner access is nondisclosing 404 across source/media/job/analysis/review/export.
 - [ ] FA10 — Given a real browser/backend, when upload/playback/cancel/recovery/review/export and keyboard/narrow-screen flows run, then browser state, persisted revisions, bytes and selected analysis agree.
 - [ ] FA11 — Given crashes, expiry, competing workers, sweep or configured caps, when the lifecycle resolves, then leases fence stale work, admission is atomic, referenced bytes survive and incomplete artifacts are never published as complete.
-- [ ] FA12 — Given approved source-disjoint held-out clips, when evaluated once against frozen methods, then cursor median error is at most 4 equivalent 1080p pixels, p95 at most 12, visible recall at least 90% and absent-span false detections at most 1%, with the additional detector gates met.
+- [ ] FA12 — Given approved source-disjoint held-out clips, when evaluated once against frozen methods, then cursor median error is at most 4 equivalent 1080p pixels, p95 at most 12, visible recall at least 99% (owner-raised from 90% on 2026-10-23) and absent-span false detections at most 1%, with the additional detector gates met.
 - [ ] FA13 — Given approved downloader pins/public clip and constrained egress, when YouTube acquisition succeeds or fails, then provenance, stable outcomes, limits, cancellation and cleanup are verified with no cookies/authentication bypass.
 - [ ] FA14 — Given all required evidence, when delivery is considered, then no required gate is waived, unsupported hosts/capabilities remain unavailable, rollback is rehearsed and tracker transitions reflect actual validation.
 
