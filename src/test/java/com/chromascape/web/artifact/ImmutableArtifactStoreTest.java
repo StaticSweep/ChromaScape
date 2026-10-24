@@ -245,6 +245,42 @@ class ImmutableArtifactStoreTest {
     assertThrows(ResponseStatusException.class, () -> s.activeKnowledgeSnapshot("owner"));
   }
 
+  @Test
+  void strictLogicForcesEveryWritePathThroughInjectedPrimitive() throws Exception {
+    var forced = java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
+    var force =
+        (ImmutableArtifactStore.DirectoryForce)
+            directory -> forced.add(directory.getFileName().toString());
+    var s =
+        new ImmutableArtifactStore(
+            root,
+            1024,
+            65536,
+            new ObjectMapper(),
+            ImmutableArtifactStore.DurabilityMode.STRICT,
+            force);
+    assertTrue(s.durabilityQualified());
+    put(s, "id", new byte[] {1});
+    var snapshot =
+        s.put(
+            "owner",
+            "snapshot",
+            ImmutableArtifactStore.Kind.KNOWLEDGE_SNAPSHOT,
+            new byte[] {2},
+            "application/json",
+            Map.of("sourceRun", "run"),
+            Map.of("corpus", "id"));
+    s.activateKnowledgeSnapshot("owner", snapshot.id());
+    s.quarantine("owner", "id");
+    s.resetDevelopment("owner", true);
+    Files.writeString(root.resolve("pending").resolve("stale.tmp"), "x");
+    s.cleanTemporary();
+    assertFalse(Files.exists(root.resolve("pending").resolve("stale.tmp")));
+    assertTrue(forced.contains("pending"));
+    assertTrue(forced.size() >= 8);
+    assertTrue(forced.stream().anyMatch(name -> name.length() == 64));
+  }
+
   private static void forceNative(Path directory) throws java.io.IOException {
     try (var channel = FileChannel.open(directory, StandardOpenOption.READ)) {
       channel.force(true);
