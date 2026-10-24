@@ -118,3 +118,31 @@ container overlay (ext4-backed) filesystem - 33 executed, 0 failed, 2 Windows-on
 the four POSIX positives and the two-JVM admission race now run and pass. Force callbacks in
 the call-order tests are recording stubs; the Linux positives use the real primitive, but no
 power-loss test was performed. spotlessJavaCheck still fails on 1,363 pre-existing files.
+
+## Worker qualification investigation - 24 October 2026
+
+Goal: unblock the worker-gated durable-session cases without bypassing the native gate.
+
+- A genuinely certifiable *identity* was produced honestly: fresh detached worktree
+  `C:\Dev\IdeaProjects\.worktrees\sc276-certifiable-20261024` at native commit 79382be3, a real
+  (non-symlink) copy of `server/cache` (2,869 files), no development override. The generator
+  reported certifiable=true (cacheRevision sha256:76000891...59b4); `validate-build-identity`
+  passed; the worker attests certifiable:true. The existing `dist/` and the recovered worktree
+  use symlinked cache inputs, which the generator rejects by design.
+- Linux harness: image sc274-wp-javanode-bwrap:20261024 (JDK 17 + Node 22 + bubblewrap, relaxed
+  seccomp only inside the disposable container), disposable postgres:16-alpine on a private
+  network. Both removed afterwards except the images.
+- Results, XrspsSessionRepositoryIntegrationTest: 3/3 pass on Linux.
+  XrspsDurableSessionIntegrationTest: 14 found, 4 skipped (client/provider env), 1 passed,
+  9 failed. Bubblewrap isolation and the certifiable BeforeAll check now pass.
+- Remaining blocker for all 9 failures (8x "Worker does not attest authoritative session
+  execution", 1x HTTP 503): the production-service worker entrypoint is
+  `server/src/replay/worker-main.ts`, and `AUTHORITATIVE_RUNTIME_QUALIFICATION.complete` in
+  `server/src/replay/authoritative-replay-capabilities.ts` is deliberately false ("closure,
+  isolation and oracle qualification is incomplete"). The `packages/replay-kernel` worker has no
+  `sessionProtocol` and advertises only INTERACT_NPC. Flipping the constant would be the
+  bypass the gate forbids; closing it requires implementing and reviewing closure enforcement,
+  isolation evidence and the full oracle acceptance matrix, which needs genuine reference
+  inputs. Not attempted.
+- The Java test also hardcodes the work root as four parents above the entrypoint; the
+  production entrypoint layout must be matched when that worker is qualified.
