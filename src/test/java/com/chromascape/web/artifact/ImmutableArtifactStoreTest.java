@@ -3,11 +3,17 @@ package com.chromascape.web.artifact;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.channels.FileChannel;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Map;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -16,7 +22,8 @@ class ImmutableArtifactStoreTest {
   @TempDir Path root;
 
   private ImmutableArtifactStore store() {
-    return new ImmutableArtifactStore(root, 1024, 65536, new ObjectMapper());
+    return new ImmutableArtifactStore(
+        root, 1024, 65536, new ObjectMapper(), TestDurability.positiveMode());
   }
 
   private ImmutableArtifactStore.Manifest put(ImmutableArtifactStore s, String id, byte[] content) {
@@ -98,7 +105,9 @@ class ImmutableArtifactStoreTest {
 
   @Test
   void oversizeAndQuotaRejectWithoutRemovingPublishedEvidence() {
-    var s = new ImmutableArtifactStore(root, 1024, 1024, new ObjectMapper());
+    var s =
+        new ImmutableArtifactStore(
+            root, 1024, 1024, new ObjectMapper(), TestDurability.positiveMode());
     put(s, "small", new byte[] {1});
     assertEquals(
         HttpStatus.PAYLOAD_TOO_LARGE,
@@ -234,5 +243,186 @@ class ImmutableArtifactStoreTest {
     assertThrows(ResponseStatusException.class, () -> s.activeKnowledgeSnapshot("other"));
     Files.write(s.contentPath(source), new byte[] {5});
     assertThrows(ResponseStatusException.class, () -> s.activeKnowledgeSnapshot("owner"));
+  }
+
+  private static void forceNative(Path directory) throws java.io.IOException {
+    try (var channel = FileChannel.open(directory, StandardOpenOption.READ)) {
+      channel.force(true);
+    }
+  }
+
+  private static ImmutableArtifactStore.DirectoryForce failOnRefs() {
+    return directory -> {
+      if (directory.toString().contains(java.io.File.separator + "refs"))
+        throw new AccessDeniedException(directory.toString());
+      forceNative(directory);
+    };
+  }
+
+  @Test
+  @EnabledOnOs(OS.WINDOWS)
+  void strictModeRefusesUnsupportedPlatformBeforeAnyRegistryWrite() {
+    var exception =
+        assertThrows(
+            ResponseStatusException.class,
+            () ->
+                new ImmutableArtifactStore(
+                    root, 1024, 65536, new ObjectMapper(), ImmutableArtifactStore.DurabilityMode.STRICT));
+    assertEquals(HttpStatus.SERVICE_UNAVAILABLE, exception.getStatusCode());
+    assertTrue(String.valueOf(exception.getReason()).startsWith("ARTIFACT_DURABILITY_UNAVAILABLE"));
+    assertFalse(Files.exists(root.resolve("objects")));
+    assertFalse(Files.exists(root.resolve("refs")));
+    assertFalse(Files.exists(root.resolve("durability.json")));
+  }
+
+  @Test
+  @EnabledOnOs(OS.WINDOWS)
+  void developmentRootIsExplicitlyMarkedUnqualified() throws Exception {
+    var s =
+        new ImmutableArtifactStore(
+            root, 1024, 65536, new ObjectMapper(), ImmutableArtifactStore.DurabilityMode.DEVELOPMENT);
+    assertFalse(s.durabilityQualified());
+    var marker = Files.readString(root.resolve("durability.json"));
+    assertTrue(marker.contains("\"qualified\":false"));
+    put(s, "id", new byte[] {1});
+    assertArrayEquals(new byte[] {1}, s.read("owner", "id"));
+  }
+
+  @Test
+  @EnabledOnOs({OS.LINUX, OS.MAC})
+  void strictRootIsMarkedQualifiedForcedAndBootstrapped() throws Exception {
+    var s =
+        new ImmutableArtifactStore(
+            root, 1024, 65536, new ObjectMapper(), ImmutableArtifactStore.DurabilityMode.STRICT);
+    assertTrue(s.durabilityQualified());
+    assertTrue(Files.readString(root.resolve("durability.json")).contains("\"qualified\":true"));
+    var m = put(s, "id", new byte[] {1});
+    var snapshot =
+        s.put(
+            "owner",
+            "snapshot",
+            ImmutableArtifactStore.Kind.KNOWLEDGE_SNAPSHOT,
+            new byte[] {2},
+            "application/json",
+            Map.of("sourceRun", "run"),
+            Map.of("corpus", "id"));
+    var reference = s.activateKnowledgeSnapshot("owner", snapshot.id());
+    s.quarantine("owner", "id");
+    assertEquals(reference, s.activeKnowledgeSnapshot("owner"));
+    assertEquals(ImmutableArtifactStore.State.QUARANTINED, s.state("owner", m.id()));
+    s.resetDevelopment("owner", true);
+    assertThrows(ResponseStatusException.class, () -> s.get("owner", "snapshot"));
+    Files.delete(root.resolve("durability.json"));
+    var restarted =
+        new ImmutableArtifactStore(
+            root, 1024, 65536, new ObjectMapper(), ImmutableArtifactStore.DurabilityMode.STRICT);
+    assertTrue(restarted.durabilityQualified());
+    assertTrue(Files.readString(root.resolve("durability.json")).contains("\"qualified\":true"));
+  }
+
+  @Test
+  @EnabledOnOs({OS.LINUX, OS.MAC})
+  void strictRefusesDevelopmentRootAndDevelopmentRefusesQualifiedRoot() {
+    new ImmutableArtifactStore(
+        root, 1024, 65536, new ObjectMapper(), ImmutableArtifactStore.DurabilityMode.DEVELOPMENT);
+    var refused =
+        assertThrows(
+            ResponseStatusException.class,
+            () ->
+                new ImmutableArtifactStore(
+                    root, 1024, 65536, new ObjectMapper(), ImmutableArtifactStore.DurabilityMode.STRICT));
+    assertTrue(String.valueOf(refused.getReason()).startsWith("ARTIFACT_DURABILITY_UNAVAILABLE"));
+    var qualified = root.resolve("qualified");
+    new ImmutableArtifactStore(
+        qualified, 1024, 65536, new ObjectMapper(), ImmutableArtifactStore.DurabilityMode.STRICT);
+    var conflict =
+        assertThrows(
+            ResponseStatusException.class,
+            () ->
+                new ImmutableArtifactStore(
+                    qualified,
+                    1024,
+                    65536,
+                    new ObjectMapper(),
+                    ImmutableArtifactStore.DurabilityMode.DEVELOPMENT));
+    assertEquals("ARTIFACT_DURABILITY_CONFLICT", conflict.getReason());
+  }
+
+  @Test
+  @EnabledOnOs({OS.LINUX, OS.MAC})
+  void forceFailureAfterObjectPublicationLeavesNoReferenceAndRetainsSharedContent() {
+    var writer =
+        new ImmutableArtifactStore(
+            root, 1024, 65536, new ObjectMapper(), ImmutableArtifactStore.DurabilityMode.STRICT);
+    var shared = put(writer, "shared", new byte[] {1});
+    var failing =
+        new ImmutableArtifactStore(
+            root,
+            1024,
+            65536,
+            new ObjectMapper(),
+            ImmutableArtifactStore.DurabilityMode.STRICT,
+            failOnRefs());
+    var exception =
+        assertThrows(ResponseStatusException.class, () -> put(failing, "orphan", new byte[] {9}));
+    assertTrue(String.valueOf(exception.getReason()).startsWith("ARTIFACT_DURABILITY_UNAVAILABLE"));
+    assertThrows(ResponseStatusException.class, () -> failing.get("owner", "orphan"));
+    var orphanChecksum = ImmutableArtifactStore.checksum(new byte[] {9}).substring(7);
+    assertTrue(
+        Files.exists(root.resolve("objects").resolve(orphanChecksum.substring(0, 2)).resolve(orphanChecksum)));
+    assertArrayEquals(new byte[] {1}, writer.read("owner", shared.id()));
+    assertTrue(Files.exists(writer.contentPath(shared)));
+    var retried =
+        new ImmutableArtifactStore(
+            root, 1024, 65536, new ObjectMapper(), ImmutableArtifactStore.DurabilityMode.STRICT);
+    var recovered = put(retried, "orphan", new byte[] {9});
+    assertEquals("sha256:" + orphanChecksum, recovered.checksum());
+    assertArrayEquals(new byte[] {9}, retried.read("owner", "orphan"));
+  }
+
+  @Test
+  @EnabledOnOs({OS.LINUX, OS.MAC})
+  void forceFailureDuringActivationSurfacesDurabilityErrorAndRetryIsIdempotent() throws Exception {
+    var armed = new AtomicBoolean(false);
+    var force =
+        (ImmutableArtifactStore.DirectoryForce)
+            directory -> {
+              if (armed.get() && directory.toString().contains(java.io.File.separator + "refs"))
+                throw new AccessDeniedException(directory.toString());
+              forceNative(directory);
+            };
+    var s =
+        new ImmutableArtifactStore(
+            root, 1024, 65536, new ObjectMapper(), ImmutableArtifactStore.DurabilityMode.STRICT, force);
+    put(s, "source", new byte[] {1});
+    var first =
+        s.put(
+            "owner",
+            "snapshot1",
+            ImmutableArtifactStore.Kind.KNOWLEDGE_SNAPSHOT,
+            new byte[] {2},
+            "application/json",
+            Map.of("sourceRun", "run"),
+            Map.of("corpus", "source"));
+    var second =
+        s.put(
+            "owner",
+            "snapshot2",
+            ImmutableArtifactStore.Kind.KNOWLEDGE_SNAPSHOT,
+            new byte[] {3},
+            "application/json",
+            Map.of("sourceRun", "run"),
+            Map.of("corpus", "source"));
+    var reference = s.activateKnowledgeSnapshot("owner", first.id());
+    armed.set(true);
+    var exception =
+        assertThrows(
+            ResponseStatusException.class, () -> s.activateKnowledgeSnapshot("owner", second.id()));
+    assertTrue(String.valueOf(exception.getReason()).startsWith("ARTIFACT_DURABILITY_UNAVAILABLE"));
+    armed.set(false);
+    assertEquals(second.checksum(), s.activateKnowledgeSnapshot("owner", second.id()).checksum());
+    assertNotEquals(reference.checksum(), second.checksum());
+    assertEquals(second.checksum(), s.activeKnowledgeSnapshot("owner").checksum());
+    assertArrayEquals(new byte[] {2}, s.read("owner", first.id()));
   }
 }

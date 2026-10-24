@@ -16,7 +16,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -118,6 +117,7 @@ public final class ImmutableArtifactStore {
           byte[] bytes = json.writeValueAsBytes(reference);
           Path pointer = refs(owner).resolve("active-knowledge.pointer");
           validateAncestors(pointer);
+          directory(pointer.getParent());
           long priorSize =
               Files.exists(pointer, LinkOption.NOFOLLOW_LINKS) ? Files.size(pointer) : 0;
           if (bytes.length - priorSize > quotaBytes - usedBytes())
@@ -138,6 +138,7 @@ public final class ImmutableArtifactStore {
                 pointer,
                 java.nio.file.StandardCopyOption.ATOMIC_MOVE,
                 java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            forceDirectory(pointer.getParent());
             return reference;
           } finally {
             Files.deleteIfExists(temp);
@@ -171,25 +172,174 @@ public final class ImmutableArtifactStore {
 
   private record Envelope(String checksum, Manifest manifest) {}
 
+  /** Durable publication contract selected for this root. */
+  public enum DurabilityMode {
+    /** Directory-entry persistence is required for every write; unsupported platforms fail closed. */
+    STRICT,
+    /** Explicitly unqualified development root; never accepted by strict production stores. */
+    DEVELOPMENT
+  }
+
+  /** Injectable directory-persistence primitive so unsupported platforms and faults are testable. */
+  @FunctionalInterface
+  interface DirectoryForce {
+    void force(Path directory) throws IOException;
+  }
+
+  private record DurabilityMarker(
+      DurabilityMode mode,
+      String platform,
+      boolean directoryForce,
+      boolean qualified,
+      String createdAt) {}
+
   private static final int MAX_MANIFEST_BYTES = 65536;
-  private static final boolean WINDOWS =
-      System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
   private static final Map<Path, ReentrantLock> LOCKS = new ConcurrentHashMap<>();
   private final Path root;
   private final long maxBytes;
   private final long quotaBytes;
   private final ObjectMapper json;
+  private final DurabilityMode durabilityMode;
+  private final DirectoryForce directoryForce;
+  private final boolean qualifiedDurability;
 
   public ImmutableArtifactStore(Path root, long maxBytes, long quotaBytes, ObjectMapper json) {
+    this(root, maxBytes, quotaBytes, json, DurabilityMode.STRICT);
+  }
+
+  public ImmutableArtifactStore(
+      Path root, long maxBytes, long quotaBytes, ObjectMapper json, DurabilityMode mode) {
+    this(root, maxBytes, quotaBytes, json, mode, ImmutableArtifactStore::nativeDirectoryForce);
+  }
+
+  ImmutableArtifactStore(
+      Path root,
+      long maxBytes,
+      long quotaBytes,
+      ObjectMapper json,
+      DurabilityMode mode,
+      DirectoryForce force) {
     if (maxBytes < 1 || quotaBytes < maxBytes)
       throw new IllegalArgumentException("Invalid artifact limits");
+    if (mode == null || force == null) throw new IllegalArgumentException("Invalid durability mode");
     this.root = root.toAbsolutePath().normalize();
     this.maxBytes = maxBytes;
     this.quotaBytes = quotaBytes;
+    this.durabilityMode = mode;
+    this.directoryForce = force;
     this.json =
         json.copy()
             .configure(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY, true)
             .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
+    this.qualifiedDurability = initializeDurability();
+  }
+
+  /**
+   * Qualifies or refuses this root before any artifact write. Strict mode refuses unsupported
+   * persistence and roots previously published as development, so unqualified output can never be
+   * served as production evidence. Development mode refuses a qualified root, keeping the two
+   * classes of root disjoint.
+   */
+  private boolean initializeDurability() {
+    try {
+      validateAncestors(root);
+      Files.createDirectories(root);
+      boolean forceSupported;
+      try {
+        directoryForce.force(root);
+        forceSupported = true;
+      } catch (AccessDeniedException e) {
+        forceSupported = false;
+      }
+      DurabilityMarker existing = marker();
+      if (durabilityMode == DurabilityMode.STRICT) {
+        if (!forceSupported)
+          throw durabilityUnavailable(
+              "Directory persistence is unavailable on this platform; strict durability refuses"
+                  + " this root");
+        if (existing != null && !existing.qualified())
+          throw durabilityUnavailable(
+              "Root was published in development mode and cannot become production evidence");
+        writeMarker(true);
+        return true;
+      }
+      if (existing != null && existing.qualified())
+        throw error(HttpStatus.CONFLICT, "ARTIFACT_DURABILITY_CONFLICT");
+      writeMarker(false);
+      return false;
+    } catch (IOException e) {
+      throw new ResponseStatusException(
+          HttpStatus.SERVICE_UNAVAILABLE, "ARTIFACT_STORAGE_UNAVAILABLE", e);
+    }
+  }
+
+  private void writeMarker(boolean qualified) throws IOException {
+    DirectoryForce force = this.directoryForce;
+    Files.createDirectories(root.resolve("pending"));
+    DurabilityMarker marker =
+        new DurabilityMarker(
+            durabilityMode,
+            System.getProperty("os.name", "unknown"),
+            qualified,
+            qualified,
+            java.time.Instant.now().toString());
+    byte[] bytes = json.writeValueAsBytes(marker);
+    Path temp = root.resolve("pending").resolve(UUID.randomUUID() + ".tmp");
+    try {
+      try (var channel =
+          FileChannel.open(temp, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+        ByteBuffer buffer = ByteBuffer.wrap(bytes);
+        while (buffer.hasRemaining()) channel.write(buffer);
+        channel.force(true);
+      }
+      Files.move(
+          temp,
+          root.resolve("durability.json"),
+          java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+          java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+      try {
+        force.force(root);
+      } catch (AccessDeniedException e) {
+        if (qualified) throw e;
+      }
+    } finally {
+      Files.deleteIfExists(temp);
+    }
+  }
+
+  private DurabilityMarker marker() throws IOException {
+    Path path = root.resolve("durability.json");
+    if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return null;
+    try {
+      return json.readValue(bounded(path, MAX_MANIFEST_BYTES), DurabilityMarker.class);
+    } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+      throw error(HttpStatus.CONFLICT, "ARTIFACT_DURABILITY_MARKER_CORRUPT");
+    }
+  }
+
+  public DurabilityMode durabilityMode() {
+    return durabilityMode;
+  }
+
+  /** True only when every publication on this root must survive directory-entry persistence. */
+  public boolean durabilityQualified() {
+    return qualifiedDurability;
+  }
+
+  private static ResponseStatusException durabilityUnavailable(String message) {
+    return new ResponseStatusException(
+        HttpStatus.SERVICE_UNAVAILABLE, "ARTIFACT_DURABILITY_UNAVAILABLE: " + message);
+  }
+
+  private void forceDirectory(Path directory) {
+    try {
+      directoryForce.force(directory);
+    } catch (AccessDeniedException e) {
+      if (qualifiedDurability) throw durabilityUnavailable("Directory persistence failed");
+    } catch (IOException e) {
+      throw new ResponseStatusException(
+          HttpStatus.SERVICE_UNAVAILABLE, "ARTIFACT_DURABILITY_UNAVAILABLE", e);
+    }
   }
 
   /** A missing reference never resolves, even if a crash left published but unregistered bytes. */
@@ -289,6 +439,7 @@ public final class ImmutableArtifactStore {
         () -> {
           Path dir = refs(owner);
           validateAncestors(dir);
+          boolean removed = false;
           if (Files.exists(dir))
             try (var entries = Files.list(dir)) {
               for (Path p : entries.toList()) {
@@ -299,8 +450,10 @@ public final class ImmutableArtifactStore {
                     || Files.isSymbolicLink(p))
                   throw error(HttpStatus.CONFLICT, "ARTIFACT_REGISTRY_INVALID");
                 Files.delete(p);
+                removed = true;
               }
             }
+          if (removed) forceDirectory(dir);
           return null;
         });
   }
@@ -398,21 +551,16 @@ public final class ImmutableArtifactStore {
   }
 
   /**
-   * Forces the newly linked directory entry where the Java filesystem provider supports it.
+   * Forces the newly linked directory entry through the configured persistence primitive.
    *
    * <p>POSIX systems persist a directory entry by forcing the parent directory. Windows does not
-   * allow {@code java.nio} to open a directory handle, so the equivalent call always fails with
-   * {@link AccessDeniedException}. The Windows compatibility path retains the already-forced
-   * object bytes and atomic non-replacing link, but does not establish that the subsequent link
-   * metadata reached stable storage before return. NTFS journaling alone is not an immediate
-   * persistence guarantee. Power-loss durability on that path remains unqualified; every other
-   * platform still fails closed on an unsuccessful directory force.
+   * allow {@code java.nio} to open a directory handle, so the equivalent call fails with
+   * {@link AccessDeniedException}. Strict roots refuse that platform at construction; development
+   * roots record an explicitly unqualified marker and tolerate only that specific refusal.
    */
-  private static void forceDirectory(Path directory) throws IOException {
+  private static void nativeDirectoryForce(Path directory) throws IOException {
     try (var channel = FileChannel.open(directory, StandardOpenOption.READ)) {
       channel.force(true);
-    } catch (AccessDeniedException e) {
-      if (!WINDOWS || !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) throw e;
     }
   }
 
@@ -475,7 +623,10 @@ public final class ImmutableArtifactStore {
 
   private void directory(Path dir) throws IOException {
     validateAncestors(dir);
+    boolean created = !Files.exists(dir, LinkOption.NOFOLLOW_LINKS);
     Files.createDirectories(dir);
+    Path parent = dir.getParent();
+    if (created && parent != null && parent.startsWith(root)) forceDirectory(parent);
   }
 
   @FunctionalInterface
@@ -495,14 +646,18 @@ public final class ImmutableArtifactStore {
                   StandardOpenOption.WRITE,
                   LinkOption.NOFOLLOW_LINKS);
           var lock = channel.lock()) {
-        directory(root.resolve("pending"));
-        try (var abandoned = Files.list(root.resolve("pending"))) {
+        Path pending = root.resolve("pending");
+        directory(pending);
+        boolean removed = false;
+        try (var abandoned = Files.list(pending)) {
           for (Path p : abandoned.toList()) {
             if (Files.isSymbolicLink(p) || !p.getFileName().toString().endsWith(".tmp"))
               throw error(HttpStatus.CONFLICT, "ARTIFACT_REGISTRY_INVALID");
             Files.delete(p);
+            removed = true;
           }
         }
+        if (removed) forceDirectory(pending);
         return operation.run();
       }
     } catch (IOException e) {

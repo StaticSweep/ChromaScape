@@ -61,6 +61,9 @@ public class FishingDatasetBuilderService {
   @Value("${ai-player.dataset.output-dir:.chromascape/datasets}")
   private String outputDir;
 
+  @Value("${artifacts.durability-mode:strict}")
+  private String durabilityMode = "strict";
+
   @Value("${features.ai-player.enabled:false}")
   private boolean aiPlayerEnabled;
 
@@ -405,7 +408,9 @@ public class FishingDatasetBuilderService {
             Path.of(outputDir).resolve("artifacts"),
             maxArtifactBytes,
             artifactQuotaBytes,
-            objectMapper);
+            objectMapper,
+            ImmutableArtifactStore.DurabilityMode.valueOf(
+                durabilityMode.trim().toUpperCase(java.util.Locale.ROOT)));
   }
 
   private Map<String, String> artifactLineage(RecordingContext ctx) {
