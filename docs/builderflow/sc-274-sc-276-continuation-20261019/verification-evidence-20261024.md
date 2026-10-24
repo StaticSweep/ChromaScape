@@ -62,16 +62,15 @@ admission race passed on a container filesystem; XrspsSessionRepositoryIntegrati
   must set `ARTIFACTS_DURABILITY_MODE=development` (or run the durable lane on POSIX); its
   root is then marked unqualified and can never be served by a strict store. This is a
   deliberate behavior change, not an outage workaround.
-- **STRICT durability is only half-verified.** Windows proves refusal; the positive
-  force-every-path contract is skipped there and has not yet run on Linux.
+- **STRICT durability is verified for policy and call order, not power loss.** Windows proves
+  refusal; the Linux STRICT positives ran against the real directory-force primitive on a container
+  filesystem. No power-loss fault test has been run (needs an owned disposable VM).
 - **Mid-publication response is not transactional.** A directory-force failure after a
   move can leave the activation pointer replaced but not proven durable; the error is
   surfaced and retried idempotently rather than rolled back. Unreferenced blobs are
   retained by design and there is no GC yet.
-- **Development roots are isolated by marker only.** A caller who deletes
-  `durability.json` can make a development root look like a new strict root and trigger
-  bootstrap. Strict bootstrap is safe only because it re-probes directory forcing; on
-  POSIX that succeeds. This is documented but not tamper-evident.
+- **Marker tampering now fails closed.** A deleted, null or inconsistent `durability.json` on a
+  populated root is refused; legacy roots can only be adopted as unqualified DEVELOPMENT roots.
 - **Native source is local.** The recovered 105-file commit is not published; another
   host cannot reproduce the worker from the owning repository yet.
 - **Windows dependency set is Linux-targeted**, so the worker lane cannot be exercised
