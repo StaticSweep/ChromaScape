@@ -1,0 +1,901 @@
+{
+  "schema": "termination-policy-vectors/v1",
+  "cases": [
+    {
+      "name": "empty",
+      "valid": true,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "every-operator",
+      "valid": true,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "all",
+              "predicates": [
+                {
+                  "op": "not",
+                  "predicate": {
+                    "op": "exists",
+                    "pointer": "/missing"
+                  }
+                },
+                {
+                  "op": "any",
+                  "predicates": [
+                    {
+                      "op": "some",
+                      "pointer": "/items",
+                      "predicate": {
+                        "op": "compare",
+                        "comparison": "eq",
+                        "left": {
+                          "kind": "path",
+                          "pointer": "/id"
+                        },
+                        "right": {
+                          "kind": "literal",
+                          "value": 1
+                        }
+                      }
+                    },
+                    {
+                      "op": "every",
+                      "pointer": "/items",
+                      "predicate": {
+                        "op": "exists",
+                        "pointer": ""
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "compare",
+                  "comparison": "eq",
+                  "left": {
+                    "kind": "count",
+                    "pointer": "/items",
+                    "where": {
+                      "op": "exists",
+                      "pointer": "/id"
+                    }
+                  },
+                  "right": {
+                    "kind": "literal",
+                    "value": 1
+                  }
+                },
+                {
+                  "op": "compare",
+                  "comparison": "eq",
+                  "left": {
+                    "kind": "sum",
+                    "pointer": "/items",
+                    "valuePointer": "/quantity"
+                  },
+                  "right": {
+                    "kind": "literal",
+                    "value": 1
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "escaped-pointer",
+      "valid": true,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "exists",
+              "pointer": "/a~1b/~0c/"
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "comparison-eq",
+      "valid": true,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "compare",
+              "comparison": "eq",
+              "left": {
+                "kind": "path",
+                "pointer": "/n"
+              },
+              "right": {
+                "kind": "literal",
+                "value": 2
+              }
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "comparison-ne",
+      "valid": true,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "compare",
+              "comparison": "ne",
+              "left": {
+                "kind": "path",
+                "pointer": "/n"
+              },
+              "right": {
+                "kind": "literal",
+                "value": 2
+              }
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "comparison-gt",
+      "valid": true,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "compare",
+              "comparison": "gt",
+              "left": {
+                "kind": "path",
+                "pointer": "/n"
+              },
+              "right": {
+                "kind": "literal",
+                "value": 2
+              }
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "comparison-gte",
+      "valid": true,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "compare",
+              "comparison": "gte",
+              "left": {
+                "kind": "path",
+                "pointer": "/n"
+              },
+              "right": {
+                "kind": "literal",
+                "value": 2
+              }
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "comparison-lt",
+      "valid": true,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "compare",
+              "comparison": "lt",
+              "left": {
+                "kind": "path",
+                "pointer": "/n"
+              },
+              "right": {
+                "kind": "literal",
+                "value": 2
+              }
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "comparison-lte",
+      "valid": true,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "compare",
+              "comparison": "lte",
+              "left": {
+                "kind": "path",
+                "pointer": "/n"
+              },
+              "right": {
+                "kind": "literal",
+                "value": 2
+              }
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "literal-null",
+      "valid": true,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "compare",
+              "comparison": "eq",
+              "left": {
+                "kind": "literal",
+                "value": null
+              },
+              "right": {
+                "kind": "literal",
+                "value": 1
+              }
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "literal-boolean",
+      "valid": true,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "compare",
+              "comparison": "eq",
+              "left": {
+                "kind": "literal",
+                "value": true
+              },
+              "right": {
+                "kind": "literal",
+                "value": 1
+              }
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "literal-string",
+      "valid": true,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "compare",
+              "comparison": "eq",
+              "left": {
+                "kind": "literal",
+                "value": "x"
+              },
+              "right": {
+                "kind": "literal",
+                "value": 1
+              }
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "literal-number",
+      "valid": true,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "compare",
+              "comparison": "eq",
+              "left": {
+                "kind": "literal",
+                "value": 1000000000000
+              },
+              "right": {
+                "kind": "literal",
+                "value": 1
+              }
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "schema",
+      "valid": false,
+      "policy": {
+        "schema": "https://network/policy",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "exists",
+              "pointer": "/x"
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "extra-root",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "exists",
+              "pointer": "/x"
+            }
+          }
+        ],
+        "failure": [],
+        "stop": [],
+        "callback": "code"
+      }
+    },
+    {
+      "name": "missing-category",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "exists",
+              "pointer": "/x"
+            }
+          }
+        ],
+        "failure": []
+      }
+    },
+    {
+      "name": "null-category",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "exists",
+              "pointer": "/x"
+            }
+          }
+        ],
+        "failure": [],
+        "stop": null
+      }
+    },
+    {
+      "name": "duplicate-id",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "exists",
+              "pointer": "/x"
+            }
+          }
+        ],
+        "failure": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "exists",
+              "pointer": "/y"
+            }
+          }
+        ],
+        "stop": []
+      }
+    },
+    {
+      "name": "blank-id",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "",
+            "predicate": {
+              "op": "exists",
+              "pointer": "/x"
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "newline-id",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done\n",
+            "predicate": {
+              "op": "exists",
+              "pointer": "/x"
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "extra-clause",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "exists",
+              "pointer": "/x"
+            },
+            "source": "inferred"
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "array-predicate",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": []
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "pointer-9",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "exists",
+              "pointer": "x"
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "pointer-10",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "exists",
+              "pointer": "/~2"
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "pointer-11",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "exists",
+              "pointer": "/~"
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "pointer-12",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "exists",
+              "pointer": "/constructor/x"
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "pointer-13",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "exists",
+              "pointer": "/a/prototype"
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "pointer-14",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "exists",
+              "pointer": "/__proto__"
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "pointer-15",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "exists",
+              "pointer": "/\n~x"
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "pointer-16",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "exists",
+              "pointer": "/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "unknown-op",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "eval",
+              "code": "process.exit()"
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "empty-all",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "all",
+              "predicates": []
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "extra-predicate",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "exists",
+              "pointer": "/x",
+              "callback": "code"
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "missing-sum-value",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "compare",
+              "comparison": "eq",
+              "left": {
+                "kind": "sum",
+                "pointer": "/items"
+              },
+              "right": {
+                "kind": "literal",
+                "value": 1
+              }
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "extra-path",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "compare",
+              "comparison": "eq",
+              "left": {
+                "kind": "path",
+                "pointer": "/x",
+                "value": 1
+              },
+              "right": {
+                "kind": "literal",
+                "value": 1
+              }
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "bad-comparison",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "compare",
+              "comparison": "equal",
+              "left": {
+                "kind": "literal",
+                "value": 1
+              },
+              "right": {
+                "kind": "literal",
+                "value": 1
+              }
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "large-number",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "compare",
+              "comparison": "eq",
+              "left": {
+                "kind": "literal",
+                "value": 1000000000001
+              },
+              "right": {
+                "kind": "literal",
+                "value": 1
+              }
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "object-literal",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "compare",
+              "comparison": "eq",
+              "left": {
+                "kind": "literal",
+                "value": {}
+              },
+              "right": {
+                "kind": "literal",
+                "value": 1
+              }
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    },
+    {
+      "name": "long-string",
+      "valid": false,
+      "policy": {
+        "schema": "xrsps-termination-policy/v1",
+        "success": [
+          {
+            "id": "done",
+            "predicate": {
+              "op": "compare",
+              "comparison": "eq",
+              "left": {
+                "kind": "literal",
+                "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              },
+              "right": {
+                "kind": "literal",
+                "value": 1
+              }
+            }
+          }
+        ],
+        "failure": [],
+        "stop": []
+      }
+    }
+  ]
+}

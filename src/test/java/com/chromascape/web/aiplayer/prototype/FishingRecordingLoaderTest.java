@@ -188,6 +188,24 @@ class FishingRecordingLoaderTest {
   }
 
   @Test
+  @DisplayName("net inventory delta is not a catch count when banking moves items")
+  void netInventoryDeltaIsNotCatchCount() {
+    TickSnapshot initial = snapshot(1000, 55, 100L, List.of("Rod Fishing spot"));
+    TickSnapshot afterDeposit = snapshot(1100, 40, 100L, List.of("Rod Fishing spot"));
+    TickSnapshot afterWithdrawal = snapshot(1200, 58, 100L, List.of("Rod Fishing spot"));
+    TickSnapshot afterCatches = snapshot(1300, 58, 140L, List.of("Rod Fishing spot"));
+    stubRepos(
+        List.of(initial, afterDeposit, afterWithdrawal, afterCatches),
+        List.of(actionLog(1000, 1000, 0, "Lure")));
+
+    RecordingContext ctx = loader.load(session);
+    assertThat(ctx.initialInventoryTotal()).isEqualTo(55);
+    assertThat(ctx.finalInventoryTotal()).isEqualTo(58);
+    assertThat(ctx.catchDelta()).isEqualTo(3);
+    assertThat(ctx.positiveInventoryAdditions()).isEqualTo(1);
+  }
+
+  @Test
   @DisplayName("unsupported actions are classified and counted")
   void unsupportedActionsCounted() {
     TickSnapshot snap = snapshot(1000, 1, 100L, List.of("Fishing spot"));

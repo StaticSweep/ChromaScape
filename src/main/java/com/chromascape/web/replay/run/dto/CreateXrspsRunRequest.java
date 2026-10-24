@@ -17,7 +17,26 @@ public record CreateXrspsRunRequest(
         @Pattern(
             regexp = "^[A-Za-z0-9._:-]+$",
             message = "idempotencyKey allows [A-Za-z0-9._:-] only")
-        String idempotencyKey) {
+        String idempotencyKey,
+    java.util.UUID curationId,
+    @Pattern(regexp = "^sha256:[0-9a-f]{64}$") String expectedManifestChecksum) {
+
+  public CreateXrspsRunRequest(
+      ConversionMode conversionMode,
+      Boolean openViewer,
+      ReplayStopPolicy stopPolicy,
+      String idempotencyKey) {
+    this(conversionMode, openViewer, stopPolicy, idempotencyKey, null, null);
+  }
+
+  public CreateXrspsRunRequest(
+      ConversionMode conversionMode,
+      Boolean openViewer,
+      ReplayStopPolicy stopPolicy,
+      String idempotencyKey,
+      java.util.UUID curationId) {
+    this(conversionMode, openViewer, stopPolicy, idempotencyKey, curationId, null);
+  }
 
   public boolean viewerRequested() {
     return Boolean.TRUE.equals(openViewer);

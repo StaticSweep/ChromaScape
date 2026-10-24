@@ -2,6 +2,7 @@ package com.chromascape.web.replay.projection;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -119,7 +120,14 @@ public class CanonicalProjectionService {
       if (rounded == Math.rint(rounded) && Math.abs(rounded) < 1e15) {
         return Long.toString((long) rounded);
       }
-      return Double.toString(rounded);
+      // ECMAScript prints ordinary decimal notation through this range (for example native
+      // magic XP 13034448.5). Double.toString instead switches to 1.30344485E7 at 1e7, breaking
+      // cross-language snapshot hashes despite identical state. Rounded v1 fractions are at
+      // least 1e-9; only values below 1e-6 use the small scientific notation on the TS side.
+      BigDecimal decimal = BigDecimal.valueOf(rounded).stripTrailingZeros();
+      return Math.abs(rounded) < 1e-6
+          ? decimal.toString().replace("E-", "e-")
+          : decimal.toPlainString();
     }
     if (node.isBoolean()) {
       return node.asBoolean() ? "true" : "false";

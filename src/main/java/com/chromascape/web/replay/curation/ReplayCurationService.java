@@ -13,6 +13,7 @@ import com.chromascape.web.replay.curation.repository.CuratedActionRepository;
 import com.chromascape.web.replay.curation.repository.RecordingCurationRepository;
 import com.chromascape.web.replay.error.ReplayErrorCode;
 import com.chromascape.web.replay.error.ReplayException;
+import com.chromascape.web.replay.manifest.TerminationPolicyContract;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -72,6 +73,7 @@ public class ReplayCurationService {
   public CurationResponse create(
       String recordingId, CreateCurationRequest request, String createdBy) {
     validateTickRange(request.tickRangeStart(), request.tickRangeEnd());
+    if (request.termination() != null) TerminationPolicyContract.validate(request.termination());
     if (request.actionLabels() != null) {
       validateLabels(request.tickRangeStart(), request.tickRangeEnd(), request.actionLabels());
     }
@@ -89,8 +91,11 @@ public class ReplayCurationService {
     curation.setSchemaVersion(1);
     curation.setContentJson(
         buildContentJson(
-            request.tickRangeStart(), request.tickRangeEnd(),
-            request.initialStateOverrides(), request.actionLabels()));
+            request.tickRangeStart(),
+            request.tickRangeEnd(),
+            request.initialStateOverrides(),
+            request.actionLabels(),
+            request.termination()));
     curation.setContentChecksum(computeChecksum(curation.getContentJson()));
     curation.setCreatedBy(createdBy);
     // Durable ordering comes from the PostgreSQL clock — never LocalDateTime.now().
@@ -116,11 +121,13 @@ public class ReplayCurationService {
     if (request == null
         || (request.role() == null
             && request.initialStateOverrides() == null
-            && request.actionLabels() == null)) {
+            && request.actionLabels() == null
+            && request.termination() == null)) {
       throw ReplayException.badRequest(
           ReplayErrorCode.VALIDATION_ERROR,
-          "Update must supply role, initialStateOverrides or actionLabels");
+          "Update must supply role, initialStateOverrides, actionLabels or termination");
     }
+    requireContentObject(curation);
 
     Long rangeStart = extractRangeStart(curation.getContentJson());
     Long rangeEnd = extractRangeEnd(curation.getContentJson());
@@ -129,18 +136,24 @@ public class ReplayCurationService {
 
     JsonNode overrides = request.initialStateOverrides();
     List<CuratedActionDto> labels = request.actionLabels();
+    JsonNode policy =
+        request.termination() != null
+            ? request.termination()
+            : curation.getContentJson().get("termination");
+    if (policy != null) TerminationPolicyContract.validate(policy);
+    if (labels != null) validateLabels(start, end, labels);
+    boolean contentChanged = overrides != null || labels != null || request.termination() != null;
+    ObjectNode content = (ObjectNode) curation.getContentJson().deepCopy();
+    if (overrides != null) content.set("initialStateOverrides", overrides.deepCopy());
+    if (labels != null)
+      content.set(
+          "actionLabels", buildContentJson(start, end, null, labels, null).get("actionLabels"));
+    if (request.termination() != null) content.set("termination", request.termination().deepCopy());
     if (request.role() != null) {
       curation.setRole(request.role());
     }
-    boolean contentChanged = overrides != null || labels != null;
     if (contentChanged) {
-      validateLabels(start, end, labels);
-      curation.setContentJson(
-          buildContentJson(
-              start,
-              end,
-              overrides != null ? overrides : extractOverrides(curation.getContentJson()),
-              labels));
+      curation.setContentJson(content);
       curation.setContentChecksum(computeChecksum(curation.getContentJson()));
     }
 
@@ -158,10 +171,13 @@ public class ReplayCurationService {
       throw ReplayException.conflict(
           ReplayErrorCode.CURATION_IMMUTABLE, "Only DRAFT curations can be published");
     }
+    requireContentObject(curation);
     if (curation.getContentChecksum() == null || curation.getContentChecksum().isBlank()) {
       throw ReplayException.invalid(
           ReplayErrorCode.CURATION_NOT_PUBLISHED, "Curation content is empty");
     }
+    if (curation.getContentJson().has("termination"))
+      TerminationPolicyContract.validate(curation.getContentJson().path("termination"));
 
     curation.setState(CurationState.PUBLISHED);
     curation.setPublishedAt(curationRepository.currentTimestamp());
@@ -279,7 +295,8 @@ public class ReplayCurationService {
       long rangeStart,
       long rangeEnd,
       JsonNode initialStateOverrides,
-      List<CuratedActionDto> labels) {
+      List<CuratedActionDto> labels,
+      JsonNode termination) {
     ObjectNode content = objectMapper.createObjectNode();
     ObjectNode range = content.putObject("tickRange");
     range.put("start", rangeStart);
@@ -287,6 +304,7 @@ public class ReplayCurationService {
     content.set(
         "initialStateOverrides",
         initialStateOverrides != null ? initialStateOverrides : objectMapper.createObjectNode());
+    if (termination != null) content.set("termination", termination.deepCopy());
     ArrayNode arr = content.putArray("actionLabels");
     if (labels != null) {
       for (CuratedActionDto dto : labels) {
@@ -320,10 +338,11 @@ public class ReplayCurationService {
             : null);
   }
 
-  private static JsonNode extractOverrides(JsonNode content) {
-    return content != null && content.has("initialStateOverrides")
-        ? content.get("initialStateOverrides")
-        : null;
+  private static void requireContentObject(RecordingCuration curation) {
+    if (curation.getContentJson() == null || !curation.getContentJson().isObject()) {
+      throw ReplayException.invalid(
+          ReplayErrorCode.VALIDATION_ERROR, "Curation requires object content");
+    }
   }
 
   private RecordingCuration refetch(UUID id) {

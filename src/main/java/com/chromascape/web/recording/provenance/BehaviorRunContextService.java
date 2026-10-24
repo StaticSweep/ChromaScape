@@ -100,6 +100,7 @@ public class BehaviorRunContextService {
         .put("settingsHash", provenance.settingsHash());
     context.set("settings", provenance.taskArgs());
     context.set("profileSnapshot", profile.deepCopy());
+    freezePublishedGraph(reference, profile, context);
     context
         .put("catalogHash", profile.path("catalog_hash").asText())
         .put("catalogVersion", profile.path("catalog_version").asText());
@@ -114,6 +115,64 @@ public class BehaviorRunContextService {
     if (context.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 2_000_000)
       fail("RUN_CONTEXT_TOO_LARGE");
     return context;
+  }
+
+  /** Freeze an explicitly selected historical publication, never whatever graph is latest now. */
+  private void freezePublishedGraph(JsonNode reference, JsonNode profile, ObjectNode context) {
+    if (!reference.has("graphId")
+        && !reference.has("graphVersion")
+        && !reference.has("graphRevision")) return;
+    String graphId = required(reference, "graphId");
+    String revision = required(reference, "graphRevision");
+    if (!revision.matches("sha256:[0-9a-f]{64}")
+        || !reference.path("graphVersion").isIntegralNumber()
+        || !reference.path("graphVersion").canConvertToLong()
+        || reference.path("graphVersion").asLong() < 1) fail("INVALID_GRAPH_REFERENCE");
+    java.util.List<Map<String, Object>> rows;
+    try {
+      rows =
+          jdbc.queryForList(
+              "SELECT graph_hash,definition_schema,definition_json FROM behavior_graph_publications"
+                  + " WHERE graph_id=? AND graph_version=?",
+              graphId,
+              reference.path("graphVersion").asLong());
+    } catch (org.springframework.dao.DataAccessException e) {
+      throw new ProvenanceException("GRAPH_SNAPSHOT_UNAVAILABLE");
+    }
+    if (rows.size() != 1) fail("GRAPH_PUBLICATION_NOT_FOUND");
+    Map<String, Object> row = rows.get(0);
+    if (!revision.equals(row.get("graph_hash"))
+        || !"behavior-graph-definition/v2".equals(row.get("definition_schema")))
+      fail("GRAPH_REVISION_MISMATCH");
+    JsonNode definition;
+    try {
+      definition = json.readTree(String.valueOf(row.get("definition_json")));
+      new com.chromascape.web.aiplayer.routine.service.GraphSchemaValidator()
+          .validateDefinitionV2(definition);
+    } catch (java.io.IOException | IllegalArgumentException e) {
+      throw new ProvenanceException("INVALID_GRAPH_PUBLICATION");
+    }
+    if (!graphId.equals(definition.path("graph_id").asText())
+        || !revision.equals(definition.path("graph_hash").asText())
+        || !revision.equals(
+            new com.chromascape.web.aiplayer.routine.service.BehaviorGraphV2Canonicalizer()
+                .graphHash(definition))) fail("GRAPH_REVISION_MISMATCH");
+    if (!profile.path("task_key").asText().equals(definition.path("task").path("task_key").asText())
+        || !profile
+            .path("profile_id")
+            .asText()
+            .equals(definition.path("profile").path("profile_id").asText())
+        || !profile
+            .path("profile_version")
+            .asText()
+            .equals(definition.path("profile").path("profile_version").asText()))
+      fail("GRAPH_PROFILE_MISMATCH");
+    context
+        .put("graphId", graphId)
+        .put("graphVersion", reference.path("graphVersion").asLong())
+        .put("graphRevision", revision)
+        .put("graphSchemaVersion", "behavior-graph-definition/v2");
+    context.set("graphSnapshot", definition.deepCopy());
   }
 
   public ObjectNode bind(ObjectNode snapshot, String recordingId, String sessionId) {
@@ -168,7 +227,9 @@ public class BehaviorRunContextService {
     row.captureProvenance(provenance);
     row.bindRunContext(context, "INFERRED");
     jdbc.update(
-        "INSERT INTO recording_provenance_audit(recording_id,actor,reason,assigned_at,context_hash,context) VALUES(?,?,?,?,?,?::jsonb)",
+        "INSERT INTO"
+            + " recording_provenance_audit(recording_id,actor,reason,assigned_at,context_hash,context)"
+            + " VALUES(?,?,?,?,?,?::jsonb)",
         recordingId,
         actor,
         reason,
@@ -198,7 +259,8 @@ public class BehaviorRunContextService {
     if (!hash.equals(Micro6CanonicalHash.sha256WithPrefix(content))) fail("CONTEXT_HASH_MISMATCH");
     var quality =
         jdbc.queryForList(
-            "SELECT quality::text FROM recording_capture_quality WHERE session_id=? AND finalized=true",
+            "SELECT quality::text FROM recording_capture_quality WHERE session_id=? AND"
+                + " finalized=true",
             String.class,
             session.getSessionId());
     if (quality.isEmpty()) fail("CAPTURE_QUALITY_UNKNOWN");

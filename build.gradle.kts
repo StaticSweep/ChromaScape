@@ -198,7 +198,89 @@ tasks.register<Test>("replayTest") {
 	// Certification is a SEPARATE hard gate: ordinary replay runs must never silently skip it or
 	// report misleading skips.
 	exclude("com/chromascape/web/replay/certification/**")
+	// Real native persistence has an explicit Docker/authored-worker lane, never an implicit skip.
+	exclude("**/NativeCheckpointPersistenceTest.class")
+	exclude("**/NativeDatabaseContinuationTest.class")
+	exclude("**/NativeDatabaseRestartTest.class")
 	shouldRunAfter(tasks.test)
+}
+
+tasks.named<Test>("test") {
+	exclude("**/NativeCheckpointPersistenceTest.class")
+	exclude("**/NativeDatabaseContinuationTest.class")
+	exclude("**/NativeDatabaseRestartTest.class")
+}
+
+tasks.register<Test>("replayNativeCheckpointPersistenceTest") {
+	group = "verification"
+	description = "Real disposable PostgreSQL/artifact/native checkpoint proof; authored and non-certifying"
+	testClassesDirs = sourceSets["replayTest"].output.classesDirs
+	classpath = sourceSets["replayTest"].output + sourceSets.main.get().output + sourceSets["replayTest"].runtimeClasspath
+	useJUnitPlatform()
+	include("**/NativeCheckpointPersistenceTest.class")
+	jvmArgs("-Djdk.attach.allowAttachSelf=true")
+	shouldRunAfter(tasks.named("replayTest"))
+}
+
+tasks.register<Test>("replayNativeDatabaseContinuationTest") {
+	group = "verification"
+	description = "Authored fresh-native checkpoint continuation through committed PostgreSQL/artifacts"
+	testClassesDirs = sourceSets["replayTest"].output.classesDirs
+	classpath = sourceSets["replayTest"].output + sourceSets.main.get().output + sourceSets["replayTest"].runtimeClasspath
+	useJUnitPlatform { includeTags("native-database-continuation") }
+	filter {
+		includeTestsMatching("com.chromascape.web.replay.worker.NativeDatabaseContinuationTest.finalizedDatabaseAnchorsRestoreInSixFreshNativeWorkers")
+		isFailOnNoMatchingTests = true
+	}
+	jvmArgs("-Djdk.attach.allowAttachSelf=true")
+	maxParallelForks = 1
+	outputs.upToDateWhen { false }
+	doFirst {
+		for (name in listOf("SC276_NATIVE_CHECKPOINT_JDBC_URL", "SC276_NATIVE_DATABASE_INPUT",
+			"SC276_NATIVE_DATABASE_OUTPUT", "SC274_NATIVE_REPLAY_ROOT")) {
+			if (System.getenv(name).isNullOrBlank()) {
+				throw GradleException("Required native/database prerequisite: $name")
+			}
+		}
+		val input = file(System.getenv("SC276_NATIVE_DATABASE_INPUT"))
+		val output = file(System.getenv("SC276_NATIVE_DATABASE_OUTPUT"))
+		val worker = file(System.getenv("SC274_NATIVE_REPLAY_ROOT")).resolve("server/src/replay/worker-main.ts")
+		if (!input.isFile || !worker.isFile || output.exists()) {
+			throw GradleException("Native/database input/runtime must exist and output must be new")
+		}
+	}
+	shouldRunAfter(tasks.named("replayNativeCheckpointPersistenceTest"))
+}
+
+for ((taskName, method) in mapOf(
+	"replayNativeDatabasePrepareTest" to "prepareCommittedAnchorsAndQueuedChildren",
+	"replayNativeDatabaseResumeTest" to "restoreCommittedChildrenInDifferentJvm"
+)) {
+	tasks.register<Test>(taskName) {
+		group = "verification"
+		description = "Explicit authored cross-JVM native/database continuation: $method"
+		testClassesDirs = sourceSets["replayTest"].output.classesDirs
+		classpath = sourceSets["replayTest"].output + sourceSets.main.get().output + sourceSets["replayTest"].runtimeClasspath
+		useJUnitPlatform { includeTags("native-database-restart") }
+		filter {
+			includeTestsMatching("com.chromascape.web.replay.worker.NativeDatabaseRestartTest.$method")
+			isFailOnNoMatchingTests = true
+		}
+		jvmArgs("-Djdk.attach.allowAttachSelf=true")
+		maxParallelForks = 1
+		outputs.upToDateWhen { false }
+		doFirst {
+			for (name in listOf("SC276_NATIVE_CHECKPOINT_JDBC_URL", "SC276_NATIVE_DATABASE_INPUT",
+				"SC276_NATIVE_RESTART_ROOT", "SC274_NATIVE_REPLAY_ROOT")) {
+				if (System.getenv(name).isNullOrBlank()) {
+					throw GradleException("Required native restart prerequisite: $name")
+				}
+			}
+		}
+	}
+}
+tasks.named("replayNativeDatabaseResumeTest") {
+	mustRunAfter(tasks.named("replayNativeDatabasePrepareTest"))
 }
 
 // Windows-only replay contract certification gate: drives the freshly built xRSPS synthetic
@@ -1699,26 +1781,3 @@ tasks.register<Test>("artifactCompletionTest") {
     useJUnitPlatform()
 }
 
-// SC-666 requests use actual PostgreSQL commit visibility, never an embedded DB or skipped lane.
-sourceSets.create("sc666CompletionTest") {
-    compileClasspath += sourceSets.main.get().output
-    runtimeClasspath += sourceSets.main.get().output
-    java.srcDir("src/test/java")
-    java.include("com/chromascape/web/debug/buildergoal/service/BuilderGoalRunnerServiceTest.java")
-    java.include("com/chromascape/web/debug/buildergoal/service/BuilderGoalCodexOrchestrationServiceTest.java")
-    java.include("com/chromascape/web/debug/buildergoal/service/BuilderGoalStartRequestPostgresTest.java")
-    java.include("com/chromascape/web/debug/buildergoal/service/BuilderGoalRunStateMutationServiceTest.java")
-    java.include("com/chromascape/web/debug/buildergoal/controller/BuilderGoalRunnerControllerTest.java")
-    java.include("com/chromascape/web/debug/buildergoal/controller/BuilderGoalCodexControllerTest.java")
-    resources.srcDir("src/test/resources")
-}
-configurations.named("sc666CompletionTestImplementation") { extendsFrom(configurations.testImplementation.get()) }
-configurations.named("sc666CompletionTestRuntimeOnly") { extendsFrom(configurations.testRuntimeOnly.get()) }
-tasks.test { exclude("**/BuilderGoalStartRequestPostgresTest.class") }
-tasks.register<Test>("sc666CompletionTest") {
-    group = "verification"
-    testClassesDirs = sourceSets["sc666CompletionTest"].output.classesDirs
-    classpath = sourceSets["sc666CompletionTest"].runtimeClasspath
-    useJUnitPlatform()
-    systemProperty("sc666.test.jdbc.url", providers.gradleProperty("sc666TestJdbcUrl").getOrElse(""))
-}

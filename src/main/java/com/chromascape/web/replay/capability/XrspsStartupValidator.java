@@ -293,6 +293,11 @@ public class XrspsStartupValidator {
     requireExactHashVersionArray(problems, node);
     requireFidelity(problems, node);
     requireSupportedActionSubset(problems, node);
+    try {
+      ReplayMethodCapability.parse(node);
+    } catch (IllegalArgumentException invalid) {
+      problems.add(invalid.getMessage());
+    }
     requireViewerTraceSchema(problems, node);
     if (node.has("causal")) {
       try {
@@ -530,7 +535,8 @@ public class XrspsStartupValidator {
         stringList(node.path("supportedActions")),
         node.path("viewerTraceSchema").isMissingNode()
             ? null
-            : node.path("viewerTraceSchema").asText(null));
+            : node.path("viewerTraceSchema").asText(null),
+        ReplayMethodCapability.parse(node));
   }
 
   private static CapabilityManifest.Fidelity parseFidelity(JsonNode field) {
@@ -574,7 +580,7 @@ public class XrspsStartupValidator {
     if (!CapabilityManifest.isValidSupportedActionSubset(manifest.supportedActions())) {
       problems.add(
           "supportedActions must be a non-empty duplicate-free subset of "
-              + CapabilityManifest.V1_SUPPORTED_ACTIONS);
+              + CapabilityManifest.WORKER_ACTION_VOCABULARY);
     }
     if (!"xrsps-replay-trace/v1".equals(manifest.viewerTraceSchema())) {
       problems.add("viewerTraceSchema must be exactly xrsps-replay-trace/v1");

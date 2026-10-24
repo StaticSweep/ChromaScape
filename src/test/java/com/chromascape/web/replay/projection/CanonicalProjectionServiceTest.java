@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 /**
  * Golden-vector parity with the TypeScript canonical JSON + hashing implementation
@@ -97,5 +99,17 @@ class CanonicalProjectionServiceTest {
     JsonNode a = mapper.readTree("{\"x\":1,\"y\":{\"p\":true,\"q\":\"s\"}}");
     JsonNode b = mapper.readTree("{\"y\":{\"q\":\"s\",\"p\":true},\"x\":1}");
     assertEquals(service.canonicalJson(a), service.canonicalJson(b));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "13034448.5,13034448.5", "-13034448.5,-13034448.5", "10000000.25,10000000.25",
+    "9999999.25,9999999.25", "0.000001,0.000001", "0.0000001,1e-7",
+    "-0.0000001,-1e-7", "0.000000123,1.23e-7", "0.000000001,1e-9",
+    "0.0000000001,0", "-0.0,0", "17.5,17.5"
+  })
+  void nativeXpAndSmallFractionNumbersMatchTypeScriptV1Notation(String input, String canonical)
+      throws Exception {
+    assertEquals(canonical, service.canonicalJson(mapper.readTree(input)));
   }
 }

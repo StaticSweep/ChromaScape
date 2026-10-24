@@ -36,6 +36,19 @@ public class ReplayAttempt {
   @Column(name = "worker_identity")
   private String workerIdentity;
 
+  /** Null for legacy attempts; new native attempts persist only validated source progress. */
+  @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+  @Column(name = "native_source_cursor", columnDefinition = "jsonb")
+  private com.fasterxml.jackson.databind.JsonNode nativeSourceCursor;
+
+  public com.fasterxml.jackson.databind.JsonNode getNativeSourceCursor() {
+    return nativeSourceCursor == null ? null : nativeSourceCursor.deepCopy();
+  }
+
+  public void setNativeSourceCursor(com.fasterxml.jackson.databind.JsonNode cursor) {
+    nativeSourceCursor = cursor == null ? null : cursor.deepCopy();
+  }
+
   @Column(nullable = false)
   private String state = "QUEUED";
 

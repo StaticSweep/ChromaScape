@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -15,6 +16,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -170,6 +172,8 @@ public final class ImmutableArtifactStore {
   private record Envelope(String checksum, Manifest manifest) {}
 
   private static final int MAX_MANIFEST_BYTES = 65536;
+  private static final boolean WINDOWS =
+      System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
   private static final Map<Path, ReentrantLock> LOCKS = new ConcurrentHashMap<>();
   private final Path root;
   private final long maxBytes;
@@ -387,11 +391,28 @@ public final class ImmutableArtifactStore {
         throw error(HttpStatus.CONFLICT, "ARTIFACT_CORRUPT");
       // Hard-link creation is atomic and never replaces a winner. No non-atomic fallback.
       Files.createLink(path, temp);
-      try (var channel = FileChannel.open(path.getParent(), StandardOpenOption.READ)) {
-        channel.force(true);
-      }
+      forceDirectory(path.getParent());
     } finally {
       Files.deleteIfExists(temp);
+    }
+  }
+
+  /**
+   * Forces the newly linked directory entry where the Java filesystem provider supports it.
+   *
+   * <p>POSIX systems persist a directory entry by forcing the parent directory. Windows does not
+   * allow {@code java.nio} to open a directory handle, so the equivalent call always fails with
+   * {@link AccessDeniedException}. The Windows compatibility path retains the already-forced
+   * object bytes and atomic non-replacing link, but does not establish that the subsequent link
+   * metadata reached stable storage before return. NTFS journaling alone is not an immediate
+   * persistence guarantee. Power-loss durability on that path remains unqualified; every other
+   * platform still fails closed on an unsuccessful directory force.
+   */
+  private static void forceDirectory(Path directory) throws IOException {
+    try (var channel = FileChannel.open(directory, StandardOpenOption.READ)) {
+      channel.force(true);
+    } catch (AccessDeniedException e) {
+      if (!WINDOWS || !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) throw e;
     }
   }
 

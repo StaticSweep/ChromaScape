@@ -92,6 +92,11 @@ public class CurrentSliceRunService {
       stabilization
           .getRunByRunIdAndAttemptId(identity.run().runId(), attemptId)
           .filter(run -> "PASS".equalsIgnoreCase(run.getOutcome()))
+          // A source signature is independent of stabilization provenance: only a row persisted by
+          // the certified /report-bundles route may authorise a source-bound run. Legacy
+          // harness-manifest/v1 rows are always verified=false and must never be promoted merely
+          // because a real signed source manifest was fetched for the same run.
+          .filter(run -> Boolean.TRUE.equals(run.getVerified()))
           .orElseThrow(
               () ->
                   error(

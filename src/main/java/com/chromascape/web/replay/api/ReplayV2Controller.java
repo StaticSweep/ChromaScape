@@ -46,9 +46,10 @@ public class ReplayV2Controller {
   public ResponseEntity<XrspsPreflightResponse> preflight(
       @PathVariable String recordingId,
       @RequestParam(required = false) ConversionMode conversionMode,
+      @RequestParam(required = false) UUID curationId,
       Principal principal) {
-    requirePrincipal(principal);
-    return ResponseEntity.ok(runService.preflight(recordingId, conversionMode));
+    return ResponseEntity.ok(
+        runService.preflight(recordingId, conversionMode, curationId, requirePrincipal(principal)));
   }
 
   @PostMapping("/recordings/{recordingId}/xrsps-runs")

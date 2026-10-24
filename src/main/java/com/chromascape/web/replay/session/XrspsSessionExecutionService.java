@@ -18,7 +18,7 @@ public class XrspsSessionExecutionService {
   // Diagnostic alias admission never expands the pinned worker's legal action surface.
   private static final List<String> ADMITTED_ACTIONS =
       java.util.stream.Stream.concat(
-              CapabilityManifest.V1_SUPPORTED_ACTIONS.stream(),
+              CapabilityManifest.WORKER_ACTION_VOCABULARY.stream(),
               java.util.stream.Stream.of("INTERACT_FISHING_SPOT"))
           .distinct()
           .toList();

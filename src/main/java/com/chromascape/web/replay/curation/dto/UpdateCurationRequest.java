@@ -12,4 +12,10 @@ import java.util.List;
 public record UpdateCurationRequest(
     CurationRole role,
     JsonNode initialStateOverrides,
-    @Valid List<CuratedActionDto> actionLabels) {}
+    @Valid List<CuratedActionDto> actionLabels,
+    JsonNode termination) {
+  public UpdateCurationRequest(
+      CurationRole role, JsonNode initialStateOverrides, List<CuratedActionDto> actionLabels) {
+    this(role, initialStateOverrides, actionLabels, null);
+  }
+}

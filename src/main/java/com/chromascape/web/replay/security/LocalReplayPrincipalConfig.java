@@ -14,7 +14,13 @@ public class LocalReplayPrincipalConfig {
     FilterRegistrationBean<LocalReplayPrincipalFilter> registration =
         new FilterRegistrationBean<>();
     registration.setFilter(filter);
-    registration.addUrlPatterns("/api/replay/*", "/api/recordings/*", "/api/xrsps/sessions/*");
+    registration.addUrlPatterns(
+        "/api/replay/*",
+        "/api/recordings/*",
+        "/api/xrsps/sessions/*",
+        "/xrsps-sessions",
+        "/xrsps-client",
+        "/xrsps-client/");
     registration.setName("localReplayPrincipalFilter");
     registration.setOrder(1);
     return registration;

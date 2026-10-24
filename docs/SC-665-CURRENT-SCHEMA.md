@@ -80,8 +80,8 @@ Rollback leaves no successful capture. Completed capture/artifact identities can
 
 ## Identity and version changes
 
-Identity `sc665-current-v1` plus the pinned SHA-256 catalog fingerprint identify the schema.
-Verification checks the singleton identity, Flyway's exact three versioned migrations and
+Identity `sc276-current-v2` plus the pinned SHA-256 catalog fingerprint identify the schema.
+Verification checks the singleton identity, Flyway's exact eight versioned migrations and
 checksums, and physical columns/defaults, relations, constraints, indexes, functions,
 triggers, static sequence configuration and views. It ignores row contents and sequence
 counters. Column/index/trigger drift, disabled triggers or altered history fail closed with

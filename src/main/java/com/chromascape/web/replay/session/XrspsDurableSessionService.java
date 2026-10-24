@@ -4,6 +4,7 @@ import com.chromascape.web.replay.error.ReplayErrorCode;
 import com.chromascape.web.replay.error.ReplayException;
 import com.chromascape.web.replay.manifest.repository.ScenarioManifestRepository;
 import com.chromascape.web.replay.projection.CanonicalProjectionService;
+import com.chromascape.web.replay.worker.ReplaySourceSchedule;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
@@ -17,7 +18,7 @@ import org.springframework.stereotype.Service;
  * Durable recorded execution through the existing authoritative xRSPS worker. Each action commits
  * checkpoint + receipt under a database row lock. A crashed or rolled-back attempt loses its
  * private world; only the committed checkpoint is restored on retry. An action hash alone is never
- * executable. AI mode and client attachment remain unavailable in this slice.
+ * executable. Client presentation and configured AI consume this same committed world.
  */
 @Service
 public class XrspsDurableSessionService {
@@ -60,9 +61,9 @@ public class XrspsDurableSessionService {
 
   public XrspsSessionRepository.Creation create(
       XrspsSessionMode mode, String key, String scenario, String ownerId) {
-    if (mode != XrspsSessionMode.RECORDED_ACTIONS)
+    if (mode != XrspsSessionMode.RECORDED_ACTIONS && mode != XrspsSessionMode.AI_TASK)
       throw ReplayException.invalid(
-          ReplayErrorCode.ACTION_UNSUPPORTED, "AI session execution is not available yet");
+          ReplayErrorCode.ACTION_UNSUPPORTED, "Unsupported session execution mode");
     return repository.create(
         mode,
         key,
@@ -95,6 +96,10 @@ public class XrspsDurableSessionService {
           }
           XrspsSessionDocument doc = new XrspsSessionDocument();
           doc.lifecycle = session.snapshot();
+          if (source.getManifestVersion() == 2) {
+            com.chromascape.web.replay.manifest.ScenarioManifestImportValidator
+                .requireSimulationAllowed(source.getManifestJson());
+          }
           doc.manifest = source.getManifestJson().deepCopy();
           try (var worker = workers.open(doc)) {
             worker.checkpoint(doc);
@@ -102,6 +107,236 @@ public class XrspsDurableSessionService {
           session.markReady();
           doc.lifecycle = session.snapshot();
           return doc;
+        });
+  }
+
+  /** Bind a paced recording once; its source journal remains immutable. */
+  public void bindPlayback(UUID id, List<XrspsRecordedAction> journal, String owner) {
+    if (get(id).getMode() != XrspsSessionMode.RECORDED_ACTIONS)
+      throw ReplayException.invalid(
+          ReplayErrorCode.ACTION_UNSUPPORTED, "Recording playback requires recorded mode");
+    installJournal(id, snapshotJournal(journal));
+    repository.update(
+        id,
+        doc -> {
+          requirePinnedJournal(doc, false);
+          if (doc.playbackOwner != null
+              && !owner.equals(doc.playbackOwner)
+              && doc.lifecycle.leaseId().equals(doc.playbackLease))
+            throw ReplayException.conflict(
+                ReplayErrorCode.RUN_STATE_INVALID,
+                "Another playback coordinator owns this lease; recover before replacing it");
+          doc.playbackOwner = owner;
+          doc.playbackLease = doc.lifecycle.leaseId();
+          if (doc.lifecycle.status() == XrspsSessionStatus.READY) {
+            var session = XrspsSession.restore(doc.lifecycle);
+            session.start();
+            doc.lifecycle = session.snapshot();
+          }
+          return null;
+        });
+  }
+
+  /** One committed tick at most. Viewer speed never calls or changes this clock. */
+  public XrspsSessionStatus playbackTick(UUID id, String lease, String owner) {
+    return repository.update(
+        id,
+        doc -> {
+          var session = XrspsSession.restore(doc.lifecycle);
+          if (!session.getLeaseId().equals(lease)
+              || !owner.equals(doc.playbackOwner)
+              || !lease.equals(doc.playbackLease))
+            throw ReplayException.conflict(
+                ReplayErrorCode.RUN_STATE_INVALID, "Playback lease was fenced");
+          if (session.getMode() != XrspsSessionMode.RECORDED_ACTIONS
+              || session.getStatus() != XrspsSessionStatus.RUNNING) return session.getStatus();
+          requirePinnedJournal(doc, false);
+          long tick = session.getTick();
+          for (var action : doc.journal) {
+            if (action.relativeTick() > tick) break;
+            if (!doc.receipts.containsKey(action.commandId())) apply(doc, action, false);
+            if (doc.mismatch != null) return doc.lifecycle.status();
+          }
+          long end =
+              doc.manifest.path("recording").path("endTick").asLong()
+                  - doc.manifest.path("recording").path("startTick").asLong();
+          if (tick < end) advance(doc, tick + 1, false);
+          else if (doc.receipts.size() == doc.journal.size()) {
+            requireCompleteRecordingJournal(doc);
+            session = XrspsSession.restore(doc.lifecycle);
+            session.complete("Pinned recording executed; task outcome verification is separate");
+            doc.lifecycle = session.snapshot();
+          }
+          return doc.lifecycle.status();
+        });
+  }
+
+  /** Reconstruct only an archived, proven recorded state and fence the previous execution epoch. */
+  public XrspsSession seek(UUID id, long targetTick) {
+    return repository.update(
+        id,
+        doc -> {
+          var old = doc.lifecycle;
+          if (old.mode() != XrspsSessionMode.RECORDED_ACTIONS
+              || doc.mismatch != null
+              || (old.status() != XrspsSessionStatus.PAUSED
+                  && old.status() != XrspsSessionStatus.SUCCEEDED))
+            throw ReplayException.conflict(
+                ReplayErrorCode.RUN_STATE_INVALID,
+                "Pause recorded playback before seeking; mismatched runs require a new run");
+          if (targetTick < 0 || targetTick > MAX_TICK_ADVANCE)
+            throw ReplayException.badRequest(
+                ReplayErrorCode.TICK_RANGE_INVALID, "Seek is outside the bounded restore window");
+          long revision =
+              doc.verifiedStates.keySet().stream()
+                  .filter(k -> k.startsWith(targetTick + ":"))
+                  .mapToLong(k -> Long.parseLong(k.substring(k.indexOf(':') + 1)))
+                  .max()
+                  .orElse(-1);
+          if (revision < 0)
+            throw ReplayException.conflict(
+                ReplayErrorCode.SNAPSHOT_INCOMPATIBLE,
+                "No archived domain hash exists at this tick");
+          String expected = doc.verifiedStates.get(targetTick + ":" + revision);
+          var restored = new XrspsSessionDocument();
+          restored.manifest = doc.manifest.deepCopy();
+          restored.journal = snapshotJournal(doc.journal);
+          restored.lifecycle =
+              new XrspsSession.Snapshot(
+                  old.id(),
+                  old.mode(),
+                  old.idempotencyKey(),
+                  old.scenarioRef(),
+                  old.ownerId(),
+                  XrspsSessionStatus.PAUSED,
+                  0,
+                  0,
+                  old.epoch() + 1,
+                  UUID.randomUUID().toString(),
+                  null,
+                  java.time.Instant.now());
+          try (var worker = workers.open(restored)) {
+            worker.checkpoint(restored);
+          }
+          for (var action : restored.journal) {
+            if (action.relativeTick() > targetTick || action.expectedRevision() >= revision) break;
+            apply(restored, action, true);
+            if (restored.mismatch != null)
+              throw ReplayException.conflict(
+                  ReplayErrorCode.SNAPSHOT_INCOMPATIBLE, "Recorded prefix could not be restored");
+          }
+          advance(restored, targetTick, true);
+          if (restored.lifecycle.observationRevision() != revision
+              || !expected.equals(canonical.stateHash(restored.observation)))
+            throw ReplayException.conflict(
+                ReplayErrorCode.SNAPSHOT_INCOMPATIBLE,
+                "Reconstructed domain hash differs from the archived run");
+          if (doc.seekHistory.size() >= 32)
+            throw ReplayException.conflict(
+                ReplayErrorCode.RUN_STATE_INVALID,
+                "Seek history budget exhausted; create a new session");
+          var archive = mapper.createObjectNode();
+          archive.set("lifecycle", mapper.valueToTree(old));
+          archive.set("receipts", mapper.valueToTree(doc.receipts));
+          archive.put("domainStateHash", canonical.stateHash(doc.observation));
+          doc.seekHistory.add(archive);
+          doc.playbackOwner = null;
+          doc.playbackLease = null;
+          doc.retiredLeases.add(old.leaseId());
+          doc.lifecycle = restored.lifecycle;
+          doc.checkpoint = restored.checkpoint;
+          doc.observation = restored.observation;
+          doc.receipts = restored.receipts;
+          doc.clientBootstrap = restored.clientBootstrap;
+          doc.clientFrames = restored.clientFrames;
+          doc.clientSequence = restored.clientSequence;
+          return XrspsSession.restore(doc.lifecycle);
+        });
+  }
+
+  /**
+   * Re-run committed AI action bytes through a private production world without another model call.
+   */
+  public String verifyAiJournal(XrspsSessionDocument doc) {
+    var replay = new XrspsSessionDocument();
+    replay.manifest = doc.manifest.deepCopy();
+    var old = doc.lifecycle;
+    replay.lifecycle =
+        new XrspsSession.Snapshot(
+            old.id(),
+            old.mode(),
+            old.idempotencyKey(),
+            old.scenarioRef(),
+            old.ownerId(),
+            XrspsSessionStatus.RUNNING,
+            0,
+            0,
+            old.epoch(),
+            old.leaseId(),
+            null,
+            java.time.Instant.now());
+    try (var worker = workers.open(replay)) {
+      worker.checkpoint(replay);
+    }
+    for (var action : doc.journal) {
+      if (apply(replay, action, false) == null || replay.mismatch != null)
+        throw ReplayException.conflict(
+            ReplayErrorCode.SNAPSHOT_INCOMPATIBLE, "AI journal replay failed");
+    }
+    advance(replay, old.tick(), false);
+    String actual = canonical.stateHash(replay.observation);
+    if (!actual.equals(canonical.stateHash(doc.observation)))
+      throw ReplayException.conflict(
+          ReplayErrorCode.SNAPSHOT_INCOMPATIBLE, "AI journal replay domain hash differs");
+    return actual;
+  }
+
+  public XrspsSession recover(UUID id, String fencedLease) {
+    return repository.update(
+        id,
+        doc -> {
+          var session = XrspsSession.restore(doc.lifecycle);
+          boolean ai = session.getMode() == XrspsSessionMode.AI_TASK;
+          if (ai
+              && (doc.aiDecision == null
+                  || !doc.aiDecision.isObject()
+                  || doc.aiTask == null
+                  || !doc.aiTask.isObject()
+                  || doc.aiRecoveryCount >= 3
+                  || java.time.Instant.now()
+                      .isAfter(java.time.Instant.parse(doc.aiTask.path("deadline").asText()))))
+            throw ReplayException.conflict(
+                ReplayErrorCode.RUN_STATE_INVALID,
+                "AI recovery requires a committed decision and remaining task/recovery budget");
+          if (!session.getLeaseId().equals(fencedLease))
+            throw ReplayException.conflict(
+                ReplayErrorCode.RUN_STATE_INVALID, "Recovery lease is stale");
+          if (session.getStatus() == XrspsSessionStatus.RUNNING
+              || session.getStatus() == XrspsSessionStatus.PAUSED) session.reportWorkerLoss();
+          String expected = canonical.stateHash(doc.observation);
+          try (var worker = workers.open(doc)) {
+            if (!expected.equals(canonical.stateHash(doc.observation)))
+              throw ReplayException.conflict(
+                  ReplayErrorCode.SNAPSHOT_INCOMPATIBLE,
+                  "Recovered checkpoint domain hash differs");
+            worker.checkpoint(doc);
+          }
+          String newLease = UUID.randomUUID().toString();
+          if (doc.retiredLeases.contains(newLease))
+            throw ReplayException.conflict(
+                ReplayErrorCode.RUN_STATE_INVALID, "Lease identity already retired");
+          session.recoverFromCheckpoint(fencedLease, newLease);
+          doc.retiredLeases.add(fencedLease);
+          doc.playbackOwner = null;
+          doc.playbackLease = null;
+          doc.lifecycle = session.snapshot();
+          if (ai) {
+            doc.aiRecoveryCount++;
+            ((com.fasterxml.jackson.databind.node.ObjectNode) doc.aiTask)
+                .put("lease", newLease)
+                .put("epoch", session.getEpoch());
+          }
+          return session;
         });
   }
 
@@ -140,6 +375,10 @@ public class XrspsDurableSessionService {
   }
 
   public XrspsRecordedRunReport run(UUID id, List<XrspsRecordedAction> journal) {
+    if (get(id).getMode() != XrspsSessionMode.RECORDED_ACTIONS)
+      throw ReplayException.conflict(
+          ReplayErrorCode.RUN_STATE_INVALID,
+          "AI actions require the configured decision coordinator");
     journal = snapshotJournal(journal);
     installJournal(id, journal);
     List<XrspsSessionReceipt> receipts = new ArrayList<>();
@@ -209,12 +448,19 @@ public class XrspsDurableSessionService {
   }
 
   private void requireCompleteRecordingJournal(XrspsSessionDocument doc) {
+    if (doc.lifecycle.mode() != XrspsSessionMode.RECORDED_ACTIONS)
+      throw ReplayException.conflict(
+          ReplayErrorCode.RUN_STATE_INVALID, "Only recorded replay can finish a recording");
+    requirePinnedJournal(doc, true);
+  }
+
+  private void requirePinnedJournal(XrspsSessionDocument doc, boolean requireReceipts) {
     var actions = doc.manifest.path("actions");
     if (!actions.isArray()
         || actions.isEmpty()
         || actions.size() != doc.journal.size()
         || doc.mismatch != null
-        || doc.receipts.size() != doc.journal.size())
+        || (requireReceipts && doc.receipts.size() != doc.journal.size()))
       throw ReplayException.conflict(
           ReplayErrorCode.ACTION_SEQUENCE_INVALID,
           "Every pinned recording action needs an accepted receipt before finishing");
@@ -223,9 +469,11 @@ public class XrspsDurableSessionService {
       var action = doc.journal.get(i);
       var source = actions.get(i);
       var receipt = doc.receipts.get(action.commandId());
-      if (!canonical.actionDigest(source).equals(action.payloadHash())
-          || receipt == null
-          || receipt.outcome() != XrspsReceiptOutcome.ACCEPTED
+      if (!canonical
+              .actionDigest(ReplaySourceSchedule.semanticAction(source))
+              .equals(action.payloadHash())
+          || (requireReceipts
+              && (receipt == null || receipt.outcome() != XrspsReceiptOutcome.ACCEPTED))
           || (source.has("sourceActionTick")
               && source.path("sourceActionTick").asLong() - start != action.relativeTick()))
         throw ReplayException.conflict(
@@ -261,7 +509,8 @@ public class XrspsDurableSessionService {
         id,
         doc -> {
           var s = XrspsSession.restore(doc.lifecycle);
-          if (s.getStatus() != XrspsSessionStatus.PAUSED)
+          if (s.getMode() != XrspsSessionMode.RECORDED_ACTIONS
+              || s.getStatus() != XrspsSessionStatus.PAUSED)
             throw ReplayException.conflict(
                 ReplayErrorCode.RUN_STATE_INVALID, "Session must be paused to step");
           if (doc.mismatch != null) return report(doc, List.of(), XrspsRunHaltReason.MISMATCH);
@@ -294,6 +543,8 @@ public class XrspsDurableSessionService {
           long end =
               doc.manifest.path("recording").path("endTick").asLong()
                   - doc.manifest.path("recording").path("startTick").asLong();
+          boolean timedRecording = timedRecording(doc);
+          int sourceIndex = 0;
           for (var action : journal) {
             if (action == null
                 || action.relativeTick() < previousTick
@@ -325,6 +576,19 @@ public class XrspsDurableSessionService {
               throw ReplayException.invalid(
                   ReplayErrorCode.CHECKSUM_MISMATCH,
                   "Semantic action digest does not match its payload");
+            if (timedRecording) {
+              JsonNode source = doc.manifest.path("actions").path(sourceIndex);
+              long start = doc.manifest.path("recording").path("startTick").asLong();
+              if (!source.isObject()
+                  || source.path("sourceActionTick").asLong() - start != action.relativeTick()
+                  || !canonical
+                      .actionDigest(ReplaySourceSchedule.semanticAction(source))
+                      .equals(action.payloadHash()))
+                throw ReplayException.invalid(
+                    ReplayErrorCode.ACTION_SEQUENCE_INVALID,
+                    "Journal prefix must preserve each exact indexed source action and tick");
+            }
+            sourceIndex++;
             previousTick = action.relativeTick();
           }
           if (journal.size() < doc.journal.size())
@@ -344,8 +608,7 @@ public class XrspsDurableSessionService {
         });
   }
 
-  private XrspsSessionReceipt apply(
-      XrspsSessionDocument doc, XrspsRecordedAction action, boolean paused) {
+  XrspsSessionReceipt apply(XrspsSessionDocument doc, XrspsRecordedAction action, boolean paused) {
     var s = XrspsSession.restore(doc.lifecycle);
     if (doc.mismatch != null
         || s.getStatus() != (paused ? XrspsSessionStatus.PAUSED : XrspsSessionStatus.RUNNING))
@@ -370,11 +633,16 @@ public class XrspsDurableSessionService {
     advance(doc, action.relativeTick(), paused);
     s = XrspsSession.restore(doc.lifecycle);
     try (var worker = workers.open(doc)) {
-      JsonNode params =
-          mapper
-              .createObjectNode()
-              .put("expectedTick", absoluteTick(doc))
-              .set("action", action.payload());
+      var params = mapper.createObjectNode().put("expectedTick", absoluteTick(doc));
+      params.set("action", action.payload());
+      if (timedRecording(doc)) {
+        int index = doc.journal.indexOf(action);
+        if (index < 0)
+          throw ReplayException.invalid(
+              ReplayErrorCode.ACTION_SEQUENCE_INVALID,
+              "Source command is absent from the installed journal");
+        params.put("sourceActionIndex", index);
+      }
       JsonNode result;
       try {
         result = worker.call("session.apply", params);
@@ -406,7 +674,7 @@ public class XrspsDurableSessionService {
     }
   }
 
-  private void advance(XrspsSessionDocument doc, long target, boolean paused) {
+  void advance(XrspsSessionDocument doc, long target, boolean paused) {
     var s = XrspsSession.restore(doc.lifecycle);
     long delta = target - s.getTick();
     if (delta == 0) return;
@@ -417,7 +685,7 @@ public class XrspsDurableSessionService {
       throw ReplayException.invalid(
           ReplayErrorCode.TICK_RANGE_INVALID,
           "Tick advance exceeds the scenario or operation bound");
-    try (var worker = workers.open(doc)) {
+    try (var worker = paused ? workers.open(doc) : workers.openPaced(doc)) {
       for (long i = 0; i < delta; i++) {
         long tick = doc.manifest.path("recording").path("startTick").asLong() + s.getTick();
         var result =
@@ -437,6 +705,11 @@ public class XrspsDurableSessionService {
 
   private static long absoluteTick(XrspsSessionDocument doc) {
     return doc.manifest.path("recording").path("startTick").asLong() + doc.lifecycle.tick();
+  }
+
+  private static boolean timedRecording(XrspsSessionDocument doc) {
+    return doc.lifecycle.mode() == XrspsSessionMode.RECORDED_ACTIONS
+        && new ReplaySourceSchedule(doc.manifest).timed();
   }
 
   private static XrspsSessionReceipt mismatch(

@@ -10,9 +10,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.chromascape.web.replay.catalog.ReplayRecordingResolver;
+import com.chromascape.web.replay.curation.dto.CreateCurationRequest;
 import com.chromascape.web.replay.curation.dto.CuratedActionDto;
 import com.chromascape.web.replay.curation.dto.UpdateCurationRequest;
 import com.chromascape.web.replay.curation.entity.CuratedAction;
+import com.chromascape.web.replay.curation.entity.CurationRole;
 import com.chromascape.web.replay.curation.entity.CurationState;
 import com.chromascape.web.replay.curation.entity.RecordingCuration;
 import com.chromascape.web.replay.curation.repository.CuratedActionRepository;
@@ -24,6 +26,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -160,5 +163,161 @@ class ReplayCurationActionReplacementTest {
         () -> service.update(draft.getId(), request, "alice"),
         "(tick, sequence) must be unique within the curation");
     verify(actionRepository, never()).save(any());
+  }
+
+  private ObjectNode policy() {
+    ObjectNode policy = mapper.createObjectNode().put("schema", "xrsps-termination-policy/v1");
+    policy.putArray("failure");
+    policy.putArray("stop");
+    policy
+        .putArray("success")
+        .addObject()
+        .put("id", "fish-ready")
+        .putObject("predicate")
+        .put("op", "exists")
+        .put("pointer", "/player/inventory");
+    return policy;
+  }
+
+  @Test
+  void policyOnlyUpdatePreservesLabelsOverridesUnknownContentAndDetachedPolicy() {
+    ObjectNode content = (ObjectNode) draft.getContentJson();
+    content
+        .withArray("actionLabels")
+        .addObject()
+        .put("tick", 3)
+        .put("sequence", 0)
+        .put("status", "IGNORED");
+    content.putObject("initialStateOverrides").put("worldId", 301);
+    content.putObject("reviewMetadata").put("note", "preserve me");
+    var original = content.deepCopy();
+    ObjectNode policy = policy();
+    var expected = policy.deepCopy();
+    when(curationRepository.save(any(RecordingCuration.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
+    service.update(draft.getId(), new UpdateCurationRequest(null, null, null, policy), "alice");
+    assertEquals(expected, draft.getContentJson().path("termination"));
+    for (String field :
+        List.of("tickRange", "actionLabels", "initialStateOverrides", "reviewMetadata"))
+      assertEquals(original.path(field), draft.getContentJson().path(field));
+    assertNotEquals("sha256:old", draft.getContentChecksum());
+    policy.withArray("success").removeAll();
+    assertEquals(expected, draft.getContentJson().path("termination"));
+    verify(actionRepository, never()).deleteByCurationId(any());
+    verify(actionRepository, never()).save(any());
+  }
+
+  @Test
+  void omittedPolicySurvivesRoleOverrideAndLabelEditsAndExplicitEmptyPolicyClearsIt() {
+    ((ObjectNode) draft.getContentJson()).set("termination", policy());
+    ((ObjectNode) draft.getContentJson()).withArray("actionLabels").addObject().put("tick", 5);
+    var expected = draft.getContentJson().path("termination").deepCopy();
+    when(curationRepository.save(any(RecordingCuration.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
+    service.update(
+        draft.getId(), new UpdateCurationRequest(CurationRole.TRAIN, null, null), "alice");
+    assertEquals(expected, draft.getContentJson().path("termination"));
+    assertEquals("sha256:old", draft.getContentChecksum());
+    service.update(
+        draft.getId(),
+        new UpdateCurationRequest(null, mapper.createObjectNode().put("worldId", 302), null),
+        "alice");
+    assertEquals(expected, draft.getContentJson().path("termination"));
+    assertEquals(1, draft.getContentJson().path("actionLabels").size());
+    service.update(
+        draft.getId(), new UpdateCurationRequest(null, null, List.of(label(6, 0))), "alice");
+    assertEquals(expected, draft.getContentJson().path("termination"));
+    ObjectNode empty = policy();
+    empty.withArray("success").removeAll();
+    service.update(draft.getId(), new UpdateCurationRequest(null, null, null, empty), "alice");
+    assertEquals(empty, draft.getContentJson().path("termination"));
+    assertEquals(1, draft.getContentJson().path("actionLabels").size());
+  }
+
+  @Test
+  void invalidPolicyFailsBeforeAnyMutationAndCannotBePublishedFromAnOldDraft() {
+    ObjectNode invalid = policy().put("callback", "untrusted");
+    var before = draft.getContentJson().deepCopy();
+    assertThrows(
+        ReplayException.class,
+        () ->
+            service.update(
+                draft.getId(),
+                new UpdateCurationRequest(CurationRole.TRAIN, null, null, invalid),
+                "alice"));
+    assertEquals(before, draft.getContentJson());
+    assertEquals("sha256:old", draft.getContentChecksum());
+    ((ObjectNode) draft.getContentJson()).set("termination", invalid);
+    assertThrows(ReplayException.class, () -> service.publish(draft.getId(), "alice"));
+    assertEquals(CurationState.DRAFT, draft.getState());
+    verify(curationRepository, never()).save(any());
+    assertThrows(
+        ReplayException.class,
+        () ->
+            service.create(
+                "rec-1",
+                new CreateCurationRequest(null, 0, 10, null, null, "spoof", invalid),
+                "alice"));
+    verify(resolver, never()).resolve(any());
+  }
+
+  @Test
+  void policyAuthoringKeepsForeignAndPublishedRowsInert() {
+    var before = draft.getContentJson().deepCopy();
+    UpdateCurationRequest request = new UpdateCurationRequest(null, null, null, policy());
+    ReplayException foreign =
+        assertThrows(
+            ReplayException.class, () -> service.update(draft.getId(), request, "mallory"));
+    assertEquals(org.springframework.http.HttpStatus.NOT_FOUND, foreign.getHttpStatus());
+    draft.setState(CurationState.PUBLISHED);
+    assertThrows(ReplayException.class, () -> service.update(draft.getId(), request, "alice"));
+    assertEquals(before, draft.getContentJson());
+    assertEquals("sha256:old", draft.getContentChecksum());
+    verify(curationRepository, never()).save(any());
+  }
+
+  @Test
+  void createAcceptsDetachedPolicyAndUsesAuthenticatedAuthorNotBodyIdentity() {
+    var session = new com.chromascape.web.debug.tickdebugger.entity.DebugSession();
+    session.setSessionId("sess-1");
+    when(resolver.resolve("rec-1"))
+        .thenReturn(new ReplayRecordingResolver.ResolvedRecording(null, session));
+    AtomicReference<RecordingCuration> created = new AtomicReference<>();
+    when(curationRepository.save(any(RecordingCuration.class)))
+        .thenAnswer(
+            inv -> {
+              created.set(inv.getArgument(0));
+              return created.get();
+            });
+    when(curationRepository.findById(any(UUID.class)))
+        .thenAnswer(inv -> Optional.ofNullable(created.get()));
+    ObjectNode policy = policy();
+    var expected = policy.deepCopy();
+    var response =
+        service.create(
+            "rec-1",
+            new CreateCurationRequest(CurationRole.HELD_OUT, 0, 100, null, null, "mallory", policy),
+            "alice");
+    assertEquals("alice", created.get().getCreatedBy());
+    assertEquals(CurationRole.HELD_OUT, created.get().getRole());
+    assertEquals(expected, response.contentJson().path("termination"));
+    policy.withArray("success").removeAll();
+    assertEquals(expected, created.get().getContentJson().path("termination"));
+  }
+
+  @Test
+  void requestJsonRetainsOptionalPolicyAndLegacyPayloadsRemainCompatible() throws Exception {
+    ObjectNode body = mapper.createObjectNode();
+    body.set("termination", policy());
+    UpdateCurationRequest update = mapper.treeToValue(body, UpdateCurationRequest.class);
+    assertEquals(policy(), update.termination());
+    body.put("tickRangeStart", 0).put("tickRangeEnd", 100);
+    CreateCurationRequest create = mapper.treeToValue(body, CreateCurationRequest.class);
+    assertEquals(policy(), create.termination());
+    body.remove("termination");
+    assertEquals(null, mapper.treeToValue(body, CreateCurationRequest.class).termination());
+    assertEquals(
+        null,
+        mapper.treeToValue(mapper.createObjectNode(), UpdateCurationRequest.class).termination());
   }
 }

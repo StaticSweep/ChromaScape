@@ -12,8 +12,15 @@ import org.hibernate.type.SqlTypes;
 public class RecordingCuration {
 
   @Id
-  @GeneratedValue(strategy = GenerationType.UUID)
-  private UUID id;
+  // Compiler curations have content-derived IDs. A generated-ID mapping treats a new assigned
+  // UUID as a deleted detached row in Hibernate 6.6, rather than inserting it. Human drafts still
+  // receive an application-generated UUID; persisted IDs and schema defaults are unchanged.
+  private UUID id = UUID.randomUUID();
+
+  @PrePersist
+  void assignMissingId() {
+    if (id == null) id = UUID.randomUUID();
+  }
 
   @Column(name = "recording_id", nullable = false)
   private String recordingId;

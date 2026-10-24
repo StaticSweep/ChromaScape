@@ -12,8 +12,15 @@ import org.hibernate.type.SqlTypes;
 public class ScenarioManifest {
 
   @Id
-  @GeneratedValue(strategy = GenerationType.UUID)
-  private UUID id;
+  // v2 assigns the immutable manifest ID before persistence, including during read-only preview.
+  // Generated-ID mappings reject such new rows as stale detached entities in Hibernate 6.6.
+  // v1 callers that do not assign an ID retain UUID generation without changing existing rows.
+  private UUID id = UUID.randomUUID();
+
+  @PrePersist
+  void assignMissingId() {
+    if (id == null) id = UUID.randomUUID();
+  }
 
   /** Version of the serialized scenario contract. Existing rows are v1. */
   @Column(name = "manifest_version", nullable = false)

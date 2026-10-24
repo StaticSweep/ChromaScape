@@ -6,13 +6,136 @@
   "type": "object",
   "additionalProperties": false,
   "$defs": {
+    "policyPointer": { "type": "string", "maxLength": 256, "pattern": "^(?:|/(?:[^~]|~[01])*)$" },
+    "policyOperand": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false,
+          "properties": { "kind": { "const": "literal" }, "value": { "oneOf": [
+            { "type": "null" }, { "type": "boolean" },
+            { "type": "number", "minimum": -1000000000000, "maximum": 1000000000000 },
+            { "type": "string", "maxLength": 256 }
+          ] } }, "required": ["kind", "value"] },
+        { "type": "object", "additionalProperties": false,
+          "properties": { "kind": { "const": "path" }, "pointer": { "$ref": "#/$defs/policyPointer" } },
+          "required": ["kind", "pointer"] },
+        { "type": "object", "additionalProperties": false,
+          "properties": { "kind": { "const": "count" }, "pointer": { "$ref": "#/$defs/policyPointer" },
+            "where": { "$ref": "#/$defs/policyPredicate" } }, "required": ["kind", "pointer"] },
+        { "type": "object", "additionalProperties": false,
+          "properties": { "kind": { "const": "sum" }, "pointer": { "$ref": "#/$defs/policyPointer" },
+            "valuePointer": { "$ref": "#/$defs/policyPointer" }, "where": { "$ref": "#/$defs/policyPredicate" } },
+          "required": ["kind", "pointer", "valuePointer"] }
+      ]
+    },
+    "policyPredicate": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false,
+          "properties": { "op": { "enum": ["all", "any"] },
+            "predicates": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "$ref": "#/$defs/policyPredicate" } } },
+          "required": ["op", "predicates"] },
+        { "type": "object", "additionalProperties": false,
+          "properties": { "op": { "const": "not" }, "predicate": { "$ref": "#/$defs/policyPredicate" } },
+          "required": ["op", "predicate"] },
+        { "type": "object", "additionalProperties": false,
+          "properties": { "op": { "const": "exists" }, "pointer": { "$ref": "#/$defs/policyPointer" } },
+          "required": ["op", "pointer"] },
+        { "type": "object", "additionalProperties": false,
+          "properties": { "op": { "enum": ["some", "every"] }, "pointer": { "$ref": "#/$defs/policyPointer" },
+            "predicate": { "$ref": "#/$defs/policyPredicate" } }, "required": ["op", "pointer", "predicate"] },
+        { "type": "object", "additionalProperties": false,
+          "properties": { "op": { "const": "compare" }, "comparison": { "enum": ["eq", "ne", "gt", "gte", "lt", "lte"] },
+            "left": { "$ref": "#/$defs/policyOperand" }, "right": { "$ref": "#/$defs/policyOperand" } },
+          "required": ["op", "comparison", "left", "right"] }
+      ]
+    },
+    "policyClauses": {
+      "type": "array", "maxItems": 32,
+      "items": { "type": "object", "additionalProperties": false,
+        "properties": { "id": { "type": "string", "maxLength": 64, "pattern": "^[A-Za-z][A-Za-z0-9_.:-]*$" },
+          "predicate": { "$ref": "#/$defs/policyPredicate" } }, "required": ["id", "predicate"] }
+    },
+    "terminationPolicy": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "schema": { "const": "xrsps-termination-policy/v1" },
+        "success": { "$ref": "#/$defs/policyClauses" }, "failure": { "$ref": "#/$defs/policyClauses" },
+        "stop": { "$ref": "#/$defs/policyClauses" } }, "required": ["schema", "success", "failure", "stop"]
+    },
+    "nativeBankSlot": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "slot": { "type": "integer", "minimum": 0, "maximum": 1409 },
+        "itemId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "quantity": { "type": "integer", "minimum": 0, "maximum": 2147483647 },
+        "placeholder": { "type": "boolean" }, "filler": { "type": "boolean" },
+        "tab": { "type": "integer", "minimum": 0, "maximum": 9 }
+      },
+      "required": ["slot", "itemId", "quantity", "placeholder", "filler", "tab"]
+    },
+    "nativeBank": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "capacity": { "type": "integer", "minimum": 1, "maximum": 1410 },
+        "slots": { "type": "array", "maxItems": 1410, "items": { "$ref": "#/$defs/nativeBankSlot" } },
+        "withdrawNotes": { "type": "boolean" }, "insertMode": { "type": "boolean" },
+        "placeholderMode": { "type": "boolean" },
+        "quantityMode": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "customQuantity": { "type": "integer", "minimum": 0, "maximum": 2147483647 },
+        "currentTab": { "type": "integer", "minimum": 0, "maximum": 9 },
+        "tabDisplayMode": { "type": "integer", "minimum": 0, "maximum": 3 }
+      },
+      "required": ["capacity", "slots", "withdrawNotes", "insertMode", "placeholderMode",
+        "quantityMode", "customQuantity", "currentTab", "tabDisplayMode"]
+    },
+    "nativeFishingWorld": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema": { "const": "xrsps-native-fishing-world/v1" },
+        "catalogChecksum": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "spawnIndices": { "type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 0, "maximum": 99999 } }
+      },
+      "required": ["schema", "catalogChecksum", "spawnIndices"]
+    },
+    "nativeNpcBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "actionIndex": { "type": "integer", "minimum": 0, "maximum": 9999 },
+        "tick": { "type": "integer", "minimum": 0, "maximum": 10000000 },
+        "sequence": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "sourceStableId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "spawnIndex": { "type": "integer", "minimum": 0, "maximum": 99999 },
+        "npcTypeId": { "type": "integer", "minimum": 1, "maximum": 65534 },
+        "position": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "x": { "type": "integer", "minimum": 0, "maximum": 16383 },
+            "y": { "type": "integer", "minimum": 0, "maximum": 16383 },
+            "plane": { "type": "integer", "minimum": 0, "maximum": 3 }
+          },
+          "required": ["x", "y", "plane"]
+        },
+        "sourceSnapshotRef": { "type": "string", "pattern": "^snapshot:sha256:[0-9a-f]{64}$" }
+      },
+      "required": ["actionIndex", "tick", "sequence", "sourceStableId", "spawnIndex", "npcTypeId", "position", "sourceSnapshotRef"]
+    },
+    "nativeNpcBindings": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "schema": { "const": "xrsps-native-npc-bindings/v1" },
+        "catalogChecksum": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "bindings": { "type": "array", "minItems": 1, "maxItems": 10000, "items": { "$ref": "#/$defs/nativeNpcBinding" } }
+      },
+      "required": ["schema", "catalogChecksum", "bindings"]
+    },
     "position": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "x": { "type": "integer" },
         "y": { "type": "integer" },
-        "plane": { "type": "integer", "minimum": 0 }
+        "plane": { "type": "integer", "minimum": 0, "maximum": 3 }
       },
       "required": ["x", "y", "plane"]
     },
@@ -39,12 +162,51 @@
             "INVENTORY_ACTION", "USE_ITEM_ON_NPC"
           ]
         },
+        "mappingVersion": { "enum": ["1.0.0", "1.1.0"] },
         "tick": { "type": "integer", "minimum": 0 },
         "targetStableId": { "type": "string", "minLength": 1 },
         "option": { "type": "string" },
         "destination": { "$ref": "#/$defs/position" },
-        "slot": { "type": "integer", "minimum": 0 },
-        "itemId": { "type": "integer", "minimum": 0 },
+        "slot": { "type": "integer", "minimum": 0, "maximum": 27 },
+        "itemId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "sourceSlot": { "type": "integer", "minimum": 0, "maximum": 27 },
+        "sourceItemId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "sourceItem": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "slot": { "type": "integer", "minimum": 0, "maximum": 27 },
+            "itemId": { "type": "integer", "minimum": 1, "maximum": 2147483647 }
+          },
+          "required": ["slot", "itemId"]
+        },
+        "productId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "quantity": { "type": "integer", "minimum": 1, "maximum": 28 },
+        "input": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": { "const": "quantity" },
+                "value": { "type": "integer", "minimum": 1, "maximum": 2147483647 }
+              },
+              "required": ["kind", "value"]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": { "const": "exchange-offer" },
+                "side": { "enum": ["buy", "sell"] },
+                "itemId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+                "quantity": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+                "price": { "type": "integer", "minimum": 1, "maximum": 2147483647 }
+              },
+              "required": ["kind", "side", "itemId", "quantity", "price"]
+            }
+          ]
+        },
         "optionIndex": { "type": "integer", "minimum": 0, "maximum": 255 },
         "spellId": { "type": "integer", "minimum": 1 },
         "widgetId": { "type": "integer", "minimum": 0 },
@@ -64,7 +226,26 @@
         }
       },
       "required": ["type"],
+      "dependentRequired": {
+        "sourceSlot": ["sourceItemId"], "sourceItemId": ["sourceSlot"],
+        "productId": ["quantity"], "quantity": ["productId"]
+      },
       "allOf": [
+        {
+          "if": { "required": ["sourceItem"] },
+          "then": { "properties": { "type": { "const": "INTERACT_OBJECT" } } }
+        },
+        {
+          "if": { "anyOf": [{ "required": ["sourceSlot"] }, { "required": ["sourceItemId"] }] },
+          "then": { "properties": { "type": { "const": "INTERACT_INVENTORY_ITEM" } } }
+        },
+        {
+          "if": { "anyOf": [{ "required": ["productId"] }, { "required": ["quantity"] }, { "required": ["input"] }] },
+          "then": {
+            "properties": { "type": { "const": "INTERACT_WIDGET" } },
+            "not": { "required": ["input", "productId"] }
+          }
+        },
         {
           "if": { "properties": { "type": { "const": "WAIT_UNTIL_TICK" } } },
           "then": { "required": ["tick"] }
@@ -95,7 +276,11 @@
         },
         {
           "if": { "properties": { "type": { "const": "CAST_SPELL" } } },
-          "then": { "required": ["targetStableId"] }
+          "then": {
+            "required": ["targetStableId"],
+            "anyOf": [{ "required": ["spellId"] }, { "required": ["option"] }],
+            "dependentRequired": { "slot": ["itemId"], "itemId": ["slot"] }
+          }
         },
         {
           "if": { "properties": { "type": { "const": "EQUIP_ITEM" } } },
@@ -123,7 +308,8 @@
         "code": { "type": "string" },
         "message": { "type": "string" },
         "provenance": { "type": "string" },
-        "sourceLogId": { "type": "integer", "minimum": 0 }
+        "sourceLogId": { "type": "integer", "minimum": 0 },
+        "sourceRef": { "type": "string", "minLength": 1 }
       },
       "required": ["tick", "code", "message", "provenance"]
     },
@@ -142,6 +328,38 @@
   },
   "properties": {
     "manifestVersion": { "type": "integer", "const": 2 },
+    "compilationEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "behaviorRunContext": { "type": "object" },
+        "world": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "initialSnapshotRef": { "type": "string", "minLength": 1 },
+            "staticContent": { "type": "object" },
+            "actionTargets": { "type": "array", "maxItems": 10000, "items": { "type": "object" } },
+            "requiredNativeBindings": { "type": "array", "items": { "type": "object" } }
+          },
+          "required": ["initialSnapshotRef", "staticContent", "actionTargets", "requiredNativeBindings"]
+        },
+        "fieldProvenance": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "provenance": { "enum": ["OBSERVED", "DERIVED", "OPERATOR_SUPPLIED", "DEFAULTED"] },
+              "sourceRef": { "type": "string", "minLength": 1 },
+              "outputPointer": { "type": "string" }
+            },
+            "required": ["provenance", "sourceRef", "outputPointer"]
+          }
+        }
+      },
+      "required": ["world", "fieldProvenance"]
+    },
     "manifestId": { "type": "string", "minLength": 1 },
     "recording": {
       "type": "object",
@@ -161,6 +379,19 @@
       "additionalProperties": false,
       "properties": {
         "curationId": { "type": "string", "minLength": 1 },
+        "datasetRole": { "enum": ["TRAIN", "VALIDATION", "HELD_OUT"] },
+        "sourceCuration": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "version": { "type": "integer", "minimum": 1 },
+            "checksum": { "type": "string", "minLength": 1 },
+            "role": { "enum": ["TRAIN", "VALIDATION", "HELD_OUT"] },
+            "canonicalContentChecksum": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+            "contentSnapshot": { "type": "object" }
+          },
+          "required": ["id", "version", "checksum", "role", "canonicalContentChecksum", "contentSnapshot"]
+        },
         "version": { "type": "integer", "minimum": 1 },
         "checksum": { "type": "string", "minLength": 1 }
       },
@@ -203,6 +434,11 @@
       "properties": {
         "worldId": { "type": "integer" },
         "collisionRevision": { "type": "string" },
+        "nativeFishingWorld": { "$ref": "#/$defs/nativeFishingWorld" },
+        "bank": { "$ref": "#/$defs/nativeBank" },
+        "bankOpen": { "type": "boolean" },
+        "travelProfile": { "const": "jewelry-v1" },
+        "nativeNpcBindings": { "$ref": "#/$defs/nativeNpcBindings" },
         "player": {
           "type": "object",
           "additionalProperties": true,
@@ -223,6 +459,7 @@
     "actions": {
       "type": "array",
       "items": { "$ref": "#/$defs/semanticAction" },
+      "maxItems": 10000,
       "minItems": 1
     },
     "expectations": {
@@ -257,8 +494,33 @@
     "fidelity": { "type": "string", "enum": ["SYNTHETIC_CONTRACT", "XRSPS_AUTHORITATIVE"] },
     "fidelityRequirement": { "type": "string", "enum": ["CERTIFIED", "BEST_EFFORT", "UNSUPPORTED"] },
     "controlAllowed": { "type": "boolean", "const": false },
+    "termination": { "$ref": "#/$defs/terminationPolicy" },
+    "execution": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "schema": { "const": "xrsps-execution-limits/v1" },
+        "maximumTicks": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "maximumActions": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "maximumSteps": { "type": "integer", "minimum": 1, "maximum": 100000 }
+      },
+      "required": ["schema", "maximumTicks", "maximumActions", "maximumSteps"]
+    },
     "manifestChecksum": { "type": "string", "minLength": 1 }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "compiler": { "properties": { "version": { "const": "2.1.0" } } } } },
+      "then": { "required": ["compilationEvidence"] }
+    },
+    {
+      "if": { "properties": { "compiler": { "properties": { "version": { "const": "2.3.0" } } } } },
+      "then": { "required": ["compilationEvidence", "execution"] }
+    },
+    {
+      "if": { "properties": { "compiler": { "properties": { "version": { "const": "2.4.0" } } } } },
+      "then": { "required": ["compilationEvidence", "execution", "termination"] }
+    }
+  ],
   "required": [
     "manifestVersion", "manifestId", "recording", "curation", "compiler", "runtime",
     "determinism", "initialState", "actions", "expectations", "tolerances", "conversion",

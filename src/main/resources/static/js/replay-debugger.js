@@ -223,6 +223,10 @@
         appendField(panel, 'Recording', pf.recordingId, true);
         appendField(panel, 'Debug session', pf.debugSessionId, true);
         appendField(panel, 'State', pf.preflightState);
+        if (pf.compiledInput) {
+            appendField(panel, 'Published curation', pf.compiledInput.curationId || 'No operator snapshot', true);
+            appendField(panel, 'Preview checksum', pf.compiledInput.manifestChecksum, true);
+        }
 
         const badges = el('div', 'mb-2');
         appendBadge(badges, pf.playbackEligible, 'Playback');
@@ -280,12 +284,13 @@
     // ── Durable v2 run ──
 
     function idempotencyKey(recordingId) {
-        let key = state.idempotencyKeys.get(recordingId);
+        const inputKey = `${recordingId}:${state.preflight?.compiledInput?.manifestChecksum || ''}`;
+        let key = state.idempotencyKeys.get(inputKey);
         if (!key) {
             const random = typeof crypto !== 'undefined' && crypto.randomUUID
                 ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
             key = `debugger-${recordingId}-${random}`.replace(/[^A-Za-z0-9._:-]/g, '-');
-            state.idempotencyKeys.set(recordingId, key);
+            state.idempotencyKeys.set(inputKey, key);
         }
         return key;
     }
@@ -295,12 +300,8 @@
         try {
             const response = await v2Post(
                 `/recordings/${encodeURIComponent(state.selectedRecordingId)}/xrsps-runs`,
-                {
-                    conversionMode: 'AUTO',
-                    openViewer: true,
-                    stopPolicy: 'STOP_ON_FIRST_HARD',
-                    idempotencyKey: idempotencyKey(state.selectedRecordingId),
-                });
+                window.ChromaScapeReplayCore.createScenarioRunRequest(
+                    state.preflight, idempotencyKey(state.selectedRecordingId)));
             state.run = response;
             state.report = null;
             state.events = [];

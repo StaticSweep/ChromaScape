@@ -10,12 +10,16 @@ import com.chromascape.web.replay.capability.ReplayCapabilityService;
 import com.chromascape.web.replay.catalog.ReplayRecordingResolver.ResolvedRecording;
 import com.chromascape.web.replay.catalog.dto.ReplayBlockingReason;
 import com.chromascape.web.replay.catalog.dto.ReplayEligibility;
+import com.chromascape.web.replay.conversion.ActionProvenance;
 import com.chromascape.web.replay.conversion.ConversionMode;
 import com.chromascape.web.replay.conversion.ConversionQuality;
 import com.chromascape.web.replay.conversion.ConvertedReplayAction;
 import com.chromascape.web.replay.conversion.ReplayActionConversionResult;
 import com.chromascape.web.replay.conversion.ReplayActionConversionService;
+import com.chromascape.web.replay.conversion.ReplayGap;
 import com.chromascape.web.replay.error.ReplayErrorCode;
+import com.chromascape.web.replay.error.ReplayException;
+import com.chromascape.web.replay.manifest.ScenarioManifestV2Compiler;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -23,6 +27,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,20 +47,162 @@ public class ReplayV2PreflightService {
   private final TickSnapshotRepository snapshotRepository;
   private final ReplayActionConversionService conversionService;
   private final ReplayCapabilityService capabilityService;
+  private final ScenarioManifestV2Compiler compiler;
 
   public ReplayV2PreflightService(
       ReplayRecordingResolver resolver,
       RecordingIntegrityService integrityService,
       TickSnapshotRepository snapshotRepository,
       ReplayActionConversionService conversionService,
-      ReplayCapabilityService capabilityService) {
+      ReplayCapabilityService capabilityService,
+      ScenarioManifestV2Compiler compiler) {
     this.resolver = resolver;
     this.integrityService = integrityService;
     this.snapshotRepository = snapshotRepository;
     this.conversionService = conversionService;
     this.capabilityService = capabilityService;
+    this.compiler = compiler;
   }
 
+  /** Owner-scoped request preview: the exact same selected-input compiler as execution. */
+  public XrspsPreflightResponse preflight(
+      String recordingId, ConversionMode requestedMode, UUID curationId, String ownerId) {
+    if (ownerId == null || ownerId.isBlank()) {
+      throw new ReplayException(
+          ReplayErrorCode.VALIDATION_ERROR,
+          org.springframework.http.HttpStatus.UNAUTHORIZED,
+          false,
+          "Authentication is required",
+          "Sign in before previewing a selected curation");
+    }
+    ConversionMode mode = requestedMode == null ? ConversionMode.AUTO : requestedMode;
+    List<ReplayBlockingReason> blockers = new ArrayList<>();
+    try {
+      var compiled = compiler.preview(recordingId, mode, curationId, ownerId);
+      ResolvedRecording resolved = resolver.resolve(recordingId);
+      ReplayEligibility base = integrityService.evaluate(resolved);
+      base.blockingReasons().stream()
+          .filter(reason -> reason.mode() != ReplayMode.CAUSAL_SIMULATION)
+          .forEach(blockers::add);
+      var conversion = compiled.conversion();
+      var manifest = compiled.manifest();
+      List<ReplayGap> gaps = new ArrayList<>();
+      for (JsonNode gap : manifest.getManifestJson().path("conversion").path("gaps")) {
+        String message = gap.path("message").asText();
+        if (gap.has("sourceRef")) message += "; source=" + gap.path("sourceRef").asText();
+        ActionProvenance provenance =
+            switch (gap.path("provenance").asText()) {
+              case "OBSERVED", "CAPTURED" -> ActionProvenance.CAPTURED;
+              case "OPERATOR_SUPPLIED" -> ActionProvenance.OPERATOR_SUPPLIED;
+              case "DEFAULTED" -> ActionProvenance.DEFAULTED;
+              default -> ActionProvenance.INFERRED;
+            };
+        gaps.add(
+            new ReplayGap(
+                gap.path("tick").asLong(manifest.getStartTick()),
+                gap.path("code").asText(),
+                message,
+                provenance,
+                gap.has("sourceLogId") ? gap.path("sourceLogId").asLong() : null));
+      }
+      boolean eligible;
+      try {
+        compiled.requireSimulationAllowed();
+        eligible = true;
+      } catch (ReplayException blocked) {
+        eligible = false;
+        addBlocker(
+            blockers,
+            blocked.getErrorCode(),
+            blocked.getMessage(),
+            "Resolve the selected snapshot's source-linked gaps before execution");
+      }
+      // Report the complete compiled gap list, including source/native audit findings, rather
+      // than presenting captured-row coverage as a completeness verdict.
+      var audited =
+          new ReplayActionConversionResult(
+              conversion.sessionId(),
+              conversion.startTick(),
+              conversion.endTick(),
+              conversion.mode(),
+              conversion.quality(),
+              conversion.actions(),
+              gaps,
+              conversion.approximations(),
+              conversion.typedActionCount(),
+              conversion.legacyLogCount(),
+              conversion.actionCoveragePct(),
+              conversion.conversionChecksum());
+      boolean certified =
+          eligible
+              && conversion.quality() == ConversionQuality.CERTIFIED
+              && gaps.isEmpty()
+              && conversion.approximations().isEmpty()
+              && compiled.capability().certifiable()
+              && compiled.capability().fidelity()
+                  == CapabilityManifest.Fidelity.XRSPS_AUTHORITATIVE;
+      JsonNode sourceId =
+          manifest.getManifestJson().path("curation").path("sourceCuration").path("id");
+      var input =
+          new XrspsPreflightResponse.CompiledInput(
+              manifest.getId(),
+              manifest.getManifestChecksum(),
+              sourceId.isTextual() ? UUID.fromString(sourceId.asText()) : null);
+      return new XrspsPreflightResponse(
+          response(
+              recordingId,
+              manifest.getDebugSessionId(),
+              base,
+              mode,
+              audited,
+              blockers,
+              compiled.capability(),
+              eligible,
+              certified),
+          input);
+    } catch (ReplayException rejected) {
+      // Keep missing/foreign/private selections indistinguishable at the ownership boundary.
+      if (rejected.getHttpStatus().value() == 404 || rejected.getHttpStatus().value() == 401)
+        throw rejected;
+      ResolvedRecording resolved = resolver.resolve(recordingId);
+      ReplayEligibility base = integrityService.evaluate(resolved);
+      blockers.clear();
+      base.blockingReasons().stream()
+          .filter(reason -> reason.mode() != ReplayMode.CAUSAL_SIMULATION)
+          .forEach(blockers::add);
+      addBlocker(
+          blockers,
+          rejected.getErrorCode(),
+          rejected.getMessage(),
+          "Resolve the selected compilation input; preview never publishes partial records");
+      return new XrspsPreflightResponse(
+          XrspsPreflightResponse.SCHEMA,
+          recordingId,
+          resolved.debugSession() == null ? null : resolved.debugSession().getSessionId(),
+          rejected.getErrorCode() == ReplayErrorCode.ACTION_UNSUPPORTED ? "UNSUPPORTED" : "BLOCKED",
+          base.playbackEligible(),
+          base.policyReplayEligible(),
+          false,
+          false,
+          mode,
+          ConversionQuality.UNSUPPORTED,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          List.of(),
+          List.of(),
+          blockers,
+          capabilityService.getManifest(),
+          null);
+    }
+  }
+
+  /**
+   * Raw-source inspection retained for diagnostics; execution requests use the selected overload.
+   */
   public XrspsPreflightResponse preflight(String recordingId, ConversionMode requestedMode) {
     ResolvedRecording resolved = resolver.resolve(recordingId);
     ReplayEligibility base = integrityService.evaluate(resolved);
@@ -105,6 +252,53 @@ public class ReplayV2PreflightService {
     }
     ReplayActionConversionResult conversion =
         conversionService.convert(session.getSessionId(), startTick, endTick, mode);
+    var missingIdentity =
+        com.chromascape.web.replay.manifest.ScenarioCompilationEvidence.missingIdentityFields(
+            resolved.recording() == null ? null : resolved.recording().getRunContext(),
+            recordingId,
+            session.getSessionId());
+    if (!missingIdentity.isEmpty()) {
+      addBlocker(
+          blockers,
+          ReplayErrorCode.SIM_INITIAL_STATE_INCOMPLETE,
+          "SOURCE_IDENTITY_INCOMPLETE: "
+              + String.join(", ", missingIdentity)
+              + "; source=recording:"
+              + recordingId
+              + "/runContext",
+          "Use a recording with the original frozen BehaviorRunContext; do not invent missing"
+              + " pins");
+    }
+    if (!snapshots.isEmpty()
+        && conversion != null
+        && capability != null
+        && capability.xrsps() != null) {
+      try {
+        var world =
+            new com.chromascape.web.replay.manifest.ScenarioCompilationEvidence(
+                    new com.fasterxml.jackson.databind.ObjectMapper(),
+                    new com.chromascape.web.replay.projection.CanonicalProjectionService())
+                .world(snapshots, conversion, capability);
+        if (!world.path("requiredNativeBindings").isEmpty()) {
+          var target = world.path("requiredNativeBindings").get(0);
+          addBlocker(
+              blockers,
+              ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
+              "NATIVE_WORLD_SUPPORT_REQUIRED: "
+                  + target.path("stableId").asText()
+                  + "; source="
+                  + target.path("sourceRef").asText(),
+              "Verify pinned native content and deterministic spawns; do not copy later state into"
+                  + " the initial world");
+        }
+      } catch (com.chromascape.web.replay.error.ReplayException issue) {
+        addBlocker(
+            blockers,
+            issue.getErrorCode(),
+            issue.getMessage(),
+            "Resolve the target from evidence at its execution tick");
+      }
+    }
     addInitialStateBlockers(snapshots, conversion, blockers);
     boolean authoritativeNpcPins =
         conversion != null && conversion.quality() == ConversionQuality.CERTIFIED;
@@ -113,6 +307,14 @@ public class ReplayV2PreflightService {
       addBlocker(blockers, violation.code(), violation.message(), violation.remediation());
     }
     List<String> unsupported = unsupportedActions(conversion, capability);
+    if (!conversion.gaps().isEmpty() || !unsupported.isEmpty()) {
+      addBlocker(
+          blockers,
+          ReplayErrorCode.SIM_INITIAL_STATE_INCOMPLETE,
+          "Captured-action coverage is not completeness: the scenario has capture gaps or"
+              + " unsupported actions",
+          "Resolve every source-linked gap before causal simulation; playback remains independent");
+    }
     if (!conversion.hasExecutableActions()) {
       addBlocker(
           blockers,
@@ -225,7 +427,8 @@ public class ReplayV2PreflightService {
         gaps,
         approximations,
         blockers,
-        capability);
+        capability,
+        null);
   }
 
   private boolean runtimeReady(CapabilityManifest capability) {
@@ -286,7 +489,7 @@ public class ReplayV2PreflightService {
           "Capture equipment slots at the recording start");
     }
     JsonNode npcs = first.getNpcs();
-    if (npcs == null || !npcs.isArray() || npcs.isEmpty()) {
+    if (npcs == null || !npcs.isArray()) {
       addBlocker(
           blockers,
           ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
@@ -323,6 +526,12 @@ public class ReplayV2PreflightService {
                 ReplayErrorCode.ACTION_TARGET_UNRESOLVED,
                 "INTERACT_NPC action has no stable target id",
                 "Capture a stable NPC identity at the semantic dispatch boundary");
+            continue;
+          }
+          if (converted.action().getTick() > first.getTick()
+              && !npcsByStableId.containsKey(stableId)) {
+            // The execution-tick audit resolves later targets. Absence initially is not itself
+            // a capture failure; native loading remains a distinct, explicit blocker.
             continue;
           }
           referencedNpcIds.add(stableId);
@@ -411,7 +620,6 @@ public class ReplayV2PreflightService {
         }
       }
 
-      int retainedNpcCount = 0;
       Set<String> retainedIds = new HashSet<>();
       for (JsonNode npc : npcs) {
         String stableId = npc == null ? null : npc.path("stableId").asText(null);
@@ -453,7 +661,6 @@ public class ReplayV2PreflightService {
         if (isSupportedFishingOption(recordedSpotType)
             || (referenced && !spotTypeCandidates.getOrDefault(stableId, Set.of()).isEmpty())
             || (referenced && !spotTypeCandidates.containsKey(stableId))) {
-          retainedNpcCount++;
           if (!retainedIds.add(stableId)) {
             addBlocker(
                 blockers,
@@ -462,13 +669,6 @@ public class ReplayV2PreflightService {
                 "Capture each stable NPC identity exactly once");
           }
         }
-      }
-      if (retainedNpcCount == 0) {
-        addBlocker(
-            blockers,
-            ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
-            "Initial world contains no supported fishing NPC",
-            "Capture the fishing NPC referenced by the semantic action stream");
       }
     }
     if (first.getGameObjects() == null || first.getGroundItems() == null) {

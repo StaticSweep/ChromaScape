@@ -21,6 +21,11 @@ public class ReplayProperties {
   @Valid private final Worker worker = new Worker();
   @Valid private final Artifacts artifacts = new Artifacts();
   @Valid private final Viewer viewer = new Viewer();
+  @Valid private final Client client = new Client();
+
+  public Client getClient() {
+    return client;
+  }
 
   public boolean isEnabled() {
     return enabled;
@@ -373,6 +378,37 @@ public class ReplayProperties {
 
     public void setTokenTtlSeconds(long tokenTtlSeconds) {
       this.tokenTtlSeconds = tokenTtlSeconds;
+    }
+  }
+
+  /** Packaged actual-client assets and pinned caches. Paths are operator configuration only. */
+  public static class Client {
+    private boolean enabled;
+    private String assetsDirectory;
+    private String cachesDirectory;
+
+    public boolean isEnabled() {
+      return enabled;
+    }
+
+    public void setEnabled(boolean value) {
+      enabled = value;
+    }
+
+    public String getAssetsDirectory() {
+      return assetsDirectory;
+    }
+
+    public void setAssetsDirectory(String value) {
+      assetsDirectory = value;
+    }
+
+    public String getCachesDirectory() {
+      return cachesDirectory;
+    }
+
+    public void setCachesDirectory(String value) {
+      cachesDirectory = value;
     }
   }
 }

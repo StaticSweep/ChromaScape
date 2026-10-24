@@ -165,4 +165,35 @@ class ReplayEvidenceValidatorTest {
                     v.code() == ReplayErrorCode.SCHEMA_VERSION_UNSUPPORTED
                         && v.message().contains("NO schema version")));
   }
+
+  @Test
+  void fullModernSnapshotsRetainRequiredStateChecksAndRejectSchemaDrift() throws Exception {
+    for (int version : List.of(2, 4)) {
+      TickSnapshot first =
+          snapshot(
+              0L,
+              "[{\"stableId\":\"spot:a:1\",\"npcId\":331,\"position\":{\"x\":1,\"y\":2,\"plane\":0},\"spotType\":\"net\"}]");
+      TickSnapshot second = snapshot(1L, "[]");
+      first.setSchemaVersion(version);
+      second.setSchemaVersion(version);
+      assertTrue(
+          ReplayEvidenceValidator.validateRecordingEvidence(0, 1, 2, List.of(first, second))
+              .isEmpty());
+      first.setPlayerState(null);
+      assertTrue(
+          ReplayEvidenceValidator.validateRecordingEvidence(0, 1, 2, List.of(first, second))
+              .stream()
+              .anyMatch(v -> v.code() == ReplayErrorCode.PLAYER_STATE_MISSING));
+    }
+    TickSnapshot first = snapshot(0L, "[]");
+    TickSnapshot second = snapshot(1L, "[]");
+    second.setSchemaVersion(2);
+    assertTrue(
+        ReplayEvidenceValidator.validateRecordingEvidence(0, 1, 2, List.of(first, second)).stream()
+            .anyMatch(v -> v.code() == ReplayErrorCode.SCHEMA_VERSION_UNSUPPORTED));
+    second.setSchemaVersion(3);
+    assertTrue(
+        ReplayEvidenceValidator.validateRecordingEvidence(1, 1, 1, List.of(second)).stream()
+            .anyMatch(v -> v.code() == ReplayErrorCode.SCHEMA_VERSION_UNSUPPORTED));
+  }
 }

@@ -224,6 +224,41 @@ public class ReplayWorkerPersistenceService {
     hashSampleRepository.save(sample);
   }
 
+  /** Bind progress only after a validated reset or independently anchored native restore. */
+  @Transactional
+  public void initializeNativeSourceCursor(ReplayFence fence, com.fasterxml.jackson.databind.JsonNode cursor) {
+    NativeSourceCursor.validate(cursor);
+    ReplayAttempt attempt = lockedAttempt(fence);
+    requireRunning(fence, ownedRunForUpdate(fence));
+    var previous = attempt.getNativeSourceCursor();
+    if (previous != null && !previous.equals(cursor)) {
+      throw ReplayException.invalid(ReplayErrorCode.XRSPS_PROTOCOL_ERROR,
+          "NATIVE_SOURCE_CURSOR_INVALID: attempt already has different committed progress");
+    }
+    attempt.setNativeSourceCursor(cursor);
+    attemptRepository.save(attempt);
+  }
+
+  /** Source progress, events and hashes commit together under the same attempt/run fence. */
+  @Transactional
+  public void appendNativeActionResult(ReplayFence fence, List<ReplayEvent> events,
+      StateHashSample sample, com.fasterxml.jackson.databind.JsonNode nativeState) {
+    ReplayAttempt attempt = lockedAttempt(fence);
+    requireRunning(fence, ownedRunForUpdate(fence));
+    var cursor = NativeSourceCursor.advance(attempt.getNativeSourceCursor(), nativeState);
+    if (!fence.runId().equals(sample.getId().getRunId())) throw stale(fence);
+    if (sample.getId().getTick() != cursor.path("tick").asLong()) {
+      throw ReplayException.invalid(ReplayErrorCode.XRSPS_PROTOCOL_ERROR,
+          "NATIVE_SOURCE_CURSOR_INVALID: hash sample tick differs from committed source progress");
+    }
+    savePartitions(fence, events);
+    hashSampleRepository.save(sample);
+    // Event partitioning may clear the persistence context. Save the locked attempt explicitly;
+    // its database lock remains held until this entire transaction commits or rolls back.
+    attempt.setNativeSourceCursor(cursor);
+    attemptRepository.save(attempt);
+  }
+
   /**
    * Registers a checkpoint snapshot reference AND inserts the checkpoint row inside ONE
    * transaction. A failed insert may leave staged bytes, but a registered SNAPSHOT reference can

@@ -89,9 +89,33 @@ class FishingActiveModelServiceTest {
 
   private void writeModel(FishingModel model) throws Exception {
     Files.createDirectories(modelsDir);
-    objectMapper
-        .writerWithDefaultPrettyPrinter()
-        .writeValue(modelsDir.resolve(model.modelId() + ".json").toFile(), model);
+    byte[] bytes = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(model);
+    Files.write(modelsDir.resolve(model.modelId() + ".json"), bytes);
+    registerModel(model.modelId(), bytes);
+  }
+
+  private void writeRawModel(String modelId, byte[] bytes) throws Exception {
+    Files.createDirectories(modelsDir);
+    Files.write(modelsDir.resolve(modelId + ".json"), bytes);
+    registerModel(modelId, bytes);
+  }
+
+  /** Registers the model in the immutable artifact registry that production loading reads. */
+  private void registerModel(String modelId, byte[] bytes) {
+    artifactStore()
+        .put(
+            "fishing-prototype",
+            modelId,
+            com.chromascape.web.artifact.ImmutableArtifactStore.Kind.MODEL,
+            bytes,
+            "application/json",
+            Map.of("recordingId", "recording_train"),
+            Map.of());
+  }
+
+  private com.chromascape.web.artifact.ImmutableArtifactStore artifactStore() {
+    return new com.chromascape.web.artifact.ImmutableArtifactStore(
+        tempDir.resolve("artifacts"), 104857600, 1073741824, objectMapper);
   }
 
   private void writePassedRun(String modelId, String runId) throws Exception {
@@ -193,8 +217,8 @@ class FishingActiveModelServiceTest {
         .satisfies(
             e -> assertThat(((PrototypeApiException) e).getCode()).isEqualTo("MODEL_NOT_FOUND"));
 
-    Files.createDirectories(modelsDir);
-    Files.writeString(modelsDir.resolve("fishing_malformed.json"), "not json {");
+    writeRawModel(
+        "fishing_malformed", "not json {".getBytes(java.nio.charset.StandardCharsets.UTF_8));
     assertThatThrownBy(() -> service.activate("fishing_malformed"))
         .isInstanceOf(PrototypeApiException.class)
         .satisfies(
@@ -649,7 +673,8 @@ class FishingActiveModelServiceTest {
 
   @Test
   @DisplayName(
-      "restore racing with activation and deactivation never leaves disk and cache on different models")
+      "restore racing with activation and deactivation never leaves disk and cache on different"
+          + " models")
   void restoreRacingWithActivationAndDeactivationKeepsDiskAndCacheConsistent() throws Exception {
     writeModel(model("fishing_a", "recording_a", 1));
     writePassedRun("fishing_a", "fishing_run_a");

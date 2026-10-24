@@ -9,5 +9,7 @@ public enum ArtifactKind {
   /** SC-275 bound transition-prefix frames for one checkpoint. */
   CHAIN,
   /** Complete versioned causal projection, captured periodically and at boundaries. */
-  PROJECTION
+  PROJECTION,
+  /** Validated native gameplay outcome and exact consumed-source prefix, not conformance. */
+  OUTCOME
 }

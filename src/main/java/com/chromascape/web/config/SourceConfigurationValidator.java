@@ -18,6 +18,8 @@ public class SourceConfigurationValidator {
   private final SourceTrustProperties trust;
   private final String upstreamBaseUrl;
   private final String upstreamToken;
+  private final String upstreamMetadataToken;
+  private final String upstreamContentToken;
   private final String upstreamActor;
   private final String metadataToken;
   private final String contentToken;
@@ -28,10 +30,14 @@ public class SourceConfigurationValidator {
       @Value("${micro6.source.transport.auth-token:}") String upstreamToken,
       @Value("${micro6.source.transport.actor:chromascape-web}") String upstreamActor,
       @Value("${chromascape.source.access.metadata-token:}") String metadataToken,
-      @Value("${chromascape.source.access.content-token:}") String contentToken) {
+      @Value("${chromascape.source.access.content-token:}") String contentToken,
+      @Value("${micro6.source.transport.metadata-token:}") String upstreamMetadataToken,
+      @Value("${micro6.source.transport.content-token:}") String upstreamContentToken) {
     this.trust = trust;
     this.upstreamBaseUrl = normalize(upstreamBaseUrl);
     this.upstreamToken = normalize(upstreamToken);
+    this.upstreamMetadataToken = normalize(upstreamMetadataToken);
+    this.upstreamContentToken = normalize(upstreamContentToken);
     this.upstreamActor = normalize(upstreamActor);
     this.metadataToken = normalize(metadataToken);
     this.contentToken = normalize(contentToken);
@@ -60,7 +66,12 @@ public class SourceConfigurationValidator {
       fail("chromascape.source.public-key-base64 must be a valid X.509 Ed25519 public key");
     }
     requireTrustedEndpoint(upstreamBaseUrl);
-    requireNonBlank(upstreamToken, "micro6.source.transport.auth-token");
+    requireNonBlank(
+        effectiveToken(upstreamMetadataToken),
+        "micro6.source.transport.metadata-token or micro6.source.transport.auth-token");
+    requireNonBlank(
+        effectiveToken(upstreamContentToken),
+        "micro6.source.transport.content-token or micro6.source.transport.auth-token");
     if (!SAFE_TOKEN.matcher(upstreamActor).matches()) {
       fail("micro6.source.transport.actor must be a safe bounded token");
     }
@@ -69,6 +80,10 @@ public class SourceConfigurationValidator {
     log.info(
         "SC-810 source trust and transport configuration validated for environment {}",
         environment);
+  }
+
+  private String effectiveToken(String specific) {
+    return specific.isBlank() ? upstreamToken : specific;
   }
 
   private static void requireTrustedEndpoint(String value) {
