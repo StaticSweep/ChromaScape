@@ -49,6 +49,15 @@ Artifacts: `C:\Dev\IdeaProjects\verification\sc274-sc276-continuation-20261024\`
 
 ## Risks
 
+Subsequent source/admission review reproduced additional blockers, superseding blanket
+claims of complete mode isolation and force coverage below:
+[durability-review-findings-20261024.md](durability-review-findings-20261024.md).
+The three findings were subsequently fixed (see the Resolution section of that file): admission
+is serialized and revalidated, missing/null/inconsistent markers are refused, and every changed
+parent is forced in order. Linux STRICT positives (33 executed, 0 failed) and the two-JVM
+admission race passed on a container filesystem; XrspsSessionRepositoryIntegrationTest passed
+3/3 on a disposable PostgreSQL. Remaining WP1 work is listed in that file; WP1 sign-off is still open.
+
 - **Strict is now the default and fails closed at startup on Windows.** A Windows deployment
   must set `ARTIFACTS_DURABILITY_MODE=development` (or run the durable lane on POSIX); its
   root is then marked unqualified and can never be served by a strict store. This is a
