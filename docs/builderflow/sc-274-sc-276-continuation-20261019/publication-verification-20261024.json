@@ -1,0 +1,620 @@
+{
+  "testedCommit": "9dfac34051a8cb9f8d5f2b11210238cb530344af",
+  "uniqueTests": 716,
+  "counts": {
+    "passed": 699,
+    "failed": 0,
+    "skipped": 17
+  },
+  "prior32Passed": 32,
+  "debuggerJsTests": 14,
+  "syntaxFiles": 7,
+  "windowsPowerLossDurability": "UNQUALIFIED",
+  "acceptanceRowsClosed": 0,
+  "skippedPrerequisites": [
+    "SC1991_WORKER_ENTRYPOINT for native durable session integration",
+    "SC1991_TEST_JDBC_URL for PostgreSQL session repository integration"
+  ],
+  "skips": [
+    {
+      "suite": "com.chromascape.web.replay.session.XrspsDurableSessionIntegrationTest",
+      "test": "rolledBackPacedTickCannotLeakFromWarmWorkerIntoRetry()",
+      "status": "skipped"
+    },
+    {
+      "suite": "com.chromascape.web.replay.session.XrspsDurableSessionIntegrationTest",
+      "test": "realFishingSurvivesNewServiceAndRepeatedRestoreWithoutDuplicateEffects()",
+      "status": "skipped"
+    },
+    {
+      "suite": "com.chromascape.web.replay.session.XrspsDurableSessionIntegrationTest",
+      "test": "actualClientRebuildsTheNativeJewelryDestinationAndRestoresItsCharge()",
+      "status": "skipped"
+    },
+    {
+      "suite": "com.chromascape.web.replay.session.XrspsDurableSessionIntegrationTest",
+      "test": "finishRecordingAdvancesNativeFishingToEndAndRemainsIdempotent()",
+      "status": "skipped"
+    },
+    {
+      "suite": "com.chromascape.web.replay.session.XrspsDurableSessionIntegrationTest",
+      "test": "concurrentCreatesAcrossRepositoryInstancesInitializeOneWorld()",
+      "status": "skipped"
+    },
+    {
+      "suite": "com.chromascape.web.replay.session.XrspsDurableSessionIntegrationTest",
+      "test": "configuredAiCompletesInTheSameWorldVisibleInTheActualClient()",
+      "status": "skipped"
+    },
+    {
+      "suite": "com.chromascape.web.replay.session.XrspsDurableSessionIntegrationTest",
+      "test": "httpRetriesReturnExistingSessionAndExposeRealDomainState()",
+      "status": "skipped"
+    },
+    {
+      "suite": "com.chromascape.web.replay.session.XrspsDurableSessionIntegrationTest",
+      "test": "actualOsrsClientRendersCommittedNativeWorldWithoutCommandAuthority()",
+      "status": "skipped"
+    },
+    {
+      "suite": "com.chromascape.web.replay.session.XrspsDurableSessionIntegrationTest",
+      "test": "aiJournalReproducesRealNativeFishingWithoutAnotherModelCall()",
+      "status": "skipped"
+    },
+    {
+      "suite": "com.chromascape.web.replay.session.XrspsDurableSessionIntegrationTest",
+      "test": "configuredProviderCompletesNativeGoalAndReproducesJournalWithoutSecondModelCall()",
+      "status": "skipped"
+    },
+    {
+      "suite": "com.chromascape.web.replay.session.XrspsDurableSessionIntegrationTest",
+      "test": "nativeMismatchLatchesDurablyAndLaterActionsNeverExecute()",
+      "status": "skipped"
+    },
+    {
+      "suite": "com.chromascape.web.replay.session.XrspsDurableSessionIntegrationTest",
+      "test": "pacedOwnershipSeekAndRecoveryPreserveCommittedNativeWorld()",
+      "status": "skipped"
+    },
+    {
+      "suite": "com.chromascape.web.replay.session.XrspsDurableSessionIntegrationTest",
+      "test": "rolledBackActionAndCheckpointLeaveNoReceiptAndRetryAppliesExactlyOnce()",
+      "status": "skipped"
+    },
+    {
+      "suite": "com.chromascape.web.replay.session.XrspsDurableSessionIntegrationTest",
+      "test": "hashOnlyAndChangedJournalAreRejectedBeforeWorldMutation()",
+      "status": "skipped"
+    },
+    {
+      "suite": "com.chromascape.web.replay.session.XrspsSessionRepositoryIntegrationTest",
+      "test": "foreignMissingAndUnownedLegacyRowsAreUniformlyHidden()",
+      "status": "skipped"
+    },
+    {
+      "suite": "com.chromascape.web.replay.session.XrspsSessionRepositoryIntegrationTest",
+      "test": "retryKeysArePerOwnerAndOwnershipSurvivesSerialization()",
+      "status": "skipped"
+    },
+    {
+      "suite": "com.chromascape.web.replay.session.XrspsSessionRepositoryIntegrationTest",
+      "test": "concurrentRetriesInitializeOnce()",
+      "status": "skipped"
+    }
+  ],
+  "suites": [
+    {
+      "task": "test",
+      "name": "com.chromascape.web.aiplayer.prototype.AiPlayerPrototypeControllerTest",
+      "tests": "18",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "6.479"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.aiplayer.prototype.FishingActionNormalizerTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "1.073"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.aiplayer.prototype.FishingActiveModelServiceTest",
+      "tests": "19",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "30.698"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.aiplayer.prototype.FishingArtifactRegistryIntegrationTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "1.15"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.aiplayer.prototype.FishingDatasetBuilderServiceTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.361"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.aiplayer.prototype.FishingDemonstrationPolicyTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.026"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.aiplayer.prototype.FishingPreflightServiceTest",
+      "tests": "11",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "1.013"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.aiplayer.prototype.FishingRecordingLoaderTest",
+      "tests": "11",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.57"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.aiplayer.prototype.FishingReplayServiceTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.177"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.aiplayer.prototype.FishingShadowDecisionServiceTest",
+      "tests": "53",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "15.597"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.aiplayer.prototype.FishingShadowDecisionWriterTest",
+      "tests": "30",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "11.939"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.aiplayer.prototype.FishingStateExtractorTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.03"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.aiplayer.routine.service.CurrentSliceRunServiceProvenanceTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "1.1"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.aiplayer.routine.service.Micro6SourceManifestClientTest",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "1.379"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.config.SourceConfigurationValidatorTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "1.239"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.config.SourceTransportTokenBindingTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "1.352"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.capability.XrspsNativeMethodCapabilityTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.767"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.catalog.ReplayV2SelectedPreflightTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.195"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.compiler.ScenarioManifestFreshJvmDeterminismTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "23.546"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.conversion.ReplayActionConversionServiceTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.082"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.curation.ReplayCurationActionReplacementTest",
+      "tests": "12",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.648"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.manifest.BehaviorRunContextGraphTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "1.267"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.manifest.ExecutionLimitContractTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.032"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.manifest.NativeBankStateContractTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.059"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.manifest.NativeNpcBindingContractTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.335"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.manifest.PublishedCurationSnapshotTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.06"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.manifest.ScenarioCompilationWidgetEvidenceTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.027"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.manifest.ScenarioManifestImportValidatorTest",
+      "tests": "26",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "1.322"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.manifest.ScenarioManifestV2CompilerTest",
+      "tests": "56",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "2.58"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.manifest.TerminationPolicyContractTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.013"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.security.ReplayOwnershipServiceTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.014"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.session.XrspsAiTaskCoordinatorTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.16"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.session.XrspsClientPresentationControllerTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.01"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.session.XrspsDurableBoundaryTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.144"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.session.XrspsDurableSessionIntegrationTest",
+      "tests": "14",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "14",
+      "time": "0.003"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.session.XrspsRealClientConfigTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "1.382"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.session.XrspsRecordedActionRunnerTest",
+      "tests": "12",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.02"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.session.XrspsSessionContractSchemaTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.006"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.session.XrspsSessionExecutionServiceTest",
+      "tests": "13",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.02"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.session.XrspsSessionLifecycleTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.005"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.session.XrspsSessionPreflightTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.004"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.session.XrspsSessionRepositoryIntegrationTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "3",
+      "time": "0.001"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.session.XrspsSessionsControllerTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "3.356"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.session.XrspsSessionStoreTest",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.03"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.session.XrspsSessionWorkspaceControllerTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.073"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.worker.NativeCheckpointRestoreTest",
+      "tests": "48",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "3.161"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.worker.NativeRunLedgerTest",
+      "tests": "120",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "1.325"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.worker.NativeRunProtocolTest",
+      "tests": "21",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.026"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.worker.NativeSourceCursorTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.033"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.worker.ReplayLeaseHeartbeatTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "2.728"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.worker.ReplaySourceScheduleTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.004"
+    },
+    {
+      "task": "test",
+      "name": "com.chromascape.web.replay.worker.ReplayWorkerLifecycleTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "1.113"
+    },
+    {
+      "task": "artifactCompletionTest",
+      "name": "com.chromascape.web.aiplayer.prototype.FishingArtifactRegistryIntegrationTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "8.55"
+    },
+    {
+      "task": "artifactCompletionTest",
+      "name": "com.chromascape.web.artifact.ArtifactRegistryControllerTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "3.917"
+    },
+    {
+      "task": "artifactCompletionTest",
+      "name": "com.chromascape.web.artifact.ImmutableArtifactStoreTest",
+      "tests": "13",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "1.661"
+    },
+    {
+      "task": "artifactCompletionTest",
+      "name": "com.chromascape.web.replay.artifact.ReplayArtifactServiceReuseTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "1.652"
+    },
+    {
+      "task": "artifactCompletionTest",
+      "name": "com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest",
+      "tests": "34",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "1.47"
+    }
+  ]
+}

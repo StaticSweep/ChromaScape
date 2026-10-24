@@ -31,6 +31,9 @@ do not represent this Windows compatibility branch as proven fail-closed durable
 
 ## Verification record
 
+Fresh clean-checkout results and remaining gates:
+[publication-result-20261024.md](publication-result-20261024.md).
+
 Existing retained JUnit records show artifactCompletionTest 61/61 and fresh-JVM hardening
 6/6. Follow-up records report active-model 19/19 and dataset-builder 4/4. Fresh publication
 verification is recorded separately under:
