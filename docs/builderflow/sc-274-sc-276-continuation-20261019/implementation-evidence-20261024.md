@@ -35,14 +35,14 @@ Native owning repository (`C:\Dev\IdeaProjects\.worktrees\sc276-recovered-202610
 - Recovery bundle retained at
   `C:\Dev\IdeaProjects\verification\sc274-sc276-continuation-20261024\wp2-native-20261024T055412Z\native-sc274-20261024.bundle`.
 
-Commits: `45700523` (plan), `748f2d93` (durability implementation), `07725f0c` (formatting).
+Commits: `45700523` (plan), `748f2d93` (durability implementation), `e44d6506` (formatting).
 
 ## Tests
 
 Run in an isolated checkout (`C:\Dev\IdeaProjects\.worktrees\sc274-wp-verify-20261024T055412Z`)
-at `07725f0c`, JDK 17, `--offline`:
+at `e44d6506`, JDK 17, `--offline`:
 
-- `artifactCompletionTest`: 67 tests, 0 failures, 0 errors, 4 skipped (the POSIX-only
+- `artifactCompletionTest`: 68 tests, 0 failures, 0 errors, 4 skipped (the POSIX-only
   strict positive tests, skipped on Windows). Includes Windows strict refusal and
   development-marker tests.
 - `replayTest --tests XrspsSessionRepositoryIntegrationTest`: 3 tests, 0 failures, against

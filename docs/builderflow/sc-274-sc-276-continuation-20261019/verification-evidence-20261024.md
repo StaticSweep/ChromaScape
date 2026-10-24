@@ -1,6 +1,6 @@
 # Verification evidence — SC-274/SC-276 achievable slice
 
-Date: 24 October 2026. Verified commit `07725f0c` on
+Date: 24 October 2026. Verified commit `e44d6506` on
 `codex/sc274-completion-20261015` (local, not pushed). Native recovery commit
 `79382be38272da3d36f627c9932384692dd27873` (local branch, not pushed).
 
@@ -32,15 +32,16 @@ No original acceptance row is closed. Statuses below record what changed; all ro
 
 | Check | Result |
 |---|---|
-| `artifactCompletionTest` (isolated checkout, JDK 17, offline) | 67 tests, 0 failures, 0 errors, 4 skipped (POSIX-only) |
+| `artifactCompletionTest` (isolated checkout, JDK 17, offline) | 68 tests, 0 failures, 0 errors, 4 skipped (POSIX-only) |
 | `replayTest --tests XrspsSessionRepositoryIntegrationTest` | 3 tests, 0 failures, disposable PostgreSQL |
 | Windows STRICT admission refusal | PASS — no objects, refs or marker created |
 | Windows development marker | PASS — `qualified:false`, publication works |
+| Strict force-call coverage with an injected primitive | PASS — publication, activation, quarantine, reset and temp cleanup all invoked the force hook |
 | POSIX STRICT positive suite | NOT RUN on Windows; skipped by design |
 | `spotlessJavaCheck` (repository-wide) | FAILS on 1364 unrelated files (pre-existing) |
 | Touched-file formatting | PASS under `--ignore-cr-at-eol` |
 | Worker capability preflight | FAILS — `certifiable` hard-coded false |
-| Post-commit clean-checkout build | PASS at `07725f0c` |
+| Post-commit clean-checkout build | PASS at `e44d6506` |
 
 Artifacts: `C:\Dev\IdeaProjects\verification\sc274-sc276-continuation-20261024\`
 (`wp1-freeze-*`, `wp2-native-*`, `wp3-verify-*`, `wp4-db-*`, `wp4b-verify-*`,
