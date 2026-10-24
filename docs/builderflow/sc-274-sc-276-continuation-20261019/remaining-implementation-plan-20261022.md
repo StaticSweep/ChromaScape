@@ -1,5 +1,9 @@
 # SC-274 / SC-276: full remaining implementation plan
 
+Current full remaining plan after publication and the green follow-up checks:
+[remaining-implementation-plan-20261024.md](remaining-implementation-plan-20261024.md).
+The historical results below are retained; the prior 32 failing cases now pass.
+
 Latest executed verification and prioritized remaining work (23 October):
 [full-verification-20261023.md](full-verification-20261023.md).
 This supersedes older availability/clock observations and broad green-test claims below:

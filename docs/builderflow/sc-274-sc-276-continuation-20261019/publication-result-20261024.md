@@ -50,6 +50,9 @@ The final publication record changes documentation only; tested source is unchan
 
 ## Remaining work and risks
 
+Full executable sequence, dependencies, validation and completion criteria:
+[remaining-implementation-plan-20261024.md](remaining-implementation-plan-20261024.md).
+
 1. Windows post-link power-loss durability remains unqualified; NTFS journaling is not
    evidence that the link is persisted before return. Select a supported implementation/
    platform contract before production qualification.
