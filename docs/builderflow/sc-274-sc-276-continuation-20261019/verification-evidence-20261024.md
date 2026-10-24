@@ -49,6 +49,10 @@ Artifacts: `C:\Dev\IdeaProjects\verification\sc274-sc276-continuation-20261024\`
 
 ## Risks
 
+- **Strict is now the default and fails closed at startup on Windows.** A Windows deployment
+  must set `ARTIFACTS_DURABILITY_MODE=development` (or run the durable lane on POSIX); its
+  root is then marked unqualified and can never be served by a strict store. This is a
+  deliberate behavior change, not an outage workaround.
 - **STRICT durability is only half-verified.** Windows proves refusal; the positive
   force-every-path contract is skipped there and has not yet run on Linux.
 - **Mid-publication response is not transactional.** A directory-force failure after a

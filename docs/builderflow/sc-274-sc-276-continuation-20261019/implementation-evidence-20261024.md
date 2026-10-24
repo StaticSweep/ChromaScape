@@ -56,6 +56,8 @@ at `e44d6506`, JDK 17, `--offline`:
 
 ## Remaining work
 
+- Operators on Windows must set `ARTIFACTS_DURABILITY_MODE=development` explicitly; strict
+  admission intentionally refuses to start there.
 - Run the four POSIX-only STRICT tests on Linux; Windows only proves refusal.
 - WP4: 10 worker-gated cases remain blocked by
   `AUTHORITATIVE_RUNTIME_QUALIFICATION.complete === false`; 4 further cases need a real
