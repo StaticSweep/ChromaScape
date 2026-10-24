@@ -16,11 +16,7 @@ public class ArtifactRegistryConfiguration {
       @Value("${artifacts.quota-bytes:1073741824}") long quotaBytes,
       @Value("${artifacts.durability-mode:strict}") String durabilityMode) {
     return new ImmutableArtifactStore(
-        Path.of(root).resolve("artifacts"),
-        maxBytes,
-        quotaBytes,
-        json,
-        mode(durabilityMode));
+        Path.of(root).resolve("artifacts"), maxBytes, quotaBytes, json, mode(durabilityMode));
   }
 
   private static ImmutableArtifactStore.DurabilityMode mode(String value) {

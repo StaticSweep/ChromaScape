@@ -267,7 +267,11 @@ class ImmutableArtifactStoreTest {
             ResponseStatusException.class,
             () ->
                 new ImmutableArtifactStore(
-                    root, 1024, 65536, new ObjectMapper(), ImmutableArtifactStore.DurabilityMode.STRICT));
+                    root,
+                    1024,
+                    65536,
+                    new ObjectMapper(),
+                    ImmutableArtifactStore.DurabilityMode.STRICT));
     assertEquals(HttpStatus.SERVICE_UNAVAILABLE, exception.getStatusCode());
     assertTrue(String.valueOf(exception.getReason()).startsWith("ARTIFACT_DURABILITY_UNAVAILABLE"));
     assertFalse(Files.exists(root.resolve("objects")));
@@ -280,7 +284,11 @@ class ImmutableArtifactStoreTest {
   void developmentRootIsExplicitlyMarkedUnqualified() throws Exception {
     var s =
         new ImmutableArtifactStore(
-            root, 1024, 65536, new ObjectMapper(), ImmutableArtifactStore.DurabilityMode.DEVELOPMENT);
+            root,
+            1024,
+            65536,
+            new ObjectMapper(),
+            ImmutableArtifactStore.DurabilityMode.DEVELOPMENT);
     assertFalse(s.durabilityQualified());
     var marker = Files.readString(root.resolve("durability.json"));
     assertTrue(marker.contains("\"qualified\":false"));
@@ -330,7 +338,11 @@ class ImmutableArtifactStoreTest {
             ResponseStatusException.class,
             () ->
                 new ImmutableArtifactStore(
-                    root, 1024, 65536, new ObjectMapper(), ImmutableArtifactStore.DurabilityMode.STRICT));
+                    root,
+                    1024,
+                    65536,
+                    new ObjectMapper(),
+                    ImmutableArtifactStore.DurabilityMode.STRICT));
     assertTrue(String.valueOf(refused.getReason()).startsWith("ARTIFACT_DURABILITY_UNAVAILABLE"));
     var qualified = root.resolve("qualified");
     new ImmutableArtifactStore(
@@ -369,7 +381,10 @@ class ImmutableArtifactStoreTest {
     assertThrows(ResponseStatusException.class, () -> failing.get("owner", "orphan"));
     var orphanChecksum = ImmutableArtifactStore.checksum(new byte[] {9}).substring(7);
     assertTrue(
-        Files.exists(root.resolve("objects").resolve(orphanChecksum.substring(0, 2)).resolve(orphanChecksum)));
+        Files.exists(
+            root.resolve("objects")
+                .resolve(orphanChecksum.substring(0, 2))
+                .resolve(orphanChecksum)));
     assertArrayEquals(new byte[] {1}, writer.read("owner", shared.id()));
     assertTrue(Files.exists(writer.contentPath(shared)));
     var retried =
@@ -393,7 +408,12 @@ class ImmutableArtifactStoreTest {
             };
     var s =
         new ImmutableArtifactStore(
-            root, 1024, 65536, new ObjectMapper(), ImmutableArtifactStore.DurabilityMode.STRICT, force);
+            root,
+            1024,
+            65536,
+            new ObjectMapper(),
+            ImmutableArtifactStore.DurabilityMode.STRICT,
+            force);
     put(s, "source", new byte[] {1});
     var first =
         s.put(

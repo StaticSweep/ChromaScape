@@ -174,13 +174,17 @@ public final class ImmutableArtifactStore {
 
   /** Durable publication contract selected for this root. */
   public enum DurabilityMode {
-    /** Directory-entry persistence is required for every write; unsupported platforms fail closed. */
+    /**
+     * Directory-entry persistence is required for every write; unsupported platforms fail closed.
+     */
     STRICT,
     /** Explicitly unqualified development root; never accepted by strict production stores. */
     DEVELOPMENT
   }
 
-  /** Injectable directory-persistence primitive so unsupported platforms and faults are testable. */
+  /**
+   * Injectable directory-persistence primitive so unsupported platforms and faults are testable.
+   */
   @FunctionalInterface
   interface DirectoryForce {
     void force(Path directory) throws IOException;
@@ -221,7 +225,8 @@ public final class ImmutableArtifactStore {
       DirectoryForce force) {
     if (maxBytes < 1 || quotaBytes < maxBytes)
       throw new IllegalArgumentException("Invalid artifact limits");
-    if (mode == null || force == null) throw new IllegalArgumentException("Invalid durability mode");
+    if (mode == null || force == null)
+      throw new IllegalArgumentException("Invalid durability mode");
     this.root = root.toAbsolutePath().normalize();
     this.maxBytes = maxBytes;
     this.quotaBytes = quotaBytes;
@@ -554,9 +559,9 @@ public final class ImmutableArtifactStore {
    * Forces the newly linked directory entry through the configured persistence primitive.
    *
    * <p>POSIX systems persist a directory entry by forcing the parent directory. Windows does not
-   * allow {@code java.nio} to open a directory handle, so the equivalent call fails with
-   * {@link AccessDeniedException}. Strict roots refuse that platform at construction; development
-   * roots record an explicitly unqualified marker and tolerate only that specific refusal.
+   * allow {@code java.nio} to open a directory handle, so the equivalent call fails with {@link
+   * AccessDeniedException}. Strict roots refuse that platform at construction; development roots
+   * record an explicitly unqualified marker and tolerate only that specific refusal.
    */
   private static void nativeDirectoryForce(Path directory) throws IOException {
     try (var channel = FileChannel.open(directory, StandardOpenOption.READ)) {
