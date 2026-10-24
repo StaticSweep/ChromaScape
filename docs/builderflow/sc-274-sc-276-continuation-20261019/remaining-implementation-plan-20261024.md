@@ -328,3 +328,14 @@ Documentation only: this full plan and pointers from older summaries. No impleme
 runtime tests, service/configuration/database change, credential rotation or tracker action
 is performed by writing it. Execution estimates remain conditional on platform decisions,
 release authority and genuine inputs; no zero-code-change or completion-date promise is made.
+
+## Execution status (24 October 2026)
+
+The locally achievable slice was executed: POSIX-only durability with fail-closed Windows
+admission, the exact 105-file native recovery commit and verified bundle, 3/17 integration
+cases passing against disposable PostgreSQL, and a recorded worker-qualification blocker for
+the other 10. See
+[implementation-evidence-20261024.md](implementation-evidence-20261024.md) and
+[verification-evidence-20261024.md](verification-evidence-20261024.md). Every acceptance row
+remains open.
+
