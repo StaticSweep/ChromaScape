@@ -1,4 +1,4 @@
-﻿# SC-274 / SC-276: full remaining implementation plan
+# SC-274 / SC-276: full remaining implementation plan
 
 Latest executed verification and prioritized remaining work (23 October):
 [full-verification-20261023.md](full-verification-20261023.md).
@@ -417,4 +417,3 @@ Changed only this plan and the previous plan's forward link. No product code, se
 database, credential, trust root, replay consumer or tracker state changed. No runtime tests
 were executed for this documentation update. Implementation scope and effort remain conditional
 on the local investigations and external inputs above.
-

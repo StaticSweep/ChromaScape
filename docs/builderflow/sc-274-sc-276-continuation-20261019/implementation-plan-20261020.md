@@ -347,4 +347,3 @@ Work packages 1 and 2 were implemented and verified after this plan was written.
 - WP3 negative path retained; positive creation remains blocked on an eligible verified
   prerequisite. WP4-12 were not started and retain the blockers listed above.
 - Felix and Shortcut remain skipped.
-

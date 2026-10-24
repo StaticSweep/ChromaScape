@@ -1780,4 +1780,3 @@ tasks.register<Test>("artifactCompletionTest") {
     classpath = sourceSets["artifactCompletionTest"].runtimeClasspath
     useJUnitPlatform()
 }
-

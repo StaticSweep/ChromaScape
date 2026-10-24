@@ -1,4 +1,4 @@
-﻿# Remaining implementation plan review - 22 October 2026
+# Remaining implementation plan review - 22 October 2026
 
 ## Review scope
 
@@ -106,4 +106,3 @@ runs are narrower than final acceptance. Canonical worker bean creation and life
 verified, but no replay job was executed, so production worker behavior remains unexercised.
 Preserve evidence and current uncommitted changes; reverting these documentation changes
 requires no service or database rollback. Felix/Shortcut remain skipped.
-
