@@ -1822,6 +1822,32 @@ tasks.register<Test>("sc2106HostIntegrationTest") {
 	}))
 }
 
+// SC-968 R8.4: required-mode gate for the native patch applicability check. The ordinary
+// suite keeps the portable skip; this task fails when SC968_MICRO6_VERIFY_ROOT is absent.
+tasks.register<Test>("sc968PatchApplicabilityTest") {
+	group = "verification"
+	description = "Requires SC968_MICRO6_VERIFY_ROOT and proves the canonical patch applies"
+	testClassesDirs = sourceSets.test.get().output.classesDirs
+	classpath = sourceSets.test.get().runtimeClasspath
+	useJUnitPlatform()
+	systemProperty("sc968.required", "true")
+	filter {
+		isFailOnNoMatchingTests = true
+		includeTestsMatching("com.chromascape.web.aiplayer.routine.service.PatchCandidateWorkflowServiceTest")
+	}
+	doFirst {
+		systemProperty("sc967.vectors.path", file(sc967VectorsPath.get()).canonicalFile.absolutePath)
+	}
+	afterSuite(KotlinClosure2<TestDescriptor, TestResult, Unit>({ descriptor, result ->
+		if (descriptor.parent == null && result.testCount == 0L) {
+			throw GradleException("SC-968 patch applicability executed zero tests")
+		}
+		if (descriptor.parent == null && result.skippedTestCount > 0L) {
+			throw GradleException("SC-968 patch applicability must not skip in required mode")
+		}
+	}))
+}
+
 // SC-663: embed source identity in the packaged backend; runtime measures the actual JAR bytes.
 val sc663BackendCommit = providers.exec {
 	commandLine("git", "rev-parse", "HEAD")

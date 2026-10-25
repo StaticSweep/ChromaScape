@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -255,9 +256,12 @@ class PatchCandidateWorkflowServiceTest {
   @Test
   void canonicalCandidatePatchAppliesToConfiguredMicro6Checkout() throws Exception {
     String checkout = System.getenv("SC968_MICRO6_VERIFY_ROOT");
-    assumeTrue(
-        checkout != null && !checkout.isBlank(),
-        "SC968_MICRO6_VERIFY_ROOT enables the native patch applicability check");
+    if (checkout == null || checkout.isBlank()) {
+      if (Boolean.getBoolean("sc968.required")) {
+        fail("SC968_MICRO6_VERIFY_ROOT is required in required mode");
+      }
+      assumeTrue(false, "SC968_MICRO6_VERIFY_ROOT enables the native patch applicability check");
+    }
     Field patchField = PatchCandidateWorkflowService.class.getDeclaredField("PATCH");
     patchField.setAccessible(true);
     Path patchFile = Files.createTempFile("sc967-canonical-candidate-", ".patch");
