@@ -460,11 +460,17 @@ public final class ImmutableArtifactStore {
               throw error(HttpStatus.CONFLICT, "ARTIFACT_ID_CONFLICT");
             verifyTree(owner, id, new HashSet<>(), 0);
             forceDirectory(ref.getParent()); // an earlier attempt may have died before persisting
+            forceDirectory(object(existing.checksum()).getParent());
             return existing;
           }
           Path blob = object(manifest.checksum());
           boolean reuse = Files.exists(blob, LinkOption.NOFOLLOW_LINKS);
-          if (reuse) verify(blob, manifest.checksum(), manifest.sizeBytes());
+          if (reuse) {
+            verify(blob, manifest.checksum(), manifest.sizeBytes());
+            // A retained orphan may exist because its directory force failed; satisfy it before
+            // any manifest references the bytes.
+            forceDirectory(blob.getParent());
+          }
           long needed = Math.addExact(reuse ? 0 : content.length, envelope.length);
           if (needed > quotaBytes - usedBytes())
             throw error(HttpStatus.INSUFFICIENT_STORAGE, "ARTIFACT_QUOTA_EXCEEDED");

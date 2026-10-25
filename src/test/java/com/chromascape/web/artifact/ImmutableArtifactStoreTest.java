@@ -8,6 +8,7 @@ import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -394,6 +395,58 @@ class ImmutableArtifactStoreTest {
                     new ObjectMapper(),
                     ImmutableArtifactStore.DurabilityMode.DEVELOPMENT));
     assertEquals("ARTIFACT_DURABILITY_CONFLICT", conflict.getReason());
+  }
+
+  private static boolean isBlobDirectory(Path directory) {
+    return directory.getParent() != null
+        && directory.getParent().getFileName() != null
+        && directory.getParent().getFileName().toString().equals("objects");
+  }
+
+  @Test
+  @EnabledOnOs({OS.LINUX, OS.MAC})
+  void retainedOrphanBlobDirectoryIsReforcedBeforeAcknowledgingRetry() throws Exception {
+    var failBlobDirectory = new AtomicBoolean(true);
+    var forcedBlobDirectories = new java.util.ArrayList<Path>();
+    ImmutableArtifactStore.DirectoryForce force =
+        directory -> {
+          if (isBlobDirectory(directory)) {
+            forcedBlobDirectories.add(directory);
+            if (failBlobDirectory.get()) throw new AccessDeniedException(directory.toString());
+          }
+          forceNative(directory);
+        };
+    var s =
+        new ImmutableArtifactStore(
+            root,
+            1024,
+            65536,
+            new ObjectMapper(),
+            ImmutableArtifactStore.DurabilityMode.STRICT,
+            force);
+    var checksum = ImmutableArtifactStore.checksum(new byte[] {9}).substring(7);
+    var blob = root.resolve("objects").resolve(checksum.substring(0, 2)).resolve(checksum);
+
+    for (int attempt = 0; attempt < 3; attempt++) {
+      var exception =
+          assertThrows(ResponseStatusException.class, () -> put(s, "orphan", new byte[] {9}));
+      assertTrue(
+          String.valueOf(exception.getReason()).startsWith("ARTIFACT_DURABILITY_UNAVAILABLE"));
+      assertTrue(Files.exists(blob), "orphan retained");
+      assertThrows(ResponseStatusException.class, () -> s.get("owner", "orphan"));
+    }
+    assertTrue(forcedBlobDirectories.size() >= 3, "each retry re-forces the blob directory");
+
+    failBlobDirectory.set(false);
+    forcedBlobDirectories.clear();
+    var recovered = put(s, "orphan", new byte[] {9});
+    assertEquals("sha256:" + checksum, recovered.checksum());
+    assertEquals(List.of(blob.getParent()), forcedBlobDirectories);
+    assertArrayEquals(new byte[] {9}, s.read("owner", "orphan"));
+
+    forcedBlobDirectories.clear();
+    assertEquals(recovered, put(s, "orphan", new byte[] {9}));
+    assertEquals(List.of(blob.getParent()), forcedBlobDirectories);
   }
 
   @Test
