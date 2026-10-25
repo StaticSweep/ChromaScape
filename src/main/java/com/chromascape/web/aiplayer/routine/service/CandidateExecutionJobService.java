@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -121,6 +122,14 @@ public class CandidateExecutionJobService {
     if (spec == null || spec.jobId() == null || spec.jobId().isBlank()) {
       throw failure(HttpStatus.UNPROCESSABLE_ENTITY, "EXECUTION_JOB_INVALID", "jobId is required");
     }
+    if (causal(spec) && !PINNED_PROFILE.matcher(String.valueOf(spec.profileId())).matches()) {
+      throw failure(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "EXECUTION_PROFILE_UNPINNED",
+          "a causal run needs profileId as a pinned SC-1914 profile reference"
+              + " <profileId>@<revision>#sha256:<hex>, got "
+              + spec.profileId());
+    }
     AtomicBoolean cancel = new AtomicBoolean();
     if (active.putIfAbsent(spec.jobId(), cancel) != null) {
       throw failure(HttpStatus.CONFLICT, "EXECUTION_JOB_ACTIVE", "job is already running");
@@ -144,6 +153,18 @@ public class CandidateExecutionJobService {
     } finally {
       active.remove(spec.jobId());
     }
+  }
+
+  /**
+   * A content-addressed SC-1914 profile reference. It travels in the request's {@code profileId},
+   * so the request digest covers the exact profile revision and digest; the runner and the worker
+   * both re-check it.
+   */
+  static final Pattern PINNED_PROFILE =
+      Pattern.compile("[a-z0-9][a-z0-9._-]{0,127}@[1-9][0-9]{0,8}#sha256:[0-9a-f]{64}");
+
+  private static boolean causal(JobSpec spec) {
+    return spec.executionMode() == null || "CAUSAL_CANDIDATE".equals(spec.executionMode());
   }
 
   /** Compares a baseline and a candidate job only when their conditions are equivalent. */

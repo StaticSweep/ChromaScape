@@ -275,7 +275,7 @@ class CandidateExecutionHostIntegrationTest {
         null,
         "content-1",
         "cache-1",
-        "fishing-profile-e2e",
+        CandidateExecutionJobServiceTest.PROFILE,
         "rec-java-rpc",
         "AUTHORED",
         task,
@@ -366,7 +366,8 @@ class CandidateExecutionHostIntegrationTest {
     spot.put("npcId", 1530);
     spot.put("position", Map.of("x", 101, "y", 100, "plane", 0));
     spot.put("spotType", "net");
-    spot.put("actions", List.of("net", "small net"));
+    // The cache actions of NPC 1530; the pinned profile rejects actions the NPC lacks.
+    spot.put("actions", List.of("Net", "Bait"));
     Map<String, Object> initialState = new LinkedHashMap<>();
     initialState.put("worldId", 0);
     initialState.put("player", player);
@@ -380,8 +381,7 @@ class CandidateExecutionHostIntegrationTest {
     manifest.put("manifestChecksum", Sc2106CanonicalJson.sha256(base));
 
     Map<String, Object> facts = new LinkedHashMap<>();
-    facts.put(
-        "itemNames", Map.of("303", "Small fishing net", "317", "Raw shrimps", "995", "Coins"));
+    facts.put("itemNames", Map.of("303", "Small fishing net", "317", "Raw shrimps"));
     facts.put("loggedIn", true);
     facts.put("moving", false);
     facts.put("busy", false);

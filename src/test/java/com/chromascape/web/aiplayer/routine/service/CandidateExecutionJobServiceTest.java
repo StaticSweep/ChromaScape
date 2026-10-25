@@ -36,6 +36,10 @@ import org.springframework.http.HttpStatus;
  * in {@code CandidateExecutionHostIntegrationTest}.
  */
 class CandidateExecutionJobServiceTest {
+  /** The reviewed SC-1914 Fishing profile reference (xrsps-osrs237-fishing r1). */
+  static final String PROFILE =
+      "xrsps-osrs237-fishing@1#sha256:43d1d3008222c66623f03cedc6f2e08f091ac50c692c80d1456498ea0a58d0ba";
+
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String PROPOSAL = "proposal-1";
 
@@ -274,6 +278,39 @@ class CandidateExecutionJobServiceTest {
   }
 
   @Test
+  void aCausalJobWithoutAPinnedProfileStagesNothing() {
+    CandidateExecutionJobService.JobSpec base = spec("job-1");
+    for (String profile : new String[] {"fishing-profile-1", null, PROFILE.toUpperCase()}) {
+      CandidateExecutionJobService.JobSpec unpinned =
+          new CandidateExecutionJobService.JobSpec(
+              base.jobId(),
+              base.idempotencyKey(),
+              base.baselineId(),
+              base.scenarioId(),
+              base.checkpointId(),
+              base.contentVersion(),
+              base.cacheVersion(),
+              profile,
+              base.recordingId(),
+              base.initialProvenance(),
+              base.task(),
+              base.taskHash(),
+              base.start(),
+              base.executionMode(),
+              base.worldSeed(),
+              base.taskSeed(),
+              base.mouseSeed(),
+              base.budgets());
+      PatchCandidateWorkflowService.PatchWorkflowException e =
+          assertThrows(
+              PatchCandidateWorkflowService.PatchWorkflowException.class,
+              () -> service((j, timeout, cancel) -> lost()).execute(PROPOSAL, unpinned));
+      assertEquals("EXECUTION_PROFILE_UNPINNED", e.code(), String.valueOf(profile));
+    }
+    assertFalse(Files.exists(temp.resolve("store")));
+  }
+
+  @Test
   void disabledExecutionStagesNothing() {
     properties.setEnabled(false);
     PatchCandidateWorkflowService.PatchWorkflowException e =
@@ -386,7 +423,7 @@ class CandidateExecutionJobServiceTest {
         null,
         "content-1",
         "cache-1",
-        "fishing-profile-1",
+        PROFILE,
         "rec-java-rpc",
         "AUTHORED",
         task,
