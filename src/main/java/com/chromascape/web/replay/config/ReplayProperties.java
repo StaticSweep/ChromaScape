@@ -81,6 +81,51 @@ public class ReplayProperties {
     /** Bounded response queue capacity; the kernel is strictly one-request-at-a-time. */
     @Positive private int responseQueueCapacity = 16;
 
+    /**
+     * OS-enforced ceilings applied to every worker before it executes. These are provisional safety
+     * ceilings, not measured production budgets: production values must come from measured cold,
+     * warm and concurrent runs on the target platform.
+     */
+    @Positive private long maxHeapMb = 4096;
+
+    @Positive private long cpuLimitSeconds = 1800;
+
+    @Positive private long maxFileBytes = 134_217_728;
+
+    @Positive private long maxOpenFiles = 4096;
+
+    public long getMaxHeapMb() {
+      return maxHeapMb;
+    }
+
+    public void setMaxHeapMb(long maxHeapMb) {
+      this.maxHeapMb = maxHeapMb;
+    }
+
+    public long getCpuLimitSeconds() {
+      return cpuLimitSeconds;
+    }
+
+    public void setCpuLimitSeconds(long cpuLimitSeconds) {
+      this.cpuLimitSeconds = cpuLimitSeconds;
+    }
+
+    public long getMaxFileBytes() {
+      return maxFileBytes;
+    }
+
+    public void setMaxFileBytes(long maxFileBytes) {
+      this.maxFileBytes = maxFileBytes;
+    }
+
+    public long getMaxOpenFiles() {
+      return maxOpenFiles;
+    }
+
+    public void setMaxOpenFiles(long maxOpenFiles) {
+      this.maxOpenFiles = maxOpenFiles;
+    }
+
     public String getExecutable() {
       return executable;
     }
