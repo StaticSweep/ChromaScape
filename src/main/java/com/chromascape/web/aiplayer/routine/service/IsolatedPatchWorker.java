@@ -60,6 +60,9 @@ public class IsolatedPatchWorker {
       String modelHash,
       String expectedJarName) {}
 
+  /** One execution-closure JAR collected from the signed build output. */
+  public record ClosureArtifact(String name, byte[] bytes) {}
+
   public record BuildResult(
       String status,
       String baseCommit,
@@ -71,7 +74,39 @@ public class IsolatedPatchWorker {
       String sbomName,
       byte[] sbomBytes,
       byte[] testReportBytes,
-      byte[] certificationBytes) {
+      byte[] certificationBytes,
+      String closureInputsName,
+      byte[] closureInputsBytes,
+      List<ClosureArtifact> closureArtifacts) {
+    public BuildResult(
+        String status,
+        String baseCommit,
+        List<String> changedFiles,
+        String failureCode,
+        Path outputDirectory,
+        String jarName,
+        byte[] jarBytes,
+        String sbomName,
+        byte[] sbomBytes,
+        byte[] testReportBytes,
+        byte[] certificationBytes) {
+      this(
+          status,
+          baseCommit,
+          changedFiles,
+          failureCode,
+          outputDirectory,
+          jarName,
+          jarBytes,
+          sbomName,
+          sbomBytes,
+          testReportBytes,
+          certificationBytes,
+          null,
+          null,
+          null);
+    }
+
     public BuildResult(
         String status,
         String baseCommit,
@@ -187,7 +222,8 @@ public class IsolatedPatchWorker {
               ":client:sc967CandidateCheckstyleTest",
               ":client:sc967CandidateTest",
               ":client:shadowJar",
-              ":client:generateRuntimeSbom"));
+              ":client:generateRuntimeSbom",
+              ":client:sc2106ExecutionClosureInputs"));
       runCommand(
           gradle,
           repo,
@@ -201,6 +237,7 @@ public class IsolatedPatchWorker {
       byte[] sbomBytes = authoritativeSbom(repo);
       byte[] testReportBytes = deterministicTestReport(repo);
       byte[] certificationBytes = certification(request, jarBytes, sbomBytes, testReportBytes);
+      ClosureOutput closure = executionClosure(repo);
       result =
           new BuildResult(
               "BUILT",
@@ -213,7 +250,10 @@ public class IsolatedPatchWorker {
               "runtime-sbom.cdx.json",
               sbomBytes,
               testReportBytes,
-              certificationBytes);
+              certificationBytes,
+              closure.inputsName(),
+              closure.inputsBytes(),
+              closure.artifacts());
     } catch (Exception e) {
       result = failed(request, changed, e.getMessage() == null ? "BUILD_FAILED" : e.getMessage());
     } finally {
@@ -569,6 +609,72 @@ public class IsolatedPatchWorker {
         throw new IOException(matches.isEmpty() ? "JAR_NOT_FOUND" : "JAR_AMBIGUOUS");
       return matches.get(0);
     }
+  }
+
+  private record ClosureOutput(
+      String inputsName, byte[] inputsBytes, List<ClosureArtifact> artifacts) {}
+
+  /**
+   * Collects the SC-2106 execution-closure inputs and JARs from the signed build output. The
+   * manifest names drive the file list, so the worker never stages a JAR the closure does not
+   * declare and never silently drops one.
+   */
+  private static ClosureOutput executionClosure(Path repo) throws IOException {
+    Path directory = repo.resolve("runelite-client/build/sc2106/execution-closure");
+    Path inputs = directory.resolve("execution-closure-inputs.json");
+    if (!Files.isRegularFile(inputs) || Files.isSymbolicLink(inputs)) {
+      throw new IOException("EXECUTION_CLOSURE_INPUTS_MISSING");
+    }
+    byte[] inputsBytes = Files.readAllBytes(inputs);
+    if (inputsBytes.length > CandidateExecutionClosureV1.MAX_CLOSURE_BYTES) {
+      throw new IOException("EXECUTION_CLOSURE_INPUTS_TOO_LARGE");
+    }
+    JsonNode json;
+    try {
+      json = CanonicalJsonHasher.parse(inputsBytes);
+    } catch (IllegalArgumentException invalid) {
+      throw new IOException("EXECUTION_CLOSURE_INPUTS_INVALID", invalid);
+    }
+    if (!"sc2106-execution-closure-inputs/v1".equals(json.path("schema").asText())) {
+      throw new IOException("EXECUTION_CLOSURE_INPUTS_INVALID");
+    }
+    List<String> names = new ArrayList<>();
+    names.add(jarName(json.path("coreJarName")));
+    names.add(jarName(json.path("runnerJarName")));
+    for (JsonNode dependency : json.path("dependencyJarNames")) {
+      names.add(jarName(dependency));
+    }
+    if (names.size() != 5 || new HashSet<>(names).size() != 5) {
+      throw new IOException("EXECUTION_CLOSURE_INPUTS_INVALID");
+    }
+    List<ClosureArtifact> artifacts = new ArrayList<>();
+    long total = 0L;
+    for (String name : names) {
+      Path jar = directory.resolve(name);
+      if (!Files.isRegularFile(jar) || Files.isSymbolicLink(jar)) {
+        throw new IOException("EXECUTION_CLOSURE_JAR_MISSING:" + name);
+      }
+      total += Files.size(jar);
+      if (total > 32L * 1024 * 1024) {
+        throw new IOException("EXECUTION_CLOSURE_TOO_LARGE");
+      }
+      artifacts.add(new ClosureArtifact(name, Files.readAllBytes(jar)));
+    }
+    return new ClosureOutput("execution-closure-inputs.json", inputsBytes, List.copyOf(artifacts));
+  }
+
+  private static String jarName(JsonNode value) throws IOException {
+    if (value == null || !value.isTextual()) {
+      throw new IOException("EXECUTION_CLOSURE_INPUTS_INVALID");
+    }
+    return jarName(value.asText());
+  }
+
+  private static String jarName(String value) throws IOException {
+    if (value == null || !value.matches("[A-Za-z0-9._-]+\\.jar")) {
+      throw new IOException("EXECUTION_CLOSURE_JAR_NAME_INVALID");
+    }
+    return value;
   }
 
   private static byte[] authoritativeSbom(Path repo) throws IOException {

@@ -12,8 +12,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.HexFormat;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -21,6 +25,11 @@ import org.springframework.stereotype.Component;
 /** Strict, bounded client for the SC-967 v2 candidate registry. */
 @Component
 public class CandidateRegistryClient {
+  /** Matches the registry: at most 64 MiB of closure JARs per candidate. */
+  static final long MAX_CLOSURE_JARS_BYTES = 64L << 20;
+
+  private static final Pattern JAR_NAME = Pattern.compile("[^/\\\\]+\\.jar");
+
   private final HttpClient client =
       HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
   private final CertifiedCandidateV2Validator validator;
@@ -139,6 +148,19 @@ public class CandidateRegistryClient {
    */
   public RegistryManifestResponse registerEvidence(
       Path manifest, Path artifact, Path sbom, Path certification) throws Exception {
+    return registerEvidence(manifest, artifact, sbom, certification, null);
+  }
+
+  /**
+   * Registers a candidate together with its signed execution closure. The closure document and its
+   * JARs travel as the {@code execution_closure} and {@code closure_jar} parts; the registry
+   * verifies them against the candidate and must answer with the digest of the exact document
+   * bytes, which is checked here before the registration is believed. A null closure registers the
+   * candidate alone.
+   */
+  public RegistryManifestResponse registerEvidence(
+      Path manifest, Path artifact, Path sbom, Path certification, ClosureUpload closure)
+      throws Exception {
     byte[] manifestBytes =
         boundedFile(
             manifest, CertifiedCandidateV2Validator.MAX_MANIFEST_BYTES, "MANIFEST_TOO_LARGE");
@@ -158,14 +180,98 @@ public class CandidateRegistryClient {
     writePart(body, boundary, "artifact", artifact, artifactBytes);
     writePart(body, boundary, "sbom", sbom, sbomBytes);
     writePart(body, boundary, "certification", certification, certificationBytes);
+    String closureHash = null;
+    if (closure != null) {
+      byte[] closureBytes =
+          boundedFile(
+              closure.document(),
+              CandidateExecutionClosureV1.MAX_CLOSURE_BYTES,
+              "EXECUTION_CLOSURE_TOO_LARGE");
+      writePart(body, boundary, "execution_closure", closure.document(), closureBytes);
+      closureHash = hash(closureBytes);
+      long remaining = MAX_CLOSURE_JARS_BYTES;
+      Set<String> names = new HashSet<>();
+      for (Path jar : closure.jars()) {
+        String name = jar.getFileName().toString();
+        if (!JAR_NAME.matcher(name).matches() || !names.add(name)) {
+          throw new RegistryException("EXECUTION_CLOSURE_JAR_NAME_INVALID", false);
+        }
+        byte[] jarBytes = boundedFile(jar, remaining, "EXECUTION_CLOSURE_JARS_TOO_LARGE");
+        remaining -= jarBytes.length;
+        writePart(body, boundary, "closure_jar", jar, jarBytes);
+      }
+      if (names.isEmpty()) throw new RegistryException("EXECUTION_CLOSURE_JARS_MISSING", false);
+    }
     body.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
     String manifestHash = hash(manifestBytes);
-    return sendManifest(
-        "POST",
-        "/api/v1/candidates",
-        body.toByteArray(),
-        "multipart/form-data; boundary=" + boundary,
-        manifestHash);
+    RegistryManifestResponse response =
+        sendManifest(
+            "POST",
+            "/api/v1/candidates",
+            body.toByteArray(),
+            "multipart/form-data; boundary=" + boundary,
+            manifestHash);
+    if (closureHash != null && !closureHash.equals(response.closureHash())) {
+      throw new RegistryException("REGISTRY_CLOSURE_HASH_MISMATCH", false);
+    }
+    return response;
+  }
+
+  /**
+   * Downloads the stored execution closure document. The registry answers with the digest of the
+   * exact bytes it stores, and that digest must match what arrived.
+   */
+  public ArtifactDownload downloadClosure(String candidateId) throws Exception {
+    validateId(candidateId);
+    BoundedResponse response =
+        getBounded(
+            "/api/v1/candidates/" + candidateId + "/closure",
+            CandidateExecutionClosureV1.MAX_CLOSURE_BYTES);
+    String headerHash = response.headers().firstValue("X-Execution-Closure-SHA256").orElse("");
+    if (!headerHash.equals(hash(response.bytes()))) {
+      throw new RegistryException("REGISTRY_CLOSURE_HASH_MISMATCH", false);
+    }
+    return new ArtifactDownload(response.bytes(), headerHash);
+  }
+
+  /** Downloads one stored closure JAR by the file name its closure document declares. */
+  public byte[] downloadClosureJar(String candidateId, String jarName) throws Exception {
+    validateId(candidateId);
+    if (jarName == null || !JAR_NAME.matcher(jarName).matches()) {
+      throw new RegistryException("EXECUTION_CLOSURE_JAR_NAME_INVALID", false);
+    }
+    return getBounded(
+            "/api/v1/candidates/" + candidateId + "/closure/" + jarName, MAX_CLOSURE_JARS_BYTES)
+        .bytes();
+  }
+
+  /** A bounded GET that requires a declared Content-Length and reads exactly that many bytes. */
+  private BoundedResponse getBounded(String path, long limit) throws Exception {
+    HttpResponse<InputStream> response;
+    try {
+      response =
+          client.send(
+              HttpRequest.newBuilder(URI.create(baseUrl + path))
+                  .timeout(Duration.ofSeconds(60))
+                  .header("Authorization", "Bearer " + token)
+                  .GET()
+                  .build(),
+              HttpResponse.BodyHandlers.ofInputStream());
+    } catch (Exception e) {
+      throw new RegistryException("REGISTRY_NETWORK_UNCERTAIN", true, e);
+    }
+    try (InputStream stream = response.body()) {
+      if (response.statusCode() / 100 != 2) {
+        throw new RegistryException("REGISTRY_REJECTED_" + response.statusCode(), false);
+      }
+      long length = contentLength(response, limit, "REGISTRY_ARTIFACT_LENGTH_REQUIRED");
+      byte[] bytes = readBounded(stream, length, limit, "REGISTRY_ARTIFACT_TOO_LARGE");
+      return new BoundedResponse(bytes, response.headers());
+    } catch (RegistryException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new RegistryException("REGISTRY_ARTIFACT_STREAM_FAILED", true, e);
+    }
   }
 
   private RegistryManifestResponse sendManifest(
@@ -216,7 +322,11 @@ public class CandidateRegistryClient {
         if (manifestHash != null && !manifestHash.equals(responseManifestHash)) {
           throw new RegistryException("REGISTRY_MANIFEST_HASH_HEADER_MISMATCH", false);
         }
-        return new RegistryManifestResponse(raw, responseManifestHash, response.statusCode());
+        return new RegistryManifestResponse(
+            raw,
+            responseManifestHash,
+            response.statusCode(),
+            response.headers().firstValue("X-Execution-Closure-SHA256").orElse(""));
       }
     } catch (RegistryException e) {
       throw e;
@@ -330,11 +440,30 @@ public class CandidateRegistryClient {
     }
   }
 
-  public record RegistryManifestResponse(byte[] rawManifest, String manifestHash, int statusCode) {
+  /**
+   * The literal manifest response. {@code closureHash} is the registry's {@code
+   * X-Execution-Closure-SHA256} header, or empty when the candidate has no closure.
+   */
+  public record RegistryManifestResponse(
+      byte[] rawManifest, String manifestHash, int statusCode, String closureHash) {
     public RegistryManifestResponse {
       rawManifest = rawManifest == null ? new byte[0] : rawManifest.clone();
+      closureHash = closureHash == null ? "" : closureHash;
+    }
+
+    public RegistryManifestResponse(byte[] rawManifest, String manifestHash, int statusCode) {
+      this(rawManifest, manifestHash, statusCode, "");
     }
   }
+
+  /** The persisted closure document and the JARs it names, as files of the staged bundle. */
+  public record ClosureUpload(Path document, List<Path> jars) {
+    public ClosureUpload {
+      jars = List.copyOf(jars);
+    }
+  }
+
+  private record BoundedResponse(byte[] bytes, java.net.http.HttpHeaders headers) {}
 
   public record ArtifactDownload(byte[] bytes, String sha256) {
     public ArtifactDownload {

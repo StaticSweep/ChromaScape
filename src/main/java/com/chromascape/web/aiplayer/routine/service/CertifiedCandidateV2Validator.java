@@ -171,7 +171,7 @@ public final class CertifiedCandidateV2Validator {
     }
     try {
       CurrentSliceIdentity converted = mapper.treeToValue(identity, CurrentSliceIdentity.class);
-      converted.validate();
+      converted.validateSignedProjection();
     } catch (RuntimeException | IOException e) {
       fail("IDENTITY_INVALID");
     }
@@ -233,7 +233,7 @@ public final class CertifiedCandidateV2Validator {
     compare(identity.path("source"), "source_manifest_hash", manifest, "source_manifest_hash");
     compare(identity.path("client"), "client_build_id", manifest, "base_commit");
     try {
-      mapper.treeToValue(identity, CurrentSliceIdentity.class).validate();
+      mapper.treeToValue(identity, CurrentSliceIdentity.class).validateSignedProjection();
     } catch (RuntimeException | IOException e) {
       fail("IDENTITY_INVALID");
     }
@@ -268,23 +268,33 @@ public final class CertifiedCandidateV2Validator {
     }
   }
 
-  private void verifyConfiguredSignature(JsonNode manifest) {
-    if (configuredPublicKeyPath == null || configuredPublicKeyPath.isBlank()) return;
+  /**
+   * Loads the configured candidate verification key. A producer that signs and then revalidates its
+   * own output must fail closed when no public key is configured, never skip the check.
+   */
+  public PublicKey configuredPublicKey() {
+    if (configuredPublicKeyPath == null || configuredPublicKeyPath.isBlank()) {
+      fail("CANDIDATE_SIGNATURE_KEY_UNAVAILABLE");
+    }
     try {
       String pem = Files.readString(Path.of(configuredPublicKeyPath));
       pem =
           pem.replace("-----BEGIN PUBLIC KEY-----", "")
               .replace("-----END PUBLIC KEY-----", "")
               .replaceAll("\\s", "");
-      PublicKey key =
-          KeyFactory.getInstance("Ed25519")
-              .generatePublic(new X509EncodedKeySpec(Base64.getDecoder().decode(pem)));
-      validateSignature(manifest, key);
+      return KeyFactory.getInstance("Ed25519")
+          .generatePublic(new X509EncodedKeySpec(Base64.getDecoder().decode(pem)));
     } catch (IllegalArgumentException exception) {
       throw exception;
     } catch (Exception exception) {
       fail("CANDIDATE_SIGNATURE_KEY_UNAVAILABLE");
+      return null;
     }
+  }
+
+  private void verifyConfiguredSignature(JsonNode manifest) {
+    if (configuredPublicKeyPath == null || configuredPublicKeyPath.isBlank()) return;
+    validateSignature(manifest, configuredPublicKey());
   }
 
   private void validateArtifact(JsonNode manifest, String kind, byte[] bytes) {

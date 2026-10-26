@@ -1,0 +1,72 @@
+{
+  "schema": "current-ai-player-contract/v1",
+  "backend": {
+    "build_id": "fixture-chromascape",
+    "commit_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "artifact_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "schemas": {
+    "identity": "current-slice-identity/v1",
+    "catalog": "2",
+    "run": "current-slice-run/v1",
+    "graph": "behavior-graph-definition/v1",
+    "model": "fishing-model/v1",
+    "artifact": "certified-candidate/v2",
+    "runRequest": "current-slice-run-request/v1",
+    "capture": "routine-capture-session/v1",
+    "observation": "routine-tick-batch/v1",
+    "semanticAction": "routine-action-batch/v1",
+    "recording": "routine-capture-complete/v1"
+  },
+  "clients": {
+    "MICRO6_MANAGED": {
+      "build_id": "fixture-micro6",
+      "commit_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "artifact_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "adapter_contract": "micro6-builder/v2",
+      "domain": "MICRO6",
+      "controlAllowed": false,
+      "operations": {
+        "capture": true,
+        "semanticLearning": true,
+        "graph": true,
+        "model": true,
+        "replay": true,
+        "shadow": false,
+        "candidate": false,
+        "managedExecution": true,
+        "semanticProducer": true,
+        "video": true,
+        "simulator": false
+      },
+      "endpoints": [
+        "/api/v1/ai-routine/capture/sessions"
+      ]
+    },
+    "RUNELITE_CAPTURE": {
+      "build_id": "fixture-runelite",
+      "commit_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "artifact_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "adapter_contract": "runelite-capture/v1",
+      "domain": "RUNELITE",
+      "controlAllowed": false,
+      "operations": {
+        "capture": true,
+        "semanticLearning": true,
+        "graph": true,
+        "model": true,
+        "replay": true,
+        "shadow": false,
+        "candidate": false,
+        "managedExecution": false,
+        "semanticProducer": false,
+        "video": true,
+        "simulator": false
+      },
+      "endpoints": [
+        "/api/v1/ai-routine/capture/sessions"
+      ]
+    }
+  },
+  "controlAllowed": false
+}

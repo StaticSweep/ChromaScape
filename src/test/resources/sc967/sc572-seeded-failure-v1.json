@@ -1,0 +1,8 @@
+{
+  "derivation": "SEEDED_FIXTURE",
+  "failure_code": "BLANK_FISH_ALIAS_ACCEPTED",
+  "schema": "seeded-failure-manifest/v1",
+  "source_file": "runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizer.java",
+  "symbol": "FishingTaskDefinitionNormalizer#normalize(String, Map)",
+  "task_key": "FISHING_TRAINING"
+}

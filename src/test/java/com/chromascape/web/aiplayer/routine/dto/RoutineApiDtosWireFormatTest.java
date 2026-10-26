@@ -23,7 +23,7 @@ class RoutineApiDtosWireFormatTest {
   void runCreationBodyBinds() throws Exception {
     String body =
         "{\"schema\":\"current-slice-run-request/v1\",\"identity\":{"
-            + "\"schema\":\"current-slice-identity/v1\","
+            + "\"schema\":\"current-slice-identity/v1\",\"control_allowed\":false,"
             + "\"client\":{\"client_kind\":\"RUNELITE_CAPTURE\"}}}";
     RoutineApiDtos.StartRunRequest request =
         mapper.readValue(body, RoutineApiDtos.StartRunRequest.class);

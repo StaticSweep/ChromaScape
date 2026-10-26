@@ -22,6 +22,10 @@ val sc967VectorsPath =
 		// property/environment override remains available for CI and WSL path translation.
 		.orElse("C:\\Dev\\IdeaProjects\\contracts\\sc967\\ed25519-vectors.json")
 
+// SC-2106 R0.5: allow a private JUnit report location so concurrent Gradle runs sharing
+// `build/` cannot wipe each other's test evidence.
+val sc967ReportDir = providers.gradleProperty("sc967ReportDir")
+
 plugins {
 	java
 	checkstyle
@@ -158,6 +162,12 @@ tasks.test {
 		}
 		systemProperty("sc967.vectors.path", resolved.absolutePath)
 		logger.lifecycle("SC-967 vectors: ${resolved.absolutePath}")
+	}
+	sc967ReportDir.orNull?.takeIf { it.isNotBlank() }?.let { directory ->
+		val root = file(directory)
+		reports.junitXml.outputLocation.set(root.resolve("junit"))
+		reports.html.outputLocation.set(root.resolve("html"))
+		binaryResultsDirectory.set(root.resolve("binary"))
 	}
 }
 
@@ -1721,4 +1731,133 @@ tasks.register<Test>("sc666CompletionTest") {
     classpath = sourceSets["sc666CompletionTest"].runtimeClasspath
     useJUnitPlatform()
     systemProperty("sc666.test.jdbc.url", providers.gradleProperty("sc666TestJdbcUrl").getOrElse(""))
+}
+
+// SC-663 cross-repository proof uses original, explicitly staged producer inputs. It must not
+// become a silently skipped ordinary test when a CI checkout lacks the companion repositories.
+tasks.test {
+	exclude("com/chromascape/web/aiplayer/contract/CurrentContractProducerRoundTripTest*")
+	exclude("com/chromascape/web/aiplayer/contract/CurrentContractPackagedFactoryTest*")
+	exclude("com/chromascape/web/aiplayer/contract/CurrentContractReleaseManifestTest*")
+}
+tasks.register<Test>("sc663ContractTest") {
+	group = "verification"
+	description = "Verifies current Micro6 and original RuneLite-capture producer round-trips"
+	testClassesDirs = sourceSets.test.get().output.classesDirs
+	classpath = sourceSets.test.get().runtimeClasspath
+	useJUnitPlatform()
+	filter { includeTestsMatching("com.chromascape.web.aiplayer.contract.CurrentContractProducerRoundTripTest") }
+	systemProperty("sc663.capture.sources", file(providers.gradleProperty("sc663CaptureSources")
+		.orElse("../ai-routine-contracts/java/ai-routine-capture-contract/src/main/java").get()).absolutePath)
+	systemProperty("sc663.micro6.sources", file(providers.gradleProperty("sc663Micro6Sources")
+		.orElse("../micro6/runelite-client/src/main/java").get()).absolutePath)
+	systemProperty("sc663.micro6.fixtures", file(providers.gradleProperty("sc663Micro6Fixtures")
+		.orElse("../micro6/runelite-client/src/test/resources/micro6-fixtures").get()).absolutePath)
+}
+
+// SC-663 packaged-client gate: loads the selected production factories from the exact full JARs.
+tasks.register<Test>("sc663PackageTest") {
+	group = "verification"
+	description = "Loads production capture factories from the selected packaged client JARs"
+	testClassesDirs = sourceSets.test.get().output.classesDirs
+	classpath = sourceSets.test.get().runtimeClasspath
+	useJUnitPlatform()
+	filter { includeTestsMatching("com.chromascape.web.aiplayer.contract.CurrentContractPackagedFactoryTest") }
+	systemProperty("sc663.packaged.micro6", providers.gradleProperty("sc663PackagedMicro6").getOrElse(""))
+	systemProperty("sc663.packaged.runelite", providers.gradleProperty("sc663PackagedRuneLite").getOrElse(""))
+	systemProperty("sc663.stale.micro6", providers.gradleProperty("sc663StaleMicro6").getOrElse(""))
+}
+
+// SC-663 release manifest gate: validates reviewed pins against immutable measured copies.
+tasks.register<Test>("sc663ManifestTest") {
+	group = "verification"
+	description = "Validates the reviewed release manifest against measured artifact copies"
+	testClassesDirs = sourceSets.test.get().output.classesDirs
+	classpath = sourceSets.test.get().runtimeClasspath
+	useJUnitPlatform()
+	filter { includeTestsMatching("com.chromascape.web.aiplayer.contract.CurrentContractReleaseManifestTest") }
+	systemProperty("sc663.manifest", providers.gradleProperty("sc663Manifest").getOrElse(""))
+	systemProperty("sc663.packaged.micro6", providers.gradleProperty("sc663PackagedMicro6").getOrElse(""))
+	systemProperty("sc663.packaged.runelite", providers.gradleProperty("sc663PackagedRuneLite").getOrElse(""))
+}
+
+// SC-2106 R9.1 end to end: ChromaScape signs a candidate over the real Micro6 shaded JAR and
+// closure JARs, then runs it through the real Micro6 host process and XRSPS worker. Its inputs are
+// companion-repository build outputs, so it is a separate required task that fails, never skips,
+// when one is missing; the ordinary suite does not discover it.
+tasks.test {
+	exclude("com/chromascape/web/aiplayer/routine/service/CandidateExecutionHostIntegrationTest*")
+}
+tasks.register<Test>("sc2106HostIntegrationTest") {
+	group = "verification"
+	description = "Runs a ChromaScape-signed candidate through the real Micro6 host and XRSPS worker"
+	testClassesDirs = sourceSets.test.get().output.classesDirs
+	classpath = sourceSets.test.get().runtimeClasspath
+	useJUnitPlatform()
+	filter {
+		isFailOnNoMatchingTests = true
+		includeTestsMatching("com.chromascape.web.aiplayer.routine.service.CandidateExecutionHostIntegrationTest")
+	}
+	val micro6Build = providers.gradleProperty("sc2106Micro6Build")
+		.orElse("../micro6/runelite-client/build")
+	systemProperty("sc2106.micro6.build", file(micro6Build.get()).absolutePath)
+	systemProperty("sc2106.xrsps.package", providers.gradleProperty("sc2106XrspsPackage")
+		.orElse(providers.environmentVariable("XRSPS_PACKAGE_DIR")).getOrElse(""))
+	doFirst {
+		systemProperty("sc967.vectors.path", file(sc967VectorsPath.get()).canonicalFile.absolutePath)
+	}
+	sc967ReportDir.orNull?.takeIf { it.isNotBlank() }?.let { directory ->
+		val root = file(directory).resolve("sc2106-host")
+		reports.junitXml.outputLocation.set(root.resolve("junit"))
+		reports.html.outputLocation.set(root.resolve("html"))
+		binaryResultsDirectory.set(root.resolve("binary"))
+	}
+	afterSuite(KotlinClosure2<TestDescriptor, TestResult, Unit>({ descriptor, result ->
+		if (descriptor.parent == null && result.testCount == 0L) {
+			throw GradleException("SC-2106 host integration executed zero tests")
+		}
+		if (descriptor.parent == null && result.skippedTestCount > 0L) {
+			throw GradleException("SC-2106 host integration must not skip")
+		}
+	}))
+}
+
+// SC-968 R8.4: required-mode gate for the native patch applicability check. The ordinary
+// suite keeps the portable skip; this task fails when SC968_MICRO6_VERIFY_ROOT is absent.
+tasks.register<Test>("sc968PatchApplicabilityTest") {
+	group = "verification"
+	description = "Requires SC968_MICRO6_VERIFY_ROOT and proves the canonical patch applies"
+	testClassesDirs = sourceSets.test.get().output.classesDirs
+	classpath = sourceSets.test.get().runtimeClasspath
+	useJUnitPlatform()
+	systemProperty("sc968.required", "true")
+	filter {
+		isFailOnNoMatchingTests = true
+		includeTestsMatching("com.chromascape.web.aiplayer.routine.service.PatchCandidateWorkflowServiceTest")
+	}
+	doFirst {
+		systemProperty("sc967.vectors.path", file(sc967VectorsPath.get()).canonicalFile.absolutePath)
+	}
+	afterSuite(KotlinClosure2<TestDescriptor, TestResult, Unit>({ descriptor, result ->
+		if (descriptor.parent == null && result.testCount == 0L) {
+			throw GradleException("SC-968 patch applicability executed zero tests")
+		}
+		if (descriptor.parent == null && result.skippedTestCount > 0L) {
+			throw GradleException("SC-968 patch applicability must not skip in required mode")
+		}
+	}))
+}
+
+// SC-663: embed source identity in the packaged backend; runtime measures the actual JAR bytes.
+val sc663BackendCommit = providers.exec {
+	commandLine("git", "rev-parse", "HEAD")
+}.standardOutput.asText.map { it.trim() }
+val sc663BackendDirty = providers.exec {
+	commandLine("git", "status", "--porcelain", "--untracked-files=no")
+}.standardOutput.asText.map { it.isNotBlank() }
+tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
+	manifest.attributes(mapOf(
+		"SC663-Commit-Id" to sc663BackendCommit.get(),
+		"SC663-Build-Id" to "${project.version}@${sc663BackendCommit.get()}${if (sc663BackendDirty.get()) "-dirty" else ""}"
+	))
 }

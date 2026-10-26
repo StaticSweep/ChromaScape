@@ -54,6 +54,7 @@ public class BehaviorGraphService {
       throw error("GRAPH_INVALID", "capture has no finalized recording hash");
     }
     CurrentSliceIdentity identity = (CurrentSliceIdentity) recording.get("identity");
+    runService.requireOperation(identity, "graph");
     List<JsonNode> actions = curatedActions(recordingId, captures.actions(recordingId));
     if (actions.isEmpty()) throw error("GRAPH_INVALID", "recording has no curated actions");
     if (actions.size() > 254)
@@ -160,7 +161,7 @@ public class BehaviorGraphService {
    * graph_hash} and {@code identity.graph}; everything else (nodes, edges, remaining identity
    * groups) participates in the hash. The graph id is derived from that hash.
    */
-  private String graphHash(JsonNode content) {
+  String graphHash(JsonNode content) {
     ObjectNode copy = content.isObject() ? (ObjectNode) content.deepCopy() : (ObjectNode) content;
     copy.remove("graph_id");
     copy.remove("graph_hash");
@@ -196,6 +197,7 @@ public class BehaviorGraphService {
       throw error("GRAPH_INVALID", "assistant drafts require a published base graph");
     if (!base.getGraphHash().equals(String.valueOf(diff.get("base_graph_hash"))))
       throw error("IDENTITY_MISMATCH", "assistant diff base graph hash differs");
+    runService.requireOperation(readIdentity(base.getIdentityJson()), "graph");
     Map<String, Object> definition = readDefinition(base);
     definition.putIfAbsent("authority", disabledAuthority());
     applyOperations(definition, diff);
@@ -470,6 +472,46 @@ public class BehaviorGraphService {
     return response(entity);
   }
 
+  /** Authoring validates the same flat-graph semantics as Assistant proposals. */
+  void validateEditorGraph(Map<String, Object> definition) {
+    validateDefinitionOrThrow(definition);
+    applyOperations(new LinkedHashMap<>(definition), Map.of("operations", List.of()));
+  }
+
+  @Transactional
+  public Map<String, Object> publishEditorGraph(String baseId, Map<String, Object> definition) {
+    BehaviorGraphDefinition base =
+        repository
+            .findWithLockByGraphId(baseId)
+            .orElseThrow(() -> error("NOT_FOUND", "base graph not found"));
+    validateEditorGraph(definition);
+    Map<String, Object> original = readDefinition(base);
+    Map<String, Object> identity =
+        new LinkedHashMap<>((Map<String, Object>) definition.get("identity"));
+    Map<String, Object> originalIdentity =
+        new LinkedHashMap<>((Map<String, Object>) original.get("identity"));
+    identity.remove("graph");
+    originalIdentity.remove("graph");
+    if (!identity.equals(originalIdentity)
+        || !java.util.Objects.equals(original.get("recording_id"), definition.get("recording_id")))
+      throw error("IDENTITY_MISMATCH", "editor cannot change capture or run provenance");
+    String hash = graphHash(mapper.valueToTree(definition));
+    String id = "graph_" + hash.substring(7, 31);
+    if (!hash.equals(definition.get("graph_hash")) || !id.equals(definition.get("graph_id")))
+      throw error("GRAPH_HASH_INVALID", "editor content identity mismatch");
+    if (repository.findByGraphId(id).isEmpty()) {
+      BehaviorGraphDefinition edited = new BehaviorGraphDefinition();
+      edited.setGraphId(id);
+      edited.setGraphHash(hash);
+      edited.setIdentityJson(write(definition.get("identity")));
+      edited.setDefinitionJson(write(definition));
+      edited.setSupersedesGraphId(
+          "PUBLISHED".equals(base.getState()) ? baseId : base.getSupersedesGraphId());
+      repository.saveAndFlush(edited);
+    }
+    return publish(id);
+  }
+
   @Transactional
   public Map<String, Object> publish(String id) {
     BehaviorGraphDefinition entity =
@@ -481,6 +523,7 @@ public class BehaviorGraphService {
       throw error("GRAPH_INVALID", "only a draft graph can be published");
     String superseded = entity.getSupersedesGraphId();
     CurrentSliceIdentity identity = readIdentity(entity.getIdentityJson());
+    runService.requireOperation(identity, "graph");
     if (identity.run() == null || identity.run().runId() == null) {
       throw error("IDENTITY_MISMATCH", "graph run identity is required for publication");
     }
