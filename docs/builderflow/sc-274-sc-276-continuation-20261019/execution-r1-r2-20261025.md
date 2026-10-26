@@ -208,3 +208,18 @@ Linux evidence (fresh Ubuntu-22.04 clones, Node 22.19.0, Yarn 4.12.0, same cache
 - Disk: the Ubuntu-22.04 disk image (C:\WSL\Ubuntu-22.04\ext4.vhdx) is 128.6 GB for 48 GB of Linux data;
   WSL has sparse VHD disabled for corruption risk (not forced). Compaction needs an elevated shell.
   I deleted my scratch Linux clones (kept ~/r4/tools and ~/r4/cache-store) and my Windows temp files.
+
+### Correction (2026-10-26)
+
+The statement above that Wind Strike and the five auxiliary methods have NO contract is superseded. Wind Strike
+and all five auxiliary contracts now exist, with auxiliary kernel routing and checkpoint reconstruction, in
+xrsps-typescript commit f4e4aa5f. That commit is merged into xrsps-typescript `main` (now 7af7e7d5, pushed to
+origin/main, which also carries the SC-1914/SC-2106 upstream commits and a `.gitattributes` rule that keeps
+`packages/replay-kernel/test/fixtures/**` byte-exact).
+
+Merged-tree results (Windows): replay-kernel package 379/379; server sweep 498 tests, 487 pass, 9 skipped,
+2 failed, both from an esbuild host/binary version mismatch (0.28.1 vs 0.28.2) and passing 6/6 when rerun with
+the matching 0.28.1 binary.
+
+Unchanged: the story is still incomplete. Approved independent captures, parity evidence, runtime qualification,
+Linux qualification (SC-2201), genuine integration and Watch sign-off, and migration/clock ownership remain open.
