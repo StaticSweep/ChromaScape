@@ -148,6 +148,72 @@ public class CandidateExecutionJobService {
 
   /** Builds the request, stages the candidate and runs it to a validated outcome. */
   public ExecutionJob execute(String proposalId, JobSpec spec) {
+    return run(proposalId, spec, null);
+  }
+
+  /**
+   * Explicitly recovers an attempt that ended UNCERTAIN or FAILED (SC-2106 R6). The recovery is a
+   * new, separately fenced attempt under a new idempotency key; it resumes from the previous
+   * attempt's last durable cut, which the runner verifies before any intent. Nothing is ever
+   * recovered automatically.
+   */
+  public ExecutionJob recover(String proposalId, String previousAttemptId, JobSpec spec) {
+    if (attempts == null) {
+      throw failure(
+          HttpStatus.SERVICE_UNAVAILABLE,
+          "EXECUTION_OWNERSHIP_UNAVAILABLE",
+          "no durable attempt store is configured");
+    }
+    CandidateAttemptStore.Attempt previous =
+        attempts
+            .find(previousAttemptId == null ? "" : previousAttemptId)
+            .orElseThrow(
+                () ->
+                    failure(
+                        HttpStatus.NOT_FOUND,
+                        "EXECUTION_ATTEMPT_NOT_FOUND",
+                        "no attempt " + previousAttemptId));
+    if (!previous.ownerId().equals("proposal:" + proposalId)) {
+      throw failure(
+          HttpStatus.CONFLICT,
+          "EXECUTION_RECOVERY_FOREIGN",
+          "attempt " + previousAttemptId + " belongs to another proposal");
+    }
+    if (previous.state() != CandidateAttemptStore.State.UNCERTAIN
+        && previous.state() != CandidateAttemptStore.State.FAILED) {
+      throw failure(
+          HttpStatus.CONFLICT,
+          "EXECUTION_RECOVERY_NOT_NEEDED",
+          "attempt " + previousAttemptId + " is " + previous.state());
+    }
+    if (spec != null && previous.idempotencyKey().equals(spec.idempotencyKey())) {
+      throw failure(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "EXECUTION_JOB_INVALID",
+          "a recovery is a new attempt and needs its own idempotencyKey");
+    }
+    Path journal;
+    try {
+      journal =
+          directory(properties.getRunRoot(), "runRoot")
+              .resolve(previousAttemptId)
+              .resolve("journal");
+    } catch (IOException e) {
+      throw failure(HttpStatus.INTERNAL_SERVER_ERROR, "EXECUTION_STAGING_FAILED", e.getMessage());
+    }
+    if (!Files.isDirectory(journal, LinkOption.NOFOLLOW_LINKS)) {
+      throw failure(
+          HttpStatus.CONFLICT,
+          "EXECUTION_RECOVERY_UNAVAILABLE",
+          "attempt " + previousAttemptId + " published no durable journal");
+    }
+    Map<String, Object> resume = new LinkedHashMap<>();
+    resume.put("root", journal.toString());
+    resume.put("attemptId", previousAttemptId);
+    return run(proposalId, spec, resume);
+  }
+
+  private ExecutionJob run(String proposalId, JobSpec spec, Map<String, Object> resume) {
     if (properties == null || !properties.isEnabled()) {
       throw failure(
           HttpStatus.FORBIDDEN,
@@ -181,11 +247,11 @@ public class CandidateExecutionJobService {
             "proposal:" + proposalId,
             spec.idempotencyKey(),
             spec.jobId(),
-            fingerprint(proposalId, spec),
+            reservationFingerprint(proposalId, spec, resume),
             lease);
     CandidateAttemptStore.Attempt attempt = reservation.attempt();
     if (!reservation.created()) {
-      return reattach(proposalId, spec, attempt);
+      return reattach(attempt, reservationFingerprint(proposalId, spec, resume), spec);
     }
     String attemptId = attempt.attemptId();
     AtomicBoolean cancel = new AtomicBoolean();
@@ -200,6 +266,9 @@ public class CandidateExecutionJobService {
       Path runDirectory = directory(properties.getRunRoot(), "runRoot").resolve(attemptId);
       Files.createDirectory(runDirectory);
       Map<String, Object> job = job(request, spec, runDirectory);
+      if (resume != null) {
+        job.put("resume", resume);
+      }
       // Persist the launch identity before any effect; a fenced owner launches nothing.
       attempts.markRunning(attemptId, attempt.leaseId(), attempt.epoch(), request.requestDigest());
       renewal = renewWhileRunning(attempt, lease, cancel);
@@ -240,9 +309,17 @@ public class CandidateExecutionJobService {
    * A duplicate request reattaches to the attempt it names; it never launches a second run. Only a
    * finished attempt returns its recorded result.
    */
+  private static String reservationFingerprint(
+      String proposalId, JobSpec spec, Map<String, Object> resume) {
+    return resume == null
+        ? fingerprint(proposalId, spec)
+        : Sc2106CanonicalJson.sha256(
+            Map.of("recovers", resume.get("attemptId"), "spec", fingerprint(proposalId, spec)));
+  }
+
   private ExecutionJob reattach(
-      String proposalId, JobSpec spec, CandidateAttemptStore.Attempt attempt) {
-    if (!attempt.fingerprint().equals(fingerprint(proposalId, spec))) {
+      CandidateAttemptStore.Attempt attempt, String fingerprint, JobSpec spec) {
+    if (!attempt.fingerprint().equals(fingerprint)) {
       throw failure(
           HttpStatus.CONFLICT,
           "EXECUTION_IDEMPOTENCY_CONFLICT",

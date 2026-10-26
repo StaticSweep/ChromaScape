@@ -425,6 +425,127 @@ class CandidateExecutionJobServiceTest {
     assertEquals(0, store.launchesMarked);
   }
 
+  /** An attempt that lost its owner, with the journal directory its runner would have published. */
+  private CandidateAttemptStore.Attempt uncertainAttemptWithJournal(String key) throws Exception {
+    CandidateAttemptStore.Attempt previous =
+        store
+            .reserve(
+                "proposal:" + PROPOSAL,
+                key,
+                "job-crashed",
+                CandidateExecutionJobService.fingerprint(PROPOSAL, spec("job-crashed")),
+                java.time.Duration.ofMinutes(1))
+            .attempt();
+    store.expireAndReconcile(previous.attemptId());
+    Files.createDirectories(temp.resolve("runs").resolve(previous.attemptId()).resolve("journal"));
+    return store.find(previous.attemptId()).orElseThrow();
+  }
+
+  @Test
+  void aRecoveryIsANewFencedAttemptThatNamesThePreviousJournal() throws Exception {
+    CandidateAttemptStore.Attempt previous = uncertainAttemptWithJournal("key-crashed");
+    AtomicReference<Map<String, Object>> sent = new AtomicReference<>();
+    CandidateExecutionJobService.ExecutionJob recovered =
+        service(
+                (j, timeout, cancel) -> {
+                  sent.set(j);
+                  return answer(j, false, true, List.of());
+                })
+            .recover(PROPOSAL, previous.attemptId(), spec("job-recovery"));
+
+    Map<String, Object> resume = map(sent.get().get("resume"));
+    assertEquals(previous.attemptId(), resume.get("attemptId"));
+    assertEquals(
+        temp.resolve("runs").resolve(previous.attemptId()).resolve("journal").toString(),
+        resume.get("root"));
+    assertFalse(previous.attemptId().equals(recovered.attemptId()), "a recovery is a new attempt");
+    assertEquals(CandidateExecutionResultValidator.Outcome.PASS, recovered.outcome());
+    assertEquals(
+        CandidateAttemptStore.State.UNCERTAIN,
+        store.find(previous.attemptId()).orElseThrow().state(),
+        "the recovered attempt's own record is never rewritten");
+
+    // Asking again with the same key reattaches instead of recovering twice.
+    CandidateExecutionJobService.ExecutionJob again =
+        service((j, timeout, cancel) -> fail("recovered only once"))
+            .recover(PROPOSAL, previous.attemptId(), spec("job-recovery"));
+    assertEquals(recovered.attemptId(), again.attemptId());
+  }
+
+  @Test
+  void onlyAnUncertainOrFailedAttemptOfTheSameProposalWithAJournalCanBeRecovered()
+      throws Exception {
+    CandidateAttemptStore.Attempt previous = uncertainAttemptWithJournal("key-crashed");
+    CandidateExecutionJobService service = service((j, t, c) -> fail("never launched"));
+
+    assertEquals(
+        "EXECUTION_ATTEMPT_NOT_FOUND",
+        assertThrows(
+                PatchCandidateWorkflowService.PatchWorkflowException.class,
+                () -> service.recover(PROPOSAL, "attempt-missing", spec("job-r1")))
+            .code());
+    assertEquals(
+        "EXECUTION_RECOVERY_FOREIGN",
+        assertThrows(
+                PatchCandidateWorkflowService.PatchWorkflowException.class,
+                () -> service.recover("another-proposal", previous.attemptId(), spec("job-r2")))
+            .code());
+    assertEquals(
+        "EXECUTION_JOB_INVALID",
+        assertThrows(
+                PatchCandidateWorkflowService.PatchWorkflowException.class,
+                () ->
+                    service.recover(
+                        PROPOSAL,
+                        previous.attemptId(),
+                        new CandidateExecutionJobService.JobSpec(
+                            "job-r3",
+                            "key-crashed",
+                            "baseline-1",
+                            "scenario-1",
+                            null,
+                            "content-1",
+                            "cache-1",
+                            PROFILE,
+                            "rec-java-rpc",
+                            "AUTHORED",
+                            spec("x").task(),
+                            spec("x").taskHash(),
+                            spec("x").start(),
+                            null,
+                            "java-rpc-seed",
+                            "task-seed-1",
+                            "mouse-seed-1",
+                            spec("x").budgets())))
+            .code());
+
+    CandidateExecutionJobService.ExecutionJob finished =
+        service((j, t, c) -> answer(j, false, true, List.of())).execute(PROPOSAL, spec("job-ok"));
+    assertEquals(
+        "EXECUTION_RECOVERY_NOT_NEEDED",
+        assertThrows(
+                PatchCandidateWorkflowService.PatchWorkflowException.class,
+                () -> service.recover(PROPOSAL, finished.attemptId(), spec("job-r4")))
+            .code());
+
+    CandidateAttemptStore.Attempt noJournal =
+        store
+            .reserve(
+                "proposal:" + PROPOSAL,
+                "key-nojournal",
+                "job-nj",
+                "sha256:x",
+                java.time.Duration.ofMinutes(1))
+            .attempt();
+    store.expireAndReconcile(noJournal.attemptId());
+    assertEquals(
+        "EXECUTION_RECOVERY_UNAVAILABLE",
+        assertThrows(
+                PatchCandidateWorkflowService.PatchWorkflowException.class,
+                () -> service.recover(PROPOSAL, noJournal.attemptId(), spec("job-r5")))
+            .code());
+  }
+
   @Test
   void disabledExecutionStagesNothing() {
     properties.setEnabled(false);
