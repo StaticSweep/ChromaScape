@@ -1,5 +1,9 @@
 # SC-274 / SC-276: full remaining implementation plan after publication
 
+Current full plan after the latest qualification review:
+[remaining-implementation-plan-20261025.md](remaining-implementation-plan-20261025.md).
+The historical scope and results below are retained.
+
 Date: 24 October 2026. Status: planned work; no implementation executed by this update.
 
 This is the current remaining plan after publication of ChromaScape candidate
