@@ -1787,6 +1787,26 @@ tasks.register<Test>("sc663ManifestTest") {
 // when one is missing; the ordinary suite does not discover it.
 tasks.test {
 	exclude("com/chromascape/web/aiplayer/routine/service/CandidateExecutionHostIntegrationTest*")
+	exclude("com/chromascape/web/aiplayer/routine/service/CandidateAttemptStoreIntegrationTest*")
+}
+
+// SC-2106 R4: durable attempt ownership against a real PostgreSQL. Required, not optional: the
+// test class fails (never skips) when SC2106_TEST_JDBC_URL does not name a disposable database.
+tasks.register<Test>("sc2106ManagedAttemptTest") {
+	group = "verification"
+	description = "Verifies SC-2106 durable attempt reservation, fencing and reconciliation on PostgreSQL"
+	testClassesDirs = sourceSets.test.get().output.classesDirs
+	classpath = sourceSets.test.get().runtimeClasspath
+	useJUnitPlatform()
+	filter {
+		isFailOnNoMatchingTests = true
+		includeTestsMatching("com.chromascape.web.aiplayer.routine.service.CandidateAttemptStoreIntegrationTest")
+	}
+	afterSuite(KotlinClosure2<TestDescriptor, TestResult, Unit>({ descriptor, result ->
+		if (descriptor.parent == null && (result.testCount == 0L || result.skippedTestCount > 0L)) {
+			throw GradleException("SC-2106 managed attempt tests must run every test")
+		}
+	}))
 }
 tasks.register<Test>("sc2106HostIntegrationTest") {
 	group = "verification"

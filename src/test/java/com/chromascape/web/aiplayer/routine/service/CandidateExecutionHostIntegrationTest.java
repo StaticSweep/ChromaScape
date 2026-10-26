@@ -234,7 +234,8 @@ class CandidateExecutionHostIntegrationTest {
     properties.setWorkerDirectory(xrspsPackage.toString());
     properties.setDevelopmentWorker(true);
     properties.setHostTimeout(java.time.Duration.ofMinutes(5));
-    return new CandidateExecutionJobService(workflow, properties);
+    return new CandidateExecutionJobService(
+        workflow, properties, new InMemoryCandidateAttemptStore());
   }
 
   private static Path policy(String name, PublicKey key) throws Exception {
