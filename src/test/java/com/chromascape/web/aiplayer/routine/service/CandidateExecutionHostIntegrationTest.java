@@ -382,10 +382,7 @@ class CandidateExecutionHostIntegrationTest {
 
     Map<String, Object> facts = new LinkedHashMap<>();
     facts.put("itemNames", Map.of("303", "Small fishing net", "317", "Raw shrimps"));
-    facts.put("loggedIn", true);
-    facts.put("moving", false);
-    facts.put("busy", false);
-    facts.put("paused", false);
+    // loggedIn/moving/busy/paused come from worker state in a profile-qualified session (R3.2).
     facts.put("onScreen", true);
     Map<String, Object> start = new LinkedHashMap<>();
     start.put("manifest", manifest);
