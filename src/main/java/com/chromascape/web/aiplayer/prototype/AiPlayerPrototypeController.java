@@ -206,20 +206,6 @@ public class AiPlayerPrototypeController {
     return ResponseEntity.status(e.getStatus()).body(e.toErrorBody());
   }
 
-  @ExceptionHandler(com.chromascape.web.aiplayer.contract.CurrentSliceContractException.class)
-  public ResponseEntity<Object> handleContract(
-      com.chromascape.web.aiplayer.contract.CurrentSliceContractException exception) {
-    return ResponseEntity.unprocessableEntity()
-        .body(
-            Map.of(
-                "status",
-                "BLOCKED",
-                "code",
-                exception.code().name(),
-                "message",
-                exception.code().name()));
-  }
-
   @ExceptionHandler(Exception.class)
   public ResponseEntity<Object> handleUnexpected(Exception e) {
     log.error("Prototype request failed unexpectedly", e);

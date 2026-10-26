@@ -1731,7 +1731,7 @@ tasks.register<Test>("sc666CompletionTest") {
     classpath = sourceSets["sc666CompletionTest"].runtimeClasspath
     useJUnitPlatform()
     systemProperty("sc666.test.jdbc.url", providers.gradleProperty("sc666TestJdbcUrl").getOrElse(""))
-
+}
 
 // SC-663 cross-repository proof uses original, explicitly staged producer inputs. It must not
 // become a silently skipped ordinary test when a CI checkout lacks the companion repositories.

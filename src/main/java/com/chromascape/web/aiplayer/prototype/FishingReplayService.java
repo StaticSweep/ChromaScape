@@ -63,7 +63,6 @@ public class FishingReplayService {
    */
   public RunReport run(String modelId, String recordingId) {
     ensureEnabled();
-    modelStore.requireReplayRecording(recordingId, null);
     FishingModel model = modelStore.loadModel(modelId);
     if (model.schemaVersion() != FishingDemonstrationPolicy.SCHEMA_VERSION
         || !FishingDemonstrationPolicy.KIND.equals(model.kind())
@@ -83,7 +82,6 @@ public class FishingReplayService {
               model.requiredCatchCount()));
     }
     DebugSession session = preflightService.resolveRecording(recordingId);
-    modelStore.requireReplayRecording(recordingId, session.getSessionId());
 
     if (session.getEndTick() == null) {
       throw new PrototypeApiException(
