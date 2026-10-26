@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -23,6 +24,7 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +38,9 @@ import org.springframework.http.HttpStatus;
  * in {@code CandidateExecutionHostIntegrationTest}.
  */
 class CandidateExecutionJobServiceTest {
+  /** Durable ownership double; one per test instance, shared by every service it builds. */
+  private final InMemoryCandidateAttemptStore store = new InMemoryCandidateAttemptStore();
+
   /** The reviewed SC-1914 Fishing profile reference (xrsps-osrs237-fishing r1). */
   static final String PROFILE =
       "xrsps-osrs237-fishing@1#sha256:43d1d3008222c66623f03cedc6f2e08f091ac50c692c80d1456498ea0a58d0ba";
@@ -311,6 +316,116 @@ class CandidateExecutionJobServiceTest {
   }
 
   @Test
+  void aDuplicateRequestReattachesToItsRecordedResultWithoutASecondLaunch() {
+    AtomicInteger launches = new AtomicInteger();
+    CandidateExecutionJobService service =
+        service(
+            (j, timeout, cancel) -> {
+              launches.incrementAndGet();
+              return answer(j, false, true, List.of());
+            });
+    CandidateExecutionJobService.ExecutionJob first = service.execute(PROPOSAL, spec("job-1"));
+    // A new service instance stands in for a restarted owner reading the same durable store.
+    CandidateExecutionJobService.ExecutionJob again =
+        service((j, timeout, cancel) -> fail("a duplicate must never launch"))
+            .execute(PROPOSAL, spec("job-1"));
+
+    assertEquals(1, launches.get());
+    assertEquals(first.attemptId(), again.attemptId());
+    assertEquals(first.requestDigest(), again.requestDigest());
+    assertEquals(first.outcome(), again.outcome());
+    assertEquals(
+        CandidateAttemptStore.State.COMPLETED, store.find(first.attemptId()).orElseThrow().state());
+  }
+
+  @Test
+  void aReusedKeyWithChangedInputsConflicts() {
+    service((j, timeout, cancel) -> answer(j, false, true, List.of()))
+        .execute(PROPOSAL, spec("job-1"));
+    CandidateExecutionJobService.JobSpec base = spec("job-1");
+    CandidateExecutionJobService.JobSpec changed =
+        new CandidateExecutionJobService.JobSpec(
+            base.jobId(),
+            base.idempotencyKey(),
+            base.baselineId(),
+            base.scenarioId(),
+            base.checkpointId(),
+            base.contentVersion(),
+            base.cacheVersion(),
+            base.profileId(),
+            base.recordingId(),
+            base.initialProvenance(),
+            base.task(),
+            base.taskHash(),
+            base.start(),
+            base.executionMode(),
+            "another-world-seed",
+            base.taskSeed(),
+            base.mouseSeed(),
+            base.budgets());
+    PatchCandidateWorkflowService.PatchWorkflowException e =
+        assertThrows(
+            PatchCandidateWorkflowService.PatchWorkflowException.class,
+            () -> service((j, t, c) -> fail("never launched")).execute(PROPOSAL, changed));
+    assertEquals("EXECUTION_IDEMPOTENCY_CONFLICT", e.code());
+  }
+
+  @Test
+  void anAbandonedAttemptIsUncertainAndNeverRelaunched() {
+    CandidateAttemptStore.Attempt abandoned =
+        store
+            .reserve(
+                "proposal:" + PROPOSAL,
+                "key-job-1",
+                "job-1",
+                CandidateExecutionJobService.fingerprint(PROPOSAL, spec("job-1")),
+                java.time.Duration.ofMinutes(1))
+            .attempt();
+    store.expireAndReconcile(abandoned.attemptId());
+
+    PatchCandidateWorkflowService.PatchWorkflowException e =
+        assertThrows(
+            PatchCandidateWorkflowService.PatchWorkflowException.class,
+            () -> service((j, t, c) -> fail("never relaunched")).execute(PROPOSAL, spec("job-1")));
+    assertEquals("EXECUTION_RECONCILIATION_REQUIRED", e.code());
+    assertEquals(2L, store.find(abandoned.attemptId()).orElseThrow().epoch());
+  }
+
+  @Test
+  void aFencedOwnerCannotRecordItsResult() {
+    CandidateExecutionJobService service =
+        service(
+            (j, timeout, cancel) -> {
+              // While this owner runs, its lease is lost and reconciliation takes the attempt.
+              String attemptId = String.valueOf(map(j.get("request")).get("attemptId"));
+              store.expireAndReconcile(attemptId);
+              return answer(j, false, true, List.of());
+            });
+    PatchCandidateWorkflowService.PatchWorkflowException e =
+        assertThrows(
+            PatchCandidateWorkflowService.PatchWorkflowException.class,
+            () -> service.execute(PROPOSAL, spec("job-1")));
+    assertEquals("EXECUTION_OWNER_FENCED", e.code());
+    CandidateAttemptStore.Attempt attempt = store.byId.values().iterator().next();
+    assertEquals(CandidateAttemptStore.State.UNCERTAIN, attempt.state());
+    assertNull(attempt.job(), "the fenced owner's view was not recorded as the result");
+  }
+
+  @Test
+  void aStagingFailureEndsTheAttemptWithoutLaunching() throws Exception {
+    Path entries = Files.createDirectories(temp.resolve("store/sha256"));
+    Files.writeString(entries.resolve(sha(closureBytes).substring(7)), "not the closure");
+    PatchCandidateWorkflowService.PatchWorkflowException e =
+        assertThrows(
+            PatchCandidateWorkflowService.PatchWorkflowException.class,
+            () -> service((j, t, c) -> fail("never launched")).execute(PROPOSAL, spec("job-1")));
+    assertEquals("EXECUTION_STAGING_FAILED", e.code());
+    CandidateAttemptStore.Attempt attempt = store.byId.values().iterator().next();
+    assertEquals(CandidateAttemptStore.State.FAILED, attempt.state());
+    assertEquals(0, store.launchesMarked);
+  }
+
+  @Test
   void disabledExecutionStagesNothing() {
     properties.setEnabled(false);
     PatchCandidateWorkflowService.PatchWorkflowException e =
@@ -343,7 +458,7 @@ class CandidateExecutionJobServiceTest {
   }
 
   private CandidateExecutionJobService service(CandidateHostLauncher host) {
-    return new CandidateExecutionJobService(workflow, properties, host);
+    return new CandidateExecutionJobService(workflow, properties, host, store);
   }
 
   private static CandidateHostLauncher.HostOutcome lost() {

@@ -1,7 +1,9 @@
 package com.chromascape.web.aiplayer.routine.service;
 
 import com.chromascape.web.aiplayer.routine.config.Sc2106ExecutionProperties;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.FileAlreadyExistsException;
@@ -9,16 +11,23 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -32,31 +41,57 @@ import org.springframework.stereotype.Service;
  * content-addressed store the host resolves from, so the host verifies the same bytes that were
  * registered. The result is accepted only through {@link CandidateExecutionResultValidator}.
  *
- * <p>Jobs are held in memory only. Durable job status, restart reattachment and duplicate
- * suppression across restarts (R9.2, R9.5) depend on the SC-279 ownership store and are not
- * provided here; a duplicate job id is refused only while the first run is in this process.
+ * <p>Ownership is durable (R4): each (proposal, idempotency key) is reserved in the {@link
+ * CandidateAttemptStore} before anything is staged or launched, and every later write is fenced on
+ * the reservation's lease and epoch. A duplicate request with the same inputs reattaches to the
+ * recorded result instead of launching again; changed inputs conflict. An attempt whose owner
+ * disappeared is reconciled to UNCERTAIN at startup and is never relaunched automatically.
  */
 @Service
 public class CandidateExecutionJobService {
   private final PatchCandidateWorkflowService workflow;
   private final Sc2106ExecutionProperties properties;
   private final CandidateHostLauncher host;
+  private final CandidateAttemptStore attempts;
   private final Map<String, AtomicBoolean> active = new ConcurrentHashMap<>();
+  private final ObjectMapper mapper = new ObjectMapper();
+  private final ScheduledExecutorService leaseRenewal =
+      Executors.newSingleThreadScheduledExecutor(
+          runnable -> {
+            Thread thread = new Thread(runnable, "sc2106-attempt-lease");
+            thread.setDaemon(true);
+            return thread;
+          });
 
   @Autowired
   public CandidateExecutionJobService(
-      PatchCandidateWorkflowService workflow, Sc2106ExecutionProperties properties) {
-    this(workflow, properties, null);
+      PatchCandidateWorkflowService workflow,
+      Sc2106ExecutionProperties properties,
+      CandidateAttemptStore attempts) {
+    this(workflow, properties, null, attempts);
   }
 
   /** Test seam: a supplied launcher replaces the configured host process. */
   CandidateExecutionJobService(
       PatchCandidateWorkflowService workflow,
       Sc2106ExecutionProperties properties,
-      CandidateHostLauncher host) {
+      CandidateHostLauncher host,
+      CandidateAttemptStore attempts) {
     this.workflow = workflow;
     this.properties = properties;
     this.host = host;
+    this.attempts = attempts;
+  }
+
+  /**
+   * An attempt whose owner went away (process exit, crash) cannot be known to have done nothing, so
+   * its expired lease is reconciled to UNCERTAIN; it is never relaunched automatically.
+   */
+  @EventListener(ApplicationReadyEvent.class)
+  public void reconcileAbandonedAttempts() {
+    if (properties != null && properties.isEnabled() && attempts != null) {
+      attempts.reconcileExpired(Instant.now());
+    }
   }
 
   /**
@@ -130,29 +165,189 @@ public class CandidateExecutionJobService {
               + " <profileId>@<revision>#sha256:<hex>, got "
               + spec.profileId());
     }
-    AtomicBoolean cancel = new AtomicBoolean();
-    if (active.putIfAbsent(spec.jobId(), cancel) != null) {
-      throw failure(HttpStatus.CONFLICT, "EXECUTION_JOB_ACTIVE", "job is already running");
+    if (spec.idempotencyKey() == null || spec.idempotencyKey().isBlank()) {
+      throw failure(
+          HttpStatus.UNPROCESSABLE_ENTITY, "EXECUTION_JOB_INVALID", "idempotencyKey is required");
     }
+    if (attempts == null) {
+      throw failure(
+          HttpStatus.SERVICE_UNAVAILABLE,
+          "EXECUTION_OWNERSHIP_UNAVAILABLE",
+          "no durable attempt store is configured");
+    }
+    Duration lease = attemptLease();
+    CandidateAttemptStore.Reservation reservation =
+        attempts.reserve(
+            "proposal:" + proposalId,
+            spec.idempotencyKey(),
+            spec.jobId(),
+            fingerprint(proposalId, spec),
+            lease);
+    CandidateAttemptStore.Attempt attempt = reservation.attempt();
+    if (!reservation.created()) {
+      return reattach(proposalId, spec, attempt);
+    }
+    String attemptId = attempt.attemptId();
+    AtomicBoolean cancel = new AtomicBoolean();
+    active.put(spec.jobId(), cancel);
+    ScheduledFuture<?> renewal = null;
+    CandidateExecutionRequestV2 request = null;
     try {
       PatchCandidateWorkflowService.RegisteredCandidate candidate =
           workflow.registeredCandidate(proposalId);
       Staged staged = stage(candidate);
-      String attemptId = "attempt-" + UUID.randomUUID();
-      CandidateExecutionRequestV2 request = request(staged, spec, attemptId);
+      request = request(staged, spec, attemptId);
       Path runDirectory = directory(properties.getRunRoot(), "runRoot").resolve(attemptId);
       Files.createDirectory(runDirectory);
       Map<String, Object> job = job(request, spec, runDirectory);
+      // Persist the launch identity before any effect; a fenced owner launches nothing.
+      attempts.markRunning(attemptId, attempt.leaseId(), attempt.epoch(), request.requestDigest());
+      renewal = renewWhileRunning(attempt, lease, cancel);
       CandidateHostLauncher.HostOutcome outcome =
           launcher().run(job, properties.getHostTimeout(), cancel);
-      return interpret(spec.jobId(), attemptId, request, outcome);
+      ExecutionJob result = interpret(spec.jobId(), attemptId, request, outcome);
+      attempts.finish(
+          attemptId,
+          attempt.leaseId(),
+          attempt.epoch(),
+          stateOf(result.outcome()),
+          mapper.convertValue(result, MAP),
+          String.join("; ", result.reasons()));
+      return result;
+    } catch (CandidateAttemptStore.StaleOwnerException e) {
+      // Another owner (or reconciliation) holds this attempt now; never report our view as final.
+      throw failure(HttpStatus.CONFLICT, "EXECUTION_OWNER_FENCED", e.getMessage());
     } catch (IOException e) {
+      settleBeforeLaunch(attempt, request, "EXECUTION_STAGING_FAILED: " + e.getMessage());
       throw failure(HttpStatus.INTERNAL_SERVER_ERROR, "EXECUTION_STAGING_FAILED", e.getMessage());
     } catch (IllegalArgumentException e) {
+      settleBeforeLaunch(attempt, request, "EXECUTION_REQUEST_INVALID: " + e.getMessage());
       throw failure(HttpStatus.UNPROCESSABLE_ENTITY, "EXECUTION_REQUEST_INVALID", e.getMessage());
+    } catch (PatchCandidateWorkflowService.PatchWorkflowException e) {
+      settleBeforeLaunch(attempt, request, e.code() + ": " + e.getMessage());
+      throw e;
     } finally {
+      if (renewal != null) {
+        renewal.cancel(false);
+      }
       active.remove(spec.jobId());
     }
+  }
+
+  private static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() {};
+
+  /**
+   * A duplicate request reattaches to the attempt it names; it never launches a second run. Only a
+   * finished attempt returns its recorded result.
+   */
+  private ExecutionJob reattach(
+      String proposalId, JobSpec spec, CandidateAttemptStore.Attempt attempt) {
+    if (!attempt.fingerprint().equals(fingerprint(proposalId, spec))) {
+      throw failure(
+          HttpStatus.CONFLICT,
+          "EXECUTION_IDEMPOTENCY_CONFLICT",
+          "idempotencyKey " + spec.idempotencyKey() + " was used with different inputs");
+    }
+    if (attempt.state() == CandidateAttemptStore.State.UNCERTAIN) {
+      throw failure(
+          HttpStatus.CONFLICT,
+          "EXECUTION_RECONCILIATION_REQUIRED",
+          "attempt " + attempt.attemptId() + " is uncertain: " + attempt.detail());
+    }
+    if (attempt.state().open()) {
+      throw failure(
+          HttpStatus.CONFLICT,
+          "EXECUTION_JOB_ACTIVE",
+          "attempt " + attempt.attemptId() + " is " + attempt.state() + " under another owner");
+    }
+    if (attempt.job() == null) {
+      throw failure(
+          HttpStatus.CONFLICT,
+          "EXECUTION_JOB_UNAVAILABLE",
+          "attempt " + attempt.attemptId() + " ended before launch: " + attempt.detail());
+    }
+    return mapper.convertValue(attempt.job(), ExecutionJob.class);
+  }
+
+  /** Nothing was launched, so the attempt ends FAILED; a fenced owner leaves it untouched. */
+  private void settleBeforeLaunch(
+      CandidateAttemptStore.Attempt attempt, CandidateExecutionRequestV2 request, String detail) {
+    try {
+      attempts.finish(
+          attempt.attemptId(),
+          attempt.leaseId(),
+          attempt.epoch(),
+          CandidateAttemptStore.State.FAILED,
+          null,
+          detail);
+    } catch (CandidateAttemptStore.StaleOwnerException ignored) {
+      // Reconciliation already owns it; its record stands.
+    }
+  }
+
+  private ScheduledFuture<?> renewWhileRunning(
+      CandidateAttemptStore.Attempt attempt, Duration lease, AtomicBoolean cancel) {
+    long period = Math.max(1_000L, lease.toMillis() / 3);
+    return leaseRenewal.scheduleAtFixedRate(
+        () -> {
+          // A lost lease means another owner may act; stop the run rather than race it.
+          if (!attempts.renew(attempt.attemptId(), attempt.leaseId(), attempt.epoch(), lease)) {
+            cancel.set(true);
+          }
+        },
+        period,
+        period,
+        TimeUnit.MILLISECONDS);
+  }
+
+  private Duration attemptLease() {
+    Duration hostTimeout = properties.getHostTimeout();
+    Duration lease = Duration.ofMinutes(2);
+    return hostTimeout != null && hostTimeout.compareTo(lease) < 0 ? hostTimeout : lease;
+  }
+
+  private static CandidateAttemptStore.State stateOf(CandidateExecutionResultValidator.Outcome o) {
+    return switch (o) {
+      case PASS, BLOCKED -> CandidateAttemptStore.State.COMPLETED;
+      case CANCELLED -> CandidateAttemptStore.State.CANCELLED;
+      case UNCERTAIN -> CandidateAttemptStore.State.UNCERTAIN;
+      case FAILED, INVALID -> CandidateAttemptStore.State.FAILED;
+    };
+  }
+
+  /** Everything that decides what would run; a reused key with another fingerprint conflicts. */
+  static String fingerprint(String proposalId, JobSpec spec) {
+    Map<String, Object> inputs = new LinkedHashMap<>();
+    inputs.put("proposalId", proposalId);
+    inputs.put("jobId", spec.jobId());
+    inputs.put("baselineId", spec.baselineId());
+    inputs.put("scenarioId", spec.scenarioId());
+    inputs.put("checkpointId", spec.checkpointId());
+    inputs.put("contentVersion", spec.contentVersion());
+    inputs.put("cacheVersion", spec.cacheVersion());
+    inputs.put("profileId", spec.profileId());
+    inputs.put("recordingId", spec.recordingId());
+    inputs.put("initialProvenance", spec.initialProvenance());
+    inputs.put("task", spec.task());
+    inputs.put("taskHash", spec.taskHash());
+    inputs.put("start", spec.start());
+    inputs.put("executionMode", spec.executionMode());
+    inputs.put("worldSeed", spec.worldSeed());
+    inputs.put("taskSeed", spec.taskSeed());
+    inputs.put("mouseSeed", spec.mouseSeed());
+    CandidateExecutionJobService.Budgets b = spec.budgets();
+    inputs.put(
+        "budgets",
+        b == null
+            ? null
+            : List.of(
+                b.maxSteps(),
+                b.maxTicks(),
+                b.maxIntents(),
+                b.maxWallTimeMillis(),
+                b.maxMemoryBytes(),
+                b.maxOutputBytes()));
+    return Sc2106CanonicalJson.sha256(inputs);
   }
 
   /**
