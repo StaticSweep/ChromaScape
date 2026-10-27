@@ -128,6 +128,79 @@ class ProcessCandidateHostLauncherTest {
         "the flooding host is stopped, not waited out");
   }
 
+  @Test
+  @DisabledOnOs(OS.WINDOWS)
+  void aBindingIsAnsweredOnlyAfterTheHandlerDecided() {
+    // The host reports a binding, then echoes the owner's answer back inside its outcome.
+    String host =
+        "read job; echo '{\"schema\":\"sc2106-host-binding/v1\",\"bindingId\":\"b-1\","
+            + "\"generation\":1}'; read answer; "
+            + "echo \"{\\\"schema\\\":\\\"sc2106-host-outcome/v1\\\",\\\"answer\\\":\\\"$answer\\\"}\"";
+    ProcessCandidateHostLauncher launcher =
+        new ProcessCandidateHostLauncher(List.of("sh", "-c", host), Map.of(), null);
+    List<Map<String, Object>> seen = new CopyOnWriteArrayList<>();
+
+    CandidateHostLauncher.HostOutcome accepted =
+        launcher.run(
+            Map.of("schema", "sc2106-host-job/v2"),
+            Duration.ofSeconds(10),
+            new CandidateHostLauncher.HostControl(
+                new AtomicBoolean(),
+                new AtomicBoolean(),
+                null,
+                binding -> {
+                  seen.add(binding);
+                  return true;
+                }));
+    assertFalse(accepted.lost(), String.valueOf(accepted.detail()));
+    assertEquals("bound b-1", accepted.document().get("answer"));
+    assertEquals(1, seen.size());
+    assertEquals(1, ((Number) seen.get(0).get("generation")).intValue());
+
+    CandidateHostLauncher.HostOutcome refused =
+        launcher.run(
+            Map.of("schema", "sc2106-host-job/v2"),
+            Duration.ofSeconds(10),
+            new CandidateHostLauncher.HostControl(
+                new AtomicBoolean(),
+                new AtomicBoolean(),
+                null,
+                binding -> {
+                  throw new IllegalStateException("the database is gone");
+                }));
+    assertEquals("unbound b-1", refused.document().get("answer"));
+
+    CandidateHostLauncher.HostOutcome unhandled =
+        launcher.run(
+            Map.of("schema", "sc2106-host-job/v2"),
+            Duration.ofSeconds(10),
+            new CandidateHostLauncher.HostControl(new AtomicBoolean(), new AtomicBoolean(), null));
+    assertEquals("unbound b-1", unhandled.document().get("answer"), "no handler, no binding");
+  }
+
+  @Test
+  void onlyAWellFormedBindingLineIsABinding() {
+    assertEquals(
+        "b-1",
+        ProcessCandidateHostLauncher.bindingLine(
+                bytes("{\"schema\":\"sc2106-host-binding/v1\",\"bindingId\":\"b-1\"}"))
+            .get("bindingId"));
+    assertNull(
+        ProcessCandidateHostLauncher.bindingLine(
+            bytes("{\"schema\":\"sc2106-host-binding/v1\",\"bindingId\":\"a b\"}")));
+    assertNull(
+        ProcessCandidateHostLauncher.bindingLine(
+            bytes("{\"schema\":\"sc2106-host-binding/v1\",\"bindingId\":7}")));
+    assertNull(
+        ProcessCandidateHostLauncher.bindingLine(
+            bytes(
+                "{\"schema\":\"sc2106-host-binding/v1\",\"bindingId\":\""
+                    + "x".repeat(ProcessCandidateHostLauncher.MAX_BINDING_ID_CHARS + 1)
+                    + "\"}")));
+    assertNull(
+        ProcessCandidateHostLauncher.bindingLine(bytes("{\"schema\":\"sc2106-host-status/v1\"}")));
+  }
+
   private static byte[] bytes(String text) {
     return text.getBytes(StandardCharsets.UTF_8);
   }

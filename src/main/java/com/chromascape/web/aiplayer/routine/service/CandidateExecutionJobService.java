@@ -449,7 +449,10 @@ public class CandidateExecutionJobService {
                   job,
                   properties.getHostTimeout(),
                   new CandidateHostLauncher.HostControl(
-                      live.cancel, live.pause, paused -> observePause(attempt, live, paused)));
+                      live.cancel,
+                      live.pause,
+                      paused -> observePause(attempt, live, paused),
+                      binding -> acceptBinding(attempt, live, binding)));
       ExecutionJob result = interpret(spec.jobId(), attemptId, request, outcome);
       try {
         attempts.finish(
@@ -488,6 +491,71 @@ public class CandidateExecutionJobService {
   }
 
   /** Records that the runner parked or resumed; a fenced owner stops its run instead. */
+  /**
+   * Commits the runner's worker binding under this owner's fence before the host is told {@code
+   * bound} (R4.2). A fenced owner refuses and stops its run; any other failure refuses the binding,
+   * and the runner then performs no effect.
+   */
+  private boolean acceptBinding(
+      CandidateAttemptStore.Attempt attempt, Live live, Map<String, Object> binding) {
+    CandidateAttemptStore.WorkerBinding parsed;
+    try {
+      parsed = workerBinding(binding);
+    } catch (RuntimeException e) {
+      return false;
+    }
+    try {
+      attempts.recordBinding(attempt.attemptId(), attempt.leaseId(), attempt.epoch(), parsed);
+      return true;
+    } catch (CandidateAttemptStore.StaleOwnerException e) {
+      live.cancel.set(true);
+      return false;
+    } catch (RuntimeException e) {
+      return false;
+    }
+  }
+
+  /** The typed binding a host line carries; malformed fields are refused, never coerced. */
+  @SuppressWarnings("unchecked")
+  static CandidateAttemptStore.WorkerBinding workerBinding(Map<String, Object> line) {
+    Object identity = line.get("workerIdentity");
+    if (identity != null && !(identity instanceof Map)) {
+      throw new IllegalArgumentException("workerIdentity must be an object");
+    }
+    return new CandidateAttemptStore.WorkerBinding(
+        text(line, "bindingId"),
+        whole(line, "generation"),
+        text(line, "attemptId"),
+        text(line, "requestDigest"),
+        text(line, "workerAuthority"),
+        text(line, "workerSessionId"),
+        whole(line, "workerEpoch"),
+        text(line, "workerLeaseDigest"),
+        whole(line, "workerRevision"),
+        whole(line, "runnerSteps"),
+        whole(line, "runnerIntents"),
+        text(line, "reason"),
+        (Map<String, Object>) identity);
+  }
+
+  private static String text(Map<String, Object> line, String field) {
+    if (!(line.get(field) instanceof String value) || value.isBlank()) {
+      throw new IllegalArgumentException(field + " must be a non-empty string");
+    }
+    return value;
+  }
+
+  private static long whole(Map<String, Object> line, String field) {
+    Object value = line.get(field);
+    if (value instanceof Integer || value instanceof Long) {
+      return ((Number) value).longValue();
+    }
+    if (value instanceof java.math.BigInteger big && big.bitLength() < 64) {
+      return big.longValue();
+    }
+    throw new IllegalArgumentException(field + " must be an integer");
+  }
+
   private void observePause(CandidateAttemptStore.Attempt attempt, Live live, boolean paused) {
     try {
       attempts.recordPaused(attempt.attemptId(), attempt.leaseId(), attempt.epoch(), paused);
@@ -735,7 +803,8 @@ public class CandidateExecutionJobService {
       String outcome,
       List<String> reasons,
       Map<String, Object> resultRefs,
-      String detail) {}
+      String detail,
+      Map<String, Object> binding) {}
 
   /** The status of the job a proposal submitted under {@code idempotencyKey}. */
   public JobStatus status(String proposalId, String idempotencyKey) {
@@ -824,7 +893,25 @@ public class CandidateExecutionJobService {
         job == null || job.get("outcome") == null ? null : String.valueOf(job.get("outcome")),
         reasons,
         refs,
-        attempt.detail());
+        attempt.detail(),
+        attempts
+            .currentBinding(attempt.attemptId())
+            .map(CandidateExecutionJobService::binding)
+            .orElse(null));
+  }
+
+  /** What status shows of the current binding; never the worker identity's raw detail. */
+  private static Map<String, Object> binding(CandidateAttemptStore.WorkerBinding binding) {
+    Map<String, Object> shown = new LinkedHashMap<>();
+    shown.put("generation", binding.generation());
+    shown.put("reason", binding.reason());
+    shown.put("workerAuthority", binding.workerAuthority());
+    shown.put("workerSessionId", binding.workerSessionId());
+    shown.put("workerEpoch", binding.workerEpoch());
+    shown.put("workerRevision", binding.workerRevision());
+    shown.put("runnerSteps", binding.runnerSteps());
+    shown.put("runnerIntents", binding.runnerIntents());
+    return shown;
   }
 
   static Lifecycle lifecycle(

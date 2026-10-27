@@ -882,6 +882,115 @@ class CandidateExecutionJobServiceTest {
   }
 
   @Test
+  void theOwnerCommitsEachWorkerBindingGenerationBeforeAnsweringIt() throws Exception {
+    List<Boolean> answers = new java.util.concurrent.CopyOnWriteArrayList<>();
+    AtomicReference<String> attemptId = new AtomicReference<>();
+    CountDownLatch bound = new CountDownLatch(1);
+    CountDownLatch checked = new CountDownLatch(1);
+    CandidateExecutionJobService service =
+        service(
+            new CandidateHostLauncher() {
+              @Override
+              public HostOutcome run(
+                  Map<String, Object> job, java.time.Duration timeout, AtomicBoolean cancel) {
+                throw new AssertionError("the service passes the binding handler");
+              }
+
+              @Override
+              public HostOutcome run(
+                  Map<String, Object> job, java.time.Duration timeout, HostControl control) {
+                Map<String, Object> request = map(job.get("request"));
+                attemptId.set(String.valueOf(request.get("attemptId")));
+                answers.add(control.binding().accept(binding(request, 1, "CREATE", 3)));
+                // A repeat, a skipped generation and a foreign request are all refused.
+                answers.add(control.binding().accept(binding(request, 1, "CREATE", 3)));
+                answers.add(control.binding().accept(binding(request, 3, "RESTORE", 5)));
+                Map<String, Object> foreign = new LinkedHashMap<>(request);
+                foreign.put("requestDigest", "sha256:" + "0".repeat(64));
+                answers.add(control.binding().accept(binding(foreign, 2, "RESTORE", 4)));
+                answers.add(control.binding().accept(binding(request, 2, "RESTORE", 4)));
+                bound.countDown();
+                awaitLatch(checked);
+                return answer(job, false, true, List.of());
+              }
+            });
+    service.submit(PROPOSAL, spec("job-1"));
+    awaitLatch(bound);
+
+    assertEquals(List.of(true, false, false, false, true), answers);
+    Map<String, Object> shown = service.status(PROPOSAL, "key-job-1").binding();
+    assertEquals(2L, ((Number) shown.get("generation")).longValue());
+    assertEquals("RESTORE", shown.get("reason"));
+    assertEquals(4L, ((Number) shown.get("workerEpoch")).longValue());
+    assertFalse(shown.containsKey("workerLeaseDigest"), "status never shows lease material");
+    assertEquals(2, store.bindings.get(attemptId.get()).size());
+    checked.countDown();
+    awaitLifecycle(service, "key-job-1", CandidateExecutionJobService.Lifecycle.COMPLETED);
+  }
+
+  @Test
+  void aFencedOwnerRefusesTheBindingAndStopsItsRun() throws Exception {
+    AtomicBoolean answer = new AtomicBoolean(true);
+    AtomicBoolean cancelled = new AtomicBoolean();
+    CountDownLatch done = new CountDownLatch(1);
+    CandidateExecutionJobService service =
+        service(
+            new CandidateHostLauncher() {
+              @Override
+              public HostOutcome run(
+                  Map<String, Object> job, java.time.Duration timeout, AtomicBoolean cancel) {
+                throw new AssertionError("the service passes the binding handler");
+              }
+
+              @Override
+              public HostOutcome run(
+                  Map<String, Object> job, java.time.Duration timeout, HostControl control) {
+                Map<String, Object> request = map(job.get("request"));
+                store.expireAndReconcile(String.valueOf(request.get("attemptId")));
+                answer.set(control.binding().accept(binding(request, 1, "CREATE", 3)));
+                cancelled.set(control.cancel().get());
+                done.countDown();
+                return answer(job, false, true, List.of());
+              }
+            });
+    service.submit(PROPOSAL, spec("job-1"));
+    awaitLatch(done);
+
+    assertFalse(answer.get(), "a stale owner cannot accept a binding");
+    assertTrue(cancelled.get(), "the fenced owner stops its run");
+    assertTrue(store.bindings.values().stream().allMatch(List::isEmpty));
+  }
+
+  @Test
+  void aMalformedBindingLineIsRefusedNotCoerced() {
+    Map<String, Object> line = new LinkedHashMap<>();
+    line.put("bindingId", "b");
+    line.put("generation", "1");
+    assertThrows(
+        IllegalArgumentException.class, () -> CandidateExecutionJobService.workerBinding(line));
+  }
+
+  private static Map<String, Object> binding(
+      Map<String, Object> request, long generation, String reason, long workerEpoch) {
+    Map<String, Object> binding = new LinkedHashMap<>();
+    binding.put("schema", "sc2106-host-binding/v1");
+    binding.put("bindingId", java.util.UUID.randomUUID().toString());
+    binding.put("generation", generation);
+    binding.put("attemptId", request.get("attemptId"));
+    binding.put("requestDigest", request.get("requestDigest"));
+    binding.put("workerAuthority", "candidate-stdio/v1");
+    binding.put("workerSessionId", "sc2106-" + request.get("attemptId"));
+    binding.put("workerEpoch", workerEpoch);
+    binding.put("workerLeaseDigest", "sha256:" + "a".repeat(63) + workerEpoch);
+    binding.put("workerRevision", 7L);
+    binding.put("runnerSteps", 0L);
+    binding.put("runnerIntents", 0L);
+    binding.put("reason", reason);
+    binding.put("workerIdentity", Map.of("workerCertifiable", false));
+    return binding;
+  }
+
+  @Test
   void aRecoveryOfAPausedAttemptStartsPausedUntilResumed() throws Exception {
     CandidateAttemptStore.Attempt previous =
         store

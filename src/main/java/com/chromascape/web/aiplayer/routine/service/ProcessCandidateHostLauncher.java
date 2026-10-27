@@ -29,11 +29,21 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * {@code sc2106-host-job/v2} job, which a host without pause control refuses before launching
  * anything. At most {@value #MAX_STATUS_LINES} status lines are accepted; a host that writes more
  * is stopped and its run reported lost, never successful.
+ *
+ * <p>SC-2106 R4.2: a {@code sc2106-host-binding/v1} line carries the runner's worker binding. It
+ * goes to the control's binding handler, which commits it before this side answers {@code bound
+ * <bindingId>}; a refusal, a handler failure or a missing handler answers {@code unbound
+ * <bindingId>}. Binding lines count against the same bound as status lines.
  */
 public class ProcessCandidateHostLauncher implements CandidateHostLauncher {
   static final int MAX_OUTCOME_BYTES = 32 << 20;
   static final int STDERR_TAIL_BYTES = 64 << 10;
   static final String STATUS_SCHEMA = "sc2106-host-status/v1";
+  static final String BINDING_SCHEMA = "sc2106-host-binding/v1";
+
+  /** The longest binding id answered; the runner sends a UUID. */
+  static final int MAX_BINDING_ID_CHARS = 128;
+
   static final int MAX_STATUS_LINES = 1024;
 
   /** What {@link #readOutcome} returns when the host exceeded {@link #MAX_STATUS_LINES}. */
@@ -86,16 +96,22 @@ public class ProcessCandidateHostLauncher implements CandidateHostLauncher {
       // Nothing was handed over, so nothing can have run.
       return new HostOutcome(null, false, "HOST_START_FAILED: " + e.getMessage(), null, "");
     }
+    OutputStream stdin = process.getOutputStream();
     CompletableFuture<byte[]> stdout =
         CompletableFuture.supplyAsync(
-            () -> readOutcome(process.getInputStream(), control.listener()));
+            () ->
+                readOutcome(
+                    process.getInputStream(),
+                    control.listener(),
+                    binding -> answerBinding(stdin, control.binding(), binding)));
     CompletableFuture<String> stderr =
         CompletableFuture.supplyAsync(() -> tail(process.getErrorStream()));
-    OutputStream stdin = process.getOutputStream();
     try {
-      stdin.write(MAPPER.writeValueAsBytes(job));
-      stdin.write('\n');
-      stdin.flush();
+      synchronized (stdin) {
+        stdin.write(MAPPER.writeValueAsBytes(job));
+        stdin.write('\n');
+        stdin.flush();
+      }
     } catch (IOException e) {
       destroy(process);
       // The host may have read part of the job; treat it as handed over.
@@ -115,8 +131,7 @@ public class ProcessCandidateHostLauncher implements CandidateHostLauncher {
       if (!cancelSent && paused != pauseSent) {
         pauseSent = paused;
         try {
-          stdin.write((paused ? "pause\n" : "resume\n").getBytes(StandardCharsets.UTF_8));
-          stdin.flush();
+          writeLine(stdin, paused ? "pause" : "resume");
         } catch (IOException ignored) {
           // A host that no longer reads stdin ends with its outcome or the deadline.
         }
@@ -125,8 +140,7 @@ public class ProcessCandidateHostLauncher implements CandidateHostLauncher {
         cancelSent = true;
         cancelDeadline = now + CANCEL_GRACE.toNanos();
         try {
-          stdin.write("cancel\n".getBytes(StandardCharsets.UTF_8));
-          stdin.flush();
+          writeLine(stdin, "cancel");
         } catch (IOException ignored) {
           // A host that no longer reads stdin is handled by the grace deadline.
         }
@@ -167,22 +181,74 @@ public class ProcessCandidateHostLauncher implements CandidateHostLauncher {
    * bound. Status lines are handed to {@code listener}; past {@link #MAX_STATUS_LINES} of them this
    * returns {@link #STATUS_FLOOD}.
    */
-  private static byte[] readOutcome(InputStream in, PauseListener listener) {
+  private static byte[] readOutcome(
+      InputStream in,
+      PauseListener listener,
+      java.util.function.Consumer<Map<String, Object>> bindings) {
     for (int statusLines = 1; ; statusLines++) {
       byte[] line = readLine(in);
       if (line == null) {
         return null;
       }
-      Boolean paused = pausedStatus(line);
-      if (paused == null) {
+      Map<String, Object> binding = bindingLine(line);
+      Boolean paused = binding == null ? pausedStatus(line) : null;
+      if (binding == null && paused == null) {
         return line;
       }
       if (statusLines > MAX_STATUS_LINES) {
         return STATUS_FLOOD;
       }
+      if (binding != null) {
+        bindings.accept(binding);
+        continue;
+      }
       if (listener != null) {
         listener.onPause(paused);
       }
+    }
+  }
+
+  /** A host binding line with a usable {@code bindingId}, or null when the line is not one. */
+  @SuppressWarnings("unchecked")
+  static Map<String, Object> bindingLine(byte[] line) {
+    try {
+      Map<String, Object> document = MAPPER.readValue(line, Map.class);
+      if (BINDING_SCHEMA.equals(document.get("schema"))
+          && document.get("bindingId") instanceof String id
+          && !id.isBlank()
+          && id.length() <= MAX_BINDING_ID_CHARS
+          && id.chars().noneMatch(Character::isWhitespace)) {
+        return document;
+      }
+    } catch (IOException | RuntimeException e) {
+      // Not a binding line.
+    }
+    return null;
+  }
+
+  /**
+   * Answers one binding: {@code bound} only after {@code handler} accepted (committed) it. Runs on
+   * the stdout reader, so no answer is written before the decision returns.
+   */
+  private static void answerBinding(
+      OutputStream stdin, BindingHandler handler, Map<String, Object> binding) {
+    boolean accepted;
+    try {
+      accepted = handler != null && handler.accept(binding);
+    } catch (RuntimeException e) {
+      accepted = false;
+    }
+    try {
+      writeLine(stdin, (accepted ? "bound " : "unbound ") + binding.get("bindingId"));
+    } catch (IOException ignored) {
+      // A host that no longer reads stdin times its runner out; nothing was accepted on its behalf.
+    }
+  }
+
+  private static void writeLine(OutputStream stdin, String line) throws IOException {
+    synchronized (stdin) {
+      stdin.write((line + "\n").getBytes(StandardCharsets.UTF_8));
+      stdin.flush();
     }
   }
 

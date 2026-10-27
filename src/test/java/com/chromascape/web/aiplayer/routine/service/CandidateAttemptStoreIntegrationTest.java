@@ -29,7 +29,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 /**
  * SC-2106 R4, the R6 recovery claim and the R9 controls against a real PostgreSQL (disposable
- * schema; the V71, V73 and V74 migrations as shipped). Run through {@code
+ * schema; the V71, V73, V74 and V75 migrations as shipped). Run through {@code
  * sc2106ManagedAttemptTest}, which fails instead of skipping without a database.
  */
 class CandidateAttemptStoreIntegrationTest {
@@ -57,7 +57,8 @@ class CandidateAttemptStoreIntegrationTest {
         List.of(
             "V71__sc2106_candidate_execution_attempts.sql",
             "V73__sc2106_one_recovery_per_attempt.sql",
-            "V74__sc2106_attempt_controls.sql")) {
+            "V74__sc2106_attempt_controls.sql",
+            "V75__sc2106_attempt_worker_binding.sql")) {
       try (var input =
           CandidateAttemptStoreIntegrationTest.class.getResourceAsStream(
               "/db/migration/" + migration)) {
@@ -75,7 +76,7 @@ class CandidateAttemptStoreIntegrationTest {
 
   @BeforeEach
   void truncate() {
-    jdbc.execute("TRUNCATE candidate_execution_attempts");
+    jdbc.execute("TRUNCATE candidate_execution_attempts, candidate_attempt_worker_bindings");
   }
 
   /** A fresh store instance per call stands in for a separate owner process. */
@@ -459,6 +460,104 @@ class CandidateAttemptStoreIntegrationTest {
     assertFalse(elsewhere.requestCancel(held.attemptId()));
     assertFalse(elsewhere.requestPause(held.attemptId(), false));
     assertEquals(CandidateAttemptStore.Control.NONE, elsewhere.control("attempt-missing"));
+  }
+
+  @Test
+  void onlyTheHolderAcceptsEachNextBindingGenerationOfItsOwnRequest() {
+    CandidateAttemptStore holder = owner();
+    var held =
+        holder
+            .reserve("proposal:p1", "key-1", "job-1", "sha256:f", Duration.ofMinutes(1))
+            .attempt();
+    String id = held.attemptId();
+    assertThrows(
+        CandidateAttemptStore.BindingRejectedException.class,
+        () ->
+            holder.recordBinding(
+                id, held.leaseId(), held.epoch(), binding(id, 1, "sha256:request")),
+        "a reserved attempt has not launched and cannot be bound");
+    holder.markRunning(id, held.leaseId(), held.epoch(), "sha256:request");
+    assertTrue(owner().currentBinding(id).isEmpty(), "unbound until the owner accepts one");
+
+    holder.recordBinding(id, held.leaseId(), held.epoch(), binding(id, 1, "sha256:request"));
+    for (CandidateAttemptStore.WorkerBinding refused :
+        List.of(
+            binding(id, 1, "sha256:request"),
+            binding(id, 3, "sha256:request"),
+            binding(id, 2, "sha256:other"),
+            binding("attempt-foreign", 2, "sha256:request"))) {
+      assertThrows(
+          CandidateAttemptStore.BindingRejectedException.class,
+          () -> holder.recordBinding(id, held.leaseId(), held.epoch(), refused));
+    }
+    assertThrows(
+        CandidateAttemptStore.StaleOwnerException.class,
+        () ->
+            owner()
+                .recordBinding(id, "lease-other", held.epoch(), binding(id, 2, "sha256:request")));
+    assertThrows(
+        CandidateAttemptStore.StaleOwnerException.class,
+        () ->
+            owner()
+                .recordBinding(
+                    id, held.leaseId(), held.epoch() + 1, binding(id, 2, "sha256:request")),
+        "an equal lease under another epoch is still stale");
+    assertEquals(1L, owner().currentBinding(id).orElseThrow().generation());
+
+    holder.recordBinding(id, held.leaseId(), held.epoch(), binding(id, 2, "sha256:request"));
+    CandidateAttemptStore.WorkerBinding current = owner().currentBinding(id).orElseThrow();
+    assertEquals(2L, current.generation());
+    assertEquals("RESTORE", current.reason());
+    assertEquals(Map.of("workerCertifiable", false), current.workerIdentity());
+    assertEquals(
+        2,
+        jdbc.queryForObject(
+            "SELECT count(*) FROM candidate_attempt_worker_bindings WHERE attempt_id = ?",
+            Integer.class,
+            id));
+  }
+
+  @Test
+  void aReconciledOwnerCanNoLongerBindItsAttempt() {
+    CandidateAttemptStore holder = owner();
+    var held =
+        holder
+            .reserve("proposal:p1", "key-1", "job-1", "sha256:f", Duration.ofMillis(200))
+            .attempt();
+    String id = held.attemptId();
+    holder.markRunning(id, held.leaseId(), held.epoch(), "sha256:request");
+    holder.recordBinding(id, held.leaseId(), held.epoch(), binding(id, 1, "sha256:request"));
+    jdbc.update(
+        "UPDATE candidate_execution_attempts SET lease_expires_at = now() - interval '1 second'"
+            + " WHERE attempt_id = ?",
+        id);
+    assertEquals(1, owner().reconcileExpired(Instant.now()));
+
+    assertThrows(
+        CandidateAttemptStore.StaleOwnerException.class,
+        () ->
+            holder.recordBinding(
+                id, held.leaseId(), held.epoch(), binding(id, 2, "sha256:request")),
+        "a cold-restarted owner cannot bind one more worker generation");
+    assertEquals(1L, owner().currentBinding(id).orElseThrow().generation());
+  }
+
+  private static CandidateAttemptStore.WorkerBinding binding(
+      String attemptId, long generation, String requestDigest) {
+    return new CandidateAttemptStore.WorkerBinding(
+        UUID.randomUUID().toString(),
+        generation,
+        attemptId,
+        requestDigest,
+        "candidate-stdio/v1",
+        "sc2106-" + attemptId,
+        generation + 2,
+        "sha256:" + "b".repeat(63) + generation,
+        7L,
+        0L,
+        0L,
+        generation == 1 ? "CREATE" : "RESTORE",
+        Map.of("workerCertifiable", false));
   }
 
   @Test

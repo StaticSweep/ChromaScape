@@ -31,8 +31,24 @@ public interface CandidateHostLauncher {
     void onPause(boolean paused);
   }
 
-  /** The live controls of one run; {@code listener} may be null. */
-  record HostControl(AtomicBoolean cancel, AtomicBoolean pause, PauseListener listener) {}
+  /**
+   * Decides a runner's worker binding (SC-2106 R4.2): true once the binding is durably accepted,
+   * false when it was refused. The host's runner performs no effect until it has the answer.
+   */
+  interface BindingHandler {
+    boolean accept(Map<String, Object> binding);
+  }
+
+  /**
+   * The live controls of one run; {@code listener} and {@code binding} may be null. Without a
+   * binding handler every binding the host reports is refused.
+   */
+  record HostControl(
+      AtomicBoolean cancel, AtomicBoolean pause, PauseListener listener, BindingHandler binding) {
+    public HostControl(AtomicBoolean cancel, AtomicBoolean pause, PauseListener listener) {
+      this(cancel, pause, listener, null);
+    }
+  }
 
   /**
    * What came back from the host.

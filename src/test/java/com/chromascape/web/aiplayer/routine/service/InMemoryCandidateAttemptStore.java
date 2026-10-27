@@ -221,6 +221,42 @@ final class InMemoryCandidateAttemptStore implements CandidateAttemptStore {
     controls.put(attemptId, new Control(c.cancelRequested(), c.pauseRequested(), paused));
   }
 
+  /** Accepted worker bindings by attempt id, in generation order (the V75 table). */
+  final Map<String, java.util.List<WorkerBinding>> bindings = new LinkedHashMap<>();
+
+  @Override
+  public synchronized void recordBinding(
+      String attemptId, String leaseId, long epoch, WorkerBinding binding) {
+    Attempt a = byId.get(attemptId);
+    if (a == null) {
+      throw new BindingRejectedException("attempt " + attemptId + " does not exist");
+    }
+    held(attemptId, leaseId, epoch);
+    if (binding == null) {
+      throw new BindingRejectedException("no binding");
+    }
+    java.util.List<WorkerBinding> accepted =
+        bindings.computeIfAbsent(attemptId, id -> new java.util.ArrayList<>());
+    JdbcCandidateAttemptStore.rejectForeignBinding(
+        attemptId, a.state().name(), a.requestDigest(), accepted.size(), binding);
+    for (java.util.List<WorkerBinding> other : bindings.values()) {
+      for (WorkerBinding existing : other) {
+        if (existing.bindingId().equals(binding.bindingId())) {
+          throw new BindingRejectedException("binding " + binding.bindingId() + " already used");
+        }
+      }
+    }
+    accepted.add(binding);
+  }
+
+  @Override
+  public synchronized Optional<WorkerBinding> currentBinding(String attemptId) {
+    java.util.List<WorkerBinding> accepted = bindings.get(attemptId);
+    return accepted == null || accepted.isEmpty()
+        ? Optional.empty()
+        : Optional.of(accepted.get(accepted.size() - 1));
+  }
+
   /** The attempt's lease runs out; nothing is reconciled yet. */
   synchronized void expire(String attemptId) {
     Attempt a = byId.get(attemptId);
