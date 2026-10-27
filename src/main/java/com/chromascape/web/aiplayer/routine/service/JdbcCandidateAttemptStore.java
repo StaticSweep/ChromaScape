@@ -210,7 +210,7 @@ public class JdbcCandidateAttemptStore implements CandidateAttemptStore {
     }
     return fenced(
         "UPDATE candidate_execution_attempts SET state = ?, job = ?::jsonb, detail = ?,"
-            + " lease_id = NULL, lease_expires_at = NULL, updated_at = now()"
+            + " lease_id = NULL, lease_expires_at = NULL, paused = FALSE, updated_at = now()"
             + " WHERE attempt_id = ? AND lease_id = ? AND epoch = ?"
             + " AND state IN ('RESERVED', 'RUNNING')",
         attemptId,
@@ -228,7 +228,7 @@ public class JdbcCandidateAttemptStore implements CandidateAttemptStore {
         tx ->
             jdbc.update(
                 "UPDATE candidate_execution_attempts SET state = 'UNCERTAIN', epoch = epoch + 1,"
-                    + " lease_id = NULL, lease_expires_at = NULL, updated_at = now(),"
+                    + " lease_id = NULL, lease_expires_at = NULL, paused = FALSE, updated_at = now(),"
                     + " detail = 'owner lease expired at ' || lease_expires_at::text"
                     + " || '; reconciliation required, never relaunched'"
                     + " WHERE state IN ('RESERVED', 'RUNNING') AND lease_expires_at < ?",
@@ -243,6 +243,72 @@ public class JdbcCandidateAttemptStore implements CandidateAttemptStore {
             this::row,
             attemptId);
     return rows.stream().findFirst();
+  }
+
+  @Override
+  public Optional<Attempt> findByKey(String ownerId, String idempotencyKey) {
+    List<Attempt> rows =
+        jdbc.query(
+            "SELECT "
+                + COLUMNS
+                + " FROM candidate_execution_attempts WHERE owner_id = ? AND idempotency_key = ?",
+            this::row,
+            ownerId,
+            idempotencyKey);
+    return rows.stream().findFirst();
+  }
+
+  @Override
+  public Control control(String attemptId) {
+    List<Control> rows =
+        jdbc.query(
+            "SELECT cancel_requested, pause_requested, paused FROM candidate_execution_attempts"
+                + " WHERE attempt_id = ?",
+            (rs, n) ->
+                new Control(
+                    rs.getBoolean("cancel_requested"),
+                    rs.getBoolean("pause_requested"),
+                    rs.getBoolean("paused")),
+            attemptId);
+    return rows.isEmpty() ? Control.NONE : rows.get(0);
+  }
+
+  @Override
+  public boolean requestCancel(String attemptId) {
+    return transactions.execute(
+            tx ->
+                jdbc.update(
+                    "UPDATE candidate_execution_attempts SET cancel_requested = TRUE,"
+                        + " updated_at = now() WHERE attempt_id = ?"
+                        + " AND state IN ('RESERVED', 'RUNNING')",
+                    attemptId))
+        == 1;
+  }
+
+  @Override
+  public boolean requestPause(String attemptId, boolean pause) {
+    return transactions.execute(
+            tx ->
+                jdbc.update(
+                    "UPDATE candidate_execution_attempts SET pause_requested = ?,"
+                        + " updated_at = now() WHERE attempt_id = ?"
+                        + " AND state IN ('RESERVED', 'RUNNING')",
+                    pause,
+                    attemptId))
+        == 1;
+  }
+
+  @Override
+  public void recordPaused(String attemptId, String leaseId, long epoch, boolean paused) {
+    fenced(
+        "UPDATE candidate_execution_attempts SET paused = ?, updated_at = now()"
+            + " WHERE attempt_id = ? AND lease_id = ? AND epoch = ?"
+            + " AND state = 'RUNNING'",
+        attemptId,
+        paused,
+        attemptId,
+        leaseId,
+        epoch);
   }
 
   /** Runs one fenced UPDATE; zero rows means the presented lease or epoch is stale. */

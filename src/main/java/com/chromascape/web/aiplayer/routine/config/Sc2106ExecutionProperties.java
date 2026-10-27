@@ -55,6 +55,9 @@ public class Sc2106ExecutionProperties {
   /** Upper bound on one host run, after which it is cancelled. */
   private Duration hostTimeout = Duration.ofMinutes(20);
 
+  /** Submitted jobs that may run at once; the rest wait QUEUED with their lease renewed. */
+  private int maxConcurrentJobs = 2;
+
   public boolean isEnabled() {
     return enabled;
   }
@@ -151,5 +154,13 @@ public class Sc2106ExecutionProperties {
 
   public void setHostTimeout(Duration hostTimeout) {
     this.hostTimeout = hostTimeout == null ? Duration.ofMinutes(20) : hostTimeout;
+  }
+
+  public int getMaxConcurrentJobs() {
+    return maxConcurrentJobs;
+  }
+
+  public void setMaxConcurrentJobs(int maxConcurrentJobs) {
+    this.maxConcurrentJobs = Math.max(1, maxConcurrentJobs);
   }
 }

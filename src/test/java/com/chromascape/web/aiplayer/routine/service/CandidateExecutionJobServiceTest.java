@@ -722,6 +722,323 @@ class CandidateExecutionJobServiceTest {
     assertFalse(called.get());
   }
 
+  // ---- R9.2 / R9.5 durable job control ----
+
+  @Test
+  void aSubmittedJobIsQueuedThenRunsAndItsStatusReadsBackFromTheStore() throws Exception {
+    CountDownLatch launched = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    CandidateExecutionJobService service =
+        service(
+            (j, timeout, cancel) -> {
+              launched.countDown();
+              awaitLatch(release);
+              return answer(j, false, true, List.of());
+            });
+
+    CandidateExecutionJobService.JobStatus queued = service.submit(PROPOSAL, spec("job-1"));
+    assertEquals(CandidateExecutionJobService.Lifecycle.QUEUED, queued.lifecycle());
+    assertTrue(launched.await(10, TimeUnit.SECONDS));
+    // A refresh, another process or a restarted server reads the same job by its key.
+    CandidateExecutionJobService other = service((j, timeout, cancel) -> fail("never launches"));
+    assertEquals(
+        CandidateExecutionJobService.Lifecycle.RUNNING,
+        other.status(PROPOSAL, "key-job-1").lifecycle());
+    release.countDown();
+
+    CandidateExecutionJobService.JobStatus done =
+        awaitLifecycle(other, "key-job-1", CandidateExecutionJobService.Lifecycle.COMPLETED);
+    assertEquals(queued.attemptId(), done.attemptId());
+    assertEquals("PASS", done.outcome());
+    assertEquals(Sc2106CanonicalJson.sha256("journal"), done.resultRefs().get("journalRef"));
+    assertEquals(Sc2106CanonicalJson.sha256("decisions"), done.resultRefs().get("decisionsRef"));
+    assertTrue(done.resultRefs().containsKey("resultDigest"));
+  }
+
+  @Test
+  void aRepeatedSubmissionReturnsTheSameJobAndChangedInputsConflict() throws Exception {
+    AtomicInteger launches = new AtomicInteger();
+    CandidateExecutionJobService service =
+        service(
+            (j, timeout, cancel) -> {
+              launches.incrementAndGet();
+              return answer(j, false, true, List.of());
+            });
+    CandidateExecutionJobService.JobStatus first = service.submit(PROPOSAL, spec("job-1"));
+    awaitLifecycle(service, "key-job-1", CandidateExecutionJobService.Lifecycle.COMPLETED);
+
+    CandidateExecutionJobService.JobStatus again = service.submit(PROPOSAL, spec("job-1"));
+    assertEquals(first.attemptId(), again.attemptId());
+    assertEquals(CandidateExecutionJobService.Lifecycle.COMPLETED, again.lifecycle());
+    assertEquals(1, launches.get(), "a duplicate submission never launches");
+
+    PatchCandidateWorkflowService.PatchWorkflowException conflict =
+        assertThrows(
+            PatchCandidateWorkflowService.PatchWorkflowException.class,
+            () -> service.submit(PROPOSAL, withSeed(spec("job-1"), "another-seed")));
+    assertEquals("EXECUTION_IDEMPOTENCY_CONFLICT", conflict.code());
+  }
+
+  @Test
+  void aCancelRecordedByAnotherProcessReachesTheRunningJob() throws Exception {
+    CountDownLatch launched = new CountDownLatch(1);
+    AtomicBoolean sawCancel = new AtomicBoolean();
+    CandidateExecutionJobService owner =
+        service(
+            (j, timeout, cancel) -> {
+              launched.countDown();
+              waitUntil(cancel::get);
+              sawCancel.set(true);
+              return cancelledAnswer(j);
+            });
+    owner.submit(PROPOSAL, spec("job-1"));
+    assertTrue(launched.await(10, TimeUnit.SECONDS));
+
+    // Another instance shares only the store: the request must travel through it.
+    CandidateExecutionJobService other = service((j, timeout, cancel) -> fail("never launches"));
+    CandidateExecutionJobService.JobStatus requested = other.requestCancel(PROPOSAL, "key-job-1");
+    assertTrue(requested.cancelRequested());
+
+    CandidateExecutionJobService.JobStatus done =
+        awaitLifecycle(other, "key-job-1", CandidateExecutionJobService.Lifecycle.CANCELLED);
+    assertTrue(sawCancel.get());
+    assertEquals("CANCELLED", done.outcome());
+    PatchCandidateWorkflowService.PatchWorkflowException finished =
+        assertThrows(
+            PatchCandidateWorkflowService.PatchWorkflowException.class,
+            () -> other.requestCancel(PROPOSAL, "key-job-1"));
+    assertEquals("EXECUTION_JOB_NOT_ACTIVE", finished.code());
+  }
+
+  @Test
+  void aJobCancelledWhileQueuedIsNeverLaunched() throws Exception {
+    properties.setMaxConcurrentJobs(1);
+    CountDownLatch launched = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    AtomicInteger launches = new AtomicInteger();
+    CandidateExecutionJobService service =
+        service(
+            (j, timeout, cancel) -> {
+              launches.incrementAndGet();
+              launched.countDown();
+              awaitLatch(release);
+              return answer(j, false, true, List.of());
+            });
+    service.submit(PROPOSAL, spec("job-1"));
+    assertTrue(launched.await(10, TimeUnit.SECONDS));
+    CandidateExecutionJobService.JobStatus second = service.submit(PROPOSAL, spec("job-2"));
+    assertEquals(CandidateExecutionJobService.Lifecycle.QUEUED, second.lifecycle());
+
+    service.requestCancel(PROPOSAL, "key-job-2");
+    release.countDown();
+
+    CandidateExecutionJobService.JobStatus cancelled =
+        awaitLifecycle(service, "key-job-2", CandidateExecutionJobService.Lifecycle.CANCELLED);
+    assertEquals(List.of("CANCELLED_BEFORE_LAUNCH"), cancelled.reasons());
+    awaitLifecycle(service, "key-job-1", CandidateExecutionJobService.Lifecycle.COMPLETED);
+    assertEquals(1, launches.get(), "the cancelled job never reached the host");
+  }
+
+  @Test
+  void aPauseReachesTheHostAndTheObservedPauseIsDurable() throws Exception {
+    CountDownLatch launched = new CountDownLatch(1);
+    AtomicReference<Map<String, Object>> sent = new AtomicReference<>();
+    CandidateExecutionJobService service =
+        service(
+            new CandidateHostLauncher() {
+              @Override
+              public HostOutcome run(
+                  Map<String, Object> job, java.time.Duration timeout, AtomicBoolean cancel) {
+                throw new AssertionError("the service passes pause control");
+              }
+
+              @Override
+              public HostOutcome run(
+                  Map<String, Object> job, java.time.Duration timeout, HostControl control) {
+                sent.set(job);
+                launched.countDown();
+                waitUntil(() -> control.pause().get());
+                control.listener().onPause(true);
+                waitUntil(() -> !control.pause().get());
+                control.listener().onPause(false);
+                return answer(job, false, true, List.of());
+              }
+            });
+    service.submit(PROPOSAL, spec("job-1"));
+    assertTrue(launched.await(10, TimeUnit.SECONDS));
+    assertNull(sent.get().get("startPaused"));
+
+    service.requestPause(PROPOSAL, "key-job-1", true);
+    CandidateExecutionJobService.JobStatus paused =
+        awaitLifecycle(service, "key-job-1", CandidateExecutionJobService.Lifecycle.PAUSED);
+    assertTrue(paused.pauseRequested());
+    assertTrue(paused.paused(), "the runner reported that it parked");
+
+    service.requestPause(PROPOSAL, "key-job-1", false);
+    CandidateExecutionJobService.JobStatus done =
+        awaitLifecycle(service, "key-job-1", CandidateExecutionJobService.Lifecycle.COMPLETED);
+    assertFalse(done.paused());
+    assertFalse(done.pauseRequested());
+  }
+
+  @Test
+  void aRecoveryOfAPausedAttemptStartsPausedUntilResumed() throws Exception {
+    CandidateAttemptStore.Attempt previous =
+        store
+            .reserve(
+                "proposal:" + PROPOSAL,
+                "key-crashed",
+                "job-crashed",
+                CandidateExecutionJobService.fingerprint(PROPOSAL, spec("job-crashed")),
+                java.time.Duration.ofMinutes(1))
+            .attempt();
+    assertTrue(store.requestPause(previous.attemptId(), true));
+    store.expireAndReconcile(previous.attemptId());
+    Files.createDirectories(temp.resolve("runs").resolve(previous.attemptId()).resolve("journal"));
+
+    CountDownLatch launched = new CountDownLatch(1);
+    AtomicReference<Map<String, Object>> sent = new AtomicReference<>();
+    AtomicBoolean startedPaused = new AtomicBoolean();
+    CandidateExecutionJobService service =
+        service(
+            new CandidateHostLauncher() {
+              @Override
+              public HostOutcome run(
+                  Map<String, Object> job, java.time.Duration timeout, AtomicBoolean cancel) {
+                throw new AssertionError("the service passes pause control");
+              }
+
+              @Override
+              public HostOutcome run(
+                  Map<String, Object> job, java.time.Duration timeout, HostControl control) {
+                sent.set(job);
+                startedPaused.set(control.pause().get());
+                launched.countDown();
+                waitUntil(() -> !control.pause().get());
+                return answer(job, false, true, List.of());
+              }
+            });
+
+    CandidateExecutionJobService.JobStatus recovery =
+        service.submitRecovery(PROPOSAL, "key-crashed", spec("job-recovery"));
+    assertTrue(recovery.pauseRequested(), "restored work stays paused");
+    assertTrue(launched.await(10, TimeUnit.SECONDS));
+    assertEquals(Boolean.TRUE, sent.get().get("startPaused"));
+    assertTrue(startedPaused.get());
+    assertEquals(previous.attemptId(), map(sent.get().get("resume")).get("attemptId"));
+
+    service.requestPause(PROPOSAL, "key-job-recovery", false);
+    awaitLifecycle(service, "key-job-recovery", CandidateExecutionJobService.Lifecycle.COMPLETED);
+  }
+
+  @Test
+  void anOpenAttemptWhoseOwnerLeaseRanOutIsReconcilingAndUnknownJobsAreNotFound() {
+    CandidateAttemptStore.Attempt orphan =
+        store
+            .reserve(
+                "proposal:" + PROPOSAL,
+                "key-orphan",
+                "job-orphan",
+                "fingerprint",
+                java.time.Duration.ofMinutes(1))
+            .attempt();
+    store.expire(orphan.attemptId());
+    CandidateExecutionJobService service = service((j, timeout, cancel) -> fail("never"));
+
+    assertEquals(
+        CandidateExecutionJobService.Lifecycle.RECONCILING,
+        service.status(PROPOSAL, "key-orphan").lifecycle());
+    PatchCandidateWorkflowService.PatchWorkflowException missing =
+        assertThrows(
+            PatchCandidateWorkflowService.PatchWorkflowException.class,
+            () -> service.status(PROPOSAL, "key-unknown"));
+    assertEquals("EXECUTION_JOB_NOT_FOUND", missing.code());
+    assertEquals(HttpStatus.NOT_FOUND, missing.status());
+    assertThrows(
+        PatchCandidateWorkflowService.PatchWorkflowException.class,
+        () -> service.status("another-proposal", "key-orphan"),
+        "a job is only visible under its own proposal");
+  }
+
+  private static CandidateHostLauncher.HostOutcome cancelledAnswer(Map<String, Object> job) {
+    CandidateHostLauncher.HostOutcome ok = answer(job, false, true, List.of());
+    @SuppressWarnings("unchecked")
+    Map<String, Object> result = (Map<String, Object>) ok.document().get("result");
+    result.put("status", "CANCELLED");
+    result.put("failureCode", "CANCELLED");
+    result.put("failureDetail", "cancelled by host");
+    result.put("postconditions", Map.of("goalReached", false));
+    reseal(result);
+    return ok;
+  }
+
+  private static CandidateExecutionJobService.JobSpec withSeed(
+      CandidateExecutionJobService.JobSpec s, String worldSeed) {
+    return new CandidateExecutionJobService.JobSpec(
+        s.jobId(),
+        s.idempotencyKey(),
+        s.baselineId(),
+        s.scenarioId(),
+        s.checkpointId(),
+        s.contentVersion(),
+        s.cacheVersion(),
+        s.profileId(),
+        s.recordingId(),
+        s.initialProvenance(),
+        s.task(),
+        s.taskHash(),
+        s.start(),
+        s.executionMode(),
+        worldSeed,
+        s.taskSeed(),
+        s.mouseSeed(),
+        s.budgets());
+  }
+
+  private static CandidateExecutionJobService.JobStatus awaitLifecycle(
+      CandidateExecutionJobService service,
+      String key,
+      CandidateExecutionJobService.Lifecycle lifecycle) {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+    CandidateExecutionJobService.JobStatus status = service.status(PROPOSAL, key);
+    while (status.lifecycle() != lifecycle) {
+      assertTrue(System.nanoTime() < deadline, key + " never became " + lifecycle + ": " + status);
+      sleep(20);
+      status = service.status(PROPOSAL, key);
+    }
+    return status;
+  }
+
+  private static void waitUntil(java.util.function.BooleanSupplier condition) {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+    while (!condition.getAsBoolean()) {
+      if (System.nanoTime() > deadline) {
+        throw new AssertionError("condition never held");
+      }
+      sleep(10);
+    }
+  }
+
+  private static void awaitLatch(CountDownLatch latch) {
+    try {
+      if (!latch.await(15, TimeUnit.SECONDS)) {
+        throw new AssertionError("latch never released");
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new AssertionError(e);
+    }
+  }
+
+  private static void sleep(long millis) {
+    try {
+      Thread.sleep(millis);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new AssertionError(e);
+    }
+  }
+
   private CandidateExecutionJobService service(CandidateHostLauncher host) {
     return new CandidateExecutionJobService(workflow, properties, host, store);
   }

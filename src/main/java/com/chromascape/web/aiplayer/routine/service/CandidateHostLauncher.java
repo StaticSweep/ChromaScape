@@ -18,6 +18,23 @@ public interface CandidateHostLauncher {
   HostOutcome run(Map<String, Object> job, Duration timeout, AtomicBoolean cancel);
 
   /**
+   * As above, with live pause control (SC-2106 R9.2): while {@code control.pause} is set the run
+   * parks before its next step, and {@code control.listener} hears when it actually parked or
+   * resumed. A launcher without pause support ignores both.
+   */
+  default HostOutcome run(Map<String, Object> job, Duration timeout, HostControl control) {
+    return run(job, timeout, control.cancel());
+  }
+
+  /** Hears the host report that the run parked ({@code true}) or resumed ({@code false}). */
+  interface PauseListener {
+    void onPause(boolean paused);
+  }
+
+  /** The live controls of one run; {@code listener} may be null. */
+  record HostControl(AtomicBoolean cancel, AtomicBoolean pause, PauseListener listener) {}
+
+  /**
    * What came back from the host.
    *
    * @param document the parsed outcome line, or null when none arrived

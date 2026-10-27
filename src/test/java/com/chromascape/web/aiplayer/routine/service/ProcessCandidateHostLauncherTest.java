@@ -1,0 +1,81 @@
+package com.chromascape.web.aiplayer.routine.service;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
+
+/** The SC-2106 R9.2 pause lines between ChromaScape and the host process. */
+class ProcessCandidateHostLauncherTest {
+
+  @Test
+  void onlyAHostStatusLineIsAPauseReport() {
+    assertEquals(
+        Boolean.TRUE,
+        ProcessCandidateHostLauncher.pausedStatus(
+            bytes("{\"schema\":\"sc2106-host-status/v1\",\"paused\":true}")));
+    assertEquals(
+        Boolean.FALSE,
+        ProcessCandidateHostLauncher.pausedStatus(
+            bytes("{\"schema\":\"sc2106-host-status/v1\",\"paused\":false}")));
+    assertNull(
+        ProcessCandidateHostLauncher.pausedStatus(
+            bytes("{\"schema\":\"sc2106-host-outcome/v1\"}")));
+    assertNull(
+        ProcessCandidateHostLauncher.pausedStatus(bytes("{\"schema\":\"sc2106-host-status/v1\"}")));
+    assertNull(ProcessCandidateHostLauncher.pausedStatus(bytes("not json")));
+  }
+
+  @Test
+  @DisabledOnOs(OS.WINDOWS)
+  void pauseAndResumeTravelAsLinesAndTheOutcomeFollowsTheStatusLines() throws Exception {
+    // A stand-in host: answers pause and resume like CandidateHostMain, then writes its outcome.
+    String host =
+        "read job; "
+            + "read control; [ \"$control\" = pause ] && echo '{\"schema\":\"sc2106-host-status/v1\",\"paused\":true}'; "
+            + "read control; [ \"$control\" = resume ] && echo '{\"schema\":\"sc2106-host-status/v1\",\"paused\":false}'; "
+            + "echo '{\"schema\":\"sc2106-host-outcome/v1\",\"answered\":true}'";
+    ProcessCandidateHostLauncher launcher =
+        new ProcessCandidateHostLauncher(List.of("sh", "-c", host), Map.of(), null);
+    AtomicBoolean pause = new AtomicBoolean();
+    List<Boolean> reported = new CopyOnWriteArrayList<>();
+
+    CompletableFuture<CandidateHostLauncher.HostOutcome> running =
+        CompletableFuture.supplyAsync(
+            () ->
+                launcher.run(
+                    Map.of("schema", "sc2106-host-job/v1"),
+                    Duration.ofSeconds(30),
+                    new CandidateHostLauncher.HostControl(
+                        new AtomicBoolean(), pause, reported::add)));
+    pause.set(true);
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+    while (!reported.contains(Boolean.TRUE)) {
+      assertTrue(System.nanoTime() < deadline, "the host never reported paused");
+      Thread.sleep(10);
+    }
+    assertFalse(running.isDone(), "a status line is not the outcome");
+    pause.set(false);
+
+    CandidateHostLauncher.HostOutcome outcome = running.get(10, TimeUnit.SECONDS);
+    assertFalse(outcome.lost(), String.valueOf(outcome.detail()));
+    assertEquals(Boolean.TRUE, outcome.document().get("answered"));
+    assertEquals(List.of(Boolean.TRUE, Boolean.FALSE), reported);
+  }
+
+  private static byte[] bytes(String text) {
+    return text.getBytes(StandardCharsets.UTF_8);
+  }
+}

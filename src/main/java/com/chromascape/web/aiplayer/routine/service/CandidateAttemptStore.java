@@ -107,4 +107,31 @@ public interface CandidateAttemptStore {
   int reconcileExpired(Instant now);
 
   Optional<Attempt> find(String attemptId);
+
+  /** The attempt an (owner, idempotency key) pair names, if any. */
+  Optional<Attempt> findByKey(String ownerId, String idempotencyKey);
+
+  /**
+   * What operators asked of an attempt and what its owner observed (SC-2106 R9.2, R9.5). Requests
+   * are durable, so they reach the owning process wherever they were made.
+   *
+   * @param cancelRequested a cancel was asked for
+   * @param pauseRequested the run should be parked (survives the attempt, for its recovery)
+   * @param paused the owner observed the runner parked
+   */
+  record Control(boolean cancelRequested, boolean pauseRequested, boolean paused) {
+    static final Control NONE = new Control(false, false, false);
+  }
+
+  /** The controls of {@code attemptId}; {@link Control#NONE} when there is no such attempt. */
+  Control control(String attemptId);
+
+  /** Records a cancel request; false when the attempt is not open (nothing left to cancel). */
+  boolean requestCancel(String attemptId);
+
+  /** Records a pause ({@code true}) or resume request; false when the attempt is not open. */
+  boolean requestPause(String attemptId, boolean pause);
+
+  /** The owner's report that the runner parked or resumed; fenced like every owner write. */
+  void recordPaused(String attemptId, String leaseId, long epoch, boolean paused);
 }

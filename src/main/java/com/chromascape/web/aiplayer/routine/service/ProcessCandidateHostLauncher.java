@@ -22,10 +22,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * owner is gone, so it is closed only to cancel or after the outcome arrived. Cancellation first
  * sends {@code cancel}, then waits a grace period for the host's own outcome; only then is the
  * process tree destroyed. Stdout is bounded to one outcome line; stderr keeps a bounded tail.
+ *
+ * <p>SC-2106 R9.2: a change of the pause flag is sent as a {@code pause} or {@code resume} line.
+ * The host answers with {@code sc2106-host-status/v1} lines when the run actually parks or resumes;
+ * those reach the listener, and the outcome is the first other line.
  */
 public class ProcessCandidateHostLauncher implements CandidateHostLauncher {
   static final int MAX_OUTCOME_BYTES = 32 << 20;
   static final int STDERR_TAIL_BYTES = 64 << 10;
+  static final String STATUS_SCHEMA = "sc2106-host-status/v1";
   private static final Duration CANCEL_GRACE = Duration.ofSeconds(30);
   private static final long POLL_MILLIS = 100L;
 
@@ -54,6 +59,13 @@ public class ProcessCandidateHostLauncher implements CandidateHostLauncher {
 
   @Override
   public HostOutcome run(Map<String, Object> job, Duration timeout, AtomicBoolean cancel) {
+    return run(job, timeout, new HostControl(cancel, new AtomicBoolean(), null));
+  }
+
+  @Override
+  public HostOutcome run(Map<String, Object> job, Duration timeout, HostControl control) {
+    AtomicBoolean cancel = control.cancel();
+    AtomicBoolean pause = control.pause() == null ? new AtomicBoolean() : control.pause();
     Process process;
     try {
       ProcessBuilder builder = new ProcessBuilder(command);
@@ -67,7 +79,8 @@ public class ProcessCandidateHostLauncher implements CandidateHostLauncher {
       return new HostOutcome(null, false, "HOST_START_FAILED: " + e.getMessage(), null, "");
     }
     CompletableFuture<byte[]> stdout =
-        CompletableFuture.supplyAsync(() -> readLine(process.getInputStream()));
+        CompletableFuture.supplyAsync(
+            () -> readOutcome(process.getInputStream(), control.listener()));
     CompletableFuture<String> stderr =
         CompletableFuture.supplyAsync(() -> tail(process.getErrorStream()));
     OutputStream stdin = process.getOutputStream();
@@ -84,9 +97,20 @@ public class ProcessCandidateHostLauncher implements CandidateHostLauncher {
 
     long deadline = System.nanoTime() + timeout.toNanos();
     boolean cancelSent = false;
+    boolean pauseSent = false;
     long cancelDeadline = Long.MAX_VALUE;
     while (!stdout.isDone()) {
       long now = System.nanoTime();
+      boolean paused = pause.get();
+      if (!cancelSent && paused != pauseSent) {
+        pauseSent = paused;
+        try {
+          stdin.write((paused ? "pause\n" : "resume\n").getBytes(StandardCharsets.UTF_8));
+          stdin.flush();
+        } catch (IOException ignored) {
+          // A host that no longer reads stdin ends with its outcome or the deadline.
+        }
+      }
       if (!cancelSent && (cancel.get() || now >= deadline)) {
         cancelSent = true;
         cancelDeadline = now + CANCEL_GRACE.toNanos();
@@ -124,7 +148,41 @@ public class ProcessCandidateHostLauncher implements CandidateHostLauncher {
     }
   }
 
-  /** The first line of stdout, or null on EOF or when it exceeds the bound. */
+  /**
+   * The first stdout line that is not a host status line, or null on EOF or when a line exceeds the
+   * bound. Status lines are handed to {@code listener}.
+   */
+  private static byte[] readOutcome(InputStream in, PauseListener listener) {
+    for (; ; ) {
+      byte[] line = readLine(in);
+      if (line == null) {
+        return null;
+      }
+      Boolean paused = pausedStatus(line);
+      if (paused == null) {
+        return line;
+      }
+      if (listener != null) {
+        listener.onPause(paused);
+      }
+    }
+  }
+
+  /** The {@code paused} flag of a host status line, or null when the line is not one. */
+  static Boolean pausedStatus(byte[] line) {
+    try {
+      Map<?, ?> document = MAPPER.readValue(line, Map.class);
+      if (STATUS_SCHEMA.equals(document.get("schema"))
+          && document.get("paused") instanceof Boolean paused) {
+        return paused;
+      }
+    } catch (IOException | RuntimeException e) {
+      // Not a status line; the caller treats it as the outcome.
+    }
+    return null;
+  }
+
+  /** One line of stdout, or null on EOF or when it exceeds the bound. */
   private static byte[] readLine(InputStream in) {
     ByteArrayOutputStream line = new ByteArrayOutputStream();
     try {

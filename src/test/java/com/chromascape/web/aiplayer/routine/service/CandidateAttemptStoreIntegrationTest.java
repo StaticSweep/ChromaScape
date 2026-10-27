@@ -28,9 +28,9 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 /**
- * SC-2106 R4 and the R6 recovery claim against a real PostgreSQL (disposable schema; the V71 and
- * V73 migrations as shipped). Run through {@code sc2106ManagedAttemptTest}, which fails instead of
- * skipping without a database.
+ * SC-2106 R4, the R6 recovery claim and the R9 controls against a real PostgreSQL (disposable
+ * schema; the V71, V73 and V74 migrations as shipped). Run through {@code
+ * sc2106ManagedAttemptTest}, which fails instead of skipping without a database.
  */
 class CandidateAttemptStoreIntegrationTest {
   private static JdbcTemplate admin;
@@ -56,7 +56,8 @@ class CandidateAttemptStoreIntegrationTest {
     for (String migration :
         List.of(
             "V71__sc2106_candidate_execution_attempts.sql",
-            "V73__sc2106_one_recovery_per_attempt.sql")) {
+            "V73__sc2106_one_recovery_per_attempt.sql",
+            "V74__sc2106_attempt_controls.sql")) {
       try (var input =
           CandidateAttemptStoreIntegrationTest.class.getResourceAsStream(
               "/db/migration/" + migration)) {
@@ -417,6 +418,68 @@ class CandidateAttemptStoreIntegrationTest {
     var after = restarted.find(held.attemptId()).orElseThrow();
     assertEquals(CandidateAttemptStore.State.UNCERTAIN, after.state());
     assertNull(after.job());
+  }
+
+  @Test
+  void controlsAreDurableAcrossOwnersAndOnlyTheHolderRecordsAPause() {
+    CandidateAttemptStore holder = owner();
+    var held =
+        holder
+            .reserve("proposal:p1", "key-1", "job-1", "sha256:f", Duration.ofMinutes(1))
+            .attempt();
+    assertEquals(
+        held.attemptId(), owner().findByKey("proposal:p1", "key-1").orElseThrow().attemptId());
+    assertTrue(owner().findByKey("proposal:p2", "key-1").isEmpty(), "keys are per owner");
+
+    // Another process records the requests; the holder reads them from the row.
+    CandidateAttemptStore elsewhere = owner();
+    assertTrue(elsewhere.requestPause(held.attemptId(), true));
+    assertEquals(
+        new CandidateAttemptStore.Control(false, true, false), holder.control(held.attemptId()));
+    holder.markRunning(held.attemptId(), held.leaseId(), held.epoch(), "sha256:request");
+    holder.recordPaused(held.attemptId(), held.leaseId(), held.epoch(), true);
+    assertTrue(elsewhere.control(held.attemptId()).paused());
+    assertThrows(
+        CandidateAttemptStore.StaleOwnerException.class,
+        () -> elsewhere.recordPaused(held.attemptId(), "lease-other", held.epoch(), false),
+        "only the lease holder reports what the runner did");
+    assertTrue(elsewhere.requestCancel(held.attemptId()));
+    assertTrue(holder.control(held.attemptId()).cancelRequested());
+
+    // Finishing releases the observed pause; a finished attempt takes no more requests.
+    holder.finish(
+        held.attemptId(),
+        held.leaseId(),
+        held.epoch(),
+        CandidateAttemptStore.State.CANCELLED,
+        Map.of("outcome", "CANCELLED"),
+        "cancelled");
+    assertEquals(
+        new CandidateAttemptStore.Control(true, true, false), elsewhere.control(held.attemptId()));
+    assertFalse(elsewhere.requestCancel(held.attemptId()));
+    assertFalse(elsewhere.requestPause(held.attemptId(), false));
+    assertEquals(CandidateAttemptStore.Control.NONE, elsewhere.control("attempt-missing"));
+  }
+
+  @Test
+  void reconciliationKeepsTheRequestedPauseForTheRecovery() {
+    CandidateAttemptStore holder = owner();
+    var held =
+        holder
+            .reserve("proposal:p1", "key-1", "job-1", "sha256:f", Duration.ofMillis(200))
+            .attempt();
+    holder.markRunning(held.attemptId(), held.leaseId(), held.epoch(), "sha256:request");
+    holder.requestPause(held.attemptId(), true);
+    holder.recordPaused(held.attemptId(), held.leaseId(), held.epoch(), true);
+    jdbc.update(
+        "UPDATE candidate_execution_attempts SET lease_expires_at = now() - interval '1 second'"
+            + " WHERE attempt_id = ?",
+        held.attemptId());
+
+    assertEquals(1, owner().reconcileExpired(Instant.now()));
+    var control = owner().control(held.attemptId());
+    assertTrue(control.pauseRequested(), "a recovery of this attempt must start paused");
+    assertFalse(control.paused(), "nothing is parked once the owner is gone");
   }
 
   @Test
