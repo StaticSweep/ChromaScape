@@ -2,15 +2,65 @@ package com.chromascape.web.aiplayer.routine.service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /** Test double with the same fencing rules as {@link JdbcCandidateAttemptStore}. */
 final class InMemoryCandidateAttemptStore implements CandidateAttemptStore {
+  private static final EnumSet<State> CLAIMING =
+      EnumSet.of(State.RESERVED, State.RUNNING, State.COMPLETED, State.UNCERTAIN);
+
   final Map<String, Attempt> byId = new LinkedHashMap<>();
+
+  /** Recovery attempt id to the attempt it recovers, as the V73 {@code recovers} column. */
+  final Map<String, String> recovers = new LinkedHashMap<>();
+
   int launchesMarked;
+
+  /**
+   * When set, recording a result fails as a lost database connection would (R6 metadata commit).
+   */
+  RuntimeException finishFailure;
+
+  @Override
+  public synchronized Reservation reserveRecovery(
+      String ownerId,
+      String idempotencyKey,
+      String jobId,
+      String fingerprint,
+      Duration lease,
+      String recovered) {
+    for (Attempt existing : byId.values()) {
+      if (existing.ownerId().equals(ownerId) && existing.idempotencyKey().equals(idempotencyKey)) {
+        return new Reservation(existing, false);
+      }
+    }
+    Set<String> ancestors = new HashSet<>();
+    String root = recovered;
+    for (String id = recovered; id != null; id = recovers.get(id)) {
+      ancestors.add(id);
+      root = id;
+    }
+    for (Attempt claim : byId.values()) {
+      String claimRoot = claim.attemptId();
+      while (recovers.containsKey(claimRoot)) {
+        claimRoot = recovers.get(claimRoot);
+      }
+      if (claimRoot.equals(root)
+          && !ancestors.contains(claim.attemptId())
+          && CLAIMING.contains(claim.state())) {
+        throw new RecoveryClaimedException(recovered, claim.attemptId());
+      }
+    }
+    Reservation reservation = reserve(ownerId, idempotencyKey, jobId, fingerprint, lease);
+    recovers.put(reservation.attempt().attemptId(), recovered);
+    return reservation;
+  }
 
   @Override
   public synchronized Reservation reserve(
@@ -86,6 +136,9 @@ final class InMemoryCandidateAttemptStore implements CandidateAttemptStore {
       State state,
       Map<String, Object> job,
       String detail) {
+    if (finishFailure != null) {
+      throw finishFailure;
+    }
     Attempt a = held(attemptId, leaseId, epoch);
     return put(with(a, state, null, a.epoch(), null, a.requestDigest(), job, detail));
   }
@@ -114,6 +167,21 @@ final class InMemoryCandidateAttemptStore implements CandidateAttemptStore {
   @Override
   public synchronized Optional<Attempt> find(String attemptId) {
     return Optional.ofNullable(byId.get(attemptId));
+  }
+
+  /** The attempt's lease runs out; nothing is reconciled yet. */
+  synchronized void expire(String attemptId) {
+    Attempt a = byId.get(attemptId);
+    put(
+        with(
+            a,
+            a.state(),
+            a.leaseId(),
+            a.epoch(),
+            Instant.EPOCH,
+            a.requestDigest(),
+            a.job(),
+            a.detail()));
   }
 
   /** Simulates another owner taking the attempt over (reconciliation after a lost lease). */

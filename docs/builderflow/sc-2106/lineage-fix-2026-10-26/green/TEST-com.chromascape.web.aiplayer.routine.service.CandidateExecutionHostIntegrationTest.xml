@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.service.CandidateExecutionHostIntegrationTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-26T15:02:13.267Z" hostname="fedora" time="11.551">
+  <properties/>
+  <testcase name="aHostThatTrustsAnotherKeyRefusesBeforeLaunch()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionHostIntegrationTest" time="4.568"/>
+  <testcase name="aChromaScapeSignedCandidateReachesItsGoalThroughTheRealHost()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionHostIntegrationTest" time="6.976"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

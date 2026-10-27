@@ -1,0 +1,621 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.service.CandidateOwnerCrashIntegrationTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-26T15:02:40.558Z" hostname="fedora" time="64.762">
+  <properties/>
+  <testcase name="anOwnerKilledMidRunIsReconciledUncertainAndRecoversLikeTheReference()" classname="com.chromascape.web.aiplayer.routine.service.CandidateOwnerCrashIntegrationTest" time="64.762"/>
+  <system-out><![CDATA[16:02:40.120 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing SQL statement [CREATE SCHEMA sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:40.196 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:40.197 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test]
+16:02:40.385 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing SQL statement [-- SC-2106 R4: one row per candidate execution attempt; the row lock is the commit boundary.
+-- (owner_id, idempotency_key) maps to exactly one attempt. Every mutation after the reservation
+-- is fenced on (lease_id, epoch); reconciliation bumps the epoch so a stale owner can never write,
+-- even when it still holds the same lease id.
+CREATE TABLE candidate_execution_attempts (
+    attempt_id       TEXT PRIMARY KEY,
+    owner_id         TEXT NOT NULL,
+    idempotency_key  TEXT NOT NULL,
+    job_id           TEXT NOT NULL,
+    fingerprint      TEXT NOT NULL,
+    state            TEXT NOT NULL CHECK (state IN
+                         ('RESERVED', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED', 'UNCERTAIN')),
+    lease_id         TEXT,
+    epoch            BIGINT NOT NULL CHECK (epoch >= 1),
+    lease_expires_at TIMESTAMPTZ,
+    request_digest   TEXT,
+    job              JSONB,
+    detail           TEXT,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT candidate_execution_attempts_owner_key UNIQUE (owner_id, idempotency_key)
+);
+
+CREATE INDEX candidate_execution_attempts_open
+    ON candidate_execution_attempts (lease_expires_at)
+    WHERE state IN ('RESERVED', 'RUNNING');
+]
+16:02:40.387 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:40.387 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:40.506 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing SQL statement [-- SC-2106 R6: database defence for immediate siblings. The repository additionally locks the
+-- original attempt and checks its whole recovery lineage before reserving any continuation.
+-- At most one immediate recovery of an attempt may be
+-- live (RESERVED, RUNNING), finished (COMPLETED) or itself uncertain (UNCERTAIN) at any time, so two
+-- callers can never both continue the same attempt. A recovery that ended FAILED or CANCELLED
+-- releases the claim and the attempt may be recovered again; an UNCERTAIN recovery is recovered in
+-- its own right instead. (V72 is taken by an unmerged branch.)
+ALTER TABLE candidate_execution_attempts
+    ADD COLUMN recovers TEXT REFERENCES candidate_execution_attempts (attempt_id);
+
+CREATE UNIQUE INDEX candidate_execution_attempts_one_recovery
+    ON candidate_execution_attempts (recovers)
+    WHERE recovers IS NOT NULL AND state IN ('RESERVED', 'RUNNING', 'COMPLETED', 'UNCERTAIN');
+]
+16:02:40.508 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:40.508 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:54.866 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:54.867 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:54.868 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:54.868 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:55.025 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:55.026 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:55.026 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:55.026 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:55.145 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:55.145 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:55.146 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:55.146 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:55.264 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:55.265 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:55.265 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:55.265 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:55.388 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:55.389 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:55.389 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:55.390 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:55.512 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:55.512 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:55.513 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:55.513 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:55.642 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:55.642 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:55.643 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:55.643 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:55.764 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:55.765 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:55.765 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:55.766 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:55.885 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:55.886 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:55.886 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:55.886 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:56.007 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:56.007 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:56.007 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:56.008 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:56.129 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:56.130 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:56.130 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:56.131 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:56.249 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:56.249 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:56.250 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:56.250 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:56.370 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:56.371 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:56.371 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:56.371 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:56.507 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:56.510 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:56.510 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:56.511 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:56.632 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:56.632 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:56.632 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:56.633 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:56.751 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:56.752 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:56.752 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:56.752 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:56.875 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:56.877 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:56.878 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:56.878 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:56.996 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:56.997 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:56.997 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:56.998 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:57.123 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:57.123 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:57.123 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:57.124 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:57.241 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:57.242 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:57.242 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:57.243 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:57.363 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:57.364 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:57.364 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:57.364 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:57.483 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:57.483 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:57.483 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:57.484 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:57.602 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:57.602 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:57.603 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:57.603 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:57.721 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:57.721 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:57.721 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:57.722 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:57.840 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:57.840 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:57.840 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:57.841 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:57.960 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:57.961 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:57.961 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:57.961 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:58.079 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:58.079 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:58.079 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:58.080 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:58.198 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:58.198 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:58.198 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:58.199 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:58.319 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:58.320 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:58.320 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:58.320 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:58.448 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:58.449 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:58.450 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:58.451 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:58.578 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:58.579 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:58.579 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:58.579 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:58.698 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:58.698 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:58.698 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:58.699 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:58.821 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:58.822 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:58.822 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:58.822 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:58.946 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:58.947 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:58.947 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:58.947 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:59.069 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:59.069 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:59.069 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:59.069 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:59.189 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:59.189 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:59.190 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:59.190 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:59.310 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:59.311 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:59.311 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:59.311 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:59.433 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:59.434 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:59.434 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:59.434 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:59.551 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:59.552 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:59.552 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:59.552 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:59.670 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:59.671 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:59.671 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:59.671 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:59.789 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:59.789 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:59.789 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:59.789 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:02:59.907 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:02:59.908 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:02:59.908 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:02:59.908 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:00.026 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:00.027 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:00.027 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:00.027 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:00.150 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:00.151 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:00.151 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:00.151 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:00.269 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:00.269 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:00.269 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:00.270 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:00.388 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:00.389 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:00.389 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:00.389 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:00.513 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:00.514 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:00.514 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:00.514 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:00.633 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:00.634 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:00.634 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:00.634 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:00.754 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:00.754 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:00.754 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:00.754 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:00.880 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:00.881 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:00.881 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:00.881 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:00.998 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:00.999 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:00.999 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:00.999 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:01.120 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:01.121 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:01.121 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:01.122 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:01.241 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:01.241 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:01.242 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:01.242 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:01.359 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:01.359 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:01.359 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:01.360 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:01.477 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:01.478 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:01.478 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:01.478 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:01.596 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:01.596 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:01.596 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:01.596 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:01.718 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:01.719 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:01.719 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:01.719 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:01.837 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:01.838 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:01.838 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:01.838 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:01.959 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:01.960 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:01.960 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:01.960 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:02.087 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:02.087 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:02.088 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:02.088 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:02.205 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:02.206 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:02.206 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:02.206 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:02.327 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:02.328 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:02.328 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:02.329 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:02.448 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:02.448 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:02.448 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:02.449 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:02.568 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:02.568 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:02.568 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:02.569 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:02.685 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:02.686 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:02.686 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:02.686 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:02.803 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:02.804 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:02.804 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:02.804 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:02.921 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:02.921 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:02.921 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:02.922 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:03.041 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:03.041 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:03.041 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:03.042 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:03.160 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:03.160 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:03.160 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:03.161 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:03.280 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:03.281 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:03.281 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:03.281 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:03.402 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:03.403 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:03.403 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:03.403 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:03.527 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:03.528 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:03.528 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:03.529 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:03.650 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:03.650 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:03.651 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:03.651 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:03.781 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:03.782 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:03.782 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:03.782 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:03.906 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:03.906 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:03.906 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:03.906 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:04.044 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:04.045 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:04.045 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:04.045 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:04.177 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:04.182 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:04.182 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:04.182 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:04.309 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:04.309 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:04.309 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:04.309 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:04.430 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:04.431 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:04.431 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:04.431 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:04.563 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:04.563 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:04.564 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:04.564 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:04.690 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:04.691 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:04.691 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:04.692 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:04.817 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:04.817 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:04.817 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:04.818 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:04.937 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:04.937 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:04.937 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:04.937 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:05.065 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:05.065 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:05.065 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:05.065 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:05.191 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:05.191 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:05.191 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:05.191 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:05.309 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:05.309 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:05.309 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:05.310 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:05.427 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:05.428 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:05.428 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:05.428 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:05.546 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:05.547 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:05.547 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:05.547 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:05.665 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:05.665 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:05.665 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:05.665 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:05.783 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:05.783 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:05.783 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:05.783 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:05.903 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:05.905 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:05.905 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:05.906 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:06.027 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:06.028 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:06.028 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:06.028 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:06.146 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:06.146 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:06.146 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:06.146 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:06.263 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:06.263 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:06.264 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:06.264 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:06.383 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:06.383 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:06.383 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:06.383 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:06.501 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:06.501 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:06.501 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:06.501 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:06.618 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:06.618 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:06.618 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:06.619 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:06.735 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:06.736 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:06.736 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:06.736 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:06.853 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:06.853 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:06.853 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:06.854 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:06.971 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:06.971 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:06.971 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:06.971 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:07.089 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:07.089 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:07.089 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:07.089 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:07.205 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:07.206 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:07.206 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:07.206 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:07.325 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:07.326 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:07.326 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:07.326 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:07.444 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:07.444 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:07.444 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:07.444 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:07.562 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:07.562 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:07.562 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:07.563 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:07.680 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:07.680 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:07.680 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:07.680 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:07.806 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:07.806 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:07.806 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:07.807 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:07.924 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:07.924 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:07.925 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:07.925 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:08.044 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:08.044 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:08.044 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:08.044 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:08.162 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:08.163 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:08.163 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:08.163 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:08.282 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:08.282 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:08.282 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:08.282 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:08.403 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:08.404 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:08.404 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:08.404 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:08.524 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:08.524 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:08.524 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:08.524 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:08.641 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:08.641 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:08.641 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:08.641 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:08.758 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:08.758 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:08.758 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:08.758 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:08.877 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:08.877 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:08.877 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:08.877 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:08.994 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:08.994 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:08.994 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:08.994 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:09.115 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:09.115 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:09.115 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:09.115 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:09.234 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:09.234 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE idempotency_key = ? AND state = 'RUNNING']
+16:03:09.234 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:09.234 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:17.656 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:17.656 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id, owner_id, idempotency_key, job_id, fingerprint, state, lease_id, epoch, lease_expires_at, request_digest, job::text, detail FROM candidate_execution_attempts WHERE attempt_id = ?]
+16:03:17.656 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:17.656 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:37.068 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Creating new transaction with name [null]: PROPAGATION_REQUIRED,ISOLATION_READ_COMMITTED,timeout_60
+16:03:37.070 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:37.081 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Acquired Connection [org.postgresql.jdbc.PgConnection@63088bbd] for JDBC transaction
+16:03:37.090 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Changing isolation level of JDBC Connection [org.postgresql.jdbc.PgConnection@63088bbd] to 2
+16:03:37.092 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Switching JDBC Connection [org.postgresql.jdbc.PgConnection@63088bbd] to manual commit
+16:03:37.093 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL update
+16:03:37.094 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [UPDATE candidate_execution_attempts SET state = 'UNCERTAIN', epoch = epoch + 1, lease_id = NULL, lease_expires_at = NULL, updated_at = now(), detail = 'owner lease expired at ' || lease_expires_at::text || '; reconciliation required, never relaunched' WHERE state IN ('RESERVED', 'RUNNING') AND lease_expires_at < ?]
+16:03:37.104 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Initiating transaction commit
+16:03:37.105 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Committing JDBC transaction on Connection [org.postgresql.jdbc.PgConnection@63088bbd]
+16:03:37.165 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Releasing JDBC Connection [org.postgresql.jdbc.PgConnection@63088bbd] after transaction
+16:03:37.165 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:37.165 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id, owner_id, idempotency_key, job_id, fingerprint, state, lease_id, epoch, lease_expires_at, request_digest, job::text, detail FROM candidate_execution_attempts WHERE attempt_id = ?]
+16:03:37.165 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:37.166 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:37.186 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing SQL query [SELECT count(*) FROM candidate_execution_attempts]
+16:03:37.187 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:37.187 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:37.802 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Creating new transaction with name [null]: PROPAGATION_REQUIRED,ISOLATION_READ_COMMITTED,timeout_60
+16:03:37.802 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:37.812 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Acquired Connection [org.postgresql.jdbc.PgConnection@6208f81c] for JDBC transaction
+16:03:37.813 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Changing isolation level of JDBC Connection [org.postgresql.jdbc.PgConnection@6208f81c] to 2
+16:03:37.815 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Switching JDBC Connection [org.postgresql.jdbc.PgConnection@6208f81c] to manual commit
+16:03:37.816 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL update
+16:03:37.819 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [UPDATE candidate_execution_attempts SET state = 'UNCERTAIN', epoch = epoch + 1, lease_id = NULL, lease_expires_at = NULL, updated_at = now(), detail = 'owner lease expired at ' || lease_expires_at::text || '; reconciliation required, never relaunched' WHERE state IN ('RESERVED', 'RUNNING') AND lease_expires_at < ?]
+16:03:37.829 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Initiating transaction commit
+16:03:37.829 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Committing JDBC transaction on Connection [org.postgresql.jdbc.PgConnection@6208f81c]
+16:03:37.830 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Releasing JDBC Connection [org.postgresql.jdbc.PgConnection@6208f81c] after transaction
+16:03:37.831 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:37.831 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id, owner_id, idempotency_key, job_id, fingerprint, state, lease_id, epoch, lease_expires_at, request_digest, job::text, detail FROM candidate_execution_attempts WHERE attempt_id = ?]
+16:03:37.831 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:37.831 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:37.860 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Creating new transaction with name [null]: PROPAGATION_REQUIRED,ISOLATION_READ_COMMITTED,timeout_60
+16:03:37.860 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:37.869 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Acquired Connection [org.postgresql.jdbc.PgConnection@521d455c] for JDBC transaction
+16:03:37.870 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Changing isolation level of JDBC Connection [org.postgresql.jdbc.PgConnection@521d455c] to 2
+16:03:37.871 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Switching JDBC Connection [org.postgresql.jdbc.PgConnection@521d455c] to manual commit
+16:03:37.871 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing SQL statement [SET LOCAL lock_timeout = '5s']
+16:03:37.872 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:37.872 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [WITH RECURSIVE ancestors AS ( SELECT attempt_id, recovers FROM candidate_execution_attempts WHERE attempt_id = ? UNION SELECT parent.attempt_id, parent.recovers FROM candidate_execution_attempts parent JOIN ancestors a ON parent.attempt_id = a.recovers) SELECT attempt_id FROM ancestors WHERE recovers IS NULL]
+16:03:37.880 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:37.881 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id FROM candidate_execution_attempts WHERE attempt_id = ? FOR UPDATE]
+16:03:37.883 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:37.883 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id, owner_id, idempotency_key, job_id, fingerprint, state, lease_id, epoch, lease_expires_at, request_digest, job::text, detail FROM candidate_execution_attempts WHERE owner_id = ? AND idempotency_key = ? FOR UPDATE]
+16:03:37.885 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:37.885 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [WITH RECURSIVE ancestors AS ( SELECT attempt_id, recovers FROM candidate_execution_attempts WHERE attempt_id = ? UNION SELECT parent.attempt_id, parent.recovers FROM candidate_execution_attempts parent JOIN ancestors a ON parent.attempt_id = a.recovers), family AS (SELECT attempt_id, state FROM candidate_execution_attempts WHERE attempt_id = (SELECT attempt_id FROM ancestors WHERE recovers IS NULL) UNION SELECT child.attempt_id, child.state FROM candidate_execution_attempts child JOIN family f ON child.recovers = f.attempt_id) SELECT attempt_id FROM family WHERE state IN ('RESERVED', 'RUNNING', 'COMPLETED', 'UNCERTAIN') AND attempt_id NOT IN (SELECT attempt_id FROM ancestors) LIMIT 1]
+16:03:37.890 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL update
+16:03:37.891 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [INSERT INTO candidate_execution_attempts(attempt_id, owner_id, idempotency_key, job_id, fingerprint, state, lease_id, epoch, lease_expires_at, recovers) VALUES (?, ?, ?, ?, ?, 'RESERVED', ?, 1, now() + ?::interval, ?) ON CONFLICT (owner_id, idempotency_key) DO NOTHING]
+16:03:37.893 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:37.894 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id, owner_id, idempotency_key, job_id, fingerprint, state, lease_id, epoch, lease_expires_at, request_digest, job::text, detail FROM candidate_execution_attempts WHERE owner_id = ? AND idempotency_key = ? FOR UPDATE]
+16:03:37.895 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Initiating transaction commit
+16:03:37.895 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Committing JDBC transaction on Connection [org.postgresql.jdbc.PgConnection@521d455c]
+16:03:37.909 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Releasing JDBC Connection [org.postgresql.jdbc.PgConnection@521d455c] after transaction
+16:03:39.143 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Creating new transaction with name [null]: PROPAGATION_REQUIRED,ISOLATION_READ_COMMITTED,timeout_60
+16:03:39.143 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:39.152 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Acquired Connection [org.postgresql.jdbc.PgConnection@6ad703cd] for JDBC transaction
+16:03:39.152 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Changing isolation level of JDBC Connection [org.postgresql.jdbc.PgConnection@6ad703cd] to 2
+16:03:39.153 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Switching JDBC Connection [org.postgresql.jdbc.PgConnection@6ad703cd] to manual commit
+16:03:39.154 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing SQL statement [SET LOCAL lock_timeout = '5s']
+16:03:39.155 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL update
+16:03:39.155 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [UPDATE candidate_execution_attempts SET state = 'RUNNING', request_digest = ?, updated_at = now() WHERE attempt_id = ? AND lease_id = ? AND epoch = ? AND state = 'RESERVED']
+16:03:39.164 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:39.164 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id, owner_id, idempotency_key, job_id, fingerprint, state, lease_id, epoch, lease_expires_at, request_digest, job::text, detail FROM candidate_execution_attempts WHERE attempt_id = ?]
+16:03:39.166 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Initiating transaction commit
+16:03:39.166 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Committing JDBC transaction on Connection [org.postgresql.jdbc.PgConnection@6ad703cd]
+16:03:39.171 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Releasing JDBC Connection [org.postgresql.jdbc.PgConnection@6ad703cd] after transaction
+16:03:45.242 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Creating new transaction with name [null]: PROPAGATION_REQUIRED,ISOLATION_READ_COMMITTED,timeout_60
+16:03:45.243 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:45.256 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Acquired Connection [org.postgresql.jdbc.PgConnection@123e87cd] for JDBC transaction
+16:03:45.256 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Changing isolation level of JDBC Connection [org.postgresql.jdbc.PgConnection@123e87cd] to 2
+16:03:45.257 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Switching JDBC Connection [org.postgresql.jdbc.PgConnection@123e87cd] to manual commit
+16:03:45.257 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing SQL statement [SET LOCAL lock_timeout = '5s']
+16:03:45.258 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL update
+16:03:45.258 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [UPDATE candidate_execution_attempts SET state = ?, job = ?::jsonb, detail = ?, lease_id = NULL, lease_expires_at = NULL, updated_at = now() WHERE attempt_id = ? AND lease_id = ? AND epoch = ? AND state IN ('RESERVED', 'RUNNING')]
+16:03:45.269 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:45.269 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id, owner_id, idempotency_key, job_id, fingerprint, state, lease_id, epoch, lease_expires_at, request_digest, job::text, detail FROM candidate_execution_attempts WHERE attempt_id = ?]
+16:03:45.276 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Initiating transaction commit
+16:03:45.276 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Committing JDBC transaction on Connection [org.postgresql.jdbc.PgConnection@123e87cd]
+16:03:45.283 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceTransactionManager - Releasing JDBC Connection [org.postgresql.jdbc.PgConnection@123e87cd] after transaction
+16:03:45.284 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL query
+16:03:45.284 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing prepared SQL statement [SELECT attempt_id, owner_id, idempotency_key, job_id, fingerprint, state, lease_id, epoch, lease_expires_at, request_digest, job::text, detail FROM candidate_execution_attempts WHERE attempt_id = ?]
+16:03:45.284 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:45.284 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test?currentSchema=sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd]
+16:03:45.327 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - Executing SQL statement [DROP SCHEMA sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd CASCADE]
+16:03:45.327 [Test worker] DEBUG org.springframework.jdbc.datasource.DataSourceUtils - Fetching JDBC Connection from DataSource
+16:03:45.327 [Test worker] DEBUG org.springframework.jdbc.datasource.DriverManagerDataSource - Creating new JDBC DriverManager Connection to [jdbc:postgresql://127.0.0.1:32769/test]
+16:03:45.361 [Test worker] DEBUG org.springframework.jdbc.core.JdbcTemplate - SQLWarning ignored: SQL state '00000', error code '0', message [drop cascades to table sc2106_owner_crash_bde632f2744f47f18bda3b6d31e5b6fd.candidate_execution_attempts]
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

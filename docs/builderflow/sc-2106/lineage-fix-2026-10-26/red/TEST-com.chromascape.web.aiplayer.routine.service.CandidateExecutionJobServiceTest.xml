@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-10-26T14:54:43.624Z" hostname="fedora" time="2.704">
+  <properties/>
+  <testcase name="aFailedRecoverysDescendantPreventsAnAncestorFromLaunchingAgain()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="2.704">
+    <failure message="org.opentest4j.AssertionFailedError: Unexpected exception type thrown, expected: &lt;com.chromascape.web.aiplayer.routine.service.PatchCandidateWorkflowService.PatchWorkflowException&gt; but was: &lt;org.opentest4j.AssertionFailedError&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: Unexpected exception type thrown, expected: &lt;com.chromascape.web.aiplayer.routine.service.PatchCandidateWorkflowService.PatchWorkflowException&gt; but was: &lt;org.opentest4j.AssertionFailedError&gt;
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at app//org.junit.jupiter.api.AssertThrows.assertThrows(AssertThrows.java:67)
+	at app//org.junit.jupiter.api.AssertThrows.assertThrows(AssertThrows.java:35)
+	at app//org.junit.jupiter.api.Assertions.assertThrows(Assertions.java:3128)
+	at app//com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest.lambda$aFailedRecoverysDescendantPreventsAnAncestorFromLaunchingAgain$39(CandidateExecutionJobServiceTest.java:530)
+	at app//com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobService.run(CandidateExecutionJobService.java:305)
+	at app//com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobService.recover(CandidateExecutionJobService.java:225)
+	at app//com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest.aFailedRecoverysDescendantPreventsAnAncestorFromLaunchingAgain(CandidateExecutionJobServiceTest.java:535)
+	at java.base@17.0.20.1/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+Caused by: org.opentest4j.AssertionFailedError: an ancestor must never launch
+	at app//org.junit.jupiter.api.AssertionUtils.fail(AssertionUtils.java:38)
+	at app//org.junit.jupiter.api.Assertions.fail(Assertions.java:138)
+	at app//com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest.lambda$aFailedRecoverysDescendantPreventsAnAncestorFromLaunchingAgain$37(CandidateExecutionJobServiceTest.java:532)
+	at app//com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobService.run(CandidateExecutionJobService.java:305)
+	at app//com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobService.recover(CandidateExecutionJobService.java:225)
+	at app//com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest.lambda$aFailedRecoverysDescendantPreventsAnAncestorFromLaunchingAgain$38(CandidateExecutionJobServiceTest.java:533)
+	at app//org.junit.jupiter.api.AssertThrows.assertThrows(AssertThrows.java:53)
+	... 9 more
+</failure>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

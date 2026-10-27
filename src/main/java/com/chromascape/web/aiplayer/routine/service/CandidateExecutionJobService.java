@@ -54,6 +54,7 @@ public class CandidateExecutionJobService {
   private final CandidateHostLauncher host;
   private final CandidateAttemptStore attempts;
   private final Map<String, AtomicBoolean> active = new ConcurrentHashMap<>();
+  private volatile Map<String, Object> fault;
   private final ObjectMapper mapper = new ObjectMapper();
   private final ScheduledExecutorService leaseRenewal =
       Executors.newSingleThreadScheduledExecutor(
@@ -81,6 +82,14 @@ public class CandidateExecutionJobService {
     this.properties = properties;
     this.host = host;
     this.attempts = attempts;
+  }
+
+  /**
+   * Test seam for the SC-2106 R6 fault matrix: every later job carries this fault to the runner,
+   * which accepts it only for a development worker. No request or endpoint can set it.
+   */
+  void injectFault(Map<String, Object> fault) {
+    this.fault = fault;
   }
 
   /**
@@ -164,6 +173,9 @@ public class CandidateExecutionJobService {
           "EXECUTION_OWNERSHIP_UNAVAILABLE",
           "no durable attempt store is configured");
     }
+    // An owner that died, or could not record its result, leaves the attempt open until its lease
+    // runs out; reconciling first makes it UNCERTAIN here instead of only at the next startup.
+    attempts.reconcileExpired(Instant.now());
     CandidateAttemptStore.Attempt previous =
         attempts
             .find(previousAttemptId == null ? "" : previousAttemptId)
@@ -242,13 +254,30 @@ public class CandidateExecutionJobService {
           "no durable attempt store is configured");
     }
     Duration lease = attemptLease();
-    CandidateAttemptStore.Reservation reservation =
-        attempts.reserve(
-            "proposal:" + proposalId,
-            spec.idempotencyKey(),
-            spec.jobId(),
-            reservationFingerprint(proposalId, spec, resume),
-            lease);
+    CandidateAttemptStore.Reservation reservation;
+    try {
+      reservation =
+          resume == null
+              ? attempts.reserve(
+                  "proposal:" + proposalId,
+                  spec.idempotencyKey(),
+                  spec.jobId(),
+                  reservationFingerprint(proposalId, spec, null),
+                  lease)
+              : attempts.reserveRecovery(
+                  "proposal:" + proposalId,
+                  spec.idempotencyKey(),
+                  spec.jobId(),
+                  reservationFingerprint(proposalId, spec, resume),
+                  lease,
+                  String.valueOf(resume.get("attemptId")));
+    } catch (CandidateAttemptStore.RecoveryClaimedException e) {
+      // Two recoveries can never both continue one attempt (R6.5).
+      throw failure(
+          HttpStatus.CONFLICT,
+          "EXECUTION_RECOVERY_CLAIMED",
+          e.getMessage() + "; recover that attempt instead if it is uncertain");
+    }
     CandidateAttemptStore.Attempt attempt = reservation.attempt();
     if (!reservation.created()) {
       return reattach(attempt, reservationFingerprint(proposalId, spec, resume), spec);
@@ -275,14 +304,25 @@ public class CandidateExecutionJobService {
       CandidateHostLauncher.HostOutcome outcome =
           launcher().run(job, properties.getHostTimeout(), cancel);
       ExecutionJob result = interpret(spec.jobId(), attemptId, request, outcome);
-      attempts.finish(
-          attemptId,
-          attempt.leaseId(),
-          attempt.epoch(),
-          stateOf(result.outcome()),
-          mapper.convertValue(result, MAP),
-          String.join("; ", result.reasons()));
+      try {
+        attempts.finish(
+            attemptId,
+            attempt.leaseId(),
+            attempt.epoch(),
+            stateOf(result.outcome()),
+            mapper.convertValue(result, MAP),
+            String.join("; ", result.reasons()));
+      } catch (CandidateAttemptStore.StaleOwnerException e) {
+        throw e;
+      } catch (RuntimeException e) {
+        throw new ResultUnrecorded(attemptId, e);
+      }
       return result;
+    } catch (ResultUnrecorded e) {
+      // The run happened but its result is not durable (R6 metadata commit). It is not reported
+      // as final and the attempt is not settled here: it stays open until its lease runs out, then
+      // becomes UNCERTAIN, and an explicit recovery resumes from its sealed journal.
+      throw failure(HttpStatus.SERVICE_UNAVAILABLE, "EXECUTION_RESULT_UNRECORDED", e.getMessage());
     } catch (CandidateAttemptStore.StaleOwnerException e) {
       // Another owner (or reconciliation) holds this attempt now; never report our view as final.
       throw failure(HttpStatus.CONFLICT, "EXECUTION_OWNER_FENCED", e.getMessage());
@@ -304,6 +344,13 @@ public class CandidateExecutionJobService {
   }
 
   private static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() {};
+
+  /** A finished run whose result could not be written to the attempt store. */
+  private static final class ResultUnrecorded extends RuntimeException {
+    ResultUnrecorded(String attemptId, RuntimeException cause) {
+      super("attempt " + attemptId + " ran but its result was not recorded: " + cause.getMessage());
+    }
+  }
 
   /**
    * A duplicate request reattaches to the attempt it names; it never launches a second run. Only a
@@ -563,6 +610,9 @@ public class CandidateExecutionJobService {
     job.put("workspaceRoot", directory(properties.getWorkspaceRoot(), "workspaceRoot").toString());
     job.put("workingDirectory", runDirectory.toString());
     job.put("environment", properties.getChildEnvironment());
+    if (fault != null) {
+      job.put("fault", fault);
+    }
     return job;
   }
 

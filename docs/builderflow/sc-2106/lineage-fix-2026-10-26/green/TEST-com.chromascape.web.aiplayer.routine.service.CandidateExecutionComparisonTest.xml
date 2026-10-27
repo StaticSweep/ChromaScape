@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.service.CandidateExecutionComparisonTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-10-26T15:06:19.398Z" hostname="fedora" time="0.037">
+  <properties/>
+  <testcase name="aFailedBaselineIsNotComparable()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionComparisonTest" time="0.008"/>
+  <testcase name="differentBudgetsOrSeedsAreReported()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionComparisonTest" time="0.003"/>
+  <testcase name="equalConditionsWithDifferentPostconditionsDiverge()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionComparisonTest" time="0.003"/>
+  <testcase name="aPendingReconciliationIsNotComparable()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionComparisonTest" time="0.002"/>
+  <testcase name="aDifferentScenarioIsReportedAsNonEquivalent()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionComparisonTest" time="0.002"/>
+  <testcase name="equivalentCleanRunsWithEqualOutcomesMatch()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionComparisonTest" time="0.002"/>
+  <testcase name="theCandidateIdentityItselfDoesNotBreakEquivalence()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionComparisonTest" time="0.003"/>
+  <testcase name="aDifferentCoreIsNonEquivalentButADifferentCandidatePackageIsNot()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionComparisonTest" time="0.003"/>
+  <testcase name="aBaseResultWithoutACandidateIsNotAComparison()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionComparisonTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

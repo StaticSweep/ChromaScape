@@ -1,0 +1,9 @@
+./gradlew
+--offline
+--continue
+sc2106HostIntegrationTest
+sc2106OwnerCrashTest
+-Psc967VectorsPath=../contracts-sc967-closure/sc967/ed25519-vectors.json
+-Psc967ReportDir=/tmp/sc2106-lineage-green-20261026
+-Psc2106Micro6Build=../micro6-sc2104-sc2106/runelite-client/build
+-Psc2106XrspsPackage=/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/xrsps-typescript/packages/replay-kernel
