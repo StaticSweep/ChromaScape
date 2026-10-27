@@ -25,12 +25,20 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p>SC-2106 R9.2: a change of the pause flag is sent as a {@code pause} or {@code resume} line.
  * The host answers with {@code sc2106-host-status/v1} lines when the run actually parks or resumes;
- * those reach the listener, and the outcome is the first other line.
+ * those reach the listener, and the outcome is the first other line. Status lines belong to a
+ * {@code sc2106-host-job/v2} job, which a host without pause control refuses before launching
+ * anything. At most {@value #MAX_STATUS_LINES} status lines are accepted; a host that writes more
+ * is stopped and its run reported lost, never successful.
  */
 public class ProcessCandidateHostLauncher implements CandidateHostLauncher {
   static final int MAX_OUTCOME_BYTES = 32 << 20;
   static final int STDERR_TAIL_BYTES = 64 << 10;
   static final String STATUS_SCHEMA = "sc2106-host-status/v1";
+  static final int MAX_STATUS_LINES = 1024;
+
+  /** What {@link #readOutcome} returns when the host exceeded {@link #MAX_STATUS_LINES}. */
+  private static final byte[] STATUS_FLOOD = new byte[0];
+
   private static final Duration CANCEL_GRACE = Duration.ofSeconds(30);
   private static final long POLL_MILLIS = 100L;
 
@@ -97,7 +105,9 @@ public class ProcessCandidateHostLauncher implements CandidateHostLauncher {
 
     long deadline = System.nanoTime() + timeout.toNanos();
     boolean cancelSent = false;
-    boolean pauseSent = false;
+    // A job that starts paused is already parked on the host; a resume before the first poll
+    // must still be sent.
+    boolean pauseSent = Boolean.TRUE.equals(job.get("startPaused"));
     long cancelDeadline = Long.MAX_VALUE;
     while (!stdout.isDone()) {
       long now = System.nanoTime();
@@ -132,8 +142,12 @@ public class ProcessCandidateHostLauncher implements CandidateHostLauncher {
       }
       sleep(cancel);
     }
-    closeQuietly(stdin);
     byte[] line = stdout.join();
+    if (line == STATUS_FLOOD) {
+      destroy(process);
+      return new HostOutcome(null, true, "HOST_STATUS_FLOOD", null, stderr.join());
+    }
+    closeQuietly(stdin);
     Integer exit = awaitExit(process);
     String errTail = stderr.join();
     if (line == null || line.length == 0) {
@@ -150,10 +164,11 @@ public class ProcessCandidateHostLauncher implements CandidateHostLauncher {
 
   /**
    * The first stdout line that is not a host status line, or null on EOF or when a line exceeds the
-   * bound. Status lines are handed to {@code listener}.
+   * bound. Status lines are handed to {@code listener}; past {@link #MAX_STATUS_LINES} of them this
+   * returns {@link #STATUS_FLOOD}.
    */
   private static byte[] readOutcome(InputStream in, PauseListener listener) {
-    for (; ; ) {
+    for (int statusLines = 1; ; statusLines++) {
       byte[] line = readLine(in);
       if (line == null) {
         return null;
@@ -161,6 +176,9 @@ public class ProcessCandidateHostLauncher implements CandidateHostLauncher {
       Boolean paused = pausedStatus(line);
       if (paused == null) {
         return line;
+      }
+      if (statusLines > MAX_STATUS_LINES) {
+        return STATUS_FLOOD;
       }
       if (listener != null) {
         listener.onPause(paused);

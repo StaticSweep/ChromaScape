@@ -5,7 +5,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Hands one {@code sc2106-host-job/v1} to the Micro6 candidate host and returns its single {@code
+ * Hands one {@code sc2106-host-job/v2} to the Micro6 candidate host and returns its single {@code
  * sc2106-host-outcome/v1} (SC-2106 R9.1). The host verifies and supervises the run; this side only
  * carries the job, the cancellation signal and the outcome.
  */

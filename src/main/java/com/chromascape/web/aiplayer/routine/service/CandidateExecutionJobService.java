@@ -943,7 +943,8 @@ public class CandidateExecutionJobService {
         properties.getWorkerDirectory().isBlank() ? null : properties.getWorkerDirectory());
     worker.put("developmentIdentity", properties.isDevelopmentWorker());
     Map<String, Object> job = new LinkedHashMap<>();
-    job.put("schema", "sc2106-host-job/v1");
+    // v2 carries pause control; a host without it refuses the job before launching (R9.2).
+    job.put("schema", "sc2106-host-job/v2");
     job.put("request", request.toMap());
     job.put("task", spec.task());
     job.put("start", spec.start());

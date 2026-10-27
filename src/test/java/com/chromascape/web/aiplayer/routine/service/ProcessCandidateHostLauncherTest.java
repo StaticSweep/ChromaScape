@@ -56,7 +56,7 @@ class ProcessCandidateHostLauncherTest {
         CompletableFuture.supplyAsync(
             () ->
                 launcher.run(
-                    Map.of("schema", "sc2106-host-job/v1"),
+                    Map.of("schema", "sc2106-host-job/v2"),
                     Duration.ofSeconds(30),
                     new CandidateHostLauncher.HostControl(
                         new AtomicBoolean(), pause, reported::add)));
@@ -73,6 +73,59 @@ class ProcessCandidateHostLauncherTest {
     assertFalse(outcome.lost(), String.valueOf(outcome.detail()));
     assertEquals(Boolean.TRUE, outcome.document().get("answered"));
     assertEquals(List.of(Boolean.TRUE, Boolean.FALSE), reported);
+  }
+
+  @Test
+  @DisabledOnOs(OS.WINDOWS)
+  void aResumeBeforeTheFirstPollStillReachesAJobThatStartedPaused() throws Exception {
+    // The host parks a startPaused job; only a resume line lets it answer.
+    String host =
+        "read job; read control; [ \"$control\" = resume ] && "
+            + "echo '{\"schema\":\"sc2106-host-outcome/v1\",\"answered\":true}'";
+    ProcessCandidateHostLauncher launcher =
+        new ProcessCandidateHostLauncher(List.of("sh", "-c", host), Map.of(), null);
+
+    CandidateHostLauncher.HostOutcome outcome =
+        launcher.run(
+            Map.of("schema", "sc2106-host-job/v2", "startPaused", true),
+            Duration.ofSeconds(10),
+            // Resumed already: the pause flag is clear before the launcher's first poll.
+            new CandidateHostLauncher.HostControl(new AtomicBoolean(), new AtomicBoolean(), null));
+
+    assertFalse(outcome.lost(), String.valueOf(outcome.detail()));
+    assertEquals(Boolean.TRUE, outcome.document().get("answered"));
+  }
+
+  @Test
+  @DisabledOnOs(OS.WINDOWS)
+  void aHostFloodingStatusLinesIsStoppedAndNeverSucceeds() {
+    String status = "{\"schema\":\"sc2106-host-status/v1\",\"paused\":true}";
+    String host =
+        "read job; i=0; while [ $i -le "
+            + (ProcessCandidateHostLauncher.MAX_STATUS_LINES + 1)
+            + " ]; do echo '"
+            + status
+            + "'; i=$((i+1)); done; "
+            + "echo '{\"schema\":\"sc2106-host-outcome/v1\",\"answered\":true}'; sleep 60";
+    ProcessCandidateHostLauncher launcher =
+        new ProcessCandidateHostLauncher(List.of("sh", "-c", host), Map.of(), null);
+    List<Boolean> reported = new CopyOnWriteArrayList<>();
+
+    long started = System.nanoTime();
+    CandidateHostLauncher.HostOutcome outcome =
+        launcher.run(
+            Map.of("schema", "sc2106-host-job/v2"),
+            Duration.ofSeconds(30),
+            new CandidateHostLauncher.HostControl(
+                new AtomicBoolean(), new AtomicBoolean(), reported::add));
+
+    assertTrue(outcome.lost());
+    assertNull(outcome.document());
+    assertEquals("HOST_STATUS_FLOOD", outcome.detail());
+    assertEquals(ProcessCandidateHostLauncher.MAX_STATUS_LINES, reported.size());
+    assertTrue(
+        System.nanoTime() - started < TimeUnit.SECONDS.toNanos(20),
+        "the flooding host is stopped, not waited out");
   }
 
   private static byte[] bytes(String text) {

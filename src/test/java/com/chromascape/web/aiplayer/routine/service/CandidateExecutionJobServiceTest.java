@@ -136,7 +136,7 @@ class CandidateExecutionJobServiceTest {
     body.remove("requestDigest");
     assertEquals(Sc2106CanonicalJson.sha256(body), wire.get("requestDigest"));
     assertEquals(job.requestDigest(), wire.get("requestDigest"));
-    assertEquals("sc2106-host-job/v1", sent.get().get("schema"));
+    assertEquals("sc2106-host-job/v2", sent.get().get("schema"));
     assertEquals(Boolean.TRUE, map(sent.get().get("worker")).get("developmentIdentity"));
     assertTrue(
         Files.isDirectory(Path.of(String.valueOf(sent.get().get("workingDirectory")))),
