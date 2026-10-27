@@ -1788,6 +1788,7 @@ tasks.register<Test>("sc663ManifestTest") {
 tasks.test {
 	exclude("com/chromascape/web/aiplayer/routine/service/CandidateExecutionHostIntegrationTest*")
 	exclude("com/chromascape/web/aiplayer/routine/service/CandidateAttemptStoreIntegrationTest*")
+	exclude("com/chromascape/web/aiplayer/routine/service/CandidateOwnerCrashIntegrationTest*")
 }
 
 // SC-2106 R4: durable attempt ownership against a real PostgreSQL. Required, not optional: the
@@ -1805,6 +1806,32 @@ tasks.register<Test>("sc2106ManagedAttemptTest") {
 	afterSuite(KotlinClosure2<TestDescriptor, TestResult, Unit>({ descriptor, result ->
 		if (descriptor.parent == null && (result.testCount == 0L || result.skippedTestCount > 0L)) {
 			throw GradleException("SC-2106 managed attempt tests must run every test")
+		}
+	}))
+}
+tasks.register<Test>("sc2106OwnerCrashTest") {
+	group = "verification"
+	description = "Kills a ChromaScape owner JVM mid-run and recovers its attempt (real host, worker and PostgreSQL)"
+	testClassesDirs = sourceSets.test.get().output.classesDirs
+	classpath = sourceSets.test.get().runtimeClasspath
+	useJUnitPlatform()
+	filter {
+		isFailOnNoMatchingTests = true
+		includeTestsMatching("com.chromascape.web.aiplayer.routine.service.CandidateOwnerCrashIntegrationTest")
+	}
+	val micro6Build = providers.gradleProperty("sc2106Micro6Build")
+		.orElse("../micro6/runelite-client/build")
+	systemProperty("sc2106.micro6.build", file(micro6Build.get()).absolutePath)
+	systemProperty("sc2106.xrsps.package", providers.gradleProperty("sc2106XrspsPackage")
+		.orElse(providers.environmentVariable("XRSPS_PACKAGE_DIR")).getOrElse(""))
+	doFirst {
+		systemProperty("sc967.vectors.path", file(sc967VectorsPath.get()).canonicalFile.absolutePath)
+		// The owner JVM the test kills runs from this same classpath.
+		systemProperty("sc2106.test.classpath", sourceSets.test.get().runtimeClasspath.asPath)
+	}
+	afterSuite(KotlinClosure2<TestDescriptor, TestResult, Unit>({ descriptor, result ->
+		if (descriptor.parent == null && (result.testCount == 0L || result.skippedTestCount > 0L)) {
+			throw GradleException("SC-2106 owner-crash test must run, not skip")
 		}
 	}))
 }

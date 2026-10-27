@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.service.PatchCandidateRegisteredCandidateTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-26T15:06:23.987Z" hostname="fedora" time="0.481">
+  <properties/>
+  <testcase name="everyStateButRegisteredIsRefused()" classname="com.chromascape.web.aiplayer.routine.service.PatchCandidateRegisteredCandidateTest" time="0.449"/>
+  <testcase name="aRegisteredCandidateWithoutApprovalIsRefused()" classname="com.chromascape.web.aiplayer.routine.service.PatchCandidateRegisteredCandidateTest" time="0.007"/>
+  <testcase name="aRegisteredCandidateWhoseBundleCannotBeVerifiedIsRefused()" classname="com.chromascape.web.aiplayer.routine.service.PatchCandidateRegisteredCandidateTest" time="0.023"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

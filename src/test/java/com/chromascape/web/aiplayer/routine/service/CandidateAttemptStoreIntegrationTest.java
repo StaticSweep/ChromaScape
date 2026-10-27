@@ -28,8 +28,9 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 /**
- * SC-2106 R4 against a real PostgreSQL (disposable schema; the V71 migration as shipped). Run
- * through {@code sc2106ManagedAttemptTest}, which fails instead of skipping without a database.
+ * SC-2106 R4 and the R6 recovery claim against a real PostgreSQL (disposable schema; the V71 and
+ * V73 migrations as shipped). Run through {@code sc2106ManagedAttemptTest}, which fails instead of
+ * skipping without a database.
  */
 class CandidateAttemptStoreIntegrationTest {
   private static JdbcTemplate admin;
@@ -52,10 +53,15 @@ class CandidateAttemptStoreIntegrationTest {
         new DriverManagerDataSource(
             url + (url.contains("?") ? "&" : "?") + "currentSchema=" + schema, user, password);
     jdbc = new JdbcTemplate(dataSource);
-    try (var input =
-        CandidateAttemptStoreIntegrationTest.class.getResourceAsStream(
-            "/db/migration/V71__sc2106_candidate_execution_attempts.sql")) {
-      jdbc.execute(new String(input.readAllBytes(), StandardCharsets.UTF_8));
+    for (String migration :
+        List.of(
+            "V71__sc2106_candidate_execution_attempts.sql",
+            "V73__sc2106_one_recovery_per_attempt.sql")) {
+      try (var input =
+          CandidateAttemptStoreIntegrationTest.class.getResourceAsStream(
+              "/db/migration/" + migration)) {
+        jdbc.execute(new String(input.readAllBytes(), StandardCharsets.UTF_8));
+      }
     }
   }
 
@@ -109,6 +115,261 @@ class CandidateAttemptStoreIntegrationTest {
     assertEquals(1, created);
     assertEquals(
         1, jdbc.queryForObject("SELECT count(*) FROM candidate_execution_attempts", Integer.class));
+  }
+
+  /** An attempt whose owner died: UNCERTAIN, as a recovery finds it. */
+  private static String uncertainSource() {
+    CandidateAttemptStore store = owner();
+    var held =
+        store
+            .reserve("proposal:p1", "crashed", "job-0", "sha256:f", Duration.ofMinutes(1))
+            .attempt();
+    store.markRunning(held.attemptId(), held.leaseId(), held.epoch(), "sha256:request");
+    jdbc.update(
+        "UPDATE candidate_execution_attempts SET lease_expires_at = now() - interval '1 second'"
+            + " WHERE attempt_id = ?",
+        held.attemptId());
+    store.reconcileExpired(Instant.now());
+    return held.attemptId();
+  }
+
+  @Test
+  void simultaneousRecoveriesOfOneAttemptYieldExactlyOne() throws Exception {
+    String source = uncertainSource();
+    int threads = 12;
+    ExecutorService pool = Executors.newFixedThreadPool(threads);
+    CountDownLatch go = new CountDownLatch(1);
+    List<Future<Object>> results = new ArrayList<>();
+    for (int i = 0; i < threads; i++) {
+      String key = "recover-" + i;
+      Callable<Object> recover =
+          () -> {
+            go.await();
+            try {
+              return owner()
+                  .reserveRecovery(
+                      "proposal:p1", key, "job-r", "sha256:r", Duration.ofMinutes(1), source);
+            } catch (CandidateAttemptStore.RecoveryClaimedException e) {
+              return e;
+            }
+          };
+      results.add(pool.submit(recover));
+    }
+    go.countDown();
+    String winner = null;
+    int claimed = 0;
+    for (Future<Object> f : results) {
+      Object r = f.get();
+      if (r instanceof CandidateAttemptStore.Reservation reservation) {
+        assertTrue(reservation.created());
+        assertNull(winner, "only one recovery is reserved");
+        winner = reservation.attempt().attemptId();
+      } else {
+        claimed++;
+      }
+    }
+    pool.shutdownNow();
+    assertEquals(threads - 1, claimed);
+    for (Future<Object> f : results) {
+      if (f.get() instanceof CandidateAttemptStore.RecoveryClaimedException e) {
+        assertEquals(winner, e.holder(), "the refusal names the recovery that holds the claim");
+      }
+    }
+    assertEquals(
+        1,
+        jdbc.queryForObject(
+            "SELECT count(*) FROM candidate_execution_attempts WHERE recovers = ?",
+            Integer.class,
+            source));
+  }
+
+  @Test
+  void aRecoveryRetryReattachesAndOnlyAFailedRecoveryReleasesTheClaim() {
+    String source = uncertainSource();
+    CandidateAttemptStore store = owner();
+    var first =
+        store.reserveRecovery(
+            "proposal:p1", "recover-a", "job-r", "sha256:r", Duration.ofMinutes(1), source);
+    var retry =
+        owner()
+            .reserveRecovery(
+                "proposal:p1", "recover-a", "job-r", "sha256:r", Duration.ofMinutes(1), source);
+    assertFalse(retry.created(), "the same key reattaches; the claim index never fires");
+    assertEquals(first.attempt().attemptId(), retry.attempt().attemptId());
+
+    var held = first.attempt();
+    store.markRunning(held.attemptId(), held.leaseId(), held.epoch(), "sha256:r");
+    store.finish(
+        held.attemptId(),
+        held.leaseId(),
+        held.epoch(),
+        CandidateAttemptStore.State.FAILED,
+        Map.of("outcome", "FAILED"),
+        "CHECKPOINT_INCOMPLETE");
+    var second =
+        owner()
+            .reserveRecovery(
+                "proposal:p1", "recover-b", "job-r", "sha256:r", Duration.ofMinutes(1), source);
+    assertTrue(second.created(), "a FAILED recovery released its claim");
+
+    var next = second.attempt();
+    store.finish(
+        next.attemptId(),
+        next.leaseId(),
+        next.epoch(),
+        CandidateAttemptStore.State.COMPLETED,
+        Map.of("outcome", "PASS"),
+        "done");
+    var refused =
+        assertThrows(
+            CandidateAttemptStore.RecoveryClaimedException.class,
+            () ->
+                owner()
+                    .reserveRecovery(
+                        "proposal:p1",
+                        "recover-c",
+                        "job-r",
+                        "sha256:r",
+                        Duration.ofMinutes(1),
+                        source));
+    assertEquals(next.attemptId(), refused.holder(), "a COMPLETED recovery keeps its claim");
+  }
+
+  private static CandidateAttemptStore.Attempt failedRecovery(String source) {
+    CandidateAttemptStore store = owner();
+    var attempt =
+        store
+            .reserveRecovery(
+                "proposal:p1",
+                "failed-recovery",
+                "job-failed",
+                "sha256:f",
+                Duration.ofMinutes(1),
+                source)
+            .attempt();
+    return store.finish(
+        attempt.attemptId(),
+        attempt.leaseId(),
+        attempt.epoch(),
+        CandidateAttemptStore.State.FAILED,
+        Map.of("outcome", "FAILED"),
+        "journal publication failed");
+  }
+
+  private static CandidateAttemptStore.Reservation recover(String source, String key) {
+    return owner()
+        .reserveRecovery(
+            "proposal:p1", key, "job-" + key, "sha256:r", Duration.ofMinutes(1), source);
+  }
+
+  @Test
+  void aDescendantOfAFailedRecoveryBlocksAncestorRetriesWhileRunningAndAfterCompletion() {
+    String source = uncertainSource();
+    var failed = failedRecovery(source);
+    var child = recover(failed.attemptId(), "child").attempt();
+    owner().markRunning(child.attemptId(), child.leaseId(), child.epoch(), "sha256:request");
+    assertEquals(
+        child.attemptId(),
+        assertThrows(
+                CandidateAttemptStore.RecoveryClaimedException.class,
+                () -> recover(source, "ancestor-retry"))
+            .holder());
+    owner()
+        .finish(
+            child.attemptId(),
+            child.leaseId(),
+            child.epoch(),
+            CandidateAttemptStore.State.COMPLETED,
+            Map.of("outcome", "PASS"),
+            "done");
+    assertEquals(
+        child.attemptId(),
+        assertThrows(
+                CandidateAttemptStore.RecoveryClaimedException.class,
+                () -> recover(source, "ancestor-after-completion"))
+            .holder());
+    assertFalse(
+        recover(failed.attemptId(), "child").created(),
+        "the completed child's key still reattaches");
+  }
+
+  @Test
+  void anAncestorRetryPreventsContinuingAnOlderFailedBranch() {
+    String source = uncertainSource();
+    var failed = failedRecovery(source);
+    var retry = recover(source, "ancestor-retry").attempt();
+    assertEquals(
+        retry.attemptId(),
+        assertThrows(
+                CandidateAttemptStore.RecoveryClaimedException.class,
+                () -> recover(failed.attemptId(), "child"))
+            .holder());
+  }
+
+  @Test
+  void simultaneousAncestorAndDescendantRecoveriesYieldExactlyOne() throws Exception {
+    String source = uncertainSource();
+    String failed = failedRecovery(source).attemptId();
+    ExecutorService pool = Executors.newFixedThreadPool(12);
+    CountDownLatch go = new CountDownLatch(1);
+    List<Future<Object>> results = new ArrayList<>();
+    try {
+      for (int i = 0; i < 12; i++) {
+        String parent = i % 2 == 0 ? source : failed;
+        String key = "lineage-race-" + i;
+        results.add(
+            pool.submit(
+                () -> {
+                  go.await();
+                  try {
+                    return recover(parent, key);
+                  } catch (CandidateAttemptStore.RecoveryClaimedException e) {
+                    return e;
+                  }
+                }));
+      }
+      go.countDown();
+      String winner = null;
+      int refused = 0;
+      for (Future<Object> result : results) {
+        Object value = result.get(30, java.util.concurrent.TimeUnit.SECONDS);
+        if (value instanceof CandidateAttemptStore.Reservation reservation) {
+          assertTrue(reservation.created());
+          assertNull(winner, "only one continuation across both source attempts");
+          winner = reservation.attempt().attemptId();
+        } else {
+          refused++;
+        }
+      }
+      assertEquals(11, refused);
+      for (Future<Object> result : results) {
+        if (result.get() instanceof CandidateAttemptStore.RecoveryClaimedException e) {
+          assertEquals(winner, e.holder());
+        }
+      }
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  void anUncertainRecoveryCanContinueButItsAncestorsCannotFork() {
+    String source = uncertainSource();
+    var first = recover(source, "uncertain-recovery").attempt();
+    owner()
+        .finish(
+            first.attemptId(),
+            first.leaseId(),
+            first.epoch(),
+            CandidateAttemptStore.State.UNCERTAIN,
+            Map.of("outcome", "UNCERTAIN"),
+            "runner lost");
+    var continuation = recover(first.attemptId(), "continuation");
+    assertTrue(continuation.created(), "an uncertain ancestor must not block its continuation");
+    assertThrows(
+        CandidateAttemptStore.RecoveryClaimedException.class,
+        () -> recover(source, "ancestor-retry"));
+    assertFalse(recover(first.attemptId(), "continuation").created());
   }
 
   @Test

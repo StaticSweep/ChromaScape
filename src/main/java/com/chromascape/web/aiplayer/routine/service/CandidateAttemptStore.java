@@ -57,8 +57,36 @@ public interface CandidateAttemptStore {
     }
   }
 
+  /** Another branch of the recovery lineage is live, finished or uncertain (SC-2106 R6). */
+  final class RecoveryClaimedException extends RuntimeException {
+    private final String holder;
+
+    public RecoveryClaimedException(String recovers, String holder) {
+      super("attempt " + recovers + " is already recovered by " + holder);
+      this.holder = holder;
+    }
+
+    public String holder() {
+      return holder;
+    }
+  }
+
   Reservation reserve(
       String ownerId, String idempotencyKey, String jobId, String fingerprint, Duration lease);
+
+  /**
+   * As {@link #reserve}, for a recovery of {@code recovers}. Reservations are serialized across the
+   * original attempt's entire recovery lineage. RESERVED, RUNNING, COMPLETED or UNCERTAIN attempts
+   * on another branch block a new continuation with {@link RecoveryClaimedException}. Uncertain
+   * ancestors allow their own continuation; a retry under an existing key only reattaches.
+   */
+  Reservation reserveRecovery(
+      String ownerId,
+      String idempotencyKey,
+      String jobId,
+      String fingerprint,
+      Duration lease,
+      String recovers);
 
   /** RESERVED to RUNNING, recording the request digest the launch will carry. */
   Attempt markRunning(String attemptId, String leaseId, long epoch, String requestDigest);

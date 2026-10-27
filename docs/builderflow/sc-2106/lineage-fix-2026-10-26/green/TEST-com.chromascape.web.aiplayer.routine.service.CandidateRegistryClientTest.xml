@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-10-26T15:06:21.839Z" hostname="fedora" time="1.445">
+  <properties/>
+  <testcase name="headerless2xxStillRequiresContentLength()" classname="com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest" time="1.211"/>
+  <testcase name="headerless404LookupIsRejectedByStatusBeforeContentLength()" classname="com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest" time="0.01"/>
+  <testcase name="lookupHeaderMustMatchExpectedStagedHash()" classname="com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest" time="0.013"/>
+  <testcase name="registerWithClosureRejectsBadJarSetsBeforeAnyRequest()" classname="com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest" time="0.06"/>
+  <testcase name="bodyHashMismatchIsRejected()" classname="com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest" time="0.014"/>
+  <testcase name="downloadClosureChecksTheAdvertisedDigestOfTheExactBytes()" classname="com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest" time="0.024"/>
+  <testcase name="truncatedBodyIsRejectedEvenWhenHashMatchesTheAvailableBytes()" classname="com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest" time="0.017"/>
+  <testcase name="headerless404DownloadIsRejectedByStatusBeforeContentLength()" classname="com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest" time="0.015"/>
+  <testcase name="downloadClosureJarFetchesByDeclaredNameAndRefusesUnsafeNames()" classname="com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest" time="0.015"/>
+  <testcase name="lookupReturnsLiteralRawManifestBytesAndChecksBodyHash()" classname="com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest" time="0.011"/>
+  <testcase name="registerWithClosureSendsClosurePartsAndRequiresTheAdvertisedDocumentHash()" classname="com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest" time="0.019"/>
+  <testcase name="registerWithClosureRejectsARegistryThatDoesNotConfirmTheStoredClosure()" classname="com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest" time="0.025"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

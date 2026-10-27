@@ -15,6 +15,7 @@ import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -39,11 +40,82 @@ public class JdbcCandidateAttemptStore implements CandidateAttemptStore {
     this.mapper = mapper;
     this.transactions = new TransactionTemplate(manager);
     this.transactions.setTimeout(60);
+    // A waiter on the lineage root must read the reservations committed by the previous holder.
+    this.transactions.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
   }
 
   @Override
   public Reservation reserve(
       String ownerId, String idempotencyKey, String jobId, String fingerprint, Duration lease) {
+    return reserve(ownerId, idempotencyKey, jobId, fingerprint, lease, null);
+  }
+
+  @Override
+  public Reservation reserveRecovery(
+      String ownerId,
+      String idempotencyKey,
+      String jobId,
+      String fingerprint,
+      Duration lease,
+      String recovers) {
+    requireText(recovers, "recovers");
+    return reserve(ownerId, idempotencyKey, jobId, fingerprint, lease, recovers);
+  }
+
+  /** Locks the original attempt, shared by every branch, until reservation commits. */
+  private void lockRecoveryLineage(String recovers) {
+    String root =
+        jdbc.queryForObject(
+            "WITH RECURSIVE ancestors AS ("
+                + " SELECT attempt_id, recovers FROM candidate_execution_attempts"
+                + " WHERE attempt_id = ?"
+                + " UNION SELECT parent.attempt_id, parent.recovers"
+                + " FROM candidate_execution_attempts parent"
+                + " JOIN ancestors a ON parent.attempt_id = a.recovers)"
+                + " SELECT attempt_id FROM ancestors WHERE recovers IS NULL",
+            String.class,
+            recovers);
+    jdbc.queryForObject(
+        "SELECT attempt_id FROM candidate_execution_attempts WHERE attempt_id = ? FOR UPDATE",
+        String.class,
+        root);
+  }
+
+  /**
+   * Uncertain ancestors permit continuation through themselves. Every other live, uncertain or
+   * completed branch blocks it, even when the immediate parent of that branch ended FAILED.
+   */
+  private void refuseCompetingRecovery(String recovers) {
+    List<String> holders =
+        jdbc.queryForList(
+            "WITH RECURSIVE ancestors AS ("
+                + " SELECT attempt_id, recovers FROM candidate_execution_attempts"
+                + " WHERE attempt_id = ?"
+                + " UNION SELECT parent.attempt_id, parent.recovers"
+                + " FROM candidate_execution_attempts parent"
+                + " JOIN ancestors a ON parent.attempt_id = a.recovers),"
+                + " family AS (SELECT attempt_id, state FROM candidate_execution_attempts"
+                + " WHERE attempt_id = (SELECT attempt_id FROM ancestors WHERE recovers IS NULL)"
+                + " UNION SELECT child.attempt_id, child.state"
+                + " FROM candidate_execution_attempts child"
+                + " JOIN family f ON child.recovers = f.attempt_id)"
+                + " SELECT attempt_id FROM family"
+                + " WHERE state IN ('RESERVED', 'RUNNING', 'COMPLETED', 'UNCERTAIN')"
+                + " AND attempt_id NOT IN (SELECT attempt_id FROM ancestors) LIMIT 1",
+            String.class,
+            recovers);
+    if (!holders.isEmpty()) {
+      throw new RecoveryClaimedException(recovers, holders.get(0));
+    }
+  }
+
+  private Reservation reserve(
+      String ownerId,
+      String idempotencyKey,
+      String jobId,
+      String fingerprint,
+      Duration lease,
+      String recovers) {
     requireText(ownerId, "ownerId");
     requireText(idempotencyKey, "idempotencyKey");
     requireText(jobId, "jobId");
@@ -53,11 +125,28 @@ public class JdbcCandidateAttemptStore implements CandidateAttemptStore {
     return transactions.execute(
         tx -> {
           jdbc.execute("SET LOCAL lock_timeout = '5s'");
+          if (recovers != null) {
+            lockRecoveryLineage(recovers);
+            // Reattachment never acquires a new continuation, even after another branch exists.
+            List<Attempt> existing =
+                jdbc.query(
+                    "SELECT "
+                        + COLUMNS
+                        + " FROM candidate_execution_attempts"
+                        + " WHERE owner_id = ? AND idempotency_key = ? FOR UPDATE",
+                    this::row,
+                    ownerId,
+                    idempotencyKey);
+            if (!existing.isEmpty()) {
+              return new Reservation(existing.get(0), false);
+            }
+            refuseCompetingRecovery(recovers);
+          }
           int inserted =
               jdbc.update(
                   "INSERT INTO candidate_execution_attempts(attempt_id, owner_id, idempotency_key,"
-                      + " job_id, fingerprint, state, lease_id, epoch, lease_expires_at)"
-                      + " VALUES (?, ?, ?, ?, ?, 'RESERVED', ?, 1, now() + ?::interval)"
+                      + " job_id, fingerprint, state, lease_id, epoch, lease_expires_at, recovers)"
+                      + " VALUES (?, ?, ?, ?, ?, 'RESERVED', ?, 1, now() + ?::interval, ?)"
                       + " ON CONFLICT (owner_id, idempotency_key) DO NOTHING",
                   attemptId,
                   ownerId,
@@ -65,7 +154,8 @@ public class JdbcCandidateAttemptStore implements CandidateAttemptStore {
                   jobId,
                   fingerprint,
                   leaseId,
-                  interval(lease));
+                  interval(lease),
+                  recovers);
           Attempt attempt =
               one(
                   "SELECT "

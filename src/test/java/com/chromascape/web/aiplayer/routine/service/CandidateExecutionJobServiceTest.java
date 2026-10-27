@@ -473,6 +473,150 @@ class CandidateExecutionJobServiceTest {
   }
 
   @Test
+  void twoRecoveriesCanNeverBothContinueOneAttempt() throws Exception {
+    CandidateAttemptStore.Attempt previous = uncertainAttemptWithJournal("key-crashed");
+    AtomicReference<String> second = new AtomicReference<>();
+    CandidateExecutionJobService service =
+        service(
+            (j, timeout, cancel) -> {
+              // While the first recovery runs, a second caller with its own key tries as well.
+              second.set(
+                  assertThrows(
+                          PatchCandidateWorkflowService.PatchWorkflowException.class,
+                          () ->
+                              service((k, t, c) -> fail("a second recovery never launches"))
+                                  .recover(PROPOSAL, previous.attemptId(), spec("job-rival")))
+                      .code());
+              return answer(j, false, true, List.of());
+            });
+    CandidateExecutionJobService.ExecutionJob first =
+        service.recover(PROPOSAL, previous.attemptId(), spec("job-recovery"));
+    assertEquals("EXECUTION_RECOVERY_CLAIMED", second.get());
+    assertEquals(CandidateExecutionResultValidator.Outcome.PASS, first.outcome());
+    // A completed recovery keeps its claim.
+    assertEquals(
+        "EXECUTION_RECOVERY_CLAIMED",
+        assertThrows(
+                PatchCandidateWorkflowService.PatchWorkflowException.class,
+                () ->
+                    service((k, t, c) -> fail("never launched"))
+                        .recover(PROPOSAL, previous.attemptId(), spec("job-late")))
+            .code());
+  }
+
+  @Test
+  void aRecoveryThatFailedReleasesItsClaim() throws Exception {
+    CandidateAttemptStore.Attempt previous = uncertainAttemptWithJournal("key-crashed");
+    // The runner refused to resume (no usable cut) before any intent.
+    CandidateExecutionJobService.ExecutionJob failed =
+        service((j, t, c) -> refusedRecovery(j))
+            .recover(PROPOSAL, previous.attemptId(), spec("job-recovery-1"));
+    assertEquals(CandidateExecutionResultValidator.Outcome.FAILED, failed.outcome());
+    assertEquals(
+        CandidateAttemptStore.State.FAILED, store.find(failed.attemptId()).orElseThrow().state());
+    CandidateExecutionJobService.ExecutionJob retried =
+        service((j, t, c) -> answer(j, false, true, List.of()))
+            .recover(PROPOSAL, previous.attemptId(), spec("job-recovery-2"));
+    assertEquals(CandidateExecutionResultValidator.Outcome.PASS, retried.outcome());
+  }
+
+  @Test
+  void aFailedRecoverysDescendantPreventsAnAncestorFromLaunchingAgain() throws Exception {
+    var original = uncertainAttemptWithJournal("key-lineage-original");
+    var failed =
+        service((j, t, c) -> refusedRecovery(j))
+            .recover(PROPOSAL, original.attemptId(), spec("job-lineage-failed"));
+    Files.createDirectories(temp.resolve("runs").resolve(failed.attemptId()).resolve("journal"));
+    var continuation =
+        service(
+                (j, t, c) -> {
+                  assertEquals(
+                      "EXECUTION_RECOVERY_CLAIMED",
+                      assertThrows(
+                              PatchCandidateWorkflowService.PatchWorkflowException.class,
+                              () ->
+                                  service(
+                                          (k, timeout, cancel) ->
+                                              fail("an ancestor must never launch"))
+                                      .recover(
+                                          PROPOSAL,
+                                          original.attemptId(),
+                                          spec("job-lineage-rival")))
+                          .code());
+                  return answer(j, false, true, List.of());
+                })
+            .recover(PROPOSAL, failed.attemptId(), spec("job-lineage-continuation"));
+    assertEquals(CandidateExecutionResultValidator.Outcome.PASS, continuation.outcome());
+    assertEquals(
+        "EXECUTION_RECOVERY_CLAIMED",
+        assertThrows(
+                PatchCandidateWorkflowService.PatchWorkflowException.class,
+                () ->
+                    service(
+                            (k, timeout, cancel) ->
+                                fail("a completed descendant prevents a replay"))
+                        .recover(PROPOSAL, original.attemptId(), spec("job-lineage-late")))
+            .code());
+    var attached =
+        service((k, timeout, cancel) -> fail("the same key only reattaches"))
+            .recover(PROPOSAL, failed.attemptId(), spec("job-lineage-continuation"));
+    assertEquals(continuation.attemptId(), attached.attemptId());
+  }
+
+  @Test
+  void aResultThatCannotBeRecordedIsNeverReportedAndBecomesRecoverable() throws Exception {
+    store.finishFailure = new org.springframework.dao.DataAccessResourceFailureException("db down");
+    AtomicReference<String> attemptId = new AtomicReference<>();
+    PatchCandidateWorkflowService.PatchWorkflowException e =
+        assertThrows(
+            PatchCandidateWorkflowService.PatchWorkflowException.class,
+            () ->
+                service(
+                        (j, t, c) -> {
+                          attemptId.set(String.valueOf(map(j.get("request")).get("attemptId")));
+                          try {
+                            Files.createDirectories(
+                                temp.resolve("runs").resolve(attemptId.get()).resolve("journal"));
+                          } catch (java.io.IOException ex) {
+                            throw new java.io.UncheckedIOException(ex);
+                          }
+                          return answer(j, false, true, List.of());
+                        })
+                    .execute(PROPOSAL, spec("job-1")));
+    assertEquals("EXECUTION_RESULT_UNRECORDED", e.code());
+    CandidateAttemptStore.Attempt open = store.find(attemptId.get()).orElseThrow();
+    assertEquals(
+        CandidateAttemptStore.State.RUNNING, open.state(), "the run is neither final nor FAILED");
+    assertNull(open.job());
+
+    // Once the store is back and the lease has run out, recovery reconciles it first.
+    store.finishFailure = null;
+    store.expire(attemptId.get());
+    CandidateExecutionJobService.ExecutionJob recovered =
+        service((j, t, c) -> answer(j, false, true, List.of()))
+            .recover(PROPOSAL, attemptId.get(), spec("job-1-recovery"));
+    assertEquals(CandidateExecutionResultValidator.Outcome.PASS, recovered.outcome());
+    assertEquals(
+        CandidateAttemptStore.State.UNCERTAIN, store.find(attemptId.get()).orElseThrow().state());
+  }
+
+  @Test
+  void aFaultReachesTheHostOnlyThroughTheTestSeam() throws Exception {
+    AtomicReference<Map<String, Object>> sent = new AtomicReference<>();
+    CandidateExecutionJobService service =
+        service(
+            (j, t, c) -> {
+              sent.set(j);
+              return answer(j, false, true, List.of());
+            });
+    service.execute(PROPOSAL, spec("job-plain"));
+    assertFalse(sent.get().containsKey("fault"));
+    service.injectFault(Map.of("point", "HALT_BEFORE_SEAL", "at", 1));
+    service.execute(PROPOSAL, spec("job-faulted"));
+    assertEquals("HALT_BEFORE_SEAL", map(sent.get().get("fault")).get("point"));
+  }
+
+  @Test
   void onlyAnUncertainOrFailedAttemptOfTheSameProposalWithAJournalCanBeRecovered()
       throws Exception {
     CandidateAttemptStore.Attempt previous = uncertainAttemptWithJournal("key-crashed");
@@ -638,6 +782,21 @@ class CandidateExecutionJobServiceTest {
     document.put("dispatched", true);
     document.put("certification", certification);
     return new CandidateHostLauncher.HostOutcome(document, false, null, 0, "");
+  }
+
+  /** The runner's answer when a recovery cannot resume: FAILED before any intent. */
+  @SuppressWarnings("unchecked")
+  private static CandidateHostLauncher.HostOutcome refusedRecovery(Map<String, Object> job) {
+    CandidateHostLauncher.HostOutcome ok = answer(job, false, true, List.of());
+    Map<String, Object> result = (Map<String, Object>) ok.document().get("result");
+    result.put("status", "FAILED");
+    result.put("failureCode", "CHECKPOINT_INCOMPLETE");
+    result.put("failureDetail", "recovery refused before any intent");
+    result.put("intentRefs", List.of());
+    result.put("receiptRefs", List.of());
+    result.put("consumedIntents", 0L);
+    reseal(result);
+    return ok;
   }
 
   private static void reseal(Map<String, Object> result) {
