@@ -40,13 +40,35 @@ public interface CandidateHostLauncher {
   }
 
   /**
-   * The live controls of one run; {@code listener} and {@code binding} may be null. Without a
-   * binding handler every binding the host reports is refused.
+   * Decides a runner's worker commands (SC-2106 P3, R4.3). The runner sends a gated worker call
+   * only after its intent was permitted, and reports the call's receipt afterwards.
+   */
+  interface CommandHandler {
+    /** Null once the intent is durably permitted; otherwise the stable refusal code. */
+    String permit(Map<String, Object> intent);
+
+    /** True once the receipt is durably recorded. */
+    boolean receipt(Map<String, Object> receipt);
+  }
+
+  /**
+   * The live controls of one run; {@code listener}, {@code binding} and {@code commands} may be
+   * null. Without a binding handler every binding the host reports is refused; without a command
+   * handler every command intent is denied.
    */
   record HostControl(
-      AtomicBoolean cancel, AtomicBoolean pause, PauseListener listener, BindingHandler binding) {
+      AtomicBoolean cancel,
+      AtomicBoolean pause,
+      PauseListener listener,
+      BindingHandler binding,
+      CommandHandler commands) {
     public HostControl(AtomicBoolean cancel, AtomicBoolean pause, PauseListener listener) {
-      this(cancel, pause, listener, null);
+      this(cancel, pause, listener, null, null);
+    }
+
+    public HostControl(
+        AtomicBoolean cancel, AtomicBoolean pause, PauseListener listener, BindingHandler binding) {
+      this(cancel, pause, listener, binding, null);
     }
   }
 

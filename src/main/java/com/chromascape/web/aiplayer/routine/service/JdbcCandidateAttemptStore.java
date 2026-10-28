@@ -8,6 +8,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -208,31 +209,218 @@ public class JdbcCandidateAttemptStore implements CandidateAttemptStore {
     if (state == null || state.open()) {
       throw new IllegalArgumentException("finish needs a terminal or UNCERTAIN state");
     }
-    return fenced(
-        "UPDATE candidate_execution_attempts SET state = ?, job = ?::jsonb, detail = ?,"
-            + " lease_id = NULL, lease_expires_at = NULL, paused = FALSE, updated_at = now()"
-            + " WHERE attempt_id = ? AND lease_id = ? AND epoch = ?"
-            + " AND state IN ('RESERVED', 'RUNNING')",
-        attemptId,
-        state.name(),
-        json(job),
-        detail,
-        attemptId,
-        leaseId,
-        epoch);
+    return transactions.execute(
+        tx -> {
+          Attempt finished =
+              fenced(
+                  "UPDATE candidate_execution_attempts SET state = ?, job = ?::jsonb, detail = ?,"
+                      + " lease_id = NULL, lease_expires_at = NULL, paused = FALSE,"
+                      + " updated_at = now()"
+                      + " WHERE attempt_id = ? AND lease_id = ? AND epoch = ?"
+                      + " AND state IN ('RESERVED', 'RUNNING')",
+                  attemptId,
+                  state.name(),
+                  json(job),
+                  detail,
+                  attemptId,
+                  leaseId,
+                  epoch);
+          // P3: a command still open when its attempt ends may have reached the worker (a runner
+          // that died before its receipt); it becomes UNKNOWN evidence, as on reconciliation.
+          jdbc.update(
+              "UPDATE candidate_attempt_commands SET state = 'UNKNOWN', resolved_at = now()"
+                  + " WHERE attempt_id = ? AND state = 'PERMITTED'",
+              attemptId);
+          return finished;
+        });
   }
 
   @Override
   public int reconcileExpired(Instant now) {
+    // An open command of a reconciled attempt becomes UNKNOWN evidence in the same transaction
+    // (P3):
+    // the permit may already have reached the worker, so it is resolved, never retried blindly.
+    Integer reconciled =
+        transactions.execute(
+            tx ->
+                jdbc.queryForObject(
+                    "WITH reconciled AS (UPDATE candidate_execution_attempts"
+                        + " SET state = 'UNCERTAIN',"
+                        + " epoch = epoch + 1, lease_id = NULL, lease_expires_at = NULL,"
+                        + " paused = FALSE, updated_at = now(),"
+                        + " detail = 'owner lease expired at ' || lease_expires_at::text"
+                        + " || '; reconciliation required, never relaunched'"
+                        + " WHERE state IN ('RESERVED', 'RUNNING') AND lease_expires_at < ?"
+                        + " RETURNING attempt_id),"
+                        + " open_commands AS (UPDATE candidate_attempt_commands c"
+                        + " SET state = 'UNKNOWN', resolved_at = now() FROM reconciled r"
+                        + " WHERE c.attempt_id = r.attempt_id AND c.state = 'PERMITTED'"
+                        + " RETURNING 1)"
+                        + " SELECT count(*) FROM reconciled",
+                    Integer.class,
+                    Timestamp.from(now)));
+    return reconciled == null ? 0 : reconciled;
+  }
+
+  @Override
+  public CommandRecord recordIntent(
+      String attemptId, String leaseId, long epoch, CommandIntent intent) {
+    requireText(leaseId, "leaseId");
     return transactions.execute(
-        tx ->
-            jdbc.update(
-                "UPDATE candidate_execution_attempts SET state = 'UNCERTAIN', epoch = epoch + 1,"
-                    + " lease_id = NULL, lease_expires_at = NULL, paused = FALSE, updated_at = now(),"
-                    + " detail = 'owner lease expired at ' || lease_expires_at::text"
-                    + " || '; reconciliation required, never relaunched'"
-                    + " WHERE state IN ('RESERVED', 'RUNNING') AND lease_expires_at < ?",
-                Timestamp.from(now)));
+        tx -> {
+          Map<String, Object> row = lockFenced(attemptId, leaseId, epoch);
+          CandidateAttemptStore.rejectForeignIntent(
+              attemptId,
+              String.valueOf(row.get("state")),
+              (String) row.get("request_digest"),
+              ((Number) row.get("binding_generation")).longValue(),
+              intent);
+          String recovers = (String) row.get("recovers");
+          if (recovers != null) {
+            CandidateAttemptStore.rejectBeforeSourceResolved(
+                recovers, unresolvedRows(recovers).size(), intent);
+          }
+          List<CommandRecord> existing = commandRows(attemptId, intent.commandId());
+          if (!existing.isEmpty()) {
+            CommandRecord recorded = existing.get(0);
+            if (!recorded.payloadDigest().equals(intent.payloadDigest())
+                || !recorded.method().equals(intent.method())) {
+              throw new CommandConflictException(
+                  "command " + intent.commandId() + " was recorded with another payload");
+            }
+            return recorded;
+          }
+          Integer open =
+              jdbc.queryForObject(
+                  "SELECT count(*) FROM candidate_attempt_commands"
+                      + " WHERE attempt_id = ? AND state = 'PERMITTED'",
+                  Integer.class,
+                  attemptId);
+          if (open != null && open > 0) {
+            throw new CommandRejectedException(
+                "attempt " + attemptId + " already has an open command");
+          }
+          jdbc.update(
+              "INSERT INTO candidate_attempt_commands(attempt_id, command_id, intent_id, method,"
+                  + " kind, payload_digest, binding_generation, expected_worker_epoch,"
+                  + " expected_worker_revision, state, owner_lease_id, owner_epoch)"
+                  + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PERMITTED', ?, ?)",
+              attemptId,
+              intent.commandId(),
+              intent.intentId(),
+              intent.method(),
+              intent.kind(),
+              intent.payloadDigest(),
+              intent.bindingGeneration(),
+              intent.expectedWorkerEpoch(),
+              intent.expectedWorkerRevision(),
+              leaseId,
+              epoch);
+          return commandRows(attemptId, intent.commandId()).get(0);
+        });
+  }
+
+  @Override
+  public CommandRecord recordReceipt(
+      String attemptId, String leaseId, long epoch, CommandReceipt receipt) {
+    requireText(leaseId, "leaseId");
+    if (receipt == null
+        || receipt.outcome() == null
+        || receipt.outcome() == CommandState.PERMITTED) {
+      throw new CommandRejectedException("a receipt must resolve the command");
+    }
+    return transactions.execute(
+        tx -> {
+          lockFenced(attemptId, leaseId, epoch);
+          List<CommandRecord> rows = commandRows(attemptId, receipt.commandId());
+          if (rows.isEmpty()) {
+            throw new CommandRejectedException(
+                "attempt " + attemptId + " has no command " + receipt.commandId());
+          }
+          CommandRecord recorded = rows.get(0);
+          if (!recorded.intentId().equals(receipt.intentId())) {
+            throw new CommandRejectedException("receipt names another intent");
+          }
+          if (recorded.state() != CommandState.PERMITTED) {
+            throw new CommandRejectedException(
+                "command " + receipt.commandId() + " is already " + recorded.state());
+          }
+          jdbc.update(
+              "UPDATE candidate_attempt_commands SET state = ?, worker_revision = ?,"
+                  + " receipt_digest = ?, resolved_at = now()"
+                  + " WHERE attempt_id = ? AND command_id = ?",
+              receipt.outcome().name(),
+              receipt.workerRevision(),
+              receipt.receiptDigest(),
+              attemptId,
+              receipt.commandId());
+          return commandRows(attemptId, receipt.commandId()).get(0);
+        });
+  }
+
+  @Override
+  public List<CommandRecord> commands(String attemptId) {
+    return jdbc.query(
+        "SELECT "
+            + COMMAND_COLUMNS
+            + " FROM candidate_attempt_commands"
+            + " WHERE attempt_id = ? ORDER BY permitted_at, command_id",
+        JdbcCandidateAttemptStore::commandRow,
+        attemptId);
+  }
+
+  private static final String COMMAND_COLUMNS =
+      "attempt_id, command_id, intent_id, method, kind, payload_digest, binding_generation,"
+          + " expected_worker_epoch, expected_worker_revision, state, worker_revision,"
+          + " receipt_digest, resolved_by_attempt_id";
+
+  private List<CommandRecord> commandRows(String attemptId, String commandId) {
+    return jdbc.query(
+        "SELECT "
+            + COMMAND_COLUMNS
+            + " FROM candidate_attempt_commands"
+            + " WHERE attempt_id = ? AND command_id = ? FOR UPDATE",
+        JdbcCandidateAttemptStore::commandRow,
+        attemptId,
+        commandId);
+  }
+
+  private static CommandRecord commandRow(ResultSet rs, int n) throws SQLException {
+    long workerRevision = rs.getLong("worker_revision");
+    Long revision = rs.wasNull() ? null : workerRevision;
+    return new CommandRecord(
+        rs.getString("attempt_id"),
+        rs.getString("command_id"),
+        rs.getString("intent_id"),
+        rs.getString("method"),
+        rs.getString("kind"),
+        rs.getString("payload_digest"),
+        rs.getLong("binding_generation"),
+        rs.getLong("expected_worker_epoch"),
+        rs.getLong("expected_worker_revision"),
+        CommandState.valueOf(rs.getString("state")),
+        revision,
+        rs.getString("receipt_digest"),
+        rs.getString("resolved_by_attempt_id"));
+  }
+
+  /** Locks the attempt row and verifies the presented fence; returns the locked row. */
+  private Map<String, Object> lockFenced(String attemptId, String leaseId, long epoch) {
+    jdbc.execute("SET LOCAL lock_timeout = '5s'");
+    List<Map<String, Object>> rows =
+        jdbc.queryForList(
+            "SELECT state, lease_id, epoch, request_digest, binding_generation, recovers"
+                + " FROM candidate_execution_attempts WHERE attempt_id = ? FOR UPDATE",
+            attemptId);
+    if (rows.isEmpty()) {
+      throw new CommandRejectedException("attempt " + attemptId + " does not exist");
+    }
+    Map<String, Object> row = rows.get(0);
+    if (!leaseId.equals(row.get("lease_id")) || ((Number) row.get("epoch")).longValue() != epoch) {
+      throw new StaleOwnerException(
+          "attempt " + attemptId + " is not held by the presented lease/epoch");
+    }
+    return row;
   }
 
   @Override
@@ -322,7 +510,7 @@ public class JdbcCandidateAttemptStore implements CandidateAttemptStore {
           jdbc.execute("SET LOCAL lock_timeout = '5s'");
           List<Map<String, Object>> rows =
               jdbc.queryForList(
-                  "SELECT state, lease_id, epoch, request_digest, binding_generation"
+                  "SELECT state, lease_id, epoch, request_digest, binding_generation, recovers"
                       + " FROM candidate_execution_attempts WHERE attempt_id = ? FOR UPDATE",
                   attemptId);
           if (rows.isEmpty()) {
@@ -340,6 +528,10 @@ public class JdbcCandidateAttemptStore implements CandidateAttemptStore {
               (String) row.get("request_digest"),
               ((Number) row.get("binding_generation")).longValue(),
               binding);
+          String recovers = (String) row.get("recovers");
+          Map<String, CommandState> verdicts =
+              CandidateAttemptStore.sourceResolutions(
+                  recovers, recovers == null ? List.of() : unresolvedRows(recovers), binding);
           jdbc.update(
               "INSERT INTO candidate_attempt_worker_bindings(attempt_id, generation, binding_id,"
                   + " request_digest, worker_authority, worker_session_id, worker_epoch,"
@@ -366,7 +558,45 @@ public class JdbcCandidateAttemptStore implements CandidateAttemptStore {
                   + " WHERE attempt_id = ?",
               binding.generation(),
               attemptId);
+          // P3: the source attempt's unresolved commands are closed from the restored cut in the
+          // same transaction that accepts the binding, so no effect of this recovery precedes it.
+          for (Map.Entry<String, CommandState> verdict : verdicts.entrySet()) {
+            RecoveredFrom from = binding.recoveredFrom();
+            Map<String, Object> evidence = new LinkedHashMap<>();
+            evidence.put("bindingId", binding.bindingId());
+            evidence.put("checkpointIndex", from.checkpointIndex());
+            evidence.put("checkpointChecksum", from.checkpointChecksum());
+            evidence.put("workerEpoch", from.workerEpoch());
+            evidence.put("workerRevision", from.workerRevision());
+            int resolved =
+                jdbc.update(
+                    "UPDATE candidate_attempt_commands SET state = ?, resolved_by_attempt_id = ?,"
+                        + " resolution_evidence = ?::jsonb, resolved_at = now()"
+                        + " WHERE attempt_id = ? AND command_id = ?"
+                        + " AND state IN ('PERMITTED', 'UNKNOWN')",
+                    verdict.getValue().name(),
+                    attemptId,
+                    json(evidence),
+                    recovers,
+                    verdict.getKey());
+            if (resolved != 1) {
+              throw new BindingRejectedException(
+                  "command " + verdict.getKey() + " of " + recovers + " is no longer unresolved");
+            }
+          }
         });
+  }
+
+  /** The commands an ended attempt left without a receipt, locked for resolution (P3). */
+  private List<CommandRecord> unresolvedRows(String attemptId) {
+    return jdbc.query(
+        "SELECT "
+            + COMMAND_COLUMNS
+            + " FROM candidate_attempt_commands"
+            + " WHERE attempt_id = ? AND state IN ('PERMITTED', 'UNKNOWN')"
+            + " ORDER BY permitted_at, command_id FOR UPDATE",
+        JdbcCandidateAttemptStore::commandRow,
+        attemptId);
   }
 
   /**

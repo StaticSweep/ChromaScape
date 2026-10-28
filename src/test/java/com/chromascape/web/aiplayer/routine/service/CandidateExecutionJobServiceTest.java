@@ -136,7 +136,7 @@ class CandidateExecutionJobServiceTest {
     body.remove("requestDigest");
     assertEquals(Sc2106CanonicalJson.sha256(body), wire.get("requestDigest"));
     assertEquals(job.requestDigest(), wire.get("requestDigest"));
-    assertEquals("sc2106-host-job/v2", sent.get().get("schema"));
+    assertEquals("sc2106-host-job/v3", sent.get().get("schema"));
     assertEquals(Boolean.TRUE, map(sent.get().get("worker")).get("developmentIdentity"));
     assertTrue(
         Files.isDirectory(Path.of(String.valueOf(sent.get().get("workingDirectory")))),
@@ -455,6 +455,7 @@ class CandidateExecutionJobServiceTest {
 
     Map<String, Object> resume = map(sent.get().get("resume"));
     assertEquals(previous.attemptId(), resume.get("attemptId"));
+    assertEquals(List.of(), resume.get("unresolvedCommandIds"));
     assertEquals(
         temp.resolve("runs").resolve(previous.attemptId()).resolve("journal").toString(),
         resume.get("root"));
@@ -959,6 +960,99 @@ class CandidateExecutionJobServiceTest {
     assertFalse(answer.get(), "a stale owner cannot accept a binding");
     assertTrue(cancelled.get(), "the fenced owner stops its run");
     assertTrue(store.bindings.values().stream().allMatch(List::isEmpty));
+  }
+
+  @Test
+  void aRecoveryResolvesThePreviousAttemptsUnknownCommandThroughItsRestoreBinding()
+      throws Exception {
+    CandidateAttemptStore.Attempt previous = uncertainAttemptWithJournal("key-crashed");
+    store.commands.put(
+        previous.attemptId(),
+        new ArrayList<>(
+            List.of(
+                new CandidateAttemptStore.CommandRecord(
+                    previous.attemptId(),
+                    "c-9",
+                    "i-9",
+                    "session.candidate.advance",
+                    "TIME",
+                    "sha256:" + "a".repeat(64),
+                    1,
+                    3,
+                    7,
+                    CandidateAttemptStore.CommandState.UNKNOWN,
+                    null,
+                    null,
+                    null))));
+    AtomicReference<Map<String, Object>> resume = new AtomicReference<>();
+    List<Boolean> answers = new ArrayList<>();
+    CandidateExecutionJobService.ExecutionJob recovered =
+        service(
+                new CandidateHostLauncher() {
+                  @Override
+                  public HostOutcome run(
+                      Map<String, Object> job, java.time.Duration timeout, AtomicBoolean cancel) {
+                    throw new AssertionError("the service passes the binding handler");
+                  }
+
+                  @Override
+                  public HostOutcome run(
+                      Map<String, Object> job, java.time.Duration timeout, HostControl control) {
+                    resume.set(map(job.get("resume")));
+                    Map<String, Object> request = map(job.get("request"));
+                    answers.add(control.binding().accept(binding(request, 1, "CREATE", 3)));
+                    // The restored cut must account for the previous attempt's unknown command.
+                    answers.add(control.binding().accept(binding(request, 2, "RESTORE", 4)));
+                    Map<String, Object> restore = binding(request, 2, "RESTORE", 4);
+                    restore.put(
+                        "recoveredFrom",
+                        Map.of(
+                            "attemptId",
+                            previous.attemptId(),
+                            "checkpointIndex",
+                            2,
+                            "checkpointChecksum",
+                            "sha256:" + "c".repeat(64),
+                            "workerEpoch",
+                            3,
+                            "workerRevision",
+                            7,
+                            "commandResolutions",
+                            Map.of("c-9", "APPLIED")));
+                    answers.add(control.binding().accept(restore));
+                    return answer(job, false, true, List.of());
+                  }
+                })
+            .recover(PROPOSAL, previous.attemptId(), spec("job-recovery"));
+
+    assertEquals(List.of("c-9"), resume.get().get("unresolvedCommandIds"));
+    assertEquals(List.of(true, false, true), answers);
+    CandidateAttemptStore.CommandRecord resolved = store.commands(previous.attemptId()).get(0);
+    assertEquals(CandidateAttemptStore.CommandState.APPLIED, resolved.state());
+    assertEquals(recovered.attemptId(), resolved.resolvedByAttemptId());
+  }
+
+  @Test
+  void aMalformedRecoveredCutIsRefusedNotCoerced() {
+    Map<String, Object> line =
+        binding(Map.of("attemptId", "a", "requestDigest", "d"), 2, "RESTORE", 4);
+    line.put(
+        "recoveredFrom",
+        Map.of(
+            "attemptId",
+            "p",
+            "checkpointIndex",
+            2,
+            "checkpointChecksum",
+            "sha256:x",
+            "workerEpoch",
+            3,
+            "workerRevision",
+            7,
+            "commandResolutions",
+            Map.of("c-9", "MAYBE")));
+    assertThrows(
+        IllegalArgumentException.class, () -> CandidateExecutionJobService.workerBinding(line));
   }
 
   @Test

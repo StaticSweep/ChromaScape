@@ -80,7 +80,8 @@ class CandidateOwnerCrashIntegrationTest {
             "V71__sc2106_candidate_execution_attempts.sql",
             "V73__sc2106_one_recovery_per_attempt.sql",
             "V74__sc2106_attempt_controls.sql",
-            "V75__sc2106_attempt_worker_binding.sql")) {
+            "V75__sc2106_attempt_worker_binding.sql",
+            "V78__sc2106_attempt_command_intents.sql")) {
       try (var input =
           CandidateOwnerCrashIntegrationTest.class.getResourceAsStream(
               "/db/migration/" + migration)) {
