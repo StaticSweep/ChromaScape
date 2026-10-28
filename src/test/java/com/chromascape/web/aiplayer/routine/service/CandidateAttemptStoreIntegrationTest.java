@@ -542,6 +542,141 @@ class CandidateAttemptStoreIntegrationTest {
     assertEquals(1L, owner().currentBinding(id).orElseThrow().generation());
   }
 
+  @Test
+  void competingRecoveriesOfABoundAttemptYieldOneRecoveryWithItsOwnBindings() throws Exception {
+    CandidateAttemptStore crashed = owner();
+    var held =
+        crashed
+            .reserve("proposal:p1", "key-1", "job-1", "sha256:f", Duration.ofMillis(200))
+            .attempt();
+    String source = held.attemptId();
+    crashed.markRunning(source, held.leaseId(), held.epoch(), "sha256:request");
+    for (long generation = 1; generation <= 2; generation++) {
+      crashed.recordBinding(
+          source, held.leaseId(), held.epoch(), binding(source, generation, "sha256:request"));
+    }
+    jdbc.update(
+        "UPDATE candidate_execution_attempts SET lease_expires_at = now() - interval '1 second'"
+            + " WHERE attempt_id = ?",
+        source);
+    assertEquals(1, owner().reconcileExpired(Instant.now()));
+
+    int threads = 8;
+    ExecutorService pool = Executors.newFixedThreadPool(threads);
+    CountDownLatch go = new CountDownLatch(1);
+    List<Future<Object>> results = new ArrayList<>();
+    for (int i = 0; i < threads; i++) {
+      String key = "recover-" + i;
+      results.add(
+          pool.submit(
+              () -> {
+                go.await();
+                try {
+                  return owner()
+                      .reserveRecovery(
+                          "proposal:p1", key, "job-r", "sha256:r", Duration.ofMinutes(1), source);
+                } catch (CandidateAttemptStore.RecoveryClaimedException e) {
+                  return e;
+                }
+              }));
+    }
+    go.countDown();
+    List<CandidateAttemptStore.Reservation> won = new ArrayList<>();
+    for (Future<Object> f : results) {
+      if (f.get() instanceof CandidateAttemptStore.Reservation reservation) {
+        won.add(reservation);
+      }
+    }
+    pool.shutdownNow();
+    assertEquals(1, won.size(), "only one recovery of a bound attempt is reserved");
+
+    // The source keeps its last accepted binding; neither the crashed owner nor anyone else can
+    // advance it once it is uncertain.
+    assertEquals(2L, owner().currentBinding(source).orElseThrow().generation());
+    assertThrows(
+        CandidateAttemptStore.StaleOwnerException.class,
+        () ->
+            crashed.recordBinding(
+                source, held.leaseId(), held.epoch(), binding(source, 3, "sha256:request")));
+
+    // The recovery is a new attempt: its bindings start again at generation 1 under its own
+    // request, and a binding naming the source attempt is refused.
+    var recovery = won.get(0).attempt();
+    CandidateAttemptStore winner = owner();
+    winner.markRunning(
+        recovery.attemptId(), recovery.leaseId(), recovery.epoch(), "sha256:recovery");
+    assertTrue(owner().currentBinding(recovery.attemptId()).isEmpty());
+    assertThrows(
+        CandidateAttemptStore.BindingRejectedException.class,
+        () ->
+            winner.recordBinding(
+                recovery.attemptId(),
+                recovery.leaseId(),
+                recovery.epoch(),
+                binding(source, 1, "sha256:recovery")));
+    assertThrows(
+        CandidateAttemptStore.BindingRejectedException.class,
+        () ->
+            winner.recordBinding(
+                recovery.attemptId(),
+                recovery.leaseId(),
+                recovery.epoch(),
+                binding(recovery.attemptId(), 3, "sha256:recovery")),
+        "generations do not continue from the source attempt");
+    winner.recordBinding(
+        recovery.attemptId(),
+        recovery.leaseId(),
+        recovery.epoch(),
+        binding(recovery.attemptId(), 1, "sha256:recovery"));
+    assertEquals(1L, owner().currentBinding(recovery.attemptId()).orElseThrow().generation());
+    assertEquals(2L, owner().currentBinding(source).orElseThrow().generation());
+  }
+
+  @Test
+  void losingTheLeaseWhilePausedFencesTheOldOwnerAndTheRecoveryStartsPaused() {
+    CandidateAttemptStore holder = owner();
+    var held =
+        holder
+            .reserve("proposal:p1", "key-1", "job-1", "sha256:f", Duration.ofMillis(200))
+            .attempt();
+    String id = held.attemptId();
+    holder.markRunning(id, held.leaseId(), held.epoch(), "sha256:request");
+    holder.recordBinding(id, held.leaseId(), held.epoch(), binding(id, 1, "sha256:request"));
+    assertTrue(owner().requestPause(id, true));
+    holder.recordPaused(id, held.leaseId(), held.epoch(), true);
+    jdbc.update(
+        "UPDATE candidate_execution_attempts SET lease_expires_at = now() - interval '1 second'"
+            + " WHERE attempt_id = ?",
+        id);
+    assertEquals(1, owner().reconcileExpired(Instant.now()));
+    assertEquals(
+        CandidateAttemptStore.State.UNCERTAIN, owner().find(id).orElseThrow().state());
+
+    // The parked owner wakes after losing its lease: it can neither report a resume, renew, nor
+    // bind a restored worker.
+    assertThrows(
+        CandidateAttemptStore.StaleOwnerException.class,
+        () -> holder.recordPaused(id, held.leaseId(), held.epoch(), false));
+    assertFalse(holder.renew(id, held.leaseId(), held.epoch(), Duration.ofMinutes(1)));
+    assertThrows(
+        CandidateAttemptStore.StaleOwnerException.class,
+        () ->
+            holder.recordBinding(
+                id, held.leaseId(), held.epoch(), binding(id, 2, "sha256:request")));
+    assertEquals(1L, owner().currentBinding(id).orElseThrow().generation());
+    assertFalse(owner().control(id).paused(), "nothing is parked once the owner is gone");
+
+    // The requested pause survives on the source, where CandidateExecutionJobService reads it to
+    // park a new recovery; the store does not copy it onto the recovery row itself.
+    var recovery =
+        owner()
+            .reserveRecovery(
+                "proposal:p1", "recover-1", "job-r", "sha256:r", Duration.ofMinutes(1), id)
+            .attempt();
+    assertTrue(owner().control(id).pauseRequested());
+    assertFalse(owner().control(recovery.attemptId()).pauseRequested());
+  }
+
   private static CandidateAttemptStore.WorkerBinding binding(
       String attemptId, long generation, String requestDigest) {
     return new CandidateAttemptStore.WorkerBinding(
