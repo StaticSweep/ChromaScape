@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Durable ownership of candidate execution attempts (SC-2106 R4).
@@ -158,7 +159,54 @@ public interface CandidateAttemptStore {
       long runnerSteps,
       long runnerIntents,
       String reason,
-      Map<String, Object> workerIdentity) {}
+      Map<String, Object> workerIdentity,
+      RecoveredFrom recoveredFrom) {
+
+    /** A binding that names no recovered cut (every CREATE, and a RESTORE without P3). */
+    public WorkerBinding(
+        String bindingId,
+        long generation,
+        String attemptId,
+        String requestDigest,
+        String workerAuthority,
+        String workerSessionId,
+        long workerEpoch,
+        String workerLeaseDigest,
+        long workerRevision,
+        long runnerSteps,
+        long runnerIntents,
+        String reason,
+        Map<String, Object> workerIdentity) {
+      this(
+          bindingId,
+          generation,
+          attemptId,
+          requestDigest,
+          workerAuthority,
+          workerSessionId,
+          workerEpoch,
+          workerLeaseDigest,
+          workerRevision,
+          runnerSteps,
+          runnerIntents,
+          reason,
+          workerIdentity,
+          null);
+    }
+  }
+
+  /**
+   * The cut a recovery restored, as its RESTORE binding reports it (P3, R4.3). {@code resolutions}
+   * maps each unresolved command of the source attempt to {@code APPLIED} when the cut's worker had
+   * accepted it, or {@code SUPERSEDED} when the restored world predates it.
+   */
+  record RecoveredFrom(
+      String attemptId,
+      long checkpointIndex,
+      String checkpointChecksum,
+      long workerEpoch,
+      long workerRevision,
+      Map<String, CommandState> resolutions) {}
 
   /** A binding that does not belong to the attempt, or is not its next generation (R4.2). */
   final class BindingRejectedException extends RuntimeException {
@@ -196,7 +244,9 @@ public interface CandidateAttemptStore {
     PERMITTED,
     APPLIED,
     REJECTED,
-    UNKNOWN
+    UNKNOWN,
+    /** A recovery restored a world from before this command; nothing it did continues. */
+    SUPERSEDED
   }
 
   /**
@@ -237,7 +287,8 @@ public interface CandidateAttemptStore {
       long expectedWorkerRevision,
       CommandState state,
       Long workerRevision,
-      String receiptDigest) {}
+      String receiptDigest,
+      String resolvedByAttemptId) {}
 
   /** A command that does not belong to the attempt's current state (P3, R4.3). */
   class CommandRejectedException extends RuntimeException {
@@ -277,6 +328,75 @@ public interface CandidateAttemptStore {
 
   /** The attempt's recorded commands in permit order. */
   List<CommandRecord> commands(String attemptId);
+
+  /**
+   * How a recovery's binding resolves the commands its source attempt left unresolved (P3, R4.3).
+   * Only a RESTORE binding resolves, and it must name the source attempt and give an APPLIED or
+   * SUPERSEDED verdict for exactly the source's unresolved commands; any other binding of a
+   * recovery with unresolved source commands resolves nothing. Returns the verdicts to commit, or
+   * an empty map.
+   *
+   * @throws BindingRejectedException when a RESTORE binding does not account for them exactly
+   */
+  static Map<String, CommandState> sourceResolutions(
+      String recovers, List<CommandRecord> sourceUnresolved, WorkerBinding binding) {
+    RecoveredFrom from = binding.recoveredFrom();
+    if (recovers == null || !"RESTORE".equals(binding.reason())) {
+      if (from != null) {
+        throw new BindingRejectedException("only a recovery's RESTORE binding names a cut");
+      }
+      return Map.of();
+    }
+    if (from == null) {
+      if (!sourceUnresolved.isEmpty()) {
+        throw new BindingRejectedException(
+            "attempt "
+                + recovers
+                + " left "
+                + sourceUnresolved.size()
+                + " unresolved command(s); the restored cut must resolve them");
+      }
+      return Map.of();
+    }
+    if (!recovers.equals(from.attemptId())) {
+      throw new BindingRejectedException(
+          "the restored cut is from " + from.attemptId() + ", not " + recovers);
+    }
+    Map<String, CommandState> verdicts = from.resolutions() == null ? Map.of() : from.resolutions();
+    Set<String> expected = new TreeSet<>();
+    sourceUnresolved.forEach(c -> expected.add(c.commandId()));
+    if (!expected.equals(new TreeSet<>(verdicts.keySet()))) {
+      throw new BindingRejectedException(
+          "the restored cut resolves "
+              + new TreeSet<>(verdicts.keySet())
+              + ", the source left "
+              + expected);
+    }
+    for (Map.Entry<String, CommandState> verdict : verdicts.entrySet()) {
+      if (verdict.getValue() != CommandState.APPLIED
+          && verdict.getValue() != CommandState.SUPERSEDED) {
+        throw new BindingRejectedException(
+            "command " + verdict.getKey() + " cannot be resolved as " + verdict.getValue());
+      }
+    }
+    return verdicts;
+  }
+
+  /**
+   * Refuses a recovery's effect or time command while its source attempt still has an unresolved
+   * command (P3, R4.3); lifecycle commands (the restore itself) stay allowed.
+   */
+  static void rejectBeforeSourceResolved(
+      String recovers, long sourceUnresolved, CommandIntent intent) {
+    if (recovers != null && sourceUnresolved > 0 && !"LIFECYCLE".equals(intent.kind())) {
+      throw new CommandRejectedException(
+          "attempt "
+              + recovers
+              + " still has "
+              + sourceUnresolved
+              + " unresolved command(s); the recovery's RESTORE binding resolves them first");
+    }
+  }
 
   /**
    * The checks every store applies to an intent before recording it (P3, R4.3); the caller has

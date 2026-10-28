@@ -921,6 +921,198 @@ class CandidateAttemptStoreIntegrationTest {
   }
 
   @Test
+  void finishingAnAttemptWithAnOpenCommandLeavesItUnknown() {
+    CandidateAttemptStore holder = owner();
+    var held = boundAttempt(holder, Duration.ofMinutes(1));
+    String id = held.attemptId();
+    holder.recordIntent(
+        id, held.leaseId(), held.epoch(), intent(id, "c-1", "session.candidate.execute", 1, 'a'));
+    // A runner that died after the worker answered but before its receipt.
+    holder.finish(
+        id,
+        held.leaseId(),
+        held.epoch(),
+        CandidateAttemptStore.State.UNCERTAIN,
+        Map.of("status", "UNCERTAIN"),
+        "runner exited before its receipt");
+
+    var command = owner().commands(id).get(0);
+    assertEquals(CandidateAttemptStore.CommandState.UNKNOWN, command.state());
+    assertNull(command.resolvedByAttemptId());
+  }
+
+  @Test
+  void aRecoveryResolvesItsSourceCommandsFromTheRestoredCutBeforeAnyEffect() {
+    CandidateAttemptStore crashed = owner();
+    var held = boundAttempt(crashed, Duration.ofMillis(200));
+    String source = held.attemptId();
+    var applied =
+        crashed.recordIntent(
+            source,
+            held.leaseId(),
+            held.epoch(),
+            intent(source, "c-1", "session.candidate.execute", 1, 'a'));
+    crashed.recordReceipt(
+        source,
+        held.leaseId(),
+        held.epoch(),
+        receipt(applied, CandidateAttemptStore.CommandState.APPLIED));
+    crashed.recordIntent(
+        source,
+        held.leaseId(),
+        held.epoch(),
+        intent(source, "c-2", "session.candidate.advance", 1, 'b'));
+    jdbc.update(
+        "UPDATE candidate_execution_attempts SET lease_expires_at = now() - interval '1 second'"
+            + " WHERE attempt_id = ?",
+        source);
+    assertEquals(1, owner().reconcileExpired(Instant.now()));
+
+    CandidateAttemptStore winner = owner();
+    var recovery =
+        winner
+            .reserveRecovery(
+                "proposal:p1", "key-r", "job-r", "sha256:r", Duration.ofMinutes(1), source)
+            .attempt();
+    String id = recovery.attemptId();
+    winner.markRunning(id, recovery.leaseId(), recovery.epoch(), "sha256:request");
+    winner.recordBinding(
+        id, recovery.leaseId(), recovery.epoch(), binding(id, 1, "sha256:request"));
+
+    assertThrows(
+        CandidateAttemptStore.CommandRejectedException.class,
+        () ->
+            winner.recordIntent(
+                id,
+                recovery.leaseId(),
+                recovery.epoch(),
+                intent(id, "r-x", "session.candidate.execute", 1, 'c')),
+        "no effect of the recovery precedes resolving its source's unknown command");
+    var restore =
+        winner.recordIntent(
+            id,
+            recovery.leaseId(),
+            recovery.epoch(),
+            lifecycle(intent(id, "r-restore", "session.candidate.restore", 1, 'd')));
+    winner.recordReceipt(
+        id,
+        recovery.leaseId(),
+        recovery.epoch(),
+        receipt(restore, CandidateAttemptStore.CommandState.APPLIED));
+
+    assertThrows(
+        CandidateAttemptStore.BindingRejectedException.class,
+        () ->
+            winner.recordBinding(
+                id, recovery.leaseId(), recovery.epoch(), binding(id, 2, "sha256:request")),
+        "a RESTORE binding that names no cut leaves the unknown command unresolved");
+    assertThrows(
+        CandidateAttemptStore.BindingRejectedException.class,
+        () ->
+            winner.recordBinding(
+                id,
+                recovery.leaseId(),
+                recovery.epoch(),
+                restoreBinding(
+                    id,
+                    cut(
+                        source,
+                        Map.of(
+                            "c-1", CandidateAttemptStore.CommandState.SUPERSEDED,
+                            "c-2", CandidateAttemptStore.CommandState.SUPERSEDED)))),
+        "a receipted command is not the cut's to resolve");
+    assertThrows(
+        CandidateAttemptStore.BindingRejectedException.class,
+        () ->
+            winner.recordBinding(
+                id,
+                recovery.leaseId(),
+                recovery.epoch(),
+                restoreBinding(
+                    id, cut(id, Map.of("c-2", CandidateAttemptStore.CommandState.SUPERSEDED)))),
+        "the cut must come from the attempt being recovered");
+    assertThrows(
+        CandidateAttemptStore.BindingRejectedException.class,
+        () ->
+            winner.recordBinding(
+                id,
+                recovery.leaseId(),
+                recovery.epoch(),
+                restoreBinding(
+                    id, cut(source, Map.of("c-2", CandidateAttemptStore.CommandState.UNKNOWN)))),
+        "a cut resolves a command, it cannot leave it unknown");
+    assertEquals(1L, owner().currentBinding(id).orElseThrow().generation());
+    assertEquals(
+        CandidateAttemptStore.CommandState.UNKNOWN, owner().commands(source).get(1).state());
+
+    winner.recordBinding(
+        id,
+        recovery.leaseId(),
+        recovery.epoch(),
+        restoreBinding(
+            id, cut(source, Map.of("c-2", CandidateAttemptStore.CommandState.SUPERSEDED))));
+
+    var sourceCommands = owner().commands(source);
+    assertEquals(CandidateAttemptStore.CommandState.APPLIED, sourceCommands.get(0).state());
+    assertNull(sourceCommands.get(0).resolvedByAttemptId());
+    assertEquals(CandidateAttemptStore.CommandState.SUPERSEDED, sourceCommands.get(1).state());
+    assertEquals(id, sourceCommands.get(1).resolvedByAttemptId());
+    assertEquals(
+        "4",
+        jdbc.queryForObject(
+            "SELECT resolution_evidence ->> 'checkpointIndex' FROM candidate_attempt_commands"
+                + " WHERE attempt_id = ? AND command_id = 'c-2'",
+            String.class,
+            source));
+    winner.recordIntent(
+        id,
+        recovery.leaseId(),
+        recovery.epoch(),
+        intent(id, "r-1", "session.candidate.execute", 2, 'e'));
+  }
+
+  private static CandidateAttemptStore.CommandIntent lifecycle(
+      CandidateAttemptStore.CommandIntent intent) {
+    return new CandidateAttemptStore.CommandIntent(
+        intent.intentId(),
+        intent.commandId(),
+        intent.method(),
+        "LIFECYCLE",
+        intent.payloadDigest(),
+        intent.attemptId(),
+        intent.requestDigest(),
+        intent.bindingGeneration(),
+        intent.expectedWorkerEpoch(),
+        intent.expectedWorkerRevision());
+  }
+
+  private static CandidateAttemptStore.RecoveredFrom cut(
+      String attemptId, Map<String, CandidateAttemptStore.CommandState> resolutions) {
+    return new CandidateAttemptStore.RecoveredFrom(
+        attemptId, 4L, "sha256:" + "c".repeat(64), 3L, 7L, resolutions);
+  }
+
+  private static CandidateAttemptStore.WorkerBinding restoreBinding(
+      String attemptId, CandidateAttemptStore.RecoveredFrom from) {
+    var b = binding(attemptId, 2, "sha256:request");
+    return new CandidateAttemptStore.WorkerBinding(
+        b.bindingId(),
+        b.generation(),
+        b.attemptId(),
+        b.requestDigest(),
+        b.workerAuthority(),
+        b.workerSessionId(),
+        b.workerEpoch(),
+        b.workerLeaseDigest(),
+        b.workerRevision(),
+        b.runnerSteps(),
+        b.runnerIntents(),
+        b.reason(),
+        b.workerIdentity(),
+        from);
+  }
+
+  @Test
   void aRestoreRebindingMovesCommandsToTheNewGeneration() {
     CandidateAttemptStore holder = owner();
     var held = boundAttempt(holder, Duration.ofMinutes(1));

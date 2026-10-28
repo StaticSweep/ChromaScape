@@ -272,6 +272,17 @@ public class CandidateExecutionJobService {
     Map<String, Object> resume = new LinkedHashMap<>();
     resume.put("root", journal.toString());
     resume.put("attemptId", previousAttemptId);
+    // P3: the previous attempt is final, so the commands it left without a receipt are fixed; the
+    // runner resolves each from the cut it restores, and its RESTORE binding must account for all.
+    resume.put(
+        "unresolvedCommandIds",
+        attempts.commands(previousAttemptId).stream()
+            .filter(
+                c ->
+                    c.state() == CandidateAttemptStore.CommandState.PERMITTED
+                        || c.state() == CandidateAttemptStore.CommandState.UNKNOWN)
+            .map(CandidateAttemptStore.CommandRecord::commandId)
+            .toList());
     return resume;
   }
 
@@ -533,6 +544,10 @@ public class CandidateExecutionJobService {
     if (identity != null && !(identity instanceof Map)) {
       throw new IllegalArgumentException("workerIdentity must be an object");
     }
+    Object from = line.get("recoveredFrom");
+    if (from != null && !(from instanceof Map)) {
+      throw new IllegalArgumentException("recoveredFrom must be an object");
+    }
     return new CandidateAttemptStore.WorkerBinding(
         text(line, "bindingId"),
         whole(line, "generation"),
@@ -546,7 +561,29 @@ public class CandidateExecutionJobService {
         whole(line, "runnerSteps"),
         whole(line, "runnerIntents"),
         text(line, "reason"),
-        (Map<String, Object>) identity);
+        (Map<String, Object>) identity,
+        from == null ? null : recoveredFrom((Map<String, Object>) from));
+  }
+
+  /** The restored cut a RESTORE binding names; malformed fields are refused, never coerced. */
+  static CandidateAttemptStore.RecoveredFrom recoveredFrom(Map<String, Object> from) {
+    if (!(from.get("commandResolutions") instanceof Map<?, ?> verdicts)) {
+      throw new IllegalArgumentException("recoveredFrom.commandResolutions must be an object");
+    }
+    Map<String, CandidateAttemptStore.CommandState> resolutions = new LinkedHashMap<>();
+    for (Map.Entry<?, ?> verdict : verdicts.entrySet()) {
+      if (!(verdict.getKey() instanceof String id) || !(verdict.getValue() instanceof String v)) {
+        throw new IllegalArgumentException("command resolutions must map ids to outcomes");
+      }
+      resolutions.put(id, CandidateAttemptStore.CommandState.valueOf(v));
+    }
+    return new CandidateAttemptStore.RecoveredFrom(
+        text(from, "attemptId"),
+        whole(from, "checkpointIndex"),
+        text(from, "checkpointChecksum"),
+        whole(from, "workerEpoch"),
+        whole(from, "workerRevision"),
+        resolutions);
   }
 
   /**

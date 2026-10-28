@@ -145,7 +145,22 @@ final class InMemoryCandidateAttemptStore implements CandidateAttemptStore {
     Attempt a = held(attemptId, leaseId, epoch);
     Control c = control(attemptId);
     controls.put(attemptId, new Control(c.cancelRequested(), c.pauseRequested(), false));
+    unknownOpenCommands(attemptId);
     return put(with(a, state, null, a.epoch(), null, a.requestDigest(), job, detail));
+  }
+
+  private void unknownOpenCommands(String attemptId) {
+    java.util.List<CommandRecord> recorded = commands.get(attemptId);
+    if (recorded != null) {
+      recorded.replaceAll(
+          r -> r.state() == CommandState.PERMITTED ? resolved(r, CommandState.UNKNOWN, null) : r);
+    }
+  }
+
+  private java.util.List<CommandRecord> unresolved(String attemptId) {
+    return commands(attemptId).stream()
+        .filter(r -> r.state() == CommandState.PERMITTED || r.state() == CommandState.UNKNOWN)
+        .toList();
   }
 
   @Override
@@ -165,14 +180,7 @@ final class InMemoryCandidateAttemptStore implements CandidateAttemptStore {
                 a.requestDigest(),
                 a.job(),
                 "owner lease expired"));
-        java.util.List<CommandRecord> recorded = commands.get(a.attemptId());
-        if (recorded != null) {
-          recorded.replaceAll(
-              r ->
-                  r.state() == CommandState.PERMITTED
-                      ? resolved(r, CommandState.UNKNOWN, null)
-                      : r);
-        }
+        unknownOpenCommands(a.attemptId());
         count++;
       }
     }
@@ -254,7 +262,33 @@ final class InMemoryCandidateAttemptStore implements CandidateAttemptStore {
         }
       }
     }
+    String source = recovers.get(attemptId);
+    Map<String, CommandState> verdicts =
+        CandidateAttemptStore.sourceResolutions(
+            source, source == null ? java.util.List.of() : unresolved(source), binding);
     accepted.add(binding);
+    if (!verdicts.isEmpty()) {
+      commands
+          .get(source)
+          .replaceAll(
+              r ->
+                  verdicts.containsKey(r.commandId())
+                      ? new CommandRecord(
+                          r.attemptId(),
+                          r.commandId(),
+                          r.intentId(),
+                          r.method(),
+                          r.kind(),
+                          r.payloadDigest(),
+                          r.bindingGeneration(),
+                          r.expectedWorkerEpoch(),
+                          r.expectedWorkerRevision(),
+                          verdicts.get(r.commandId()),
+                          r.workerRevision(),
+                          r.receiptDigest(),
+                          attemptId)
+                      : r);
+    }
   }
 
   @Override
@@ -283,6 +317,10 @@ final class InMemoryCandidateAttemptStore implements CandidateAttemptStore {
         a.requestDigest(),
         accepted == null ? 0 : accepted.size(),
         intent);
+    String source = recovers.get(attemptId);
+    if (source != null) {
+      CandidateAttemptStore.rejectBeforeSourceResolved(source, unresolved(source).size(), intent);
+    }
     java.util.List<CommandRecord> recorded =
         commands.computeIfAbsent(attemptId, id -> new java.util.ArrayList<>());
     for (CommandRecord r : recorded) {
@@ -317,6 +355,7 @@ final class InMemoryCandidateAttemptStore implements CandidateAttemptStore {
             intent.expectedWorkerEpoch(),
             intent.expectedWorkerRevision(),
             CommandState.PERMITTED,
+            null,
             null,
             null);
     recorded.add(record);
@@ -378,7 +417,8 @@ final class InMemoryCandidateAttemptStore implements CandidateAttemptStore {
         r.expectedWorkerRevision(),
         state,
         receipt == null ? null : receipt.workerRevision(),
-        receipt == null ? null : receipt.receiptDigest());
+        receipt == null ? null : receipt.receiptDigest(),
+        r.resolvedByAttemptId());
   }
 
   /** The attempt's lease runs out; nothing is reconciled yet. */
