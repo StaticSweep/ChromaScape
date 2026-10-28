@@ -106,6 +106,7 @@ class CandidateExecutionControllerTest {
         List.of(),
         Map.of(),
         null,
+        null,
         null);
   }
 }

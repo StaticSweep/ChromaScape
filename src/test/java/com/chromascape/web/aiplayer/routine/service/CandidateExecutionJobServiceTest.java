@@ -442,6 +442,63 @@ class CandidateExecutionJobServiceTest {
   }
 
   @Test
+  void aRecoveryRebuildsTheManagedJournalWithThePreviousRunDirectoryGone() throws Exception {
+    com.chromascape.web.artifact.ImmutableArtifactStore artifacts =
+        new com.chromascape.web.artifact.ImmutableArtifactStore(
+            temp.resolve("artifacts"), 1 << 20, 1 << 24, MAPPER);
+    CandidateAttemptJournalArchive journals =
+        new CandidateAttemptJournalArchive(store, artifacts, MAPPER);
+    AtomicReference<String> crashed = new AtomicReference<>();
+    // The runner publishes one cut to its spool, then the host is lost.
+    new CandidateExecutionJobService(
+            workflow,
+            properties,
+            (job, timeout, cancel) -> {
+              String attemptId = String.valueOf(map(job.get("request")).get("attemptId"));
+              crashed.set(attemptId);
+              try {
+                new CandidateAttemptJournalArchiveTest.Spool(
+                        Path.of(String.valueOf(job.get("workingDirectory"))).resolve("journal"),
+                        attemptId)
+                    .append(CandidateAttemptJournalArchiveTest.event("CHECKPOINT"));
+              } catch (Exception e) {
+                throw new AssertionError(e);
+              }
+              return lost();
+            },
+            store,
+            journals)
+        .execute(PROPOSAL, spec("job-crashed"));
+    assertEquals(1L, store.journalHead(crashed.get()).sequence(), "published before settling");
+    CandidateAttemptJournalArchiveTest.deleteTree(temp.resolve("runs").resolve(crashed.get()));
+
+    AtomicReference<Map<String, Object>> sent = new AtomicReference<>();
+    new CandidateExecutionJobService(
+            workflow,
+            properties,
+            (j, timeout, cancel) -> {
+              sent.set(j);
+              return answer(j, false, true, List.of());
+            },
+            store,
+            journals)
+        .recover(PROPOSAL, crashed.get(), spec("job-recovery"));
+
+    Map<String, Object> resume = map(sent.get().get("resume"));
+    assertEquals("MANAGED", resume.get("journalSource"));
+    Path rebuilt = Path.of(String.valueOf(resume.get("root")));
+    assertTrue(rebuilt.startsWith(temp.resolve("runs").resolve("recovery-sources")));
+    assertTrue(Files.isRegularFile(rebuilt.resolve(crashed.get()).resolve("HEAD")));
+    assertFalse(Files.exists(temp.resolve("runs").resolve(crashed.get())));
+    Map<String, Object> journal =
+        new CandidateExecutionJobService(workflow, properties, null, store, journals)
+            .status(PROPOSAL, "key-job-crashed")
+            .journal();
+    assertEquals(1L, ((Number) journal.get("sequence")).longValue());
+    assertFalse(String.valueOf(journal).contains(temp.toString()), "no host path in status");
+  }
+
+  @Test
   void aRecoveryIsANewFencedAttemptThatNamesThePreviousJournal() throws Exception {
     CandidateAttemptStore.Attempt previous = uncertainAttemptWithJournal("key-crashed");
     AtomicReference<Map<String, Object>> sent = new AtomicReference<>();
@@ -456,6 +513,7 @@ class CandidateExecutionJobServiceTest {
     Map<String, Object> resume = map(sent.get().get("resume"));
     assertEquals(previous.attemptId(), resume.get("attemptId"));
     assertEquals(List.of(), resume.get("unresolvedCommandIds"));
+    assertEquals("LOCAL_ONLY", resume.get("journalSource"), "no managed journal: labelled");
     assertEquals(
         temp.resolve("runs").resolve(previous.attemptId()).resolve("journal").toString(),
         resume.get("root"));

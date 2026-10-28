@@ -299,6 +299,40 @@ final class InMemoryCandidateAttemptStore implements CandidateAttemptStore {
         : Optional.of(accepted.get(accepted.size() - 1));
   }
 
+  /** R5.1 managed journal heads and committed segments, by attempt id. */
+  final Map<String, JournalHead> journalHeads = new LinkedHashMap<>();
+
+  final Map<String, java.util.List<JournalSegment>> journalSegments = new LinkedHashMap<>();
+
+  @Override
+  public synchronized JournalHead journalHead(String attemptId) {
+    return journalHeads.getOrDefault(attemptId, JournalHead.empty(attemptId));
+  }
+
+  @Override
+  public synchronized java.util.List<JournalSegment> journalSegments(String attemptId) {
+    return java.util.List.copyOf(journalSegments.getOrDefault(attemptId, java.util.List.of()));
+  }
+
+  @Override
+  public synchronized JournalHead commitJournal(
+      String attemptId,
+      String leaseId,
+      long epoch,
+      JournalHead expected,
+      java.util.List<JournalSegment> segments,
+      boolean terminal) {
+    Attempt a = held(attemptId, leaseId, epoch);
+    if (!a.state().open()) {
+      throw new StaleOwnerException(attemptId + " is " + a.state());
+    }
+    JournalHead next =
+        CandidateAttemptStore.continueJournal(journalHead(attemptId), expected, segments, terminal);
+    journalSegments.computeIfAbsent(attemptId, id -> new java.util.ArrayList<>()).addAll(segments);
+    journalHeads.put(attemptId, next);
+    return next;
+  }
+
   /** The P3 command rows, by attempt id, in permit order. */
   final Map<String, java.util.List<CommandRecord>> commands = new LinkedHashMap<>();
 
