@@ -167,6 +167,71 @@ class CandidateAttemptJournalArchiveTest {
     assertNull(archive.materialize(held, temp.resolve("fresh-host")));
   }
 
+  @Test
+  void retentionRemovesOnlyCopiesManagedStorageMakesRedundant() throws Exception {
+    Path runs = temp.resolve("runs");
+    java.time.Instant now = java.time.Instant.now();
+    java.nio.file.attribute.FileTime old =
+        java.nio.file.attribute.FileTime.from(now.minus(Duration.ofHours(48)));
+
+    // A settled attempt whose sealed managed journal covers its spool exactly.
+    Spool settled = new Spool(runs.resolve(held.attemptId()).resolve("journal"), held.attemptId());
+    settled.append(event("CHECKPOINT"));
+    settled.terminal();
+    archive.ingest(held, settled.root);
+    store.finish(
+        held.attemptId(),
+        held.leaseId(),
+        held.epoch(),
+        CandidateAttemptStore.State.COMPLETED,
+        Map.of(),
+        "done");
+
+    // An open attempt, and a settled one whose spool runs past its managed head.
+    var open =
+        store.reserve("proposal:p1", "key-2", "job-2", "sha256:g", Duration.ofMinutes(1)).attempt();
+    store.markRunning(open.attemptId(), open.leaseId(), open.epoch(), "sha256:request");
+    new Spool(runs.resolve(open.attemptId()).resolve("journal"), open.attemptId())
+        .append(event("CHECKPOINT"));
+    var partial =
+        store.reserve("proposal:p1", "key-3", "job-3", "sha256:h", Duration.ofMinutes(1)).attempt();
+    store.markRunning(partial.attemptId(), partial.leaseId(), partial.epoch(), "sha256:request");
+    var partialHeld = store.find(partial.attemptId()).orElseThrow();
+    Spool ahead =
+        new Spool(runs.resolve(partial.attemptId()).resolve("journal"), partial.attemptId());
+    ahead.append(event("CHECKPOINT"));
+    archive.ingest(partialHeld, ahead.root);
+    ahead.append(event("STEP"));
+    store.expireAndReconcile(partial.attemptId());
+
+    Path oldSource = Files.createDirectories(runs.resolve("recovery-sources").resolve("a-1"));
+    Path freshSource = Files.createDirectories(runs.resolve("recovery-sources").resolve("b-2"));
+    for (Path p :
+        List.of(
+            oldSource,
+            runs.resolve(held.attemptId()).resolve("journal"),
+            runs.resolve(open.attemptId()).resolve("journal"),
+            runs.resolve(partial.attemptId()).resolve("journal"))) {
+      Files.setLastModifiedTime(p, old);
+    }
+
+    List<Path> removed = archive.sweep(runs, Duration.ofHours(24), now);
+
+    assertEquals(
+        java.util.Set.of(oldSource, runs.resolve(held.attemptId()).resolve("journal")),
+        java.util.Set.copyOf(removed));
+    assertTrue(Files.isDirectory(freshSource), "a recent rebuild may be in use");
+    assertTrue(
+        Files.isDirectory(runs.resolve(open.attemptId()).resolve("journal")), "open: pinned");
+    assertTrue(
+        Files.isDirectory(runs.resolve(partial.attemptId()).resolve("journal")),
+        "a spool past its managed head holds evidence nothing else has");
+    assertEquals(
+        List.of(),
+        archive.sweep(runs, Duration.ofHours(24), now.minus(Duration.ofHours(72))),
+        "nothing is younger than an earlier cutoff");
+  }
+
   static Map<String, Object> event(String type) {
     Map<String, Object> event = new LinkedHashMap<>();
     event.put("type", type);

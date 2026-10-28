@@ -76,6 +76,9 @@ public class CandidateExecutionJobService {
           });
   private volatile ExecutorService jobs;
 
+  /** The typed reason a run stops when managed publication stalls past its deadline (R5.4). */
+  static final String STORAGE_PUBLICATION_STALLED = "STORAGE_PUBLICATION_STALLED";
+
   /** How often an owner renews its lease and reads the attempt's controls. */
   static final Duration CONTROL_TICK = Duration.ofSeconds(1);
 
@@ -91,6 +94,12 @@ public class CandidateExecutionJobService {
 
     /** Why the spool could not be published to managed storage, if it could not. */
     volatile String journalRefusal;
+
+    /** When managed publication started failing; 0 while it keeps up (R5.4). */
+    volatile long journalStalledSince;
+
+    /** The owner parked the runner because publication is stalled, not because one asked (R5.4). */
+    volatile boolean pressurePaused;
 
     Live(String jobId) {
       this.jobId = jobId;
@@ -154,6 +163,25 @@ public class CandidateExecutionJobService {
   public void reconcileAbandonedAttempts() {
     if (properties != null && properties.isEnabled() && attempts != null) {
       attempts.reconcileExpired(Instant.now());
+      sweepRetention();
+    }
+  }
+
+  /**
+   * Removes local journal copies that managed storage makes redundant (R5.4). Runs after
+   * reconciliation, so attempts that lost their owner are already settled as UNCERTAIN.
+   */
+  void sweepRetention() {
+    if (journals == null) {
+      return;
+    }
+    try {
+      journals.sweep(
+          directory(properties.getRunRoot(), "runRoot"),
+          properties.getRetentionGrace(),
+          Instant.now());
+    } catch (IOException | RuntimeException e) {
+      // Retention is best effort; nothing it would remove is needed for a recovery.
     }
   }
 
@@ -525,6 +553,22 @@ public class CandidateExecutionJobService {
       ExecutionJob result = interpret(spec.jobId(), attemptId, request, outcome);
       // R5.1: everything the runner published is in managed storage before the attempt settles.
       publishJournal(attempt, live);
+      if (live.journalRefusal != null) {
+        // R5.4: the typed storage reason is part of the result, not only its free-text detail.
+        List<String> reasons = new ArrayList<>(result.reasons());
+        reasons.add(live.journalRefusal.substring(0, live.journalRefusal.indexOf(':')));
+        result =
+            new ExecutionJob(
+                result.jobId(),
+                result.attemptId(),
+                result.requestDigest(),
+                result.request(),
+                result.outcome(),
+                List.copyOf(reasons),
+                result.certifiable(),
+                result.result(),
+                result.hostOutcome());
+      }
       try {
         attempts.finish(
             attemptId,
@@ -824,7 +868,7 @@ public class CandidateExecutionJobService {
             if (control.cancelRequested()) {
               live.cancel.set(true);
             }
-            live.pause.set(control.pauseRequested());
+            live.pause.set(control.pauseRequested() || live.pressurePaused);
             if (System.currentTimeMillis() >= nextRenewal[0]) {
               nextRenewal[0] = System.currentTimeMillis() + renewEvery;
               if (!attempts.renew(attempt.attemptId(), attempt.leaseId(), attempt.epoch(), lease)) {
@@ -856,13 +900,42 @@ public class CandidateExecutionJobService {
     synchronized (live) {
       try {
         journals.ingest(attempt, live.spool);
+        relievePressure(attempt, live);
       } catch (CandidateAttemptStore.StaleOwnerException e) {
         live.cancel.set(true);
       } catch (CandidateAttemptJournalArchive.JournalRejectedException e) {
         live.journalRefusal = "JOURNAL_NOT_MANAGED: " + e.getMessage();
       } catch (IOException | RuntimeException e) {
-        // Retried on the next renewal and before the attempt settles.
+        applyPressure(live, e);
       }
+    }
+  }
+
+  /**
+   * Managed publication failed (a full or unavailable store, for example): the runner is parked
+   * before its next step, so no effect outruns its managed evidence. A stall that outlasts its
+   * deadline stops the run with a typed reason (R5.4).
+   */
+  private void applyPressure(Live live, Exception cause) {
+    long now = System.currentTimeMillis();
+    if (live.journalStalledSince == 0L) {
+      live.journalStalledSince = now;
+    }
+    live.pressurePaused = true;
+    live.pause.set(true);
+    if (now - live.journalStalledSince >= properties.getJournalPublicationDeadline().toMillis()) {
+      live.journalRefusal = STORAGE_PUBLICATION_STALLED + ": " + cause.getMessage();
+      live.cancel.set(true);
+    }
+  }
+
+  /** Publication caught up: a runner parked only by pressure resumes. */
+  private void relievePressure(CandidateAttemptStore.Attempt attempt, Live live) {
+    live.journalStalledSince = 0L;
+    if (live.pressurePaused) {
+      live.pressurePaused = false;
+      CandidateAttemptStore.Control control = attempts.control(attempt.attemptId());
+      live.pause.set(control.pauseRequested());
     }
   }
 

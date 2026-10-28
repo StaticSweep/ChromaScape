@@ -58,6 +58,15 @@ public class Sc2106ExecutionProperties {
   /** Submitted jobs that may run at once; the rest wait QUEUED with their lease renewed. */
   private int maxConcurrentJobs = 2;
 
+  /**
+   * How long managed journal publication may stall before the run is stopped (R5.4). While it is
+   * stalled the runner is parked between steps; it resumes as soon as publication catches up.
+   */
+  private Duration journalPublicationDeadline = Duration.ofMinutes(2);
+
+  /** How long a rebuilt recovery source or a fully managed local spool is kept (R5.4). */
+  private Duration retentionGrace = Duration.ofHours(24);
+
   public boolean isEnabled() {
     return enabled;
   }
@@ -162,5 +171,33 @@ public class Sc2106ExecutionProperties {
 
   public void setMaxConcurrentJobs(int maxConcurrentJobs) {
     this.maxConcurrentJobs = Math.max(1, maxConcurrentJobs);
+  }
+
+  public Duration getJournalPublicationDeadline() {
+    return journalPublicationDeadline;
+  }
+
+  /** Rejects a missing, non-positive or over-long deadline: the stall bound is never unbounded. */
+  public void setJournalPublicationDeadline(Duration deadline) {
+    if (deadline == null
+        || deadline.compareTo(Duration.ofSeconds(1)) < 0
+        || deadline.compareTo(Duration.ofHours(1)) > 0) {
+      throw new IllegalArgumentException(
+          "sc2106.execution.journal-publication-deadline must be between 1s and 1h");
+    }
+    this.journalPublicationDeadline = deadline;
+  }
+
+  public Duration getRetentionGrace() {
+    return retentionGrace;
+  }
+
+  /** Rejects a missing or sub-minute grace: cleanup never races a recovery that just started. */
+  public void setRetentionGrace(Duration grace) {
+    if (grace == null || grace.compareTo(Duration.ofMinutes(1)) < 0) {
+      throw new IllegalArgumentException(
+          "sc2106.execution.retention-grace must be at least 1 minute");
+    }
+    this.retentionGrace = grace;
   }
 }

@@ -10,12 +10,18 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.FileTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
@@ -39,6 +45,8 @@ public class CandidateAttemptJournalArchive {
   static final String GENESIS = "sha256:" + "0".repeat(64);
   static final String MEDIA_TYPE = "application/vnd.sc1916.attempt-segment+json";
 
+  private static final Logger logger =
+      LoggerFactory.getLogger(CandidateAttemptJournalArchive.class);
   private static final Pattern SEGMENT_FILE = Pattern.compile("(\\d{10})-([0-9a-f]{64})\\.seg");
   private static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() {};
 
@@ -281,5 +289,79 @@ public class CandidateAttemptJournalArchive {
       return ((Number) map.get(field)).longValue();
     }
     throw new JournalRejectedException("JOURNAL_HEAD_CORRUPT", field + " must be an integer");
+  }
+
+  /**
+   * Removes local copies that managed storage makes redundant, older than {@code grace} (R5.4):
+   * rebuilt recovery sources (always rebuildable from the artifact store), and the spool of a
+   * settled attempt whose sealed managed head covers it exactly. An open attempt, a spool the
+   * managed journal does not fully cover, and anything younger than the grace period are pinned.
+   * Each removal is logged as an audit record. Returns what was removed.
+   */
+  public List<Path> sweep(Path runRoot, Duration grace, Instant now) throws IOException {
+    List<Path> removed = new ArrayList<>();
+    if (!Files.isDirectory(runRoot, LinkOption.NOFOLLOW_LINKS)) {
+      return removed;
+    }
+    Instant cutoff = now.minus(grace);
+    Path sources = runRoot.resolve("recovery-sources");
+    for (Path source : children(sources)) {
+      if (older(source, cutoff)) {
+        delete(source, "rebuilt recovery source", removed);
+      }
+    }
+    for (Path run : children(runRoot)) {
+      String attemptId = run.getFileName().toString();
+      Path spool = run.resolve("journal");
+      if (attemptId.equals("recovery-sources")
+          || !Files.isDirectory(spool, LinkOption.NOFOLLOW_LINKS)
+          || !older(spool, cutoff)) {
+        continue;
+      }
+      CandidateAttemptStore.Attempt attempt = attempts.find(attemptId).orElse(null);
+      if (attempt == null || attempt.state().open()) {
+        continue;
+      }
+      CandidateAttemptStore.JournalHead managed = attempts.journalHead(attemptId);
+      Long spoolSequence = spoolSequence(spool, attemptId);
+      if (managed.terminal() && spoolSequence != null && spoolSequence == managed.sequence()) {
+        delete(spool, "spool covered by sealed managed journal " + managed.chainDigest(), removed);
+      }
+    }
+    return removed;
+  }
+
+  private Long spoolSequence(Path spool, String attemptId) {
+    try {
+      Map<String, Object> head =
+          mapper.readValue(Files.readAllBytes(spool.resolve(attemptId).resolve("HEAD")), MAP);
+      return HEAD_SCHEMA.equals(head.get("schema")) ? whole(head, "lastSequence") : null;
+    } catch (IOException | RuntimeException e) {
+      return null;
+    }
+  }
+
+  private static List<Path> children(Path dir) throws IOException {
+    if (!Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)) {
+      return List.of();
+    }
+    try (Stream<Path> list = Files.list(dir)) {
+      return list.filter(p -> Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS)).toList();
+    }
+  }
+
+  private static boolean older(Path path, Instant cutoff) throws IOException {
+    FileTime modified = Files.getLastModifiedTime(path, LinkOption.NOFOLLOW_LINKS);
+    return modified.toInstant().isBefore(cutoff);
+  }
+
+  private static void delete(Path root, String why, List<Path> removed) throws IOException {
+    try (Stream<Path> walk = Files.walk(root)) {
+      for (Path p : walk.sorted(java.util.Comparator.reverseOrder()).toList()) {
+        Files.deleteIfExists(p);
+      }
+    }
+    logger.info("SC-2106 retention removed {} ({})", root, why);
+    removed.add(root);
   }
 }
