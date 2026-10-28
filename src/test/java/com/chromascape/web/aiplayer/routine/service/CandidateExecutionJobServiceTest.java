@@ -498,6 +498,126 @@ class CandidateExecutionJobServiceTest {
     assertFalse(String.valueOf(journal).contains(temp.toString()), "no host path in status");
   }
 
+  /** An archive whose managed store refuses writes while {@code full} is set (R5.4). */
+  private CandidateAttemptJournalArchive fullUntilCleared(AtomicBoolean full) {
+    return new CandidateAttemptJournalArchive(store, null, MAPPER) {
+      @Override
+      public CandidateAttemptStore.JournalHead ingest(
+          CandidateAttemptStore.Attempt held, Path spoolRoot) throws java.io.IOException {
+        if (full.get()) {
+          throw new java.io.IOException("ARTIFACT_QUOTA_EXCEEDED");
+        }
+        return store.journalHead(held.attemptId());
+      }
+    };
+  }
+
+  private static boolean within(long millis, java.util.function.BooleanSupplier condition)
+      throws InterruptedException {
+    long deadline = System.currentTimeMillis() + millis;
+    while (!condition.getAsBoolean()) {
+      if (System.currentTimeMillis() > deadline) {
+        return false;
+      }
+      Thread.sleep(50L);
+    }
+    return true;
+  }
+
+  @Test
+  void aStalledManagedJournalParksTheRunnerUntilPublicationCatchesUp() throws Exception {
+    AtomicBoolean full = new AtomicBoolean(true);
+    List<String> seen = new java.util.concurrent.CopyOnWriteArrayList<>();
+    CandidateExecutionJobService.ExecutionJob job =
+        new CandidateExecutionJobService(
+                workflow,
+                properties,
+                new CandidateHostLauncher() {
+                  @Override
+                  public HostOutcome run(
+                      Map<String, Object> j, java.time.Duration timeout, AtomicBoolean cancel) {
+                    throw new AssertionError("the service passes its controls");
+                  }
+
+                  @Override
+                  public HostOutcome run(
+                      Map<String, Object> j, java.time.Duration timeout, HostControl control) {
+                    try {
+                      seen.add(within(5_000L, () -> control.pause().get()) ? "parked" : "never");
+                      full.set(false);
+                      seen.add(within(5_000L, () -> !control.pause().get()) ? "resumed" : "stuck");
+                      seen.add(control.cancel().get() ? "cancelled" : "running");
+                    } catch (InterruptedException e) {
+                      throw new AssertionError(e);
+                    }
+                    return answer(j, false, true, List.of());
+                  }
+                },
+                store,
+                fullUntilCleared(full))
+            .execute(PROPOSAL, spec("job-1"));
+
+    assertEquals(List.of("parked", "resumed", "running"), seen);
+    assertEquals(CandidateExecutionResultValidator.Outcome.PASS, job.outcome());
+    assertFalse(job.reasons().contains("STORAGE_PUBLICATION_STALLED"));
+  }
+
+  @Test
+  void aStallPastItsDeadlineStopsTheRunWithATypedReason() throws Exception {
+    properties.setJournalPublicationDeadline(java.time.Duration.ofSeconds(1));
+    AtomicBoolean pausedFirst = new AtomicBoolean();
+    CandidateExecutionJobService.ExecutionJob job =
+        new CandidateExecutionJobService(
+                workflow,
+                properties,
+                new CandidateHostLauncher() {
+                  @Override
+                  public HostOutcome run(
+                      Map<String, Object> j, java.time.Duration timeout, AtomicBoolean cancel) {
+                    throw new AssertionError("the service passes its controls");
+                  }
+
+                  @Override
+                  public HostOutcome run(
+                      Map<String, Object> j, java.time.Duration timeout, HostControl control) {
+                    try {
+                      pausedFirst.set(within(5_000L, () -> control.pause().get()));
+                      assertTrue(within(10_000L, () -> control.cancel().get()), "never stopped");
+                    } catch (InterruptedException e) {
+                      throw new AssertionError(e);
+                    }
+                    return answer(j, false, true, List.of());
+                  }
+                },
+                store,
+                fullUntilCleared(new AtomicBoolean(true)))
+            .execute(PROPOSAL, spec("job-1"));
+
+    assertTrue(pausedFirst.get(), "the runner is parked before the run is stopped");
+    assertTrue(job.reasons().contains("STORAGE_PUBLICATION_STALLED"), job.reasons().toString());
+    assertTrue(
+        store.find(job.attemptId()).orElseThrow().detail().contains("STORAGE_PUBLICATION_STALLED"));
+  }
+
+  @Test
+  void journalStorageSettingsAreBoundedNeverUnbounded() {
+    Sc2106ExecutionProperties settings = new Sc2106ExecutionProperties();
+    for (java.time.Duration bad :
+        java.util.Arrays.asList(
+            null,
+            java.time.Duration.ZERO,
+            java.time.Duration.ofMillis(10),
+            java.time.Duration.ofHours(2))) {
+      assertThrows(
+          IllegalArgumentException.class, () -> settings.setJournalPublicationDeadline(bad));
+    }
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> settings.setRetentionGrace(java.time.Duration.ofSeconds(5)));
+    assertEquals(java.time.Duration.ofMinutes(2), settings.getJournalPublicationDeadline());
+    assertEquals(java.time.Duration.ofHours(24), settings.getRetentionGrace());
+  }
+
   @Test
   void aRecoveryIsANewFencedAttemptThatNamesThePreviousJournal() throws Exception {
     CandidateAttemptStore.Attempt previous = uncertainAttemptWithJournal("key-crashed");
