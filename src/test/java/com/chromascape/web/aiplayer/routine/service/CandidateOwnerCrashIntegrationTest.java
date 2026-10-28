@@ -81,7 +81,8 @@ class CandidateOwnerCrashIntegrationTest {
             "V73__sc2106_one_recovery_per_attempt.sql",
             "V74__sc2106_attempt_controls.sql",
             "V75__sc2106_attempt_worker_binding.sql",
-            "V78__sc2106_attempt_command_intents.sql")) {
+            "V78__sc2106_attempt_command_intents.sql",
+            "V79__sc2106_managed_attempt_journal.sql")) {
       try (var input =
           CandidateOwnerCrashIntegrationTest.class.getResourceAsStream(
               "/db/migration/" + migration)) {
@@ -132,6 +133,8 @@ class CandidateOwnerCrashIntegrationTest {
     config.put("properties", owned);
     config.put("spec", Sc2106RealHost.spec("job-owned", START_XP));
     config.put("fault", Map.of("point", "PARK_AFTER_CHECKPOINT", "at", 1));
+    String artifactRoot = temp.resolve("artifacts").toString();
+    config.put("artifactRoot", artifactRoot);
     Path configFile = temp.resolve("owner.json");
     MAPPER.writeValue(configFile.toFile(), config);
     Path log = temp.resolve("owner.log");
@@ -161,7 +164,10 @@ class CandidateOwnerCrashIntegrationTest {
                 "key-job-owned");
         attemptId = ids.isEmpty() ? null : ids.get(0);
       }
-      if (attemptId != null && cuts(root, attemptId).size() >= 1) {
+      // R5.1: the parked cut counts only once the owner has committed it to managed storage.
+      if (attemptId != null
+          && cuts(root, attemptId).size() >= 1
+          && managedSequence(attemptId) == spoolSequence(root, attemptId)) {
         break;
       }
       Thread.sleep(100L);
@@ -196,7 +202,10 @@ class CandidateOwnerCrashIntegrationTest {
     // 6. A cold-started owner reconciles it to UNCERTAIN under a new epoch and relaunches nothing.
     CandidateExecutionJobService restarted =
         new CandidateExecutionJobService(
-            Sc2106RealHost.workflow(), Sc2106RealHost.properties(root, policy), store);
+            Sc2106RealHost.workflow(),
+            Sc2106RealHost.properties(root, policy),
+            store,
+            Sc2106OwnerProcess.journals(artifactRoot, store, MAPPER));
     restarted.reconcileAbandonedAttempts();
     CandidateAttemptStore.Attempt reconciled = store.find(attemptId).orElseThrow();
     assertEquals(CandidateAttemptStore.State.UNCERTAIN, reconciled.state());
@@ -211,6 +220,11 @@ class CandidateOwnerCrashIntegrationTest {
     assertTrue(
         cuts.stream().anyMatch(cut -> Boolean.TRUE.equals(map(cut.get("runner")).get("stopped"))),
         "the cancel is recorded as a stopped cut");
+
+    // R5.1: a fresh host has only the database and the artifact store; the dead attempt's run
+    // directory, spool included, is gone.
+    CandidateAttemptJournalArchiveTest.deleteTree(root.resolve("runs").resolve(attemptId));
+    assertFalse(Files.exists(root.resolve("runs").resolve(attemptId)));
 
     // 7. An explicit recovery resumes from the parked cut and ends like the reference.
     CandidateExecutionJobService.ExecutionJob recovered =
@@ -239,6 +253,36 @@ class CandidateOwnerCrashIntegrationTest {
     assertEquals(
         CandidateAttemptStore.State.COMPLETED,
         store.find(recovered.attemptId()).orElseThrow().state());
+    String rebuiltPrefix = attemptId + "-";
+    try (var sources = Files.list(root.resolve("runs").resolve("recovery-sources"))) {
+      assertTrue(
+          sources.anyMatch(p -> p.getFileName().toString().startsWith(rebuiltPrefix)),
+          "the recovery ran from a journal rebuilt out of managed storage");
+    }
+    assertTrue(
+        store.journalHead(recovered.attemptId()).terminal(),
+        "the recovery's own journal is managed and sealed");
+  }
+
+  private static long managedSequence(String attemptId) {
+    List<Long> rows =
+        jdbc.queryForList(
+            "SELECT sequence FROM candidate_attempt_journal_heads WHERE attempt_id = ?",
+            Long.class,
+            attemptId);
+    return rows.isEmpty() ? 0L : rows.get(0);
+  }
+
+  private static long spoolSequence(Path root, String attemptId) throws Exception {
+    Path head =
+        root.resolve("runs")
+            .resolve(attemptId)
+            .resolve("journal")
+            .resolve(attemptId)
+            .resolve("HEAD");
+    return Files.isRegularFile(head)
+        ? ((Number) MAPPER.readValue(head.toFile(), Map.class).get("lastSequence")).longValue()
+        : -1L;
   }
 
   private static List<Map<String, Object>> cuts(Path root, String attemptId) {

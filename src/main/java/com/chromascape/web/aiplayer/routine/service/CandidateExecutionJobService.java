@@ -60,6 +60,7 @@ public class CandidateExecutionJobService {
   private final Sc2106ExecutionProperties properties;
   private final CandidateHostLauncher host;
   private final CandidateAttemptStore attempts;
+  private final CandidateAttemptJournalArchive journals;
 
   /** Runs owned by this process, by attempt id. */
   private final Map<String, Live> active = new ConcurrentHashMap<>();
@@ -85,17 +86,33 @@ public class CandidateExecutionJobService {
     final AtomicBoolean pause = new AtomicBoolean();
     volatile ScheduledFuture<?> tick;
 
+    /** The runner's local journal spool (R5.1); null until the run directory exists. */
+    volatile Path spool;
+
+    /** Why the spool could not be published to managed storage, if it could not. */
+    volatile String journalRefusal;
+
     Live(String jobId) {
       this.jobId = jobId;
     }
   }
 
-  @Autowired
+  /** Without managed journals: recovery uses the local spool only (labelled LOCAL_ONLY). */
   public CandidateExecutionJobService(
       PatchCandidateWorkflowService workflow,
       Sc2106ExecutionProperties properties,
       CandidateAttemptStore attempts) {
-    this(workflow, properties, null, attempts);
+    this(workflow, properties, null, attempts, null);
+  }
+
+  /** The production owner: attempts are durable and journals are managed (R5.1). */
+  @Autowired
+  public CandidateExecutionJobService(
+      PatchCandidateWorkflowService workflow,
+      Sc2106ExecutionProperties properties,
+      CandidateAttemptStore attempts,
+      CandidateAttemptJournalArchive journals) {
+    this(workflow, properties, null, attempts, journals);
   }
 
   /** Test seam: a supplied launcher replaces the configured host process. */
@@ -104,10 +121,21 @@ public class CandidateExecutionJobService {
       Sc2106ExecutionProperties properties,
       CandidateHostLauncher host,
       CandidateAttemptStore attempts) {
+    this(workflow, properties, host, attempts, null);
+  }
+
+  /** Test seam with managed journals (R5.1). */
+  CandidateExecutionJobService(
+      PatchCandidateWorkflowService workflow,
+      Sc2106ExecutionProperties properties,
+      CandidateHostLauncher host,
+      CandidateAttemptStore attempts,
+      CandidateAttemptJournalArchive journals) {
     this.workflow = workflow;
     this.properties = properties;
     this.host = host;
     this.attempts = attempts;
+    this.journals = journals;
   }
 
   /**
@@ -255,11 +283,28 @@ public class CandidateExecutionJobService {
           "a recovery is a new attempt and needs its own idempotencyKey");
     }
     Path journal;
+    String source;
     try {
+      Path runRoot = directory(properties.getRunRoot(), "runRoot");
+      // R5.1: the managed journal is the recovery authority; it is rebuilt from the artifact store
+      // into a fresh directory, so the previous attempt's own spool is never needed.
       journal =
-          directory(properties.getRunRoot(), "runRoot")
-              .resolve(previousAttemptId)
-              .resolve("journal");
+          journals == null
+              ? null
+              : journals.materialize(
+                  previous,
+                  runRoot
+                      .resolve("recovery-sources")
+                      .resolve(previousAttemptId + "-" + java.util.UUID.randomUUID()));
+      source = "MANAGED";
+      if (journal == null) {
+        // An attempt with no managed journal (older, or published before R5.1) recovers only from
+        // its local spool, and says so; it can never count as a managed recovery.
+        journal = runRoot.resolve(previousAttemptId).resolve("journal");
+        source = "LOCAL_ONLY";
+      }
+    } catch (CandidateAttemptJournalArchive.JournalRejectedException e) {
+      throw failure(HttpStatus.CONFLICT, "EXECUTION_RECOVERY_JOURNAL_INVALID", e.getMessage());
     } catch (IOException e) {
       throw failure(HttpStatus.INTERNAL_SERVER_ERROR, "EXECUTION_STAGING_FAILED", e.getMessage());
     }
@@ -272,6 +317,7 @@ public class CandidateExecutionJobService {
     Map<String, Object> resume = new LinkedHashMap<>();
     resume.put("root", journal.toString());
     resume.put("attemptId", previousAttemptId);
+    resume.put("journalSource", source);
     // P3: the previous attempt is final, so the commands it left without a receipt are fixed; the
     // runner resolves each from the cut it restores, and its RESTORE binding must account for all.
     resume.put(
@@ -444,6 +490,7 @@ public class CandidateExecutionJobService {
       request = request(staged, spec, attemptId);
       Path runDirectory = directory(properties.getRunRoot(), "runRoot").resolve(attemptId);
       Files.createDirectory(runDirectory);
+      live.spool = runDirectory.resolve("journal");
       Map<String, Object> job = job(request, spec, runDirectory);
       if (resume != null) {
         job.put("resume", resume);
@@ -476,6 +523,8 @@ public class CandidateExecutionJobService {
                         }
                       }));
       ExecutionJob result = interpret(spec.jobId(), attemptId, request, outcome);
+      // R5.1: everything the runner published is in managed storage before the attempt settles.
+      publishJournal(attempt, live);
       try {
         attempts.finish(
             attemptId,
@@ -483,7 +532,9 @@ public class CandidateExecutionJobService {
             attempt.epoch(),
             stateOf(result.outcome()),
             mapper.convertValue(result, MAP),
-            String.join("; ", result.reasons()));
+            live.journalRefusal == null
+                ? String.join("; ", result.reasons())
+                : String.join("; ", result.reasons()) + "; " + live.journalRefusal);
       } catch (CandidateAttemptStore.StaleOwnerException e) {
         throw e;
       } catch (RuntimeException e) {
@@ -780,6 +831,10 @@ public class CandidateExecutionJobService {
                 live.cancel.set(true);
               }
             }
+            // R5.1: a cut is in managed storage within a tick of the runner publishing it.
+            if (!live.cancel.get()) {
+              publishJournal(attempt, live);
+            }
           } catch (RuntimeException e) {
             // A failed read is retried next tick; an unrenewed lease ends in reconciliation.
           }
@@ -787,6 +842,28 @@ public class CandidateExecutionJobService {
         CONTROL_TICK.toMillis(),
         CONTROL_TICK.toMillis(),
         TimeUnit.MILLISECONDS);
+  }
+
+  /**
+   * Publishes the runner's new journal segments to managed storage under this owner's fence (R5.1).
+   * A fenced owner stops its run. A spool that does not verify is recorded and never published; the
+   * managed journal then ends at its last verified segment. Any other failure is retried.
+   */
+  private void publishJournal(CandidateAttemptStore.Attempt attempt, Live live) {
+    if (journals == null || live.spool == null) {
+      return;
+    }
+    synchronized (live) {
+      try {
+        journals.ingest(attempt, live.spool);
+      } catch (CandidateAttemptStore.StaleOwnerException e) {
+        live.cancel.set(true);
+      } catch (CandidateAttemptJournalArchive.JournalRejectedException e) {
+        live.journalRefusal = "JOURNAL_NOT_MANAGED: " + e.getMessage();
+      } catch (IOException | RuntimeException e) {
+        // Retried on the next renewal and before the attempt settles.
+      }
+    }
   }
 
   private ExecutorService jobs() {
@@ -924,7 +1001,8 @@ public class CandidateExecutionJobService {
       List<String> reasons,
       Map<String, Object> resultRefs,
       String detail,
-      Map<String, Object> binding) {}
+      Map<String, Object> binding,
+      Map<String, Object> journal) {}
 
   /** The status of the job a proposal submitted under {@code idempotencyKey}. */
   public JobStatus status(String proposalId, String idempotencyKey) {
@@ -1017,7 +1095,21 @@ public class CandidateExecutionJobService {
         attempts
             .currentBinding(attempt.attemptId())
             .map(CandidateExecutionJobService::binding)
-            .orElse(null));
+            .orElse(null),
+        journal(attempts.journalHead(attempt.attemptId())));
+  }
+
+  /** The managed journal head as a durable reference (R5.1); never a host path. */
+  private static Map<String, Object> journal(CandidateAttemptStore.JournalHead head) {
+    if (head == null || head.sequence() == 0) {
+      return null;
+    }
+    Map<String, Object> shown = new LinkedHashMap<>();
+    shown.put("sequence", head.sequence());
+    shown.put("chainDigest", head.chainDigest());
+    shown.put("eventCount", head.eventCount());
+    shown.put("state", head.terminal() ? "TERMINAL" : "OPEN");
+    return shown;
   }
 
   /** What status shows of the current binding; never the worker identity's raw detail. */

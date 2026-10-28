@@ -4,6 +4,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.chromascape.web.aiplayer.routine.config.Sc2106ExecutionProperties;
+import com.chromascape.web.artifact.ImmutableArtifactStore;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Path;
@@ -41,11 +42,13 @@ public final class Sc2106OwnerProcess {
                 bundle,
                 config.path("jarName").asText(),
                 config.path("sbomName").asText()));
+    // R5.1: the owner publishes the attempt journal to the shared artifact store as it runs.
     CandidateExecutionJobService service =
         new CandidateExecutionJobService(
             workflow,
             mapper.treeToValue(config.path("properties"), Sc2106ExecutionProperties.class),
-            store);
+            store,
+            journals(config.path("artifactRoot").asText(), store, mapper));
     @SuppressWarnings("unchecked")
     Map<String, Object> fault = mapper.treeToValue(config.path("fault"), Map.class);
     service.injectFault(fault);
@@ -56,5 +59,14 @@ public final class Sc2106OwnerProcess {
             mapper.treeToValue(config.path("spec"), CandidateExecutionJobService.JobSpec.class));
     // Reaching this line means the owner was not killed in time; the test fails on it.
     System.out.println("SC2106_OWNER_FINISHED " + job.outcome());
+  }
+
+  /** The managed journal archive over the artifact store every owner of the test shares. */
+  static CandidateAttemptJournalArchive journals(
+      String artifactRoot, CandidateAttemptStore store, ObjectMapper mapper) {
+    return new CandidateAttemptJournalArchive(
+        store,
+        new ImmutableArtifactStore(Path.of(artifactRoot), 1L << 26, 1L << 30, mapper),
+        mapper);
   }
 }

@@ -59,7 +59,8 @@ class CandidateAttemptStoreIntegrationTest {
             "V73__sc2106_one_recovery_per_attempt.sql",
             "V74__sc2106_attempt_controls.sql",
             "V75__sc2106_attempt_worker_binding.sql",
-            "V78__sc2106_attempt_command_intents.sql")) {
+            "V78__sc2106_attempt_command_intents.sql",
+            "V79__sc2106_managed_attempt_journal.sql")) {
       try (var input =
           CandidateAttemptStoreIntegrationTest.class.getResourceAsStream(
               "/db/migration/" + migration)) {
@@ -79,7 +80,8 @@ class CandidateAttemptStoreIntegrationTest {
   void truncate() {
     jdbc.execute(
         "TRUNCATE candidate_execution_attempts, candidate_attempt_worker_bindings,"
-            + " candidate_attempt_commands");
+            + " candidate_attempt_commands, candidate_attempt_journal_heads,"
+            + " candidate_attempt_journal_segments");
   }
 
   /** A fresh store instance per call stands in for a separate owner process. */
@@ -918,6 +920,107 @@ class CandidateAttemptStoreIntegrationTest {
                 held.epoch(),
                 receipt(open, CandidateAttemptStore.CommandState.APPLIED)));
     assertEquals(CandidateAttemptStore.CommandState.UNKNOWN, owner().commands(id).get(0).state());
+  }
+
+  @Test
+  void onlyTheHolderAdvancesTheManagedJournalHeadAndExactlyOneConcurrentCommitWins()
+      throws Exception {
+    CandidateAttemptStore holder = owner();
+    var held = boundAttempt(holder, Duration.ofMinutes(1));
+    String id = held.attemptId();
+    var empty = CandidateAttemptStore.JournalHead.empty(id);
+    assertEquals(empty, owner().journalHead(id));
+
+    int threads = 6;
+    ExecutorService pool = Executors.newFixedThreadPool(threads);
+    CountDownLatch go = new CountDownLatch(1);
+    List<Future<Object>> results = new ArrayList<>();
+    for (int i = 0; i < threads; i++) {
+      char fill = (char) ('a' + i);
+      results.add(
+          pool.submit(
+              () -> {
+                go.await();
+                try {
+                  return owner()
+                      .commitJournal(
+                          id,
+                          held.leaseId(),
+                          held.epoch(),
+                          empty,
+                          List.of(segment(1, empty.chainDigest(), fill)),
+                          false);
+                } catch (CandidateAttemptStore.JournalConflictException e) {
+                  return e;
+                }
+              }));
+    }
+    go.countDown();
+    int won = 0;
+    for (Future<Object> f : results) {
+      won += f.get() instanceof CandidateAttemptStore.JournalHead ? 1 : 0;
+    }
+    pool.shutdownNow();
+    assertEquals(1, won, "one commit advances the head; the rest were built on a moved head");
+    var head = owner().journalHead(id);
+    assertEquals(1L, head.sequence());
+    assertEquals(1, owner().journalSegments(id).size());
+
+    assertThrows(
+        CandidateAttemptStore.JournalConflictException.class,
+        () ->
+            holder.commitJournal(
+                id,
+                held.leaseId(),
+                held.epoch(),
+                head,
+                List.of(segment(3, head.chainDigest(), '7')),
+                false),
+        "a gap is refused");
+    var sealed =
+        holder.commitJournal(
+            id,
+            held.leaseId(),
+            held.epoch(),
+            head,
+            List.of(segment(2, head.chainDigest(), '8')),
+            true);
+    assertTrue(sealed.terminal());
+    assertThrows(
+        CandidateAttemptStore.JournalConflictException.class,
+        () ->
+            holder.commitJournal(
+                id,
+                held.leaseId(),
+                held.epoch(),
+                sealed,
+                List.of(segment(3, sealed.chainDigest(), '9')),
+                false),
+        "a terminal journal is never extended");
+
+    jdbc.update(
+        "UPDATE candidate_execution_attempts SET lease_expires_at = now() - interval '1 second'"
+            + " WHERE attempt_id = ?",
+        id);
+    assertEquals(1, owner().reconcileExpired(Instant.now()));
+    var reconciledHead = owner().journalHead(id);
+    assertThrows(
+        CandidateAttemptStore.StaleOwnerException.class,
+        () ->
+            holder.commitJournal(
+                id, held.leaseId(), held.epoch(), reconciledHead, List.of(), false),
+        "a fenced owner commits nothing");
+    assertEquals(2L, owner().journalHead(id).sequence());
+  }
+
+  private static CandidateAttemptStore.JournalSegment segment(
+      long sequence, String previousChain, char fill) {
+    String digest = "sha256:" + String.valueOf(fill).repeat(64);
+    String chain =
+        com.chromascape.web.artifact.ImmutableArtifactStore.checksum(
+            (previousChain + "|" + digest).getBytes(StandardCharsets.UTF_8));
+    return new CandidateAttemptStore.JournalSegment(
+        sequence, digest, previousChain, chain, 1, "sc2106-seg-" + digest.substring(7));
   }
 
   @Test

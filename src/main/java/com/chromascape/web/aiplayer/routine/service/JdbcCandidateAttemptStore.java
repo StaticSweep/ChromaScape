@@ -369,6 +369,90 @@ public class JdbcCandidateAttemptStore implements CandidateAttemptStore {
         attemptId);
   }
 
+  @Override
+  public JournalHead journalHead(String attemptId) {
+    List<JournalHead> rows =
+        jdbc.query(
+            "SELECT attempt_id, sequence, chain_digest, event_count, state"
+                + " FROM candidate_attempt_journal_heads WHERE attempt_id = ?",
+            (rs, n) ->
+                new JournalHead(
+                    rs.getString("attempt_id"),
+                    rs.getLong("sequence"),
+                    rs.getString("chain_digest"),
+                    rs.getLong("event_count"),
+                    "TERMINAL".equals(rs.getString("state"))),
+            attemptId);
+    return rows.isEmpty() ? JournalHead.empty(attemptId) : rows.get(0);
+  }
+
+  @Override
+  public List<JournalSegment> journalSegments(String attemptId) {
+    return jdbc.query(
+        "SELECT sequence, segment_digest, previous_chain_digest, chain_digest, event_count,"
+            + " artifact_id FROM candidate_attempt_journal_segments"
+            + " WHERE attempt_id = ? ORDER BY sequence",
+        (rs, n) ->
+            new JournalSegment(
+                rs.getLong("sequence"),
+                rs.getString("segment_digest"),
+                rs.getString("previous_chain_digest"),
+                rs.getString("chain_digest"),
+                rs.getLong("event_count"),
+                rs.getString("artifact_id")),
+        attemptId);
+  }
+
+  @Override
+  public JournalHead commitJournal(
+      String attemptId,
+      String leaseId,
+      long epoch,
+      JournalHead expected,
+      List<JournalSegment> segments,
+      boolean terminal) {
+    requireText(leaseId, "leaseId");
+    return transactions.execute(
+        tx -> {
+          Map<String, Object> row = lockFenced(attemptId, leaseId, epoch);
+          String state = String.valueOf(row.get("state"));
+          if (!"RESERVED".equals(state) && !"RUNNING".equals(state)) {
+            throw new StaleOwnerException("attempt " + attemptId + " is " + state);
+          }
+          JournalHead next =
+              CandidateAttemptStore.continueJournal(
+                  journalHead(attemptId), expected, segments, terminal);
+          for (JournalSegment segment : segments) {
+            jdbc.update(
+                "INSERT INTO candidate_attempt_journal_segments(attempt_id, sequence,"
+                    + " segment_digest, previous_chain_digest, chain_digest, event_count,"
+                    + " artifact_id, owner_lease_id, owner_epoch)"
+                    + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                attemptId,
+                segment.sequence(),
+                segment.segmentDigest(),
+                segment.previousChainDigest(),
+                segment.chainDigest(),
+                segment.eventCount(),
+                segment.artifactId(),
+                leaseId,
+                epoch);
+          }
+          jdbc.update(
+              "INSERT INTO candidate_attempt_journal_heads(attempt_id, sequence, chain_digest,"
+                  + " event_count, state) VALUES (?, ?, ?, ?, ?)"
+                  + " ON CONFLICT (attempt_id) DO UPDATE SET sequence = EXCLUDED.sequence,"
+                  + " chain_digest = EXCLUDED.chain_digest, event_count = EXCLUDED.event_count,"
+                  + " state = EXCLUDED.state, updated_at = now()",
+              attemptId,
+              next.sequence(),
+              next.chainDigest(),
+              next.eventCount(),
+              next.terminal() ? "TERMINAL" : "OPEN");
+          return next;
+        });
+  }
+
   private static final String COMMAND_COLUMNS =
       "attempt_id, command_id, intent_id, method, kind, payload_digest, binding_generation,"
           + " expected_worker_epoch, expected_worker_revision, state, worker_revision,"

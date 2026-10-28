@@ -329,6 +329,87 @@ public interface CandidateAttemptStore {
   /** The attempt's recorded commands in permit order. */
   List<CommandRecord> commands(String attemptId);
 
+  /** The genesis chain digest of an SC-1916 attempt journal. */
+  String JOURNAL_GENESIS = "sha256:" + "0".repeat(64);
+
+  /**
+   * An attempt's managed journal head (R5.1): the last committed segment's sequence and chain
+   * digest. Sequence 0 with the genesis chain means nothing is committed.
+   */
+  record JournalHead(
+      String attemptId, long sequence, String chainDigest, long eventCount, boolean terminal) {
+    static JournalHead empty(String attemptId) {
+      return new JournalHead(attemptId, 0L, JOURNAL_GENESIS, 0L, false);
+    }
+  }
+
+  /** One committed journal segment and the artifact holding its bytes (R5.1). */
+  record JournalSegment(
+      long sequence,
+      String segmentDigest,
+      String previousChainDigest,
+      String chainDigest,
+      long eventCount,
+      String artifactId) {}
+
+  /** A managed journal commit built on a head that is no longer current (R5.1). */
+  final class JournalConflictException extends RuntimeException {
+    public JournalConflictException(String message) {
+      super(message);
+    }
+  }
+
+  /** The attempt's managed journal head; {@link JournalHead#empty} when nothing is committed. */
+  JournalHead journalHead(String attemptId);
+
+  /** The attempt's committed journal segments in sequence order. */
+  List<JournalSegment> journalSegments(String attemptId);
+
+  /**
+   * Commits {@code segments}, whose bytes are already in the artifact store, and advances the
+   * managed head from {@code expected}, under the owner's fence (R5.1). It commits only for an open
+   * attempt held by {@code (leaseId, epoch)}, when the managed head still equals {@code expected}
+   * and the segments continue it without a gap. A terminal head is never extended.
+   *
+   * @throws StaleOwnerException when the presented lease or epoch is no longer current
+   * @throws JournalConflictException when the head moved or the segments do not continue it
+   */
+  JournalHead commitJournal(
+      String attemptId,
+      String leaseId,
+      long epoch,
+      JournalHead expected,
+      List<JournalSegment> segments,
+      boolean terminal);
+
+  /** The checks every store applies before committing segments onto {@code current} (R5.1). */
+  static JournalHead continueJournal(
+      JournalHead current, JournalHead expected, List<JournalSegment> segments, boolean terminal) {
+    if (!current.equals(expected)) {
+      throw new JournalConflictException(
+          "commit was built on " + expected + " but the managed head is " + current);
+    }
+    if (current.terminal()) {
+      throw new JournalConflictException("a terminal journal is never extended");
+    }
+    long sequence = current.sequence();
+    String chain = current.chainDigest();
+    long events = current.eventCount();
+    for (JournalSegment segment : segments) {
+      if (segment.sequence() != sequence + 1 || !chain.equals(segment.previousChainDigest())) {
+        throw new JournalConflictException(
+            "segment " + segment.sequence() + " does not continue the head at " + sequence);
+      }
+      sequence = segment.sequence();
+      chain = segment.chainDigest();
+      events += segment.eventCount();
+    }
+    if (sequence == 0) {
+      throw new JournalConflictException("an empty journal cannot be committed");
+    }
+    return new JournalHead(current.attemptId(), sequence, chain, events, terminal);
+  }
+
   /**
    * How a recovery's binding resolves the commands its source attempt left unresolved (P3, R4.3).
    * Only a RESTORE binding resolves, and it must name the source attempt and give an APPLIED or
