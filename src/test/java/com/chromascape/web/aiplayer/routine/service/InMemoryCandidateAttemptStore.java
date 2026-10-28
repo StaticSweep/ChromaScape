@@ -165,6 +165,14 @@ final class InMemoryCandidateAttemptStore implements CandidateAttemptStore {
                 a.requestDigest(),
                 a.job(),
                 "owner lease expired"));
+        java.util.List<CommandRecord> recorded = commands.get(a.attemptId());
+        if (recorded != null) {
+          recorded.replaceAll(
+              r ->
+                  r.state() == CommandState.PERMITTED
+                      ? resolved(r, CommandState.UNKNOWN, null)
+                      : r);
+        }
         count++;
       }
     }
@@ -255,6 +263,122 @@ final class InMemoryCandidateAttemptStore implements CandidateAttemptStore {
     return accepted == null || accepted.isEmpty()
         ? Optional.empty()
         : Optional.of(accepted.get(accepted.size() - 1));
+  }
+
+  /** The P3 command rows, by attempt id, in permit order. */
+  final Map<String, java.util.List<CommandRecord>> commands = new LinkedHashMap<>();
+
+  @Override
+  public synchronized CommandRecord recordIntent(
+      String attemptId, String leaseId, long epoch, CommandIntent intent) {
+    Attempt a = byId.get(attemptId);
+    if (a == null) {
+      throw new CommandRejectedException("attempt " + attemptId + " does not exist");
+    }
+    held(attemptId, leaseId, epoch);
+    java.util.List<WorkerBinding> accepted = bindings.get(attemptId);
+    CandidateAttemptStore.rejectForeignIntent(
+        attemptId,
+        a.state().name(),
+        a.requestDigest(),
+        accepted == null ? 0 : accepted.size(),
+        intent);
+    java.util.List<CommandRecord> recorded =
+        commands.computeIfAbsent(attemptId, id -> new java.util.ArrayList<>());
+    for (CommandRecord r : recorded) {
+      if (r.commandId().equals(intent.commandId())) {
+        if (!r.payloadDigest().equals(intent.payloadDigest())
+            || !r.method().equals(intent.method())) {
+          throw new CommandConflictException(
+              "command " + intent.commandId() + " was recorded with another payload");
+        }
+        return r;
+      }
+    }
+    for (java.util.List<CommandRecord> other : commands.values()) {
+      for (CommandRecord r : other) {
+        if (r.intentId().equals(intent.intentId())) {
+          throw new CommandRejectedException("intent " + intent.intentId() + " already used");
+        }
+      }
+    }
+    if (recorded.stream().anyMatch(r -> r.state() == CommandState.PERMITTED)) {
+      throw new CommandRejectedException("attempt " + attemptId + " already has an open command");
+    }
+    CommandRecord record =
+        new CommandRecord(
+            attemptId,
+            intent.commandId(),
+            intent.intentId(),
+            intent.method(),
+            intent.kind(),
+            intent.payloadDigest(),
+            intent.bindingGeneration(),
+            intent.expectedWorkerEpoch(),
+            intent.expectedWorkerRevision(),
+            CommandState.PERMITTED,
+            null,
+            null);
+    recorded.add(record);
+    return record;
+  }
+
+  @Override
+  public synchronized CommandRecord recordReceipt(
+      String attemptId, String leaseId, long epoch, CommandReceipt receipt) {
+    if (receipt == null
+        || receipt.outcome() == null
+        || receipt.outcome() == CommandState.PERMITTED) {
+      throw new CommandRejectedException("a receipt must resolve the command");
+    }
+    if (!byId.containsKey(attemptId)) {
+      throw new CommandRejectedException("attempt " + attemptId + " does not exist");
+    }
+    held(attemptId, leaseId, epoch);
+    java.util.List<CommandRecord> recorded = commands.get(attemptId);
+    if (recorded != null) {
+      for (int i = 0; i < recorded.size(); i++) {
+        CommandRecord r = recorded.get(i);
+        if (!r.commandId().equals(receipt.commandId())) {
+          continue;
+        }
+        if (!r.intentId().equals(receipt.intentId())) {
+          throw new CommandRejectedException("receipt names another intent");
+        }
+        if (r.state() != CommandState.PERMITTED) {
+          throw new CommandRejectedException(
+              "command " + receipt.commandId() + " is already " + r.state());
+        }
+        CommandRecord done = resolved(r, receipt.outcome(), receipt);
+        recorded.set(i, done);
+        return done;
+      }
+    }
+    throw new CommandRejectedException(
+        "attempt " + attemptId + " has no command " + receipt.commandId());
+  }
+
+  @Override
+  public synchronized java.util.List<CommandRecord> commands(String attemptId) {
+    java.util.List<CommandRecord> recorded = commands.get(attemptId);
+    return recorded == null ? java.util.List.of() : java.util.List.copyOf(recorded);
+  }
+
+  private static CommandRecord resolved(
+      CommandRecord r, CommandState state, CommandReceipt receipt) {
+    return new CommandRecord(
+        r.attemptId(),
+        r.commandId(),
+        r.intentId(),
+        r.method(),
+        r.kind(),
+        r.payloadDigest(),
+        r.bindingGeneration(),
+        r.expectedWorkerEpoch(),
+        r.expectedWorkerRevision(),
+        state,
+        receipt == null ? null : receipt.workerRevision(),
+        receipt == null ? null : receipt.receiptDigest());
   }
 
   /** The attempt's lease runs out; nothing is reconciled yet. */

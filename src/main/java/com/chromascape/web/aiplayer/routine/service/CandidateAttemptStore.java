@@ -2,8 +2,10 @@ package com.chromascape.web.aiplayer.routine.service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Durable ownership of candidate execution attempts (SC-2106 R4).
@@ -177,4 +179,153 @@ public interface CandidateAttemptStore {
 
   /** The attempt's current accepted binding; empty when it has none (including legacy attempts). */
   Optional<WorkerBinding> currentBinding(String attemptId);
+
+  /** The worker calls the owner gates before the runner may send them (P3, R4.3). */
+  Set<String> GATED_METHODS =
+      Set.of(
+          "session.candidate.execute",
+          "session.candidate.advance",
+          "session.candidate.restore",
+          "session.candidate.resume");
+
+  /** Command kinds a gated call may carry (P3, R4.3). */
+  Set<String> COMMAND_KINDS = Set.of("EFFECT", "TIME", "LIFECYCLE");
+
+  /** Lifecycle of one gated worker command (P3, R4.3). */
+  enum CommandState {
+    PERMITTED,
+    APPLIED,
+    REJECTED,
+    UNKNOWN
+  }
+
+  /**
+   * A worker command the runner asks permission to send (P3, R4.3). {@code payloadDigest} is the
+   * canonical-JSON digest of the exact call parameters; {@code bindingGeneration} names the worker
+   * binding the command runs under.
+   */
+  record CommandIntent(
+      String intentId,
+      String commandId,
+      String method,
+      String kind,
+      String payloadDigest,
+      String attemptId,
+      String requestDigest,
+      long bindingGeneration,
+      long expectedWorkerEpoch,
+      long expectedWorkerRevision) {}
+
+  /** What the worker answered to a permitted command (P3, R4.3). */
+  record CommandReceipt(
+      String intentId,
+      String commandId,
+      CommandState outcome,
+      Long workerRevision,
+      String receiptDigest) {}
+
+  /** A recorded worker command and its current state (P3, R4.3). */
+  record CommandRecord(
+      String attemptId,
+      String commandId,
+      String intentId,
+      String method,
+      String kind,
+      String payloadDigest,
+      long bindingGeneration,
+      long expectedWorkerEpoch,
+      long expectedWorkerRevision,
+      CommandState state,
+      Long workerRevision,
+      String receiptDigest) {}
+
+  /** A command that does not belong to the attempt's current state (P3, R4.3). */
+  class CommandRejectedException extends RuntimeException {
+    public CommandRejectedException(String message) {
+      super(message);
+    }
+  }
+
+  /** The same command id was presented with a different payload (P3, R4.3). */
+  final class CommandConflictException extends CommandRejectedException {
+    public CommandConflictException(String message) {
+      super(message);
+    }
+  }
+
+  /**
+   * Records {@code intent} as PERMITTED under the owner's fence before the runner may send it (P3,
+   * R4.3). It commits only for a RUNNING attempt held by {@code (leaseId, epoch)}, whose request
+   * digest and current binding generation the intent names, when the method is gated and no other
+   * command of the attempt is open. The same command id with the same payload returns the existing
+   * record without writing.
+   *
+   * @throws StaleOwnerException when the presented lease or epoch is no longer current
+   * @throws CommandConflictException when the command id was recorded with another payload
+   * @throws CommandRejectedException for any other mismatch
+   */
+  CommandRecord recordIntent(String attemptId, String leaseId, long epoch, CommandIntent intent);
+
+  /**
+   * Resolves a PERMITTED command from the worker's answer, under the owner's fence (P3, R4.3). A
+   * receipt for an unknown command, another intent or an already resolved command is refused.
+   *
+   * @throws StaleOwnerException when the presented lease or epoch is no longer current
+   * @throws CommandRejectedException for any other mismatch
+   */
+  CommandRecord recordReceipt(String attemptId, String leaseId, long epoch, CommandReceipt receipt);
+
+  /** The attempt's recorded commands in permit order. */
+  List<CommandRecord> commands(String attemptId);
+
+  /**
+   * The checks every store applies to an intent before recording it (P3, R4.3); the caller has
+   * already verified the owner's fence.
+   */
+  static void rejectForeignIntent(
+      String attemptId,
+      String state,
+      String requestDigest,
+      long currentBindingGeneration,
+      CommandIntent intent) {
+    if (intent == null) {
+      throw new CommandRejectedException("no intent");
+    }
+    if (!"RUNNING".equals(state)) {
+      throw new CommandRejectedException("attempt " + attemptId + " is " + state + ", not RUNNING");
+    }
+    if (!attemptId.equals(intent.attemptId())) {
+      throw new CommandRejectedException(
+          "intent names attempt " + intent.attemptId() + ", not " + attemptId);
+    }
+    if (requestDigest == null || !requestDigest.equals(intent.requestDigest())) {
+      throw new CommandRejectedException("intent names another request digest");
+    }
+    if (!GATED_METHODS.contains(intent.method())) {
+      throw new CommandRejectedException("method " + intent.method() + " is not gated");
+    }
+    if (!COMMAND_KINDS.contains(intent.kind())) {
+      throw new CommandRejectedException("unknown command kind " + intent.kind());
+    }
+    if (intent.commandId() == null
+        || intent.commandId().isBlank()
+        || intent.intentId() == null
+        || intent.intentId().isBlank()) {
+      throw new CommandRejectedException("intent and command ids are required");
+    }
+    if (intent.payloadDigest() == null
+        || !intent.payloadDigest().matches("^sha256:[0-9a-f]{64}$")) {
+      throw new CommandRejectedException("payload digest must be a sha256 content address");
+    }
+    if (currentBindingGeneration < 1 || intent.bindingGeneration() != currentBindingGeneration) {
+      throw new CommandRejectedException(
+          "intent names binding generation "
+              + intent.bindingGeneration()
+              + ", the attempt is at "
+              + currentBindingGeneration);
+    }
+    if (intent.expectedWorkerEpoch() < 0 || intent.expectedWorkerRevision() < 0) {
+      throw new CommandRejectedException("expected worker epoch and revision must be non-negative");
+    }
+  }
 }

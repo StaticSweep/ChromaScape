@@ -28,9 +28,9 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 /**
- * SC-2106 R4, the R6 recovery claim and the R9 controls against a real PostgreSQL (disposable
- * schema; the V71, V73, V74 and V75 migrations as shipped). Run through {@code
- * sc2106ManagedAttemptTest}, which fails instead of skipping without a database.
+ * SC-2106 R4, the R6 recovery claim, the R9 controls and the P3 command intents against a real
+ * PostgreSQL (disposable schema; the V71, V73, V74, V75 and V78 migrations as shipped). Run through
+ * {@code sc2106ManagedAttemptTest}, which fails instead of skipping without a database.
  */
 class CandidateAttemptStoreIntegrationTest {
   private static JdbcTemplate admin;
@@ -58,7 +58,8 @@ class CandidateAttemptStoreIntegrationTest {
             "V71__sc2106_candidate_execution_attempts.sql",
             "V73__sc2106_one_recovery_per_attempt.sql",
             "V74__sc2106_attempt_controls.sql",
-            "V75__sc2106_attempt_worker_binding.sql")) {
+            "V75__sc2106_attempt_worker_binding.sql",
+            "V78__sc2106_attempt_command_intents.sql")) {
       try (var input =
           CandidateAttemptStoreIntegrationTest.class.getResourceAsStream(
               "/db/migration/" + migration)) {
@@ -76,7 +77,9 @@ class CandidateAttemptStoreIntegrationTest {
 
   @BeforeEach
   void truncate() {
-    jdbc.execute("TRUNCATE candidate_execution_attempts, candidate_attempt_worker_bindings");
+    jdbc.execute(
+        "TRUNCATE candidate_execution_attempts, candidate_attempt_worker_bindings,"
+            + " candidate_attempt_commands");
   }
 
   /** A fresh store instance per call stands in for a separate owner process. */
@@ -649,8 +652,7 @@ class CandidateAttemptStoreIntegrationTest {
             + " WHERE attempt_id = ?",
         id);
     assertEquals(1, owner().reconcileExpired(Instant.now()));
-    assertEquals(
-        CandidateAttemptStore.State.UNCERTAIN, owner().find(id).orElseThrow().state());
+    assertEquals(CandidateAttemptStore.State.UNCERTAIN, owner().find(id).orElseThrow().state());
 
     // The parked owner wakes after losing its lease: it can neither report a resume, renew, nor
     // bind a restored worker.
@@ -675,6 +677,284 @@ class CandidateAttemptStoreIntegrationTest {
             .attempt();
     assertTrue(owner().control(id).pauseRequested());
     assertFalse(owner().control(recovery.attemptId()).pauseRequested());
+  }
+
+  /** A RUNNING attempt bound at generation 1, held by the returned owner. */
+  private static CandidateAttemptStore.Attempt boundAttempt(
+      CandidateAttemptStore holder, Duration lease) {
+    var held = holder.reserve("proposal:p1", "key-1", "job-1", "sha256:f", lease).attempt();
+    holder.markRunning(held.attemptId(), held.leaseId(), held.epoch(), "sha256:request");
+    holder.recordBinding(
+        held.attemptId(),
+        held.leaseId(),
+        held.epoch(),
+        binding(held.attemptId(), 1, "sha256:request"));
+    return owner().find(held.attemptId()).orElseThrow();
+  }
+
+  private static CandidateAttemptStore.CommandIntent intent(
+      String attemptId, String commandId, String method, long generation, char payload) {
+    return new CandidateAttemptStore.CommandIntent(
+        UUID.randomUUID().toString(),
+        commandId,
+        method,
+        "session.candidate.advance".equals(method) ? "TIME" : "EFFECT",
+        "sha256:" + String.valueOf(payload).repeat(64),
+        attemptId,
+        "sha256:request",
+        generation,
+        3,
+        7);
+  }
+
+  private static CandidateAttemptStore.CommandReceipt receipt(
+      CandidateAttemptStore.CommandRecord permitted, CandidateAttemptStore.CommandState outcome) {
+    return new CandidateAttemptStore.CommandReceipt(
+        permitted.intentId(), permitted.commandId(), outcome, 8L, "sha256:" + "e".repeat(64));
+  }
+
+  @Test
+  void anIntentIsPermittedOnlyForTheHolderUnderTheCurrentBinding() {
+    CandidateAttemptStore holder = owner();
+    var reserved =
+        holder
+            .reserve("proposal:p1", "key-0", "job-0", "sha256:f", Duration.ofMinutes(1))
+            .attempt();
+    assertThrows(
+        CandidateAttemptStore.CommandRejectedException.class,
+        () ->
+            holder.recordIntent(
+                reserved.attemptId(),
+                reserved.leaseId(),
+                reserved.epoch(),
+                intent(reserved.attemptId(), "c-0", "session.candidate.execute", 1, 'a')),
+        "a reserved attempt has not launched");
+    holder.markRunning(
+        reserved.attemptId(), reserved.leaseId(), reserved.epoch(), "sha256:request");
+    assertThrows(
+        CandidateAttemptStore.CommandRejectedException.class,
+        () ->
+            holder.recordIntent(
+                reserved.attemptId(),
+                reserved.leaseId(),
+                reserved.epoch(),
+                intent(reserved.attemptId(), "c-0", "session.candidate.execute", 1, 'a')),
+        "an unbound attempt permits no command");
+
+    var held = boundAttempt(holder, Duration.ofMinutes(1));
+    String id = held.attemptId();
+    for (CandidateAttemptStore.CommandIntent refused :
+        List.of(
+            intent(id, "c-1", "session.candidate.execute", 2, 'a'),
+            intent(id, "c-1", "session.candidate.dispose", 1, 'a'),
+            intent("attempt-foreign", "c-1", "session.candidate.execute", 1, 'a'),
+            new CandidateAttemptStore.CommandIntent(
+                UUID.randomUUID().toString(),
+                "c-1",
+                "session.candidate.execute",
+                "EFFECT",
+                "sha256:" + "a".repeat(64),
+                id,
+                "sha256:other",
+                1,
+                3,
+                7),
+            new CandidateAttemptStore.CommandIntent(
+                UUID.randomUUID().toString(),
+                "c-1",
+                "session.candidate.execute",
+                "EFFECT",
+                "not-a-digest",
+                id,
+                "sha256:request",
+                1,
+                3,
+                7))) {
+      assertThrows(
+          CandidateAttemptStore.CommandRejectedException.class,
+          () -> holder.recordIntent(id, held.leaseId(), held.epoch(), refused));
+    }
+    assertThrows(
+        CandidateAttemptStore.StaleOwnerException.class,
+        () ->
+            owner()
+                .recordIntent(
+                    id,
+                    "lease-other",
+                    held.epoch(),
+                    intent(id, "c-1", "session.candidate.execute", 1, 'a')));
+    assertTrue(owner().commands(id).isEmpty(), "a refused intent writes nothing");
+
+    var permitted =
+        holder.recordIntent(
+            id,
+            held.leaseId(),
+            held.epoch(),
+            intent(id, "c-1", "session.candidate.execute", 1, 'a'));
+    assertEquals(CandidateAttemptStore.CommandState.PERMITTED, permitted.state());
+    assertEquals(1, owner().commands(id).size());
+  }
+
+  @Test
+  void theSameCommandReattachesAndAChangedPayloadConflicts() {
+    CandidateAttemptStore holder = owner();
+    var held = boundAttempt(holder, Duration.ofMinutes(1));
+    String id = held.attemptId();
+    var first =
+        holder.recordIntent(
+            id,
+            held.leaseId(),
+            held.epoch(),
+            intent(id, "c-1", "session.candidate.execute", 1, 'a'));
+    var again =
+        holder.recordIntent(
+            id,
+            held.leaseId(),
+            held.epoch(),
+            intent(id, "c-1", "session.candidate.execute", 1, 'a'));
+    assertEquals(first.intentId(), again.intentId(), "a duplicate delivery reattaches");
+    assertThrows(
+        CandidateAttemptStore.CommandConflictException.class,
+        () ->
+            holder.recordIntent(
+                id,
+                held.leaseId(),
+                held.epoch(),
+                intent(id, "c-1", "session.candidate.execute", 1, 'b')));
+    assertEquals(1, owner().commands(id).size());
+  }
+
+  @Test
+  void oneCommandIsOpenAtATimeAndItsReceiptResolvesItOnce() {
+    CandidateAttemptStore holder = owner();
+    var held = boundAttempt(holder, Duration.ofMinutes(1));
+    String id = held.attemptId();
+    var open =
+        holder.recordIntent(
+            id,
+            held.leaseId(),
+            held.epoch(),
+            intent(id, "c-1", "session.candidate.execute", 1, 'a'));
+    assertThrows(
+        CandidateAttemptStore.CommandRejectedException.class,
+        () ->
+            holder.recordIntent(
+                id,
+                held.leaseId(),
+                held.epoch(),
+                intent(id, "c-2", "session.candidate.advance", 1, 'c')));
+    assertThrows(
+        CandidateAttemptStore.CommandRejectedException.class,
+        () ->
+            holder.recordReceipt(
+                id,
+                held.leaseId(),
+                held.epoch(),
+                new CandidateAttemptStore.CommandReceipt(
+                    UUID.randomUUID().toString(),
+                    "c-1",
+                    CandidateAttemptStore.CommandState.APPLIED,
+                    8L,
+                    null)),
+        "a receipt for another intent");
+
+    var applied =
+        holder.recordReceipt(
+            id,
+            held.leaseId(),
+            held.epoch(),
+            receipt(open, CandidateAttemptStore.CommandState.APPLIED));
+    assertEquals(CandidateAttemptStore.CommandState.APPLIED, applied.state());
+    assertEquals(8L, applied.workerRevision());
+    assertThrows(
+        CandidateAttemptStore.CommandRejectedException.class,
+        () ->
+            holder.recordReceipt(
+                id,
+                held.leaseId(),
+                held.epoch(),
+                receipt(open, CandidateAttemptStore.CommandState.REJECTED)),
+        "a resolved command is final");
+
+    var next =
+        holder.recordIntent(
+            id,
+            held.leaseId(),
+            held.epoch(),
+            intent(id, "c-2", "session.candidate.advance", 1, 'c'));
+    assertEquals(CandidateAttemptStore.CommandState.PERMITTED, next.state());
+    assertEquals(
+        List.of("c-1", "c-2"),
+        owner().commands(id).stream().map(CandidateAttemptStore.CommandRecord::commandId).toList());
+  }
+
+  @Test
+  void reconciliationTurnsAnOpenCommandIntoUnknownAndFencesItsReceipt() {
+    CandidateAttemptStore holder = owner();
+    var held = boundAttempt(holder, Duration.ofMillis(200));
+    String id = held.attemptId();
+    var open =
+        holder.recordIntent(
+            id,
+            held.leaseId(),
+            held.epoch(),
+            intent(id, "c-1", "session.candidate.execute", 1, 'a'));
+    jdbc.update(
+        "UPDATE candidate_execution_attempts SET lease_expires_at = now() - interval '1 second'"
+            + " WHERE attempt_id = ?",
+        id);
+    assertEquals(1, owner().reconcileExpired(Instant.now()));
+
+    assertEquals(
+        CandidateAttemptStore.CommandState.UNKNOWN,
+        owner().commands(id).get(0).state(),
+        "a permit that may have reached the worker is uncertain, never forgotten");
+    assertThrows(
+        CandidateAttemptStore.StaleOwnerException.class,
+        () ->
+            holder.recordReceipt(
+                id,
+                held.leaseId(),
+                held.epoch(),
+                receipt(open, CandidateAttemptStore.CommandState.APPLIED)));
+    assertEquals(CandidateAttemptStore.CommandState.UNKNOWN, owner().commands(id).get(0).state());
+  }
+
+  @Test
+  void aRestoreRebindingMovesCommandsToTheNewGeneration() {
+    CandidateAttemptStore holder = owner();
+    var held = boundAttempt(holder, Duration.ofMinutes(1));
+    String id = held.attemptId();
+    // Restore and resume run under the binding they rotate away from.
+    var restore =
+        holder.recordIntent(
+            id,
+            held.leaseId(),
+            held.epoch(),
+            intent(id, "c-r", "session.candidate.restore", 1, 'a'));
+    holder.recordReceipt(
+        id,
+        held.leaseId(),
+        held.epoch(),
+        receipt(restore, CandidateAttemptStore.CommandState.APPLIED));
+    holder.recordBinding(id, held.leaseId(), held.epoch(), binding(id, 2, "sha256:request"));
+
+    assertThrows(
+        CandidateAttemptStore.CommandRejectedException.class,
+        () ->
+            holder.recordIntent(
+                id,
+                held.leaseId(),
+                held.epoch(),
+                intent(id, "c-x", "session.candidate.execute", 1, 'd')),
+        "a command under the rotated-away binding is refused");
+    var next =
+        holder.recordIntent(
+            id,
+            held.leaseId(),
+            held.epoch(),
+            intent(id, "c-x", "session.candidate.execute", 2, 'd'));
+    assertEquals(2L, next.bindingGeneration());
   }
 
   private static CandidateAttemptStore.WorkerBinding binding(
