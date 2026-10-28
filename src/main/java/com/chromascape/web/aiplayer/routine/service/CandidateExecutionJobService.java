@@ -452,7 +452,18 @@ public class CandidateExecutionJobService {
                       live.cancel,
                       live.pause,
                       paused -> observePause(attempt, live, paused),
-                      binding -> acceptBinding(attempt, live, binding)));
+                      binding -> acceptBinding(attempt, live, binding),
+                      new CandidateHostLauncher.CommandHandler() {
+                        @Override
+                        public String permit(Map<String, Object> intent) {
+                          return permitCommand(attempt, live, intent);
+                        }
+
+                        @Override
+                        public boolean receipt(Map<String, Object> receipt) {
+                          return recordCommandReceipt(attempt, live, receipt);
+                        }
+                      }));
       ExecutionJob result = interpret(spec.jobId(), attemptId, request, outcome);
       try {
         attempts.finish(
@@ -536,6 +547,78 @@ public class CandidateExecutionJobService {
         whole(line, "runnerIntents"),
         text(line, "reason"),
         (Map<String, Object>) identity);
+  }
+
+  /**
+   * Records the runner's command intent under this owner's fence before the host is told {@code
+   * permit} (P3, R4.3). Returns null once recorded, otherwise the refusal code; a fenced owner also
+   * stops its run. The runner sends no gated worker call without the permit.
+   */
+  private String permitCommand(
+      CandidateAttemptStore.Attempt attempt, Live live, Map<String, Object> line) {
+    CandidateAttemptStore.CommandIntent intent;
+    try {
+      intent = commandIntent(line);
+    } catch (RuntimeException e) {
+      return "INTENT_INVALID";
+    }
+    try {
+      attempts.recordIntent(attempt.attemptId(), attempt.leaseId(), attempt.epoch(), intent);
+      return null;
+    } catch (CandidateAttemptStore.StaleOwnerException e) {
+      live.cancel.set(true);
+      return "STALE_OWNER";
+    } catch (CandidateAttemptStore.CommandConflictException e) {
+      return "COMMAND_CONFLICT";
+    } catch (CandidateAttemptStore.CommandRejectedException e) {
+      return "COMMAND_REJECTED";
+    } catch (RuntimeException e) {
+      return "COMMAND_NOT_RECORDED";
+    }
+  }
+
+  /** Records what the worker answered to a permitted command (P3, R4.3). */
+  private boolean recordCommandReceipt(
+      CandidateAttemptStore.Attempt attempt, Live live, Map<String, Object> line) {
+    try {
+      attempts.recordReceipt(
+          attempt.attemptId(), attempt.leaseId(), attempt.epoch(), commandReceipt(line));
+      return true;
+    } catch (CandidateAttemptStore.StaleOwnerException e) {
+      live.cancel.set(true);
+      return false;
+    } catch (RuntimeException e) {
+      return false;
+    }
+  }
+
+  /** The typed intent a host line carries; malformed fields are refused, never coerced. */
+  static CandidateAttemptStore.CommandIntent commandIntent(Map<String, Object> line) {
+    return new CandidateAttemptStore.CommandIntent(
+        text(line, "intentId"),
+        text(line, "commandId"),
+        text(line, "method"),
+        text(line, "kind"),
+        text(line, "payloadDigest"),
+        text(line, "attemptId"),
+        text(line, "requestDigest"),
+        whole(line, "bindingGeneration"),
+        whole(line, "expectedWorkerEpoch"),
+        whole(line, "expectedWorkerRevision"));
+  }
+
+  /** The typed receipt a host line carries; malformed fields are refused, never coerced. */
+  static CandidateAttemptStore.CommandReceipt commandReceipt(Map<String, Object> line) {
+    CandidateAttemptStore.CommandState outcome =
+        CandidateAttemptStore.CommandState.valueOf(text(line, "outcome"));
+    Object revision = line.get("workerRevision");
+    String digest = line.get("receiptDigest") instanceof String d && !d.isBlank() ? d : null;
+    return new CandidateAttemptStore.CommandReceipt(
+        text(line, "intentId"),
+        text(line, "commandId"),
+        outcome,
+        revision == null ? null : whole(line, "workerRevision"),
+        digest);
   }
 
   private static String text(Map<String, Object> line, String field) {
@@ -1030,8 +1113,9 @@ public class CandidateExecutionJobService {
         properties.getWorkerDirectory().isBlank() ? null : properties.getWorkerDirectory());
     worker.put("developmentIdentity", properties.isDevelopmentWorker());
     Map<String, Object> job = new LinkedHashMap<>();
-    // v2 carries pause control; a host without it refuses the job before launching (R9.2).
-    job.put("schema", "sc2106-host-job/v2");
+    // v2 added pause control (R9.2); v3 gates every worker call on an owner permit (P3). A host
+    // without v3 refuses the job before launching anything.
+    job.put("schema", "sc2106-host-job/v3");
     job.put("request", request.toMap());
     job.put("task", spec.task());
     job.put("start", spec.start());

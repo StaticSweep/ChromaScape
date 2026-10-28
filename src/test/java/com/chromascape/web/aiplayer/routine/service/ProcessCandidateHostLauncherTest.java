@@ -201,6 +201,149 @@ class ProcessCandidateHostLauncherTest {
         ProcessCandidateHostLauncher.bindingLine(bytes("{\"schema\":\"sc2106-host-status/v1\"}")));
   }
 
+  /** A host that reports one intent and one receipt, echoing both answers into its outcome. */
+  private static final String COMMAND_HOST =
+      "read job; echo '{\"schema\":\"sc2106-host-command-intent/v1\",\"intentId\":\"i-1\","
+          + "\"commandId\":\"c-1\"}'; read permit; "
+          + "echo '{\"schema\":\"sc2106-host-command-receipt/v1\",\"intentId\":\"i-1\","
+          + "\"commandId\":\"c-1\",\"outcome\":\"APPLIED\"}'; read recorded; "
+          + "echo \"{\\\"schema\\\":\\\"sc2106-host-outcome/v1\\\",\\\"permit\\\":\\\"$permit\\\","
+          + "\\\"recorded\\\":\\\"$recorded\\\"}\"";
+
+  private static CandidateHostLauncher.HostOutcome runCommands(
+      CandidateHostLauncher.CommandHandler handler) {
+    return new ProcessCandidateHostLauncher(List.of("sh", "-c", COMMAND_HOST), Map.of(), null)
+        .run(
+            Map.of("schema", "sc2106-host-job/v3"),
+            Duration.ofSeconds(10),
+            new CandidateHostLauncher.HostControl(
+                new AtomicBoolean(), new AtomicBoolean(), null, null, handler));
+  }
+
+  @Test
+  @DisabledOnOs(OS.WINDOWS)
+  void anIntentIsPermittedOnlyAfterTheHandlerDecidedAndItsReceiptIsAnswered() {
+    List<Map<String, Object>> intents = new CopyOnWriteArrayList<>();
+    List<Map<String, Object>> receipts = new CopyOnWriteArrayList<>();
+    CandidateHostLauncher.HostOutcome permitted =
+        runCommands(
+            new CandidateHostLauncher.CommandHandler() {
+              @Override
+              public String permit(Map<String, Object> intent) {
+                intents.add(intent);
+                return null;
+              }
+
+              @Override
+              public boolean receipt(Map<String, Object> receipt) {
+                receipts.add(receipt);
+                return true;
+              }
+            });
+    assertFalse(permitted.lost(), String.valueOf(permitted.detail()));
+    assertEquals("permit i-1", permitted.document().get("permit"));
+    assertEquals("recorded i-1", permitted.document().get("recorded"));
+    assertEquals("c-1", intents.get(0).get("commandId"));
+    assertEquals("APPLIED", receipts.get(0).get("outcome"));
+
+    CandidateHostLauncher.HostOutcome denied =
+        runCommands(
+            new CandidateHostLauncher.CommandHandler() {
+              @Override
+              public String permit(Map<String, Object> intent) {
+                return "COMMAND_REJECTED";
+              }
+
+              @Override
+              public boolean receipt(Map<String, Object> receipt) {
+                return false;
+              }
+            });
+    assertEquals("deny i-1 COMMAND_REJECTED", denied.document().get("permit"));
+    assertEquals("unrecorded i-1", denied.document().get("recorded"));
+
+    CandidateHostLauncher.HostOutcome failed =
+        runCommands(
+            new CandidateHostLauncher.CommandHandler() {
+              @Override
+              public String permit(Map<String, Object> intent) {
+                throw new IllegalStateException("the database is gone");
+              }
+
+              @Override
+              public boolean receipt(Map<String, Object> receipt) {
+                throw new IllegalStateException("the database is gone");
+              }
+            });
+    assertEquals("deny i-1 COMMAND_HANDLER_FAILED", failed.document().get("permit"));
+    assertEquals("unrecorded i-1", failed.document().get("recorded"));
+
+    CandidateHostLauncher.HostOutcome unhandled = runCommands(null);
+    assertEquals(
+        "deny i-1 NO_COMMAND_HANDLER", unhandled.document().get("permit"), "no handler, no permit");
+  }
+
+  @Test
+  @DisabledOnOs(OS.WINDOWS)
+  void commandLinesHaveTheirOwnBoundAndDoNotFloodTheStatusBound() {
+    int count = ProcessCandidateHostLauncher.MAX_STATUS_LINES + 10;
+    String host =
+        "read job; i=0; while [ $i -lt "
+            + count
+            + " ]; do echo \"{\\\"schema\\\":\\\"sc2106-host-command-intent/v1\\\","
+            + "\\\"intentId\\\":\\\"i-$i\\\"}\"; i=$((i+1)); done; "
+            + "echo '{\"schema\":\"sc2106-host-outcome/v1\",\"answered\":true}'";
+    List<Map<String, Object>> intents = new CopyOnWriteArrayList<>();
+    CandidateHostLauncher.HostOutcome outcome =
+        new ProcessCandidateHostLauncher(List.of("sh", "-c", host), Map.of(), null)
+            .run(
+                Map.of("schema", "sc2106-host-job/v3"),
+                Duration.ofSeconds(30),
+                new CandidateHostLauncher.HostControl(
+                    new AtomicBoolean(),
+                    new AtomicBoolean(),
+                    null,
+                    null,
+                    new CandidateHostLauncher.CommandHandler() {
+                      @Override
+                      public String permit(Map<String, Object> intent) {
+                        intents.add(intent);
+                        return null;
+                      }
+
+                      @Override
+                      public boolean receipt(Map<String, Object> receipt) {
+                        return true;
+                      }
+                    }));
+    assertFalse(outcome.lost(), String.valueOf(outcome.detail()));
+    assertEquals(Boolean.TRUE, outcome.document().get("answered"));
+    assertEquals(count, intents.size());
+  }
+
+  @Test
+  void onlyAWellFormedCommandLineIsACommand() {
+    assertEquals(
+        "i-1",
+        ProcessCandidateHostLauncher.commandLine(
+                bytes("{\"schema\":\"sc2106-host-command-intent/v1\",\"intentId\":\"i-1\"}"))
+            .get("intentId"));
+    assertEquals(
+        "i-1",
+        ProcessCandidateHostLauncher.commandLine(
+                bytes("{\"schema\":\"sc2106-host-command-receipt/v1\",\"intentId\":\"i-1\"}"))
+            .get("intentId"));
+    assertNull(
+        ProcessCandidateHostLauncher.commandLine(
+            bytes("{\"schema\":\"sc2106-host-command-intent/v1\",\"intentId\":\"a b\"}")));
+    assertNull(
+        ProcessCandidateHostLauncher.commandLine(
+            bytes("{\"schema\":\"sc2106-host-command-intent/v1\",\"intentId\":7}")));
+    assertNull(
+        ProcessCandidateHostLauncher.commandLine(
+            bytes("{\"schema\":\"sc2106-host-binding/v1\",\"intentId\":\"i-1\"}")));
+  }
+
   private static byte[] bytes(String text) {
     return text.getBytes(StandardCharsets.UTF_8);
   }

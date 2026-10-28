@@ -34,6 +34,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * goes to the control's binding handler, which commits it before this side answers {@code bound
  * <bindingId>}; a refusal, a handler failure or a missing handler answers {@code unbound
  * <bindingId>}. Binding lines count against the same bound as status lines.
+ *
+ * <p>SC-2106 P3 (R4.3): a {@code sc2106-host-command-intent/v1} line asks to send one gated worker
+ * call. The control's command handler records it before this side answers {@code permit
+ * <intentId>}; otherwise {@code deny <intentId> <code>}. A {@code sc2106-host-command-receipt/v1}
+ * line reports what the worker answered and gets {@code recorded} or {@code unrecorded}. Command
+ * lines have their own bound of {@value #MAX_COMMAND_LINES}.
  */
 public class ProcessCandidateHostLauncher implements CandidateHostLauncher {
   static final int MAX_OUTCOME_BYTES = 32 << 20;
@@ -46,8 +52,20 @@ public class ProcessCandidateHostLauncher implements CandidateHostLauncher {
 
   static final int MAX_STATUS_LINES = 1024;
 
+  /** SC-2106 P3: a runner's request to send one gated worker call. */
+  static final String COMMAND_INTENT_SCHEMA = "sc2106-host-command-intent/v1";
+
+  /** SC-2106 P3: what the worker answered to a permitted call. */
+  static final String COMMAND_RECEIPT_SCHEMA = "sc2106-host-command-receipt/v1";
+
+  /** Intent and receipt lines accepted per run; the runner's step budget keeps a run far below. */
+  static final int MAX_COMMAND_LINES = 1 << 18;
+
   /** What {@link #readOutcome} returns when the host exceeded {@link #MAX_STATUS_LINES}. */
   private static final byte[] STATUS_FLOOD = new byte[0];
+
+  /** What {@link #readOutcome} returns when the host exceeded {@link #MAX_COMMAND_LINES}. */
+  private static final byte[] COMMAND_FLOOD = new byte[0];
 
   private static final Duration CANCEL_GRACE = Duration.ofSeconds(30);
   private static final long POLL_MILLIS = 100L;
@@ -103,7 +121,8 @@ public class ProcessCandidateHostLauncher implements CandidateHostLauncher {
                 readOutcome(
                     process.getInputStream(),
                     control.listener(),
-                    binding -> answerBinding(stdin, control.binding(), binding)));
+                    binding -> answerBinding(stdin, control.binding(), binding),
+                    command -> answerCommand(stdin, control.commands(), command)));
     CompletableFuture<String> stderr =
         CompletableFuture.supplyAsync(() -> tail(process.getErrorStream()));
     try {
@@ -161,6 +180,10 @@ public class ProcessCandidateHostLauncher implements CandidateHostLauncher {
       destroy(process);
       return new HostOutcome(null, true, "HOST_STATUS_FLOOD", null, stderr.join());
     }
+    if (line == COMMAND_FLOOD) {
+      destroy(process);
+      return new HostOutcome(null, true, "HOST_COMMAND_FLOOD", null, stderr.join());
+    }
     closeQuietly(stdin);
     Integer exit = awaitExit(process);
     String errTail = stderr.join();
@@ -184,11 +207,23 @@ public class ProcessCandidateHostLauncher implements CandidateHostLauncher {
   private static byte[] readOutcome(
       InputStream in,
       PauseListener listener,
-      java.util.function.Consumer<Map<String, Object>> bindings) {
+      java.util.function.Consumer<Map<String, Object>> bindings,
+      java.util.function.Consumer<Map<String, Object>> commands) {
+    int commandLines = 0;
     for (int statusLines = 1; ; statusLines++) {
       byte[] line = readLine(in);
       if (line == null) {
         return null;
+      }
+      // Command lines scale with the run's steps, so they have their own, larger bound (P3).
+      Map<String, Object> command = commandLine(line);
+      if (command != null) {
+        if (++commandLines > MAX_COMMAND_LINES) {
+          return COMMAND_FLOOD;
+        }
+        commands.accept(command);
+        statusLines--;
+        continue;
       }
       Map<String, Object> binding = bindingLine(line);
       Boolean paused = binding == null ? pausedStatus(line) : null;
@@ -205,6 +240,62 @@ public class ProcessCandidateHostLauncher implements CandidateHostLauncher {
       if (listener != null) {
         listener.onPause(paused);
       }
+    }
+  }
+
+  /**
+   * A host command intent or receipt line with a usable {@code intentId}, or null when the line is
+   * not one.
+   */
+  @SuppressWarnings("unchecked")
+  static Map<String, Object> commandLine(byte[] line) {
+    try {
+      Map<String, Object> document = MAPPER.readValue(line, Map.class);
+      Object schema = document.get("schema");
+      if ((COMMAND_INTENT_SCHEMA.equals(schema) || COMMAND_RECEIPT_SCHEMA.equals(schema))
+          && document.get("intentId") instanceof String id
+          && !id.isBlank()
+          && id.length() <= MAX_BINDING_ID_CHARS
+          && id.chars().noneMatch(Character::isWhitespace)) {
+        return document;
+      }
+    } catch (IOException | RuntimeException e) {
+      // Not a command line.
+    }
+    return null;
+  }
+
+  /**
+   * Answers one command line. An intent gets {@code permit <intentId>} only after {@code handler}
+   * durably permitted it, otherwise {@code deny <intentId> <code>}; a receipt gets {@code recorded
+   * <intentId>} or {@code unrecorded <intentId>}. Runs on the stdout reader, so no answer is
+   * written before the decision returns.
+   */
+  private static void answerCommand(
+      OutputStream stdin, CommandHandler handler, Map<String, Object> command) {
+    Object id = command.get("intentId");
+    String answer;
+    if (COMMAND_INTENT_SCHEMA.equals(command.get("schema"))) {
+      String refusal;
+      try {
+        refusal = handler == null ? "NO_COMMAND_HANDLER" : handler.permit(command);
+      } catch (RuntimeException e) {
+        refusal = "COMMAND_HANDLER_FAILED";
+      }
+      answer = refusal == null ? "permit " + id : "deny " + id + " " + refusal;
+    } else {
+      boolean recorded;
+      try {
+        recorded = handler != null && handler.receipt(command);
+      } catch (RuntimeException e) {
+        recorded = false;
+      }
+      answer = (recorded ? "recorded " : "unrecorded ") + id;
+    }
+    try {
+      writeLine(stdin, answer);
+    } catch (IOException ignored) {
+      // A host that no longer reads stdin times its runner out; nothing was permitted for it.
     }
   }
 
