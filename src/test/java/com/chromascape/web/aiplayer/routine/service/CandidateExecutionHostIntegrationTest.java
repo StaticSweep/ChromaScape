@@ -59,6 +59,17 @@ class CandidateExecutionHostIntegrationTest {
         List.of("WORKER_NOT_CERTIFIABLE"),
         map(job.hostOutcome().get("certification")).get("reasons"),
         "the host refuses certification for the development worker and nothing else");
+    // R4.2: the owner accepted the real worker's binding before the runner acted on it.
+    List<CandidateAttemptStore.WorkerBinding> bindings = store.bindings.get(job.attemptId());
+    assertEquals(1, bindings.size(), String.valueOf(bindings));
+    CandidateAttemptStore.WorkerBinding binding = bindings.get(0);
+    assertEquals(1L, binding.generation());
+    assertEquals("CREATE", binding.reason());
+    assertEquals(job.requestDigest(), binding.requestDigest());
+    assertEquals("candidate-stdio/v1", binding.workerAuthority());
+    assertEquals("sc2106-" + job.attemptId(), binding.workerSessionId());
+    assertEquals(0L, binding.runnerIntents(), "bound before the first intent");
+    assertTrue(binding.workerLeaseDigest().matches("sha256:[0-9a-f]{64}"));
   }
 
   @Test
@@ -79,11 +90,13 @@ class CandidateExecutionHostIntegrationTest {
     assertFalse(job.certifiable());
   }
 
+  /** The attempt store of the last service built; the owner's durable record of the run. */
+  private InMemoryCandidateAttemptStore store;
+
   private CandidateExecutionJobService service(Path policy) {
+    store = new InMemoryCandidateAttemptStore();
     return new CandidateExecutionJobService(
-        Sc2106RealHost.workflow(),
-        Sc2106RealHost.properties(temp, policy),
-        new InMemoryCandidateAttemptStore());
+        Sc2106RealHost.workflow(), Sc2106RealHost.properties(temp, policy), store);
   }
 
   private static Path policy(String name, PublicKey key) throws Exception {

@@ -5,7 +5,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Hands one {@code sc2106-host-job/v1} to the Micro6 candidate host and returns its single {@code
+ * Hands one {@code sc2106-host-job/v2} to the Micro6 candidate host and returns its single {@code
  * sc2106-host-outcome/v1} (SC-2106 R9.1). The host verifies and supervises the run; this side only
  * carries the job, the cancellation signal and the outcome.
  */
@@ -16,6 +16,39 @@ public interface CandidateHostLauncher {
    * over, the outcome is {@link HostOutcome#lost} because the run may already have had effects.
    */
   HostOutcome run(Map<String, Object> job, Duration timeout, AtomicBoolean cancel);
+
+  /**
+   * As above, with live pause control (SC-2106 R9.2): while {@code control.pause} is set the run
+   * parks before its next step, and {@code control.listener} hears when it actually parked or
+   * resumed. A launcher without pause support ignores both.
+   */
+  default HostOutcome run(Map<String, Object> job, Duration timeout, HostControl control) {
+    return run(job, timeout, control.cancel());
+  }
+
+  /** Hears the host report that the run parked ({@code true}) or resumed ({@code false}). */
+  interface PauseListener {
+    void onPause(boolean paused);
+  }
+
+  /**
+   * Decides a runner's worker binding (SC-2106 R4.2): true once the binding is durably accepted,
+   * false when it was refused. The host's runner performs no effect until it has the answer.
+   */
+  interface BindingHandler {
+    boolean accept(Map<String, Object> binding);
+  }
+
+  /**
+   * The live controls of one run; {@code listener} and {@code binding} may be null. Without a
+   * binding handler every binding the host reports is refused.
+   */
+  record HostControl(
+      AtomicBoolean cancel, AtomicBoolean pause, PauseListener listener, BindingHandler binding) {
+    public HostControl(AtomicBoolean cancel, AtomicBoolean pause, PauseListener listener) {
+      this(cancel, pause, listener, null);
+    }
+  }
 
   /**
    * What came back from the host.

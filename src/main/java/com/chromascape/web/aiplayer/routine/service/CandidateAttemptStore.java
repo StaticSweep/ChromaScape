@@ -107,4 +107,74 @@ public interface CandidateAttemptStore {
   int reconcileExpired(Instant now);
 
   Optional<Attempt> find(String attemptId);
+
+  /** The attempt an (owner, idempotency key) pair names, if any. */
+  Optional<Attempt> findByKey(String ownerId, String idempotencyKey);
+
+  /**
+   * What operators asked of an attempt and what its owner observed (SC-2106 R9.2, R9.5). Requests
+   * are durable, so they reach the owning process wherever they were made.
+   *
+   * @param cancelRequested a cancel was asked for
+   * @param pauseRequested the run should be parked (survives the attempt, for its recovery)
+   * @param paused the owner observed the runner parked
+   */
+  record Control(boolean cancelRequested, boolean pauseRequested, boolean paused) {
+    static final Control NONE = new Control(false, false, false);
+  }
+
+  /** The controls of {@code attemptId}; {@link Control#NONE} when there is no such attempt. */
+  Control control(String attemptId);
+
+  /** Records a cancel request; false when the attempt is not open (nothing left to cancel). */
+  boolean requestCancel(String attemptId);
+
+  /** Records a pause ({@code true}) or resume request; false when the attempt is not open. */
+  boolean requestPause(String attemptId, boolean pause);
+
+  /** The owner's report that the runner parked or resumed; fenced like every owner write. */
+  void recordPaused(String attemptId, String leaseId, long epoch, boolean paused);
+
+  /**
+   * The worker session an attempt's runner is bound to, as the runner reported it (SC-2106 R4.2).
+   * The worker lease appears only as a digest; the worker revision and the runner's own progress
+   * are separate numbers.
+   *
+   * @param reason {@code CREATE} for a new session, {@code RESTORE} after a restore rotated its
+   *     epoch and lease
+   */
+  record WorkerBinding(
+      String bindingId,
+      long generation,
+      String attemptId,
+      String requestDigest,
+      String workerAuthority,
+      String workerSessionId,
+      long workerEpoch,
+      String workerLeaseDigest,
+      long workerRevision,
+      long runnerSteps,
+      long runnerIntents,
+      String reason,
+      Map<String, Object> workerIdentity) {}
+
+  /** A binding that does not belong to the attempt, or is not its next generation (R4.2). */
+  final class BindingRejectedException extends RuntimeException {
+    public BindingRejectedException(String message) {
+      super(message);
+    }
+  }
+
+  /**
+   * Accepts {@code binding} as the attempt's next generation, under the owner's fence (R4.2). It
+   * commits only for a RUNNING attempt held by {@code (leaseId, epoch)}, whose request digest the
+   * binding names, when the binding is exactly the next generation. Nothing is written otherwise.
+   *
+   * @throws StaleOwnerException when the presented lease or epoch is no longer current
+   * @throws BindingRejectedException for any other mismatch
+   */
+  void recordBinding(String attemptId, String leaseId, long epoch, WorkerBinding binding);
+
+  /** The attempt's current accepted binding; empty when it has none (including legacy attempts). */
+  Optional<WorkerBinding> currentBinding(String attemptId);
 }

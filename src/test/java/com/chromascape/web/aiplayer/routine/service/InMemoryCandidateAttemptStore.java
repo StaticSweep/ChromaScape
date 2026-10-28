@@ -22,6 +22,9 @@ final class InMemoryCandidateAttemptStore implements CandidateAttemptStore {
 
   int launchesMarked;
 
+  /** The V74 control columns, by attempt id. */
+  final Map<String, Control> controls = new LinkedHashMap<>();
+
   /**
    * When set, recording a result fails as a lost database connection would (R6 metadata commit).
    */
@@ -140,6 +143,8 @@ final class InMemoryCandidateAttemptStore implements CandidateAttemptStore {
       throw finishFailure;
     }
     Attempt a = held(attemptId, leaseId, epoch);
+    Control c = control(attemptId);
+    controls.put(attemptId, new Control(c.cancelRequested(), c.pauseRequested(), false));
     return put(with(a, state, null, a.epoch(), null, a.requestDigest(), job, detail));
   }
 
@@ -148,6 +153,8 @@ final class InMemoryCandidateAttemptStore implements CandidateAttemptStore {
     int count = 0;
     for (Attempt a : byId.values().toArray(new Attempt[0])) {
       if (a.state().open() && a.leaseExpiresAt() != null && a.leaseExpiresAt().isBefore(now)) {
+        Control c = control(a.attemptId());
+        controls.put(a.attemptId(), new Control(c.cancelRequested(), c.pauseRequested(), false));
         put(
             with(
                 a,
@@ -167,6 +174,87 @@ final class InMemoryCandidateAttemptStore implements CandidateAttemptStore {
   @Override
   public synchronized Optional<Attempt> find(String attemptId) {
     return Optional.ofNullable(byId.get(attemptId));
+  }
+
+  @Override
+  public synchronized Optional<Attempt> findByKey(String ownerId, String idempotencyKey) {
+    return byId.values().stream()
+        .filter(a -> a.ownerId().equals(ownerId) && a.idempotencyKey().equals(idempotencyKey))
+        .findFirst();
+  }
+
+  @Override
+  public synchronized Control control(String attemptId) {
+    return controls.getOrDefault(attemptId, Control.NONE);
+  }
+
+  @Override
+  public synchronized boolean requestCancel(String attemptId) {
+    Attempt a = byId.get(attemptId);
+    if (a == null || !a.state().open()) {
+      return false;
+    }
+    Control c = control(attemptId);
+    controls.put(attemptId, new Control(true, c.pauseRequested(), c.paused()));
+    return true;
+  }
+
+  @Override
+  public synchronized boolean requestPause(String attemptId, boolean pause) {
+    Attempt a = byId.get(attemptId);
+    if (a == null || !a.state().open()) {
+      return false;
+    }
+    Control c = control(attemptId);
+    controls.put(attemptId, new Control(c.cancelRequested(), pause, c.paused()));
+    return true;
+  }
+
+  @Override
+  public synchronized void recordPaused(
+      String attemptId, String leaseId, long epoch, boolean paused) {
+    Attempt a = held(attemptId, leaseId, epoch);
+    if (a.state() != State.RUNNING) {
+      throw new StaleOwnerException(attemptId + " is " + a.state());
+    }
+    Control c = control(attemptId);
+    controls.put(attemptId, new Control(c.cancelRequested(), c.pauseRequested(), paused));
+  }
+
+  /** Accepted worker bindings by attempt id, in generation order (the V75 table). */
+  final Map<String, java.util.List<WorkerBinding>> bindings = new LinkedHashMap<>();
+
+  @Override
+  public synchronized void recordBinding(
+      String attemptId, String leaseId, long epoch, WorkerBinding binding) {
+    Attempt a = byId.get(attemptId);
+    if (a == null) {
+      throw new BindingRejectedException("attempt " + attemptId + " does not exist");
+    }
+    held(attemptId, leaseId, epoch);
+    if (binding == null) {
+      throw new BindingRejectedException("no binding");
+    }
+    java.util.List<WorkerBinding> accepted =
+        bindings.computeIfAbsent(attemptId, id -> new java.util.ArrayList<>());
+    JdbcCandidateAttemptStore.rejectForeignBinding(
+        attemptId, a.state().name(), a.requestDigest(), accepted.size(), binding);
+    for (java.util.List<WorkerBinding> other : bindings.values()) {
+      for (WorkerBinding existing : other) {
+        if (existing.bindingId().equals(binding.bindingId())) {
+          throw new BindingRejectedException("binding " + binding.bindingId() + " already used");
+        }
+      }
+    }
+    accepted.add(binding);
+  }
+
+  @Override
+  public synchronized Optional<WorkerBinding> currentBinding(String attemptId) {
+    java.util.List<WorkerBinding> accepted = bindings.get(attemptId);
+    return accepted == null || accepted.isEmpty()
+        ? Optional.empty()
+        : Optional.of(accepted.get(accepted.size() - 1));
   }
 
   /** The attempt's lease runs out; nothing is reconciled yet. */

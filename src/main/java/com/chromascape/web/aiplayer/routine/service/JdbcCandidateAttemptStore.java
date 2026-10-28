@@ -210,7 +210,7 @@ public class JdbcCandidateAttemptStore implements CandidateAttemptStore {
     }
     return fenced(
         "UPDATE candidate_execution_attempts SET state = ?, job = ?::jsonb, detail = ?,"
-            + " lease_id = NULL, lease_expires_at = NULL, updated_at = now()"
+            + " lease_id = NULL, lease_expires_at = NULL, paused = FALSE, updated_at = now()"
             + " WHERE attempt_id = ? AND lease_id = ? AND epoch = ?"
             + " AND state IN ('RESERVED', 'RUNNING')",
         attemptId,
@@ -228,7 +228,7 @@ public class JdbcCandidateAttemptStore implements CandidateAttemptStore {
         tx ->
             jdbc.update(
                 "UPDATE candidate_execution_attempts SET state = 'UNCERTAIN', epoch = epoch + 1,"
-                    + " lease_id = NULL, lease_expires_at = NULL, updated_at = now(),"
+                    + " lease_id = NULL, lease_expires_at = NULL, paused = FALSE, updated_at = now(),"
                     + " detail = 'owner lease expired at ' || lease_expires_at::text"
                     + " || '; reconciliation required, never relaunched'"
                     + " WHERE state IN ('RESERVED', 'RUNNING') AND lease_expires_at < ?",
@@ -241,6 +241,209 @@ public class JdbcCandidateAttemptStore implements CandidateAttemptStore {
         jdbc.query(
             "SELECT " + COLUMNS + " FROM candidate_execution_attempts WHERE attempt_id = ?",
             this::row,
+            attemptId);
+    return rows.stream().findFirst();
+  }
+
+  @Override
+  public Optional<Attempt> findByKey(String ownerId, String idempotencyKey) {
+    List<Attempt> rows =
+        jdbc.query(
+            "SELECT "
+                + COLUMNS
+                + " FROM candidate_execution_attempts WHERE owner_id = ? AND idempotency_key = ?",
+            this::row,
+            ownerId,
+            idempotencyKey);
+    return rows.stream().findFirst();
+  }
+
+  @Override
+  public Control control(String attemptId) {
+    List<Control> rows =
+        jdbc.query(
+            "SELECT cancel_requested, pause_requested, paused FROM candidate_execution_attempts"
+                + " WHERE attempt_id = ?",
+            (rs, n) ->
+                new Control(
+                    rs.getBoolean("cancel_requested"),
+                    rs.getBoolean("pause_requested"),
+                    rs.getBoolean("paused")),
+            attemptId);
+    return rows.isEmpty() ? Control.NONE : rows.get(0);
+  }
+
+  @Override
+  public boolean requestCancel(String attemptId) {
+    return transactions.execute(
+            tx ->
+                jdbc.update(
+                    "UPDATE candidate_execution_attempts SET cancel_requested = TRUE,"
+                        + " updated_at = now() WHERE attempt_id = ?"
+                        + " AND state IN ('RESERVED', 'RUNNING')",
+                    attemptId))
+        == 1;
+  }
+
+  @Override
+  public boolean requestPause(String attemptId, boolean pause) {
+    return transactions.execute(
+            tx ->
+                jdbc.update(
+                    "UPDATE candidate_execution_attempts SET pause_requested = ?,"
+                        + " updated_at = now() WHERE attempt_id = ?"
+                        + " AND state IN ('RESERVED', 'RUNNING')",
+                    pause,
+                    attemptId))
+        == 1;
+  }
+
+  @Override
+  public void recordPaused(String attemptId, String leaseId, long epoch, boolean paused) {
+    fenced(
+        "UPDATE candidate_execution_attempts SET paused = ?, updated_at = now()"
+            + " WHERE attempt_id = ? AND lease_id = ? AND epoch = ?"
+            + " AND state = 'RUNNING'",
+        attemptId,
+        paused,
+        attemptId,
+        leaseId,
+        epoch);
+  }
+
+  @Override
+  public void recordBinding(String attemptId, String leaseId, long epoch, WorkerBinding binding) {
+    requireText(leaseId, "leaseId");
+    if (binding == null) {
+      throw new BindingRejectedException("no binding");
+    }
+    transactions.executeWithoutResult(
+        tx -> {
+          jdbc.execute("SET LOCAL lock_timeout = '5s'");
+          List<Map<String, Object>> rows =
+              jdbc.queryForList(
+                  "SELECT state, lease_id, epoch, request_digest, binding_generation"
+                      + " FROM candidate_execution_attempts WHERE attempt_id = ? FOR UPDATE",
+                  attemptId);
+          if (rows.isEmpty()) {
+            throw new BindingRejectedException("attempt " + attemptId + " does not exist");
+          }
+          Map<String, Object> row = rows.get(0);
+          if (!leaseId.equals(row.get("lease_id"))
+              || ((Number) row.get("epoch")).longValue() != epoch) {
+            throw new StaleOwnerException(
+                "attempt " + attemptId + " is not held by the presented lease/epoch");
+          }
+          rejectForeignBinding(
+              attemptId,
+              String.valueOf(row.get("state")),
+              (String) row.get("request_digest"),
+              ((Number) row.get("binding_generation")).longValue(),
+              binding);
+          jdbc.update(
+              "INSERT INTO candidate_attempt_worker_bindings(attempt_id, generation, binding_id,"
+                  + " request_digest, worker_authority, worker_session_id, worker_epoch,"
+                  + " worker_lease_digest, worker_revision, runner_steps, runner_intents, reason,"
+                  + " worker_identity, owner_lease_id, owner_epoch)"
+                  + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?)",
+              attemptId,
+              binding.generation(),
+              binding.bindingId(),
+              binding.requestDigest(),
+              binding.workerAuthority(),
+              binding.workerSessionId(),
+              binding.workerEpoch(),
+              binding.workerLeaseDigest(),
+              binding.workerRevision(),
+              binding.runnerSteps(),
+              binding.runnerIntents(),
+              binding.reason(),
+              json(binding.workerIdentity()),
+              leaseId,
+              epoch);
+          jdbc.update(
+              "UPDATE candidate_execution_attempts SET binding_generation = ?, updated_at = now()"
+                  + " WHERE attempt_id = ?",
+              binding.generation(),
+              attemptId);
+        });
+  }
+
+  /**
+   * The checks every store applies before accepting a binding (R4.2); the caller has already
+   * verified the owner's fence.
+   */
+  static void rejectForeignBinding(
+      String attemptId,
+      String state,
+      String requestDigest,
+      long currentGeneration,
+      WorkerBinding binding) {
+    if (!"RUNNING".equals(state)) {
+      throw new BindingRejectedException("attempt " + attemptId + " is " + state + ", not RUNNING");
+    }
+    if (!attemptId.equals(binding.attemptId())) {
+      throw new BindingRejectedException(
+          "binding names attempt " + binding.attemptId() + ", not " + attemptId);
+    }
+    if (requestDigest == null || !requestDigest.equals(binding.requestDigest())) {
+      throw new BindingRejectedException("binding names another request digest");
+    }
+    if (binding.generation() != currentGeneration + 1) {
+      throw new BindingRejectedException(
+          "binding generation "
+              + binding.generation()
+              + " is not the next after "
+              + currentGeneration);
+    }
+    if (binding.bindingId() == null
+        || binding.bindingId().isBlank()
+        || binding.workerSessionId() == null
+        || binding.workerSessionId().isBlank()
+        || binding.workerAuthority() == null
+        || binding.workerLeaseDigest() == null
+        || !binding.workerLeaseDigest().matches("sha256:[0-9a-f]{64}")
+        || binding.workerEpoch() < 0
+        || binding.workerRevision() < 0
+        || binding.runnerSteps() < 0
+        || binding.runnerIntents() < 0
+        || !("CREATE".equals(binding.reason()) || "RESTORE".equals(binding.reason()))) {
+      throw new BindingRejectedException("binding is incomplete or malformed");
+    }
+  }
+
+  @Override
+  public Optional<WorkerBinding> currentBinding(String attemptId) {
+    List<WorkerBinding> rows =
+        jdbc.query(
+            "SELECT b.binding_id, b.generation, b.attempt_id, b.request_digest,"
+                + " b.worker_authority, b.worker_session_id, b.worker_epoch,"
+                + " b.worker_lease_digest, b.worker_revision, b.runner_steps, b.runner_intents,"
+                + " b.reason, b.worker_identity::text AS worker_identity"
+                + " FROM candidate_attempt_worker_bindings b"
+                + " JOIN candidate_execution_attempts a ON a.attempt_id = b.attempt_id"
+                + " AND a.binding_generation = b.generation WHERE b.attempt_id = ?",
+            (rs, n) -> {
+              String identity = rs.getString("worker_identity");
+              try {
+                return new WorkerBinding(
+                    rs.getString("binding_id"),
+                    rs.getLong("generation"),
+                    rs.getString("attempt_id"),
+                    rs.getString("request_digest"),
+                    rs.getString("worker_authority"),
+                    rs.getString("worker_session_id"),
+                    rs.getLong("worker_epoch"),
+                    rs.getString("worker_lease_digest"),
+                    rs.getLong("worker_revision"),
+                    rs.getLong("runner_steps"),
+                    rs.getLong("runner_intents"),
+                    rs.getString("reason"),
+                    identity == null ? null : mapper.readValue(identity, MAP));
+              } catch (JsonProcessingException e) {
+                throw new IllegalStateException("persisted worker identity is invalid", e);
+              }
+            },
             attemptId);
     return rows.stream().findFirst();
   }
