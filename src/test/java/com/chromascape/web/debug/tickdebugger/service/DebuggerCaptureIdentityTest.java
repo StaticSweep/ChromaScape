@@ -53,4 +53,34 @@ class DebuggerCaptureIdentityTest {
         .hasMessageContaining("INVALID_CAPTURE_IDENTITY");
     assertThat(DebuggerCaptureIdentity.validateClient(null)).isNull();
   }
+
+  @Test
+  void keepsTheReportedWorldAndOmitsItWhenAnOlderClientReportsNone() throws Exception {
+    var client =
+        json.createObjectNode()
+            .put("schema", "debugger-client-identity/v1")
+            .put("cacheRevisionSource", "CLIENT_GET_REVISION")
+            .put("gameRevision", 241)
+            .put("cacheRevision", 241);
+    client.putArray("qualityCodes");
+    // An identity bound before worldId existed must canonicalize exactly as it did then.
+    assertThat(DebuggerCaptureIdentity.validateClient(client).has("worldId")).isFalse();
+    assertThat(
+            DebuggerCaptureIdentity.validateClient(client.deepCopy().putNull("worldId"))
+                .has("worldId"))
+        .isFalse();
+    assertThat(
+            DebuggerCaptureIdentity.validateClient(client.deepCopy().put("worldId", 301))
+                .path("worldId")
+                .asInt())
+        .isEqualTo(301);
+    for (var bad :
+        java.util.List.of(
+            client.deepCopy().put("worldId", 0),
+            client.deepCopy().put("worldId", 70000),
+            client.deepCopy().put("worldId", "301"))) {
+      assertThatThrownBy(() -> DebuggerCaptureIdentity.validateClient(bad))
+          .hasMessageContaining("INVALID_CAPTURE_IDENTITY");
+    }
+  }
 }

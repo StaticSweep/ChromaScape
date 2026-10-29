@@ -19,6 +19,7 @@ public final class DebuggerCaptureIdentity {
           "gameRevision",
           "cacheRevision",
           "cacheRevisionSource",
+          "worldId",
           "qualityCodes");
 
   private DebuggerCaptureIdentity() {}
@@ -64,6 +65,16 @@ public final class DebuggerCaptureIdentity {
         throw invalid();
       }
     }
+    // SC-2106 R3.4: the world the session started on; a tick frame does not carry it.
+    JsonNode worldId = value.get("worldId");
+    if (worldId != null
+        && !worldId.isNull()
+        && (!worldId.isIntegralNumber()
+            || !worldId.canConvertToInt()
+            || worldId.intValue() < 1
+            || worldId.intValue() > 65535)) {
+      throw invalid();
+    }
     if (!"CLIENT_GET_REVISION".equals(value.path("cacheRevisionSource").asText())
         || !value.path("gameRevision").equals(value.path("cacheRevision"))) {
       throw invalid();
@@ -89,6 +100,10 @@ public final class DebuggerCaptureIdentity {
             "cacheRevision",
             "cacheRevisionSource")) {
       result.set(key, value.has(key) ? value.get(key).deepCopy() : JSON.nullNode());
+    }
+    // Only when reported: identities bound before worldId existed must still match on reconnect.
+    if (worldId != null && !worldId.isNull()) {
+      result.put("worldId", worldId.intValue());
     }
     var reasons = new java.util.TreeSet<String>();
     if (!result.hasNonNull("clientBuildId")) {
