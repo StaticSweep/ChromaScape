@@ -776,7 +776,9 @@ public class ScenarioManifestV2Compiler {
     player.set("position", normalizedPosition(position));
 
     JsonNode skills = playerState.path("skills");
-    if (skills.isObject()) player.set("skills", skills.deepCopy());
+    if (skills.isObject()) {
+      player.set("skills", normalizedSkills(skills));
+    }
     player.set("inventory", normalizeSlots(first.getInventory(), "inventory"));
     player.set("equipment", normalizeSlots(first.getEquipment(), "equipment"));
     state.set("player", player);
@@ -1047,6 +1049,35 @@ public class ScenarioManifestV2Compiler {
 
   private boolean isSupportedFishingOption(String spotType) {
     return spotType != null && SUPPORTED_FISHING_OPTIONS.contains(spotType);
+  }
+
+  /**
+   * The worker reads {@code skills.<name>.level/xp}; the recorder captures {@code
+   * skills.<NAME>.real/xp/boosted}. Renames only: the recorded real level becomes {@code level},
+   * every value is kept as captured, and a skill already in worker form passes through unchanged.
+   */
+  private ObjectNode normalizedSkills(JsonNode skills) {
+    ObjectNode normalized = objectMapper.createObjectNode();
+    skills
+        .fields()
+        .forEachRemaining(
+            entry -> {
+              JsonNode value = entry.getValue();
+              String name = entry.getKey().toLowerCase(java.util.Locale.ROOT);
+              if (!value.isObject() || value.has("level") || !value.has("real")) {
+                normalized.set(name, value.deepCopy());
+                return;
+              }
+              ObjectNode skill = normalized.putObject(name);
+              skill.set("level", value.get("real").deepCopy());
+              if (value.has("xp")) {
+                skill.set("xp", value.get("xp").deepCopy());
+              }
+              if (value.has("boosted")) {
+                skill.set("boosted", value.get("boosted").deepCopy());
+              }
+            });
+    return normalized;
   }
 
   private ArrayNode normalizeSlots(JsonNode raw, String name) {

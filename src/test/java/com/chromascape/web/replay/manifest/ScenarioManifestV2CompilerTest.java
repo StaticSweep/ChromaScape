@@ -265,6 +265,23 @@ class ScenarioManifestV2CompilerTest {
     assertThat(evidence.path("captureIdentity").get("gameRevision").isNull()).isTrue();
   }
 
+  @Test
+  void recordedSkillsAreRenamedForTheWorkerWithEveryValueKept() {
+    ScenarioManifestV2Compiler compiler = compiler();
+    TickSnapshot first = initialSnapshot();
+    ObjectNode skills = ((ObjectNode) first.getPlayerState()).putObject("skills");
+    skills.putObject("FISHING").put("xp", 12922).put("real", 29).put("boosted", 29);
+
+    ObjectNode state =
+        compiler.buildInitialState(first, conversion(npcAction("npc:1518:42", "net", 0)));
+
+    ObjectNode fishing = (ObjectNode) state.path("player").path("skills").path("fishing");
+    assertThat(fishing.path("level").asInt()).isEqualTo(29);
+    assertThat(fishing.path("xp").asInt()).isEqualTo(12922);
+    assertThat(fishing.path("boosted").asInt()).isEqualTo(29);
+    assertThat(state.path("player").path("skills").has("FISHING")).isFalse();
+  }
+
   private TickSnapshot initialSnapshot() {
     ObjectNode playerState = objectMapper.createObjectNode();
     playerState.put("worldId", 301);
