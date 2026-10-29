@@ -21,6 +21,7 @@ import com.chromascape.web.replay.error.ReplayErrorCode;
 import com.chromascape.web.replay.error.ReplayException;
 import com.chromascape.web.replay.manifest.repository.ScenarioManifestRepository;
 import com.chromascape.web.replay.projection.CanonicalProjectionService;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -334,6 +335,88 @@ class ScenarioManifestV2CompilerTest {
                     new ScenarioManifestV2Compiler.RecordedStart(
                         556, 241, "xrsps-collision/none@0.1.0")));
     assertThat(exception.getErrorCode()).isEqualTo(ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE);
+  }
+
+  @Test
+  void aStartOnlyManifestCarriesOnlyWhatTheWorkerModelsAndNamesTheRest() {
+    ReplayRecordingResolver resolver = mock(ReplayRecordingResolver.class);
+    TickSnapshotRepository snapshots = mock(TickSnapshotRepository.class);
+    ReplayCapabilityService capabilities = mock(ReplayCapabilityService.class);
+    ScenarioManifestV2Compiler compiler =
+        new ScenarioManifestV2Compiler(
+            resolver,
+            snapshots,
+            mock(ReplayActionConversionService.class),
+            mock(RecordingCurationRepository.class),
+            mock(CuratedActionRepository.class),
+            mock(ScenarioManifestRepository.class),
+            capabilities,
+            new CanonicalProjectionService(),
+            objectMapper);
+    com.chromascape.web.debug.tickdebugger.entity.DebugSession session =
+        new com.chromascape.web.debug.tickdebugger.entity.DebugSession();
+    session.setSessionId("session-1");
+    session.setEndTime(LocalDateTime.of(2026, 10, 29, 19, 9));
+    ObjectNode identity = objectMapper.createObjectNode();
+    identity.putObject("client").put("worldId", 368).put("gameRevision", 241);
+    session.bindCaptureIdentity(identity);
+    org.mockito.Mockito.when(resolver.resolve("rec-1"))
+        .thenReturn(
+            new ReplayRecordingResolver.ResolvedRecording(
+                new com.chromascape.web.recording.entity.RecordingSession(), session));
+    org.mockito.Mockito.when(capabilities.getManifest())
+        .thenReturn(
+            com.chromascape.web.replay.capability.CapabilityManifest.current(
+                new com.chromascape.web.replay.capability.CapabilityManifest.CapabilityModes(
+                    false, false, true),
+                new com.chromascape.web.replay.capability.CapabilityManifest.XrspsIdentity(
+                    "0.1.0", "commit", "sha256:cache", "sha256:content"),
+                true));
+    org.mockito.Mockito.when(capabilities.isAuthoritativeCertifiable()).thenReturn(true);
+    TickSnapshot first = initialSnapshot();
+    ObjectNode player = (ObjectNode) first.getPlayerState();
+    player.remove("worldId");
+    player.remove("collisionRevision");
+    player.put("hp", 99).put("animation", -1);
+    ObjectNode spot =
+        ((ArrayNode) first.getNpcs())
+            .addObject()
+            .put("stableId", "npc:1525:3085:3230:0")
+            .put("npcId", 1525)
+            .put("npcTypeId", 1525)
+            .put("size", 1)
+            .put("fishingSpot", true);
+    spot.putObject("position").put("x", 3085).put("y", 3230).put("plane", 0);
+    ((ArrayNode) first.getGameObjects()).addObject().put("id", 1189).put("x", 1).put("y", 2);
+    org.mockito.Mockito.when(snapshots.findMinTickBySessionId("session-1"))
+        .thenReturn(java.util.Optional.of(0L));
+    org.mockito.Mockito.when(snapshots.findMaxTickBySessionId("session-1"))
+        .thenReturn(java.util.Optional.of(20L));
+    org.mockito.Mockito.when(
+            snapshots.findBySessionIdAndTickBetweenOrderByTick("session-1", 0L, 0L))
+        .thenReturn(List.of(first));
+
+    ObjectNode manifest = compiler.compileStart("rec-1");
+
+    ObjectNode state = (ObjectNode) manifest.path("initialState");
+    assertThat(state.fieldNames())
+        .toIterable()
+        .containsExactlyInAnyOrder("worldId", "collisionRevision", "player", "npcs");
+    assertThat(state.path("worldId").asInt()).isEqualTo(368);
+    assertThat(state.path("collisionRevision").asText()).isEqualTo("xrsps-collision/none@0.1.0");
+    assertThat(state.path("player").has("hp")).isFalse();
+    assertThat(state.path("player").path("animation").asInt()).isEqualTo(-1);
+    assertThat(manifest.path("actions").size()).isZero();
+    JsonNode conversion = manifest.path("conversion");
+    assertThat(conversion.path("mode").asText()).isEqualTo("START_ONLY");
+    assertThat(conversion.path("unmodelledPlayerFields").toString()).contains("\"hp\"");
+    assertThat(conversion.path("unmodelledWorldFields").toString()).contains("\"objects\"");
+    assertThat(conversion.path("recordedStart").path("captureIdentity").path("worldId").asInt())
+        .isEqualTo(368);
+    assertThat(manifest.path("fidelityRequirement").asText()).isEqualTo("XRSPS_AUTHORITATIVE");
+    // Deterministic: compiling the same start again yields the same content address.
+    assertThat(compiler.compileStart("rec-1").path("manifestChecksum"))
+        .isEqualTo(manifest.path("manifestChecksum"));
   }
 
   private TickSnapshot initialSnapshot() {
