@@ -487,6 +487,7 @@ public class CandidateExecutionJobService {
       Live live) {
     String attemptId = attempt.attemptId();
     CandidateExecutionRequestV2 request = null;
+    boolean launchMarked = false;
     try {
       CandidateAttemptStore.Control control = attempts.control(attemptId);
       if (control.cancelRequested() || live.cancel.get()) {
@@ -529,6 +530,7 @@ public class CandidateExecutionJobService {
       }
       // Persist the launch identity before any effect; a fenced owner launches nothing.
       attempts.markRunning(attemptId, attempt.leaseId(), attempt.epoch(), request.requestDigest());
+      launchMarked = true;
       CandidateHostLauncher.HostOutcome outcome =
           launcher()
               .run(
@@ -602,6 +604,15 @@ public class CandidateExecutionJobService {
     } catch (PatchCandidateWorkflowService.PatchWorkflowException e) {
       settleBeforeLaunch(attempt, request, e.code() + ": " + e.getMessage());
       throw e;
+    } catch (RuntimeException e) {
+      if (launchMarked) {
+        // The host may have acted, so the attempt stays open and becomes UNCERTAIN on lease expiry.
+        throw e;
+      }
+      // Any other refusal before launch (such as a stale candidate identity) still settles the
+      // attempt; an asynchronous submission would otherwise sit RESERVED with no reason recorded.
+      settleBeforeLaunch(attempt, request, "EXECUTION_PREPARATION_FAILED: " + e);
+      throw failure(HttpStatus.INTERNAL_SERVER_ERROR, "EXECUTION_PREPARATION_FAILED", e.toString());
     } finally {
       release(live, attempt);
     }
