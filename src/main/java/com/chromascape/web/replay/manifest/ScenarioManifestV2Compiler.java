@@ -58,6 +58,11 @@ public class ScenarioManifestV2Compiler {
   static final String COMPILER_VERSION = "2.0.0";
   static final String FIXED_CLOCK_ORIGIN = "2020-01-01T00:00:00.000Z";
   static final int MANIFEST_VERSION = 2;
+
+  /** The player fields the xRSPS kernel loads from a start; a start-only manifest carries no others. */
+  static final Set<String> START_PLAYER_FIELDS =
+      Set.of(
+          "position", "skills", "inventory", "equipment", "animation", "orientation", "interaction");
   private static final int COMPILER_SCHEMA_VERSION = 2;
   private static final Set<String> SUPPORTED_FISHING_OPTIONS =
       Set.of("net", "bait", "lure", "cage", "harpoon");
@@ -310,6 +315,20 @@ public class ScenarioManifestV2Compiler {
           ReplayErrorCode.NO_TICK_SNAPSHOTS, "The recording has no single start-tick snapshot");
     }
     ObjectNode initialState = buildInitialState(start.get(0), null, true, recordedStart);
+    // The worker models only these player fields and refuses a start claiming any other (hp,
+    // prayer, run energy...). They are named below as unmodelled rather than silently dropped.
+    ObjectNode player = (ObjectNode) initialState.path("player");
+    List<String> unmodelled = new ArrayList<>();
+    player
+        .fieldNames()
+        .forEachRemaining(
+            field -> {
+              if (!START_PLAYER_FIELDS.contains(field)) {
+                unmodelled.add(field);
+              }
+            });
+    unmodelled.sort(Comparator.naturalOrder());
+    player.remove(unmodelled);
 
     ObjectNode basis = objectMapper.createObjectNode();
     basis.put("recordingId", recordingId);
@@ -375,6 +394,8 @@ public class ScenarioManifestV2Compiler {
     doc.putObject("tolerances");
     ObjectNode conversion = doc.putObject("conversion");
     conversion.put("mode", "START_ONLY");
+    ArrayNode unmodelledFields = conversion.putArray("unmodelledPlayerFields");
+    unmodelled.forEach(unmodelledFields::add);
     conversion.set("recordedStart", recordedStartEvidence(recordingId, startTick, recordedStart));
     doc.put("fidelity", capability.fidelity().name());
     doc.put("fidelityRequirement", "XRSPS_AUTHORITATIVE");
