@@ -40,6 +40,21 @@ input absent), `NOT_RUN` (not attempted).
 - Migration inventory complete (70 files; V36 and V53–V57 absent).
 - Clock probe: Windows time service not started; coarse offset a few seconds; no owner named.
 
+## 30 October 2026 — source committed, identity certifiable
+
+The 16 previously uncommitted qualification/spell changes are committed as `791f7a3d` on
+`main` (local; not pushed). The build identity regenerated from that clean commit is
+`certifiable: true`; the two identity blockers ("unstaged tracked changes", "untracked
+`client/replay/vendor`") no longer appear. Re-run on the committed tree: 59/59 tests passed,
+zero skips; server and focused test/script typechecks exit 0.
+
+The qualification runner still returns **2 PASSED, 7 NOT_RUN → INCOMPLETE**, and
+`AUTHORITATIVE_RUNTIME_QUALIFICATION.complete` is still false. No row below changes status:
+certifiable identity is not qualification.
+
+Evidence: `C:\Dev\IdeaProjects\verification\sc274-sc276-continuation-20261029\final-commit-791f7a3d\`;
+summary in `qualification-fix-and-final-commit-20261030.md`.
+
 ## Rules
 
 - Close a row only with positive or expected-negative evidence from the delivered inputs.

@@ -148,9 +148,9 @@ to SC-2201.
 ### Execution checklist (short form; this file stays the reference)
 
 Small, local, can start now:
-1. P12 step 2: classify the dirty files from the bundle; start with the 15 live-replay files (A1).
-2. Commit the 16 uncommitted `xrsps-typescript` qualification changes and regenerate identities (P0/P2). Needs owner go-ahead.
-3. Tracker reconciliation for SC-274 and SC-276 (A4). Needs owner go-ahead.
+1. P12 step 2: classify the dirty files from the bundle; start with the 15 live-replay files (A1). **Still open.**
+2. Commit the 16 uncommitted `xrsps-typescript` qualification changes and regenerate identities (P0/P2). **Done 30 Oct: commit `791f7a3d`, identity certifiable; 59/59 tests and both typechecks pass on the committed tree. Qualification verdict unchanged at INCOMPLETE (2 PASSED, 7 NOT_RUN).**
+3. Tracker reconciliation for SC-274 and SC-276 (A4). **Done 30 Oct by comment only; states left as they were because Felix was unreachable, so no Felix-state transition was claimed.**
 4. Send the 18 capture requests and the P7/P8 requests that are already drafted (P4/P7/P8), once D2 names the recipients.
 
 Decisions before further work is scheduled: D1, D2, D3, D4.
