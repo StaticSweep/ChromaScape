@@ -901,6 +901,23 @@ class CandidateExecutionJobServiceTest {
     assertFalse(called.get());
   }
 
+  @Test
+  void anUnexpectedRefusalBeforeLaunchSettlesAnAsyncSubmissionWithItsReason() throws Exception {
+    when(workflow.registeredCandidate(PROPOSAL))
+        .thenThrow(new IllegalStateException("candidate identity is not current"));
+    CandidateExecutionJobService service = service((j, timeout, cancel) -> fail("never launched"));
+
+    service.submit(PROPOSAL, spec("job-1"));
+
+    CandidateExecutionJobService.JobStatus failed =
+        awaitLifecycle(service, "key-job-1", CandidateExecutionJobService.Lifecycle.FAILED);
+    assertEquals(CandidateAttemptStore.State.FAILED, failed.attemptState());
+    assertTrue(
+        failed.detail().startsWith("EXECUTION_PREPARATION_FAILED: "), "detail: " + failed.detail());
+    assertTrue(failed.detail().contains("candidate identity is not current"));
+    assertEquals(0, store.launchesMarked);
+  }
+
   // ---- R9.2 / R9.5 durable job control ----
 
   @Test
