@@ -209,6 +209,62 @@ class ScenarioManifestV2CompilerTest {
         objectMapper);
   }
 
+  @Test
+  void aRecordedStartTakesItsWorldFromTheSessionAndItsCollisionModelFromTheWorker() {
+    ScenarioManifestV2Compiler compiler = compiler();
+    TickSnapshot first = initialSnapshot();
+    ObjectNode playerState = (ObjectNode) first.getPlayerState();
+    playerState.remove("worldId");
+    playerState.remove("collisionRevision");
+    var recordedStart =
+        new ScenarioManifestV2Compiler.RecordedStart(301, 241, "xrsps-collision/none@0.1.0");
+
+    ObjectNode state =
+        compiler.buildInitialState(
+            first, conversion(npcAction("npc:1518:42", "net", 0)), recordedStart);
+
+    assertThat(state.path("worldId").asInt()).isEqualTo(301);
+    assertThat(state.path("collisionRevision").asText()).isEqualTo("xrsps-collision/none@0.1.0");
+  }
+
+  @Test
+  void withoutABoundWorldARecordingStillFailsClosed() {
+    ScenarioManifestV2Compiler compiler = compiler();
+    TickSnapshot first = initialSnapshot();
+    ((ObjectNode) first.getPlayerState()).remove("worldId");
+
+    ReplayException exception =
+        assertThrows(
+            ReplayException.class,
+            () ->
+                compiler.buildInitialState(
+                    first,
+                    conversion(npcAction("npc:1518:42", "net", 0)),
+                    new ScenarioManifestV2Compiler.RecordedStart(
+                        null, 241, "xrsps-collision/none@0.1.0")));
+    assertThat(exception.getErrorCode()).isEqualTo(ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE);
+  }
+
+  @Test
+  void recordedStartEvidenceNamesTheStartTickForEveryFieldAndTheBoundIdentity() {
+    ObjectNode evidence =
+        compiler()
+            .recordedStartEvidence(
+                "rec-1",
+                4100L,
+                new ScenarioManifestV2Compiler.RecordedStart(
+                    301, null, "xrsps-collision/none@0.1.0"));
+
+    assertThat(evidence.path("schema").asText()).isEqualTo("recorded-start/v1");
+    assertThat(evidence.path("recordingId").asText()).isEqualTo("rec-1");
+    assertThat(evidence.path("startTick").asLong()).isEqualTo(4100L);
+    assertThat(evidence.path("sourceTicks").size()).isEqualTo(5);
+    evidence.path("sourceTicks").forEach(tick -> assertThat(tick.asLong()).isEqualTo(4100L));
+    assertThat(evidence.path("captureIdentity").path("worldId").asInt()).isEqualTo(301);
+    // An unbound revision is stated, so the worker refuses it rather than assuming one.
+    assertThat(evidence.path("captureIdentity").get("gameRevision").isNull()).isTrue();
+  }
+
   private TickSnapshot initialSnapshot() {
     ObjectNode playerState = objectMapper.createObjectNode();
     playerState.put("worldId", 301);

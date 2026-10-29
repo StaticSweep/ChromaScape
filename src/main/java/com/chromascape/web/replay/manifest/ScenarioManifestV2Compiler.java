@@ -165,7 +165,9 @@ public class ScenarioManifestV2Compiler {
       ReplayNpcPinValidator.Violation violation = npcPinViolations.get(0);
       throw ReplayException.invalid(violation.code(), violation.message());
     }
-    ObjectNode initialState = buildInitialState(snapshots.get(0), conversion, authoritativeNpcPins);
+    RecordedStart recordedStart = RecordedStart.of(session, capability);
+    ObjectNode initialState =
+        buildInitialState(snapshots.get(0), conversion, authoritativeNpcPins, recordedStart);
     ObjectNode expectations = buildExpectations(snapshots.get(snapshots.size() - 1));
     String recordingChecksum = recordingChecksum(recordingId, session, snapshots, conversion);
     String sessionChecksum = sessionChecksum(session);
@@ -183,7 +185,8 @@ public class ScenarioManifestV2Compiler {
             recordingChecksum,
             sessionChecksum,
             initialState,
-            expectations);
+            expectations,
+            recordedStart);
 
     UUID manifestId =
         UUID.nameUUIDFromBytes(
@@ -297,7 +300,8 @@ public class ScenarioManifestV2Compiler {
       String recordingChecksum,
       String sessionChecksum,
       ObjectNode initialState,
-      ObjectNode expectations) {
+      ObjectNode expectations,
+      RecordedStart recordedStart) {
     ObjectNode doc = objectMapper.createObjectNode();
     doc.put("manifestVersion", MANIFEST_VERSION);
     // Filled by the caller after the checksum basis is canonicalized.
@@ -390,6 +394,11 @@ public class ScenarioManifestV2Compiler {
       if (approximation.sourceSnapshotId() != null) {
         entry.put("sourceSnapshotId", approximation.sourceSnapshotId());
       }
+    }
+    if (recordedStart.worldId() != null) {
+      conversionNode.set(
+          "recordedStart",
+          recordedStartEvidence(recordingId, conversion.startTick(), recordedStart));
     }
     doc.put("fidelity", capability.fidelity().name());
     doc.put("fidelityRequirement", conversion.quality().name());
@@ -638,11 +647,83 @@ public class ScenarioManifestV2Compiler {
       ReplayNpcPinValidator.Violation violation = npcPinViolations.get(0);
       throw ReplayException.invalid(violation.code(), violation.message());
     }
-    return buildInitialState(first, conversion, authoritativeNpcPins);
+    return buildInitialState(first, conversion, authoritativeNpcPins, RecordedStart.NONE);
+  }
+
+  /** Test seam: the initial state of a session that bound {@code recordedStart}. */
+  ObjectNode buildInitialState(
+      TickSnapshot first, ReplayActionConversionResult conversion, RecordedStart recordedStart) {
+    boolean authoritativeNpcPins =
+        conversion != null
+            && conversion.quality()
+                == com.chromascape.web.replay.conversion.ConversionQuality.CERTIFIED;
+    return buildInitialState(first, conversion, authoritativeNpcPins, recordedStart);
+  }
+
+  /**
+   * SC-2106 R3.4: what a session bound at start for a recording-derived start. The recorder reports
+   * the world once in its capture identity (a tick frame does not carry it), and the collision
+   * model is the pinned worker's, never the recording's: the xRSPS kernel applies no collision map.
+   * Either fills its field only when the start frame has none.
+   *
+   * @param worldId the world the session started on, or null when it bound none
+   * @param gameRevision the client's game revision, or null
+   * @param collisionModel {@code xrsps-collision/none@<adapterVersion>} of the pinned worker
+   */
+  record RecordedStart(Integer worldId, Integer gameRevision, String collisionModel) {
+    static final RecordedStart NONE = new RecordedStart(null, null, null);
+
+    static RecordedStart of(DebugSession session, CapabilityManifest capability) {
+      JsonNode client =
+          session.getCaptureIdentity() == null ? null : session.getCaptureIdentity().path("client");
+      Integer worldId =
+          client != null && client.path("worldId").canConvertToInt()
+              ? client.get("worldId").asInt()
+              : null;
+      Integer gameRevision =
+          client != null && client.path("gameRevision").canConvertToInt()
+              ? client.get("gameRevision").asInt()
+              : null;
+      return new RecordedStart(
+          worldId, gameRevision, "xrsps-collision/none@" + capability.xrsps().adapterVersion());
+    }
+  }
+
+  /**
+   * The {@code recorded-start/v1} evidence the xRSPS worker qualifies before any world exists.
+   * Every initial-state field is read from the first contiguous snapshot, the start tick.
+   */
+  ObjectNode recordedStartEvidence(
+      String recordingId, long startTick, RecordedStart recordedStart) {
+    ObjectNode evidence = objectMapper.createObjectNode();
+    evidence.put("schema", "recorded-start/v1");
+    evidence.put("recordingId", recordingId);
+    evidence.put("startTick", startTick);
+    ObjectNode sourceTicks = evidence.putObject("sourceTicks");
+    for (String path :
+        List.of(
+            "player.position",
+            "player.inventory",
+            "player.equipment",
+            "player.skills.fishing",
+            "npcs")) {
+      sourceTicks.put(path, startTick);
+    }
+    ObjectNode capture = evidence.putObject("captureIdentity");
+    capture.put("worldId", recordedStart.worldId());
+    if (recordedStart.gameRevision() == null) {
+      capture.putNull("gameRevision");
+    } else {
+      capture.put("gameRevision", recordedStart.gameRevision());
+    }
+    return evidence;
   }
 
   private ObjectNode buildInitialState(
-      TickSnapshot first, ReplayActionConversionResult conversion, boolean authoritativeNpcPins) {
+      TickSnapshot first,
+      ReplayActionConversionResult conversion,
+      boolean authoritativeNpcPins,
+      RecordedStart recordedStart) {
     JsonNode playerState = first.getPlayerState();
     if (playerState == null || !playerState.isObject()) {
       throw ReplayException.invalid(
@@ -654,6 +735,9 @@ public class ScenarioManifestV2Compiler {
         world.isObject() && world.has("worldId")
             ? world.get("worldId")
             : playerState.get("worldId");
+    if (worldId == null && recordedStart.worldId() != null) {
+      worldId = objectMapper.getNodeFactory().numberNode(recordedStart.worldId());
+    }
     if (worldId == null
         || !worldId.isIntegralNumber()
         || !worldId.canConvertToInt()
@@ -668,6 +752,9 @@ public class ScenarioManifestV2Compiler {
         playerState.has("collisionRevision")
             ? playerState.get("collisionRevision")
             : world.isObject() ? world.get("collisionRevision") : null;
+    if (collisionRevision == null && recordedStart.collisionModel() != null) {
+      collisionRevision = objectMapper.getNodeFactory().textNode(recordedStart.collisionModel());
+    }
     if (collisionRevision == null
         || !collisionRevision.isTextual()
         || collisionRevision.asText().isBlank()) {
