@@ -59,10 +59,23 @@ public class ScenarioManifestV2Compiler {
   static final String FIXED_CLOCK_ORIGIN = "2020-01-01T00:00:00.000Z";
   static final int MANIFEST_VERSION = 2;
 
-  /** The player fields the xRSPS kernel loads from a start; a start-only manifest carries no others. */
+  /** The world fields a start-only Fishing manifest carries. */
+  static final Set<String> START_WORLD_FIELDS =
+      Set.of("worldId", "collisionRevision", "player", "npcs");
+
+  /**
+   * The player fields the xRSPS kernel loads from a start; a start-only manifest carries no others.
+   */
   static final Set<String> START_PLAYER_FIELDS =
       Set.of(
-          "position", "skills", "inventory", "equipment", "animation", "orientation", "interaction");
+          "position",
+          "skills",
+          "inventory",
+          "equipment",
+          "animation",
+          "orientation",
+          "interaction");
+
   private static final int COMPILER_SCHEMA_VERSION = 2;
   private static final Set<String> SUPPORTED_FISHING_OPTIONS =
       Set.of("net", "bait", "lure", "cage", "harpoon");
@@ -329,6 +342,20 @@ public class ScenarioManifestV2Compiler {
             });
     unmodelled.sort(Comparator.naturalOrder());
     player.remove(unmodelled);
+    // Likewise for the world: a Fishing start models the world, collision model, player and spots.
+    // Recorded objects, ground items, widgets and the rest are named, not carried in a recorder
+    // shape the worker would have to reinterpret.
+    List<String> unmodelledWorld = new ArrayList<>();
+    initialState
+        .fieldNames()
+        .forEachRemaining(
+            field -> {
+              if (!START_WORLD_FIELDS.contains(field)) {
+                unmodelledWorld.add(field);
+              }
+            });
+    unmodelledWorld.sort(Comparator.naturalOrder());
+    initialState.remove(unmodelledWorld);
 
     ObjectNode basis = objectMapper.createObjectNode();
     basis.put("recordingId", recordingId);
@@ -396,6 +423,8 @@ public class ScenarioManifestV2Compiler {
     conversion.put("mode", "START_ONLY");
     ArrayNode unmodelledFields = conversion.putArray("unmodelledPlayerFields");
     unmodelled.forEach(unmodelledFields::add);
+    ArrayNode unmodelledWorldFields = conversion.putArray("unmodelledWorldFields");
+    unmodelledWorld.forEach(unmodelledWorldFields::add);
     conversion.set("recordedStart", recordedStartEvidence(recordingId, startTick, recordedStart));
     doc.put("fidelity", capability.fidelity().name());
     doc.put("fidelityRequirement", "XRSPS_AUTHORITATIVE");
