@@ -375,3 +375,11 @@ relabel-and-reseal finding (R2) are fixed in merged `main`. runtime-module-guard
 `node:module` imports and seals register/registerHooks, so R1 may be partly done; confirm with the review probe
 before closing it. The qualification gate, the 17 acceptance rows and the external inputs remain open. The
 SC-666 Gradle hunk is unrelated and is committed separately.
+
+## Superseding plan (29 October 2026)
+
+Current remaining implementation and acceptance sequencing is in
+[remaining-implementation-plan-20261029.md](remaining-implementation-plan-20261029.md).
+Merged-main R1/R2 probes and fresh Windows tests have since passed within their documented scope;
+the old open-finding statements above are historical. The new plan preserves the original 17-row
+criteria and separates completed Windows development checks from qualification and external gates.
