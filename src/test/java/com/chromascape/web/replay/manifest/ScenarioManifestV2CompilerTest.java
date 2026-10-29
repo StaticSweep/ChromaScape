@@ -282,6 +282,60 @@ class ScenarioManifestV2CompilerTest {
     assertThat(state.path("player").path("skills").has("FISHING")).isFalse();
   }
 
+  @Test
+  void aStartOnlyWorldIsTheRecordedFishingSpotsExactlyAsCaptured() {
+    ScenarioManifestV2Compiler compiler = compiler();
+    TickSnapshot first = initialSnapshot();
+    ObjectNode spot =
+        ((ArrayNode) first.getNpcs())
+            .addObject()
+            .put("stableId", "npc:1525:3085:3230:0")
+            .put("npcId", 1525)
+            .put("npcTypeId", 1525)
+            .put("size", 1)
+            .put("name", "Fishing spot")
+            .put("fishingSpot", true);
+    spot.putObject("position").put("x", 3085).put("y", 3230).put("plane", 0);
+    spot.putArray("actions").add("Small Net").add("Bait");
+    var recordedStart =
+        new ScenarioManifestV2Compiler.RecordedStart(556, 241, "xrsps-collision/none@0.1.0");
+
+    ObjectNode state = compiler.buildInitialState(first, null, recordedStart);
+
+    assertThat(state.path("npcs").size()).isEqualTo(1);
+    ObjectNode npc = (ObjectNode) state.path("npcs").get(0);
+    assertThat(npc.path("stableId").asText()).isEqualTo("npc:1525:3085:3230:0");
+    assertThat(npc.path("npcTypeId").asInt()).isEqualTo(1525);
+    assertThat(npc.path("actions").toString()).isEqualTo("[\"Small Net\",\"Bait\"]");
+    // Nothing is inferred for a start: no spot type or spot id the recorder did not capture.
+    assertThat(npc.has("spotType")).isFalse();
+    assertThat(npc.has("spotId")).isFalse();
+  }
+
+  @Test
+  void aStartOnlySpotWithoutItsCacheTypeIsRefused() {
+    ScenarioManifestV2Compiler compiler = compiler();
+    TickSnapshot first = initialSnapshot();
+    ObjectNode spot =
+        ((ArrayNode) first.getNpcs())
+            .addObject()
+            .put("stableId", "npc:spot")
+            .put("size", 1)
+            .put("fishingSpot", true);
+    spot.putObject("position").put("x", 3085).put("y", 3230).put("plane", 0);
+
+    ReplayException exception =
+        assertThrows(
+            ReplayException.class,
+            () ->
+                compiler.buildInitialState(
+                    first,
+                    null,
+                    new ScenarioManifestV2Compiler.RecordedStart(
+                        556, 241, "xrsps-collision/none@0.1.0")));
+    assertThat(exception.getErrorCode()).isEqualTo(ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE);
+  }
+
   private TickSnapshot initialSnapshot() {
     ObjectNode playerState = objectMapper.createObjectNode();
     playerState.put("worldId", 301);
