@@ -1,5 +1,12 @@
 # Qualification fix, source commit and certifiable identity — 30 October 2026
 
+## Subsequent owner-adopted contract closure
+
+The owner later adopted the narrowed SC-276 criteria. Its scoped contract is now verified and
+complete in Felix/Shortcut; qualification and transferred obligations remain open. See
+[sc276-adopted-contract-closure-20261030.md](sc276-adopted-contract-closure-20261030.md).
+The earlier proposal/current-blocker statements below are historical; SC-274 remains unchanged.
+
 Evidence root: `C:\Dev\IdeaProjects\verification\sc274-sc276-continuation-20261029\final-commit-791f7a3d\`
 
 ## Changed files
