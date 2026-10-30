@@ -51,6 +51,7 @@ let currentRecordingId = null;
 let currentSessionId = null;
 let recordingStartTime = null;
 let recordingDurationInterval = null;
+let recordingStartPending = false;
 
 // Debug session state (without recording)
 let currentDebugSessionId = null;
@@ -7819,6 +7820,20 @@ function shouldRenderLiveTickBatch(data) {
   return !currentDebugSessionId || data.sessionId === currentDebugSessionId;
 }
 
+function bindRecorderSessionFromLiveTick(data) {
+  // A page refresh can miss SESSION_CREATED. Bind only from a current, accepted live tick,
+  // never by guessing from historical session rows or from browser WebSocket connectivity.
+  if (currentMode !== 'live' || !debugFeedEnabled || pendingWindowSessionRebind || currentDebugSessionId
+      || !data || typeof data.sessionId !== 'string' || !data.sessionId
+      || !Number.isSafeInteger(data.tick) || data.tick < 0
+      || !sessionCreatedMatchesSelectedWindow(data) || !shouldRenderLiveTickBatch(data)) return;
+  currentDebugSessionId = data.sessionId;
+  currentDebugSession = data.sessionId;
+  isDebugSessionActive = true;
+  if (elements.debugSessionStatus) elements.debugSessionStatus.classList.remove('d-none');
+  fishingShadowSwitchSession(data.sessionId, data.shadowRunId || null);
+}
+
 async function selectWindowInternal(windowId, displayName) {
   try {
     const response = await fetch('/api/windows/select', {
@@ -7982,6 +7997,7 @@ function connectTickStreamWebSocket() {
         return;
       }
       if (window.DEBUG_TICK) console.log('[Tick Debug] Received tick data:', data);
+      bindRecorderSessionFromLiveTick(data);
       withLiveLogScrollAnchor(() => updatePanelsForTick(data));
     } catch (e) {
       const now = Date.now();
@@ -8825,11 +8841,21 @@ function initRecordingControls() {
  * Start a new recording session.
  */
 async function startRecording() {
+  if (recordingStartPending) return;
+  recordingStartPending = true;
+  recordingStatusGeneration++;
+  if (recordingStatusAbortController) recordingStatusAbortController.abort();
+  recordingStatusRequest = null;
+  elements.recordBtn.disabled = true;
   try {
+    if (currentMode !== 'live' || !isDebugSessionActive || !currentDebugSessionId || pendingWindowSessionRebind) {
+      throw new Error('Wait for the selected Micro6 recorder to connect with a live session before recording.');
+    }
     const response = await fetch('/api/debug/replay/start-recording', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        sessionId: currentDebugSessionId,
         accountName: currentWindowId || 'Unknown',
         scriptName: 'Debug Session',
         recordingEnabled: true
@@ -8863,6 +8889,7 @@ async function startRecording() {
           if (shouldReset) {
             await forceResetRecording();
             // Retry starting the recording
+            recordingStartPending = false;
             await startRecording();
             return;
           }
@@ -8925,6 +8952,16 @@ async function startRecording() {
     isRecording = false;
     currentRecordingId = null;
     currentSessionId = null;
+    recordingNotificationId = null;
+    recordingStartTime = null;
+    elements.recordBtn.classList.remove('btn-success');
+    elements.recordBtn.classList.add('btn-danger');
+    elements.recordBtnText.textContent = 'Start Recording';
+    if (elements.recordingStatus) elements.recordingStatus.classList.add('d-none');
+    stopRecordingDurationTimer();
+  } finally {
+    recordingStartPending = false;
+    elements.recordBtn.disabled = false;
   }
 }
 
@@ -9094,6 +9131,7 @@ async function forceResetRecording() {
  * Check current recording status and synchronize frontend state with backend.
  */
 async function checkRecordingStatus() {
+  if (recordingStartPending) return;
   if (recordingStatusRequest) return recordingStatusRequest;
 
   const generation = ++recordingStatusGeneration;
@@ -9303,9 +9341,20 @@ async function initDesktopWatchControls() {
     await setDesktopWatching(!desktopWatching);
   });
 
+  let statusPollingAllowed = true;
+  let statusPoller = null;
   async function refreshFrameStatus() {
     try {
       const response = await fetch('/api/observe/status');
+      if (response.status === 401 || response.status === 403) {
+        statusPollingAllowed = false;
+        if (statusPoller !== null) clearInterval(statusPoller);
+        elements.watchBtn.disabled = true;
+        elements.watchBtn.title = 'Desktop watch requires local access on the ChromaScape server.';
+        const label = document.getElementById('clientFrameStatus');
+        if (label) label.textContent = 'Viewport: local access required';
+        return;
+      }
       if (response.ok) {
         const status = await response.json();
         desktopWatching = status && status.state === 'ACTIVE';
@@ -9320,7 +9369,7 @@ async function initDesktopWatchControls() {
     } catch (error) { console.warn('Failed to sync viewport state:', error); }
   }
   await refreshFrameStatus();
-  setInterval(refreshFrameStatus, 2000);
+  if (statusPollingAllowed) statusPoller = setInterval(refreshFrameStatus, 2000);
 }
 
 function updateDesktopWatchUi() {
