@@ -52,6 +52,16 @@ The qualification runner still returns **2 PASSED, 7 NOT_RUN → INCOMPLETE**, a
 `AUTHORITATIVE_RUNTIME_QUALIFICATION.complete` is still false. No row below changes status:
 certifiable identity is not qualification.
 
+Kernel contract suites were also re-run on the same commit after rebuilding
+`packages/replay-kernel/dist` (the old `dist` carried the stale `c64ac9a7` identity):
+**unit 355/355, integration 24/24, zero failures or skips**. Every one of the nine narrowed
+SC-276 contract criteria in `narrowed-acceptance-draft-20261029.md` now has a named passing
+test on `791f7a3d`; the mapping is in
+`qualification-fix-and-final-commit-20261030.md`. That is evidence for a narrowed Done, not
+for the original rows: 276-boundary still needs the Linux sandbox, 276-methods still needs
+independent references, 276-state still needs the real service/client restart path, and
+276-certification still needs the gate and human sign-off.
+
 Evidence: `C:\Dev\IdeaProjects\verification\sc274-sc276-continuation-20261029\final-commit-791f7a3d\`;
 summary in `qualification-fix-and-final-commit-20261030.md`.
 

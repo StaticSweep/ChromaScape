@@ -50,6 +50,35 @@ files were scheduled in parallel against shared worker ports; the serial run is 
 result. A first attempt without `ESBUILD_BINARY_PATH` failed on the platform-mismatched
 esbuild binary; that is an environment fault, not a source regression.
 
+### Kernel contract suites (SC-276 narrow criteria)
+
+Also run on the committed tree, after rebuilding `packages/replay-kernel` `dist` (the previous
+`dist` still carried the stale `c64ac9a7` identity, which made two worker tests fail with
+`XRSPS_VERSION_INCOMPATIBLE`; that was a stale build artifact, not a source defect):
+
+- **Kernel unit: 355 passed, 0 failed, 0 skipped** — `kernel-unit.log`.
+- **Kernel integration: 24 passed, 0 failed, 0 skipped** — `kernel-integration.log`.
+- `dist` rebuilt with the certifiable identity `791f7a3d`; `validate-build-identity.mjs`
+  exits 0.
+
+Named coverage for the nine narrowed SC-276 criteria:
+
+| Criterion | Evidence (test titles) |
+|---|---|
+| Fishing proof as an automated kernel test | `authoritative Fishing resolves pinned content, tool, catch, XP, and trace effects`; `... fails closed when the production tool is absent` |
+| Determinism | `advance is deterministic and never emits an intent`; `independent fresh runs produce identical chains`; `separate processes agree on the restored suffix exactly`; `two workers with identical manifests agree on observations` |
+| Run isolation and cancellation | `snapshot restore reproduces the same cursor projection and cancellation cannot execute more events`; the two-worker agreement case |
+| Snapshot round trip | `stopped lifecycle survives snapshot and restore`; `an exact checkpoint round-trips task state, revision, and clock`; `paused lifecycle survives snapshot and restore without silently resuming` |
+| Invalid/stale actions do not mutate | `rejects forged checkpoints, changed snapshot bindings and control-enabled envelopes`; `stale, empty, masked, and despawned slots reject without mutation`; `rejects an unsupported fishing option before touching the kernel` |
+| Truthful manifest, `controlAllowed=false` | `worker advertises its attested capabilities before a manifest reset`; `authoritative manifests are rejected by a non-certifiable worker` |
+| Upgrade incompatibility keeps the last pin | `replay output from another source, content, cache or closure identity never qualifies`; `the reviewed digests pinned in revision 1 match ... this worker runs` |
+| No OpenRune dependency | `runtime-identity.test.ts` asserts `openRuneAvailable === false`; `build-identity-validator.test.ts` rejects `openRuneAvailable=true` |
+
+The "no socket, port, browser, database or credential" criterion is covered by the
+`module-guard` and `read-guard` qualification components (both PASSED) plus the offline worker
+bootstrap boundary suite. That is not an OS-level network-deny measurement; the OS-level
+claim belongs to SC-2201, which the narrowed scope moves out.
+
 ## Acceptance results
 
 - Qualification runner on the committed tree: **2 PASSED (`module-guard`, `read-guard`),
