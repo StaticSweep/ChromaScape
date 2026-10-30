@@ -33,7 +33,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * <p>Covered:
  *
  * <ol>
- *   <li>the full production chain V11 → V22 on an empty database;
+ *   <li>the selected replay migration chain through V72 on an empty database;
  *   <li>V19 from the OLD-column-only state (rename + backfill + drop);
  *   <li>V19 from the NEW-column-only state (no-op convergence);
  *   <li>V19 from the BOTH-columns state with equal values (backfill + drop);
@@ -44,9 +44,9 @@ import org.testcontainers.containers.PostgreSQLContainer;
 class ReplayMigrationIntegrationTest {
 
   /**
-   * The replay chain is V11 → V22 EXCLUDING V16 (SC-1173 builder-repair, which references
-   * application tables that only Hibernate manages and predates the replay subsystem). Later replay
-   * migrations carry no dependency on it.
+   * Stage the replay subsystem's migrations through V72, excluding unrelated application migrations
+   * such as V16 (SC-1173 builder-repair, which references application tables outside this test
+   * schema). This subset validates replay entities; it is not a full application upgrade history.
    */
   static java.nio.file.Path replayMigrationDir() throws Exception {
     java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("replay-migrations");
@@ -67,7 +67,9 @@ class ReplayMigrationIntegrationTest {
       "V25__replay_v2_metadata.sql",
       "V26__replay_v2_request_identity.sql",
       "V63__sc275_causal_restore_bindings.sql",
-      "V64__sc275_causal_projection_samples.sql"
+      "V64__sc275_causal_projection_samples.sql",
+      "V71__sc276_native_outcome_artifacts.sql",
+      "V72__sc276_committed_source_cursor.sql"
     };
     for (String script : scripts) {
       try (var in =
@@ -133,6 +135,9 @@ class ReplayMigrationIntegrationTest {
       assertFalse(
           columnNotNull(connection, "replay_reports", "attempt_id"),
           "V30 must drop NOT NULL from replay_reports.attempt_id");
+      assertTrue(
+          columnExists(connection, "replay_attempts", "native_source_cursor"),
+          "the replay test schema must include V72 for the current ReplayAttempt entity");
     }
   }
 

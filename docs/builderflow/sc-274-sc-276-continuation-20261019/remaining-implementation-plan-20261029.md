@@ -1,5 +1,16 @@
 # SC-274 / SC-276 — remaining implementation and acceptance plan
 
+## 30 October execution status
+
+SC-276 completed under the owner's explicitly adopted contract-only scope; see
+[its closure evidence](sc276-adopted-contract-closure-20261030.md). SC-274 was not amended.
+SC-274 now has 171 fresh passing compiler/import/PostgreSQL/MVC/role/security checks and
+byte-identical authored compilation from two independent clean clones. A real test migration
+staging omission was repaired without changing released SQL. Genuine source/privacy/travel
+acceptance and recovery of the original Felix task remain open. Full results, limits and exact
+next steps: [SC-274 original-scope verification](sc274-original-scope-verification-20261030.md).
+Earlier status statements below are historical; the remaining-plan ordering is retained.
+
 Date: 29 October 2026, Europe/Amsterdam. Status: plan only; original story acceptance remains open.
 
 This document supersedes the remaining-work ordering and current-status statements in
