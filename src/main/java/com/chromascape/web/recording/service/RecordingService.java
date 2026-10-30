@@ -155,9 +155,27 @@ public class RecordingService implements FrameListener {
     }
 
     if (!recording.get() && recorder != null) {
-      throw new RecordingException(
-          "Previous recording was not finalized",
-          "Restart the recording service before starting another recording.");
+      // A bounded stop may time out while the encoder drains. Once its owner has
+      // terminated, release the leftover native handle without deleting the media.
+      // Never close a recorder that may still be inside record().
+      if (encoderFuture != null && !encoderFuture.isDone()) {
+        throw new RecordingException(
+            "Previous recording was not finalized",
+            "The previous recording is still finishing. Wait before starting another recording.");
+      }
+      try {
+        recorder.stop();
+        recorder.release();
+        recorder = null;
+        logger.warn(
+            "Released previous recorder after its encoder finished: {}. "
+                + "Existing media retained; calibrated finalization is not asserted.",
+            currentRecordingId);
+      } catch (Exception e) {
+        throw new RecordingException(
+            "Previous recording was not finalized",
+            "The previous recorder could not be released. Restart the recording service.");
+      }
     }
 
     if (recording.get()) {
@@ -377,7 +395,8 @@ public class RecordingService implements FrameListener {
       if (nowNanos - lastProgressLogNanos > TimeUnit.SECONDS.toNanos(2)) {
         lastProgressLogNanos = nowNanos;
         logger.info(
-            "Waiting for a stable RuneLite canvas size (attempt {}, elapsed {} ms, last size {})...",
+            "Waiting for a stable RuneLite canvas size (attempt {}, elapsed {} ms, last size"
+                + " {})...",
             attempts,
             TimeUnit.NANOSECONDS.toMillis(nowNanos - startNanos),
             lastObservedDimensions != null ? lastObservedDimensions : "unknown");

@@ -24,6 +24,35 @@ import org.junit.jupiter.api.Test;
 class RecordingServiceRoundTripTest {
 
   @Test
+  void failedReleaseRefusesAnotherStartAndRetainsMedia() throws Exception {
+    Path output = Files.createTempDirectory("recorder-release-failure");
+    Path media = Files.writeString(output.resolve("previous.mp4"), "preserve-existing-media");
+    RecordingConfig config = new RecordingConfig();
+    config.setEnabled(true);
+    config.setOutputDirectory(output.toString());
+    RecordingService service =
+        new RecordingService(
+            config,
+            new UnifiedCaptureConfig(),
+            mock(UnifiedFrameCaptureService.class),
+            mock(WindowFrameCapture.class));
+    var nativeRecorder = mock(org.bytedeco.javacv.FFmpegFrameRecorder.class);
+    org.mockito.Mockito.doThrow(new RuntimeException("release failed")).when(nativeRecorder).stop();
+    org.springframework.test.util.ReflectionTestUtils.setField(service, "recorder", nativeRecorder);
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        service, "encoderFuture", java.util.concurrent.CompletableFuture.completedFuture(null));
+    try {
+      org.assertj.core.api.Assertions.assertThatThrownBy(service::startRecording)
+          .hasMessageContaining("not finalized");
+      assertThat(org.springframework.test.util.ReflectionTestUtils.getField(service, "recorder"))
+          .isSameAs(nativeRecorder);
+      assertThat(Files.readString(media)).isEqualTo("preserve-existing-media");
+    } finally {
+      service.cleanup();
+    }
+  }
+
+  @Test
   void encoderTimeoutDoesNotCloseOwnedNativeRecorderOrPublishSuccess() throws Exception {
     RecordingConfig config = new RecordingConfig();
     config.setEnabled(true);
@@ -68,8 +97,19 @@ class RecordingServiceRoundTripTest {
         .thenAnswer(invocation -> event(binding, Color.RED, System.nanoTime()));
     RecordingService service = new RecordingService(config, captureConfig, unified, capture);
 
+    // Reproduce the state after a stop timed out, then its encoder drained later.
+    var previousRecorder = mock(org.bytedeco.javacv.FFmpegFrameRecorder.class);
+    Path previousMedia = Files.writeString(output.resolve("previous.mp4"), "retained-media");
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        service, "recorder", previousRecorder);
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        service, "encoderFuture", java.util.concurrent.CompletableFuture.completedFuture(null));
+
     try {
       String recordingId = service.startRecording(RecordingTriggerSource.MANUAL);
+      verify(previousRecorder).stop();
+      verify(previousRecorder).release();
+      assertThat(Files.readString(previousMedia)).isEqualTo("retained-media");
       Thread.sleep(120);
       service.onFrameCaptured(event(binding, Color.GREEN, System.nanoTime()));
       Thread.sleep(120);
