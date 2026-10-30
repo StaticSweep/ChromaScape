@@ -1,5 +1,13 @@
 # SC-274 capture handoff — 30 October 2026
 
+## Subsequent service recovery
+
+The database published-port failure behind the provenance API timeouts was recovered by
+restarting the same PostgreSQL container, preserving its volume. The checker now returns
+the expected RUN_CONTEXT_REQUIRED refusal for the legacy b83c input. Earlier timeout
+statements below are historical. See [record-button recovery](sc274-record-button-recovery-20261030.md).
+Capture context/profile/source prerequisites are still required.
+
 The owner confirmed that the genuine recording still has to be made. A new recording is
 separate evidence; it does not repair the historical b83c capture or close SC-274 by itself.
 
