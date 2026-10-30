@@ -68,6 +68,8 @@ import com.chromascape.web.replay.run.repository.ReplayEventRepository;
 import com.chromascape.web.replay.run.repository.ReplayMismatchRepository;
 import com.chromascape.web.replay.run.repository.ReplayRunRepository;
 import com.chromascape.web.replay.run.repository.StateHashSampleRepository;
+import com.chromascape.web.replay.security.LocalReplayPrincipalConfig;
+import com.chromascape.web.replay.security.LocalReplayPrincipalFilter;
 import com.chromascape.web.replay.security.ReplayOwnershipService;
 import com.chromascape.web.replay.security.ReplayPrincipalService;
 import com.chromascape.web.replay.viewer.ReplayViewerService;
@@ -75,9 +77,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.persistence.EntityManagerFactory;
 import java.math.BigDecimal;
+import java.net.InetAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -96,12 +104,15 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.aop.support.AopUtils;
+import org.springframework.boot.web.embedded.tomcat.TomcatServletWebServerFactory;
+import org.springframework.boot.web.server.WebServer;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.ByteArrayHttpMessageConverter;
+import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -114,13 +125,19 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
+import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
+import org.springframework.web.servlet.DispatcherServlet;
+import org.springframework.web.servlet.config.annotation.EnableWebMvc;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
  * Actual compiler, JPA repositories and Spring transaction proxies against disposable PostgreSQL.
  * Recording/tick/action input, catalog integrity and viewer services are fixtures; artifact storage
  * is real and test-isolated. Standalone MockMvc exercises MVC binding, validation, controllers,
  * exception advice and exports against the same services and database, with a supplied principal.
- * This is not a socket-level authentication, capture, browser, worker or certification test.
+ * Additional real loopback HTTP cases use the production local-development principal bridge and its
+ * production-profile refusal, without supplying a servlet principal. All source inputs and
+ * terminalization remain authored fixtures, not capture, upstream authentication or certification.
  */
 @EnabledIfEnvironmentVariable(named = "SC274_TEST_JDBC_URL", matches = ".+")
 class Sc274CompilerTransactionIntegrationTest {
@@ -260,6 +277,228 @@ class Sc274CompilerTransactionIntegrationTest {
         .andExpect(jsonPath("$.code").value("CHECKSUM_MISMATCH"));
     assertThat(counts()).containsExactly(2L, 1L, 1L, 1L);
     assertSourceUnchanged();
+  }
+
+  @Test
+  void socketRequestsCannotSupplyTheirOwnPrincipalWhenLocalBridgeIsDisabled() throws Exception {
+    List<Long> before = counts();
+    long inserts = insertCount();
+    try (SocketBoundary socket = new SocketBoundary(false, artifactRoot.resolve("socket-denied"))) {
+      for (Map<String, String> headers :
+          List.of(
+              Map.<String, String>of(),
+              Map.of("X-User", OWNER, "X-Remote-User", OWNER),
+              Map.of("Authorization", "Bearer authored-not-an-authentication-token"))) {
+        var read = socket.send("GET", "/api/replay/scenarios/" + UUID.randomUUID(), null, headers);
+        assertThat(read.statusCode()).isEqualTo(401);
+        assertThat(JSON.readTree(read.body()).path("message").asText())
+            .isEqualTo("Authentication is required");
+        var create =
+            socket.send(
+                "POST",
+                "/api/replay/v2/recordings/" + RECORDING + "/xrsps-runs",
+                JSON.writeValueAsBytes(request("socket-denied", null)),
+                headers);
+        assertThat(create.statusCode()).isEqualTo(401);
+      }
+    }
+    assertThat(counts()).isEqualTo(before);
+    assertThat(insertCount()).isEqualTo(inserts);
+    verifyNoInteractions(converter);
+  }
+
+  @ParameterizedTest
+  @EnumSource(CurationRole.class)
+  void socketLocalPrincipalPreservesRolesAndRejectsForeignPrivateArtifacts(CurationRole role)
+      throws Exception {
+    // The foreign and local sources are explicitly authored fixtures in this disposable schema.
+    var foreign = service.create(RECORDING, request("socket-foreign", null), OWNER).response();
+    String localOwner = System.getProperty("user.name");
+    if (localOwner == null || localOwner.isBlank()) localOwner = "local-development";
+    assertThat(localOwner).isNotEqualTo(OWNER);
+    RecordingCuration localSource = new RecordingCuration();
+    org.springframework.beans.BeanUtils.copyProperties(
+        source, localSource, "id", "version", "createdBy", "role");
+    localSource.setVersion(
+        jdbc.queryForObject(
+            "SELECT coalesce(max(version), 0) + 1 FROM recording_curations WHERE recording_id=?",
+            Integer.class,
+            RECORDING));
+    localSource.setCreatedBy(localOwner);
+    localSource.setRole(role);
+    localSource.setContentJson(source.getContentJson().deepCopy());
+    source = context.getBean(RecordingCurationRepository.class).saveAndFlush(localSource);
+
+    try (SocketBoundary socket =
+        new SocketBoundary(true, artifactRoot.resolve("socket-" + role.name()))) {
+      String createPath = "/api/replay/v2/recordings/" + RECORDING + "/xrsps-runs";
+      byte[] requestBytes = JSON.writeValueAsBytes(request("socket-local", null));
+      var created = socket.send("POST", createPath, requestBytes, Map.of());
+      assertThat(created.statusCode()).isEqualTo(201);
+      var result = JSON.readTree(created.body());
+      UUID runId = UUID.fromString(result.path("runId").asText());
+      UUID manifestId = UUID.fromString(result.path("manifestId").asText());
+      List<Long> afterCreate = counts();
+      var retry = socket.send("POST", createPath, requestBytes, Map.of());
+      assertThat(retry.statusCode()).isEqualTo(200);
+      assertThat(JSON.readTree(retry.body()).path("runId").asText()).isEqualTo(runId.toString());
+      assertThat(counts()).isEqualTo(afterCreate);
+
+      var privateManifest =
+          socket.send("GET", "/api/replay/scenarios/" + manifestId, null, Map.of());
+      assertThat(privateManifest.statusCode()).isEqualTo(200);
+      var manifest =
+          context.getBean(ScenarioManifestRepository.class).findById(manifestId).orElseThrow();
+      byte[] content = CANONICAL.canonicalJsonBytes(manifest.getManifestJson());
+      publishManifest(runId, content); // Authored terminalization, never worker qualification.
+      var exported =
+          socket.send(
+              "GET", "/api/replay/v2/runs/" + runId + "/artifacts/manifest", null, Map.of());
+      assertThat(exported.statusCode()).isEqualTo(200);
+      assertThat(exported.body()).isEqualTo(content);
+      assertThat(exported.headers().firstValue("Cache-Control")).contains("no-store");
+      assertThat(exported.headers().firstValue("X-Content-Type-Options")).contains("nosniff");
+      assertThat(exported.headers().firstValue("X-Replay-Artifact-Checksum"))
+          .contains(CANONICAL.sha256Hex(content));
+      var imported = ScenarioManifestImportValidator.validate(exported.body());
+      ScenarioManifestImportValidator.requireSimulationAllowed(imported);
+      assertThat(imported.path("curation").path("datasetRole").asText()).isEqualTo(role.name());
+
+      List<Long> beforeRefusals = counts();
+      long inserts = insertCount();
+      for (String suffix : List.of("", "/artifacts/manifest")) {
+        var foreignRead =
+            socket.send(
+                "GET",
+                "/api/replay/v2/runs/" + foreign.runId() + suffix,
+                null,
+                Map.of("X-User", OWNER));
+        var missingRead =
+            socket.send("GET", "/api/replay/v2/runs/" + UUID.randomUUID() + suffix, null, Map.of());
+        assertThat(foreignRead.statusCode()).isEqualTo(404);
+        assertThat(missingRead.statusCode()).isEqualTo(404);
+        assertSameError(foreignRead.body(), missingRead.body());
+      }
+      var foreignManifest =
+          socket.send("GET", "/api/replay/scenarios/" + foreign.manifestId(), null, Map.of());
+      var missingManifest =
+          socket.send("GET", "/api/replay/scenarios/" + UUID.randomUUID(), null, Map.of());
+      assertThat(foreignManifest.statusCode()).isEqualTo(404);
+      assertThat(missingManifest.statusCode()).isEqualTo(404);
+      assertSameError(foreignManifest.body(), missingManifest.body());
+      assertThat(
+              socket
+                  .send("POST", createPath, "{".getBytes(StandardCharsets.UTF_8), Map.of())
+                  .statusCode())
+          .isEqualTo(400);
+      var stale = request("socket-stale", "sha256:" + "f".repeat(64));
+      assertThat(
+              socket.send("POST", createPath, JSON.writeValueAsBytes(stale), Map.of()).statusCode())
+          .isEqualTo(409);
+      assertThat(counts()).isEqualTo(beforeRefusals);
+      assertThat(insertCount()).isEqualTo(inserts);
+    }
+  }
+
+  /** Real loopback socket and production principal bridge, with no supplied servlet principal. */
+  private static final class SocketBoundary implements AutoCloseable {
+    private final AnnotationConfigWebApplicationContext web =
+        new AnnotationConfigWebApplicationContext();
+    private final HttpClient client =
+        HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(5))
+            .version(HttpClient.Version.HTTP_1_1)
+            .build();
+    private WebServer server;
+
+    SocketBoundary(boolean localDevelopment, Path root) throws Exception {
+      Files.createDirectories(root);
+      var environment = new MockEnvironment();
+      if (localDevelopment) environment.setActiveProfiles("local-development");
+      else environment.setActiveProfiles("production");
+      web.setEnvironment(environment);
+      web.setParent(context);
+      web.register(SocketMvc.class);
+      var factory = new TomcatServletWebServerFactory(0);
+      factory.setAddress(InetAddress.getByName("127.0.0.1"));
+      factory.setBaseDirectory(root.toFile());
+      try {
+        server =
+            factory.getWebServer(
+                servletContext -> {
+                  var dispatcher =
+                      servletContext.addServlet("dispatcher", new DispatcherServlet(web));
+                  dispatcher.setLoadOnStartup(1);
+                  dispatcher.addMapping("/");
+                  new LocalReplayPrincipalConfig()
+                      .localReplayPrincipalFilterRegistration(
+                          new LocalReplayPrincipalFilter(environment))
+                      .onStartup(servletContext);
+                });
+        server.start();
+      } catch (Exception failure) {
+        try {
+          close();
+        } catch (Exception cleanup) {
+          failure.addSuppressed(cleanup);
+        }
+        throw failure;
+      }
+    }
+
+    HttpResponse<byte[]> send(String method, String path, byte[] body, Map<String, String> headers)
+        throws Exception {
+      var request =
+          HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + server.getPort() + path))
+              .timeout(Duration.ofSeconds(10));
+      headers.forEach(request::header);
+      if (body != null) request.header("Content-Type", "application/json");
+      request.method(
+          method,
+          body == null
+              ? HttpRequest.BodyPublishers.noBody()
+              : HttpRequest.BodyPublishers.ofByteArray(body));
+      return client.send(request.build(), HttpResponse.BodyHandlers.ofByteArray());
+    }
+
+    @Override
+    public void close() {
+      try {
+        if (server != null) server.stop();
+      } finally {
+        web.close();
+      }
+    }
+  }
+
+  @Configuration(proxyBeanMethods = false)
+  @EnableWebMvc
+  static class SocketMvc implements WebMvcConfigurer {
+    @Bean
+    ReplayV2Controller replayV2SocketController(ReplayV2RunService runs) {
+      return new ReplayV2Controller(runs);
+    }
+
+    @Bean
+    ReplayScenarioController replayScenarioSocketController(
+        ScenarioManifestRepository manifests, RecordingCurationRepository curations) {
+      return new ReplayScenarioController(
+          mock(ScenarioCompiler.class),
+          manifests,
+          new ReplayPrincipalService(),
+          new ReplayOwnershipService(curations));
+    }
+
+    @Bean
+    ReplayExceptionHandler socketReplayExceptionHandler() {
+      return new ReplayExceptionHandler();
+    }
+
+    @Override
+    public void configureMessageConverters(List<HttpMessageConverter<?>> converters) {
+      converters.add(new ByteArrayHttpMessageConverter());
+      converters.add(new MappingJackson2HttpMessageConverter(JSON));
+    }
   }
 
   @Test

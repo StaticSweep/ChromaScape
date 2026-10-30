@@ -2,6 +2,12 @@
 
 ## 30 October execution status
 
+Subsequent continuation: actual loopback HTTP coverage now passes; the combined lane
+is 175/175 with zero skips. TrumpSniper was launched at the owner's request, but source
+mode is disabled and the owner confirmed a genuine recording still has to be made.
+See [socket evidence](sc274-socket-verification-20261030.md) and the
+[capture checklist](sc274-capture-checklist-20261030.md). SC-274 remains open.
+
 SC-276 completed under the owner's explicitly adopted contract-only scope; see
 [its closure evidence](sc276-adopted-contract-closure-20261030.md). SC-274 was not amended.
 SC-274 now has 171 fresh passing compiler/import/PostgreSQL/MVC/role/security checks and
