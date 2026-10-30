@@ -74,6 +74,11 @@ Named coverage for the nine narrowed SC-276 criteria:
 | Upgrade incompatibility keeps the last pin | `replay output from another source, content, cache or closure identity never qualifies`; `the reviewed digests pinned in revision 1 match ... this worker runs` |
 | No OpenRune dependency | `runtime-identity.test.ts` asserts `openRuneAvailable === false`; `build-identity-validator.test.ts` rejects `openRuneAvailable=true` |
 
+`server/tests/replay-package.test.ts` also passes on the same commit (1/1): the replay package
+is byte-identical across builds and has a valid, ordered USTAR layout. That is same-host byte
+identity, so it does not discharge SC-274 criterion 1 (which the narrowed text requires from
+two independent clean directories).
+
 The "no socket, port, browser, database or credential" criterion is covered by the
 `module-guard` and `read-guard` qualification components (both PASSED) plus the offline worker
 bootstrap boundary suite. That is not an OS-level network-deny measurement; the OS-level
