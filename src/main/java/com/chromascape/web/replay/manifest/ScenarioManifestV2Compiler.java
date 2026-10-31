@@ -625,6 +625,12 @@ public class ScenarioManifestV2Compiler {
     action.put("provenance", converted.provenance().name());
     action.put("provenanceReason", converted.provenanceReason());
     ObjectNode evidence = action.putObject("sourceEvidence");
+    if ("MICRO6_CLIENT_OBSERVATION".equals(source.getSource())
+        && source.getArguments().containsKey("observationEvidence")) {
+      evidence.set(
+          "clientObservation",
+          objectMapper.valueToTree(source.getArguments().get("observationEvidence")));
+    }
     if (converted.sourceLogId() != null) evidence.put("logId", converted.sourceLogId());
     if (converted.sourceSnapshotId() != null)
       evidence.put("snapshotId", converted.sourceSnapshotId());

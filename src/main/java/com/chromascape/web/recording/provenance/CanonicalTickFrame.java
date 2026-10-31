@@ -163,6 +163,8 @@ public final class CanonicalTickFrame {
     // Prove sensitive raw fields have already been excluded at the producer boundary.
     if (input.has("chat") || input.has("players") && !input.path("players").isEmpty())
       fail("UNREDACTED_CAPTURE");
+    if (HumanFishingFrameContract.applies(input))
+      HumanFishingFrameContract.validate(input, context);
     copy.put("contentHash", digest);
     return new CanonicalTickFrame(copy);
   }

@@ -3,8 +3,8 @@ package com.chromascape.web.recording.provenance;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
-import org.thymeleaf.spring6.SpringTemplateEngine;
 import org.thymeleaf.context.Context;
+import org.thymeleaf.spring6.SpringTemplateEngine;
 import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 
 class ReplayTemplateRenderingTest {
@@ -13,6 +13,7 @@ class ReplayTemplateRenderingTest {
     var resolver = new ClassLoaderTemplateResolver();
     resolver.setPrefix("templates/");
     resolver.setSuffix(".html");
+    resolver.setCharacterEncoding(java.nio.charset.StandardCharsets.UTF_8.name());
     var engine = new SpringTemplateEngine();
     engine.setTemplateResolver(resolver);
     var html = engine.process("replay", new Context());

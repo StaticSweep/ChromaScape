@@ -73,7 +73,9 @@ class ProvenancePostgresTest {
   @BeforeEach
   void setup() {
     jdbc.execute(
-        "TRUNCATE recording_tick_frames,recording_capture_quality,recording_provenance_audit,debug_sessions,recording_sessions,tick_snapshots,tick_logs RESTART IDENTITY CASCADE");
+        "TRUNCATE"
+            + " recording_tick_frames,recording_capture_quality,recording_provenance_audit,debug_sessions,recording_sessions,tick_snapshots,tick_logs"
+            + " RESTART IDENTITY CASCADE");
     profiles = new CatalogStore(jdbc, JSON, new DataSourceTransactionManager(source));
     recordings = mock(RecordingSessionRepository.class);
     sessions = mock(DebugSessionRepository.class);
@@ -113,7 +115,9 @@ class ProvenancePostgresTest {
             inv -> {
               RecordingSession row = inv.getArgument(0);
               jdbc.update(
-                  "UPDATE recording_sessions SET task_key=?,task_args=?::jsonb,settings_hash=?,run_context=?::jsonb,provenance_origin=? WHERE recording_id=?",
+                  "UPDATE recording_sessions SET"
+                      + " task_key=?,task_args=?::jsonb,settings_hash=?,run_context=?::jsonb,provenance_origin=?"
+                      + " WHERE recording_id=?",
                   row.getTaskKey(),
                   row.getTaskArgs() == null ? null : row.getTaskArgs().toString(),
                   row.getSettingsHash(),
@@ -136,7 +140,9 @@ class ProvenancePostgresTest {
 
   void row(String id, String account, String task, String args) {
     jdbc.update(
-        "INSERT INTO recording_sessions(recording_id,account_name,script_name,start_time,trigger_type,task_key,task_args,settings_hash) VALUES(?,?,?,?,'MANUAL',?,?::jsonb,?)",
+        "INSERT INTO"
+            + " recording_sessions(recording_id,account_name,script_name,start_time,trigger_type,task_key,task_args,settings_hash)"
+            + " VALUES(?,?,?,?,'MANUAL',?,?::jsonb,?)",
         id,
         account,
         "capture-script",
@@ -202,9 +208,13 @@ class ProvenancePostgresTest {
       assertTrue(first.entries().get(0).getTaskArgs().isObject());
       assertNull(pager.page("A", null, 200, null).entries().get(0).getTaskArgs());
       jdbc.update(
-          "INSERT INTO debug_sessions(session_id,account_name,script_name,start_time,start_tick,created_at,recording_id) VALUES('debug-wrong','WRONG','WRONG',now(),0,now(),'a1')");
+          "INSERT INTO"
+              + " debug_sessions(session_id,account_name,script_name,start_time,start_tick,created_at,recording_id)"
+              + " VALUES('debug-wrong','WRONG','WRONG',now(),0,now(),'a1')");
       jdbc.update(
-          "INSERT INTO debug_sessions(session_id,account_name,script_name,start_time,start_tick,created_at,recording_id) VALUES('debug-new','WRONG','WRONG',now(),0,now(),'a1')");
+          "INSERT INTO"
+              + " debug_sessions(session_id,account_name,script_name,start_time,start_tick,created_at,recording_id)"
+              + " VALUES('debug-new','WRONG','WRONG',now(),0,now(),'a1')");
       var repo = new ReplayPlaybackCatalogRepository();
       ReflectionTestUtils.setField(repo, "entityManager", em);
       var rows = repo.findCatalogRows("A", "FISHING_TRAINING", null, null, 201, 0);
@@ -230,7 +240,8 @@ class ProvenancePostgresTest {
             "capture",
             "00000000-0000-4000-8000-000000000001");
     jdbc.update(
-        "UPDATE recording_sessions SET run_context=?::jsonb,provenance_origin='CAPTURED' WHERE recording_id='capture'",
+        "UPDATE recording_sessions SET run_context=?::jsonb,provenance_origin='CAPTURED' WHERE"
+            + " recording_id='capture'",
         frozen.toString());
     assertEquals(frozen, contexts.context("capture"));
     var newerDetail =
@@ -256,7 +267,9 @@ class ProvenancePostgresTest {
         org.springframework.dao.DataAccessException.class,
         () ->
             jdbc.update(
-                "UPDATE recording_sessions SET account_name='later',task_args='{\"fish\":\"later\"}' WHERE recording_id='capture'"));
+                "UPDATE recording_sessions SET"
+                    + " account_name='later',task_args='{\"fish\":\"later\"}' WHERE"
+                    + " recording_id='capture'"));
     assertThrows(
         ProvenanceException.class,
         () ->
@@ -403,8 +416,115 @@ class ProvenancePostgresTest {
     assertEquals(
         4,
         jdbc.queryForObject(
-            "SELECT count(*) FROM pg_indexes WHERE schemaname='ai_player_dev' AND indexname LIKE 'idx_recording_catalog_%'",
+            "SELECT count(*) FROM pg_indexes WHERE schemaname='ai_player_dev' AND indexname LIKE"
+                + " 'idx_recording_catalog_%'",
             Integer.class));
+  }
+
+  @Test
+  void authoredHumanObserverRoundTripRetainsFrameEvidenceAndRestartIdentity() throws Exception {
+    JsonNode fixture = HumanFishingFrameContractTest.fixture();
+    String recording = "authored-human-observer";
+    row(recording, "capture-account", "FISHING_TRAINING", "{\"targetFish\":\"TROUT\"}");
+    ObjectNode context = fixture.path("context").deepCopy();
+    context.put("recordingId", recording);
+    context.put("settingsHash", Micro6CanonicalHash.sha256WithPrefix(context.path("settings")));
+    context.put("contextHash", Micro6CanonicalHash.sha256WithPrefix(context));
+    jdbc.update(
+        "UPDATE recording_sessions SET run_context=?::jsonb WHERE recording_id=?",
+        context.toString(),
+        recording);
+    finalized(recording, context.path("debugSessionId").asText());
+    var session = sessions.findByRecordingId(recording).orElseThrow();
+    session.setEndTick(3L);
+    when(sessions.findBySessionId(session.getSessionId())).thenReturn(Optional.of(session));
+    var tx = new TransactionTemplate(new DataSourceTransactionManager(source));
+    for (var input : fixture.path("frames")) {
+      ObjectNode frame = input.deepCopy();
+      frame.set("runContext", context);
+      CanonicalTickFrameTest.hash(frame);
+      assertTrue(tx.execute(status -> frames.accept(recording, frame)).newFrame());
+      assertFalse(tx.execute(status -> frames.accept(recording, frame)).newFrame());
+    }
+    tx.executeWithoutResult(status -> frames.close(session.getSessionId(), "EXPLICIT_STOP"));
+    assertEquals(true, contexts.eligibility(recording).get("eligible"));
+    var reader =
+        new com.chromascape.web.replay.conversion.HumanFishingActionReader(
+            sessions,
+            contexts,
+            frames,
+            JSON,
+            new com.chromascape.web.replay.projection.CanonicalProjectionService());
+    var first =
+        reader
+            .convert(
+                session.getSessionId(),
+                1,
+                3,
+                com.chromascape.web.replay.conversion.ConversionMode.CAPTURED_ONLY)
+            .orElseThrow();
+    var restarted =
+        new com.chromascape.web.replay.conversion.HumanFishingActionReader(
+            sessions,
+            contexts,
+            new CanonicalFrameStore(jdbc, contexts, JSON),
+            JSON,
+            new com.chromascape.web.replay.projection.CanonicalProjectionService());
+    var second =
+        restarted
+            .convert(
+                session.getSessionId(),
+                1,
+                3,
+                com.chromascape.web.replay.conversion.ConversionMode.CAPTURED_ONLY)
+            .orElseThrow();
+    assertEquals(first.conversionChecksum(), second.conversionChecksum());
+    assertEquals(1, first.actions().size());
+    assertEquals("MICRO6_CLIENT_OBSERVATION", first.actions().get(0).action().getSource());
+    assertEquals(3, frames.page(recording, java.math.BigInteger.ZERO, 200).size());
+  }
+
+  @Test
+  void humanCounterInflationIsRefusedWithoutAddingAFrameAndEarlyCloseIsIncomplete()
+      throws Exception {
+    JsonNode fixture = HumanFishingFrameContractTest.fixture();
+    row(
+        "authored-human-negative",
+        "capture-account",
+        "FISHING_TRAINING",
+        "{\"targetFish\":\"TROUT\"}");
+    JsonNode context = fixture.path("context");
+    jdbc.update(
+        "UPDATE recording_sessions SET run_context=?::jsonb WHERE recording_id=?",
+        context.toString(),
+        "authored-human-negative");
+    var tx = new TransactionTemplate(new DataSourceTransactionManager(source));
+    assertTrue(
+        tx.execute(
+                status -> frames.accept("authored-human-negative", fixture.path("frames").get(0)))
+            .newFrame());
+    ObjectNode inflated = fixture.path("frames").get(1).deepCopy();
+    ((ObjectNode) inflated.path("humanCapture"))
+        .put("observedCallbacks", 2)
+        .put("acceptedIntents", 2);
+    CanonicalTickFrameTest.hash(inflated);
+    assertEquals(
+        "HUMAN_COVERAGE_COUNTER_MISMATCH",
+        assertThrows(
+                ProvenanceException.class,
+                () -> tx.execute(status -> frames.accept("authored-human-negative", inflated)))
+            .getCode());
+    assertEquals(1, frames.page("authored-human-negative", java.math.BigInteger.ZERO, 200).size());
+    tx.executeWithoutResult(
+        status -> frames.close(context.path("debugSessionId").asText(), "EXPLICIT_STOP"));
+    JsonNode quality =
+        parse(
+            jdbc.queryForObject(
+                "SELECT quality::text FROM recording_capture_quality WHERE session_id=?",
+                String.class,
+                context.path("debugSessionId").asText()));
+    assertEquals(1, quality.path("unknown").asInt());
+    assertThrows(ProvenanceException.class, () -> CanonicalTickFrame.requireComplete(quality));
   }
 
   @Test
@@ -459,12 +579,14 @@ class ProvenancePostgresTest {
     assertEquals(
         4,
         jdbc.queryForObject(
-            "SELECT count(*) FROM pg_indexes WHERE schemaname='ai_player_dev' AND indexname LIKE 'idx_recording_catalog_%'",
+            "SELECT count(*) FROM pg_indexes WHERE schemaname='ai_player_dev' AND indexname LIKE"
+                + " 'idx_recording_catalog_%'",
             Integer.class));
     assertEquals(
         "jsonb",
         jdbc.queryForObject(
-            "SELECT data_type FROM information_schema.columns WHERE table_schema='ai_player_dev' AND table_name='recording_sessions' AND column_name='task_args'",
+            "SELECT data_type FROM information_schema.columns WHERE table_schema='ai_player_dev'"
+                + " AND table_name='recording_sessions' AND column_name='task_args'",
             String.class));
   }
 }

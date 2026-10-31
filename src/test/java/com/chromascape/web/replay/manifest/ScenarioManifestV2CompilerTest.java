@@ -121,6 +121,32 @@ class ScenarioManifestV2CompilerTest {
   }
 
   @Test
+  void manualObservationFrameEvidenceSurvivesKernelMappingWithoutDispatchRelabeling() {
+    var source = npcAction("npc:1526:3100:3430:0", "Lure", 0);
+    source.setSource("MICRO6_CLIENT_OBSERVATION");
+    var evidence =
+        Map.of(
+            "frameDigest",
+            "a".repeat(64),
+            "frameSequence",
+            "2",
+            "beforeFrameDigest",
+            "b".repeat(64),
+            "beforeFrameSequence",
+            "1",
+            "eventId",
+            "00000000-0000-4000-8000-000000000001");
+    source.setArguments(Map.of("option", "Lure", "observationEvidence", evidence));
+    var action = compiler().toKernelAction(conversion(source).actions().get(0));
+    assertThat(action.path("sourceEvidence").path("clientObservation"))
+        .isEqualTo(objectMapper.valueToTree(evidence));
+    assertThat(action.path("type").asText()).isEqualTo("INTERACT_NPC");
+    assertThat(action.path("option").asText()).isEqualTo("Lure");
+    assertThat(action.has("inputs")).isFalse();
+    assertThat(source.getSource()).isEqualTo("MICRO6_CLIENT_OBSERVATION");
+  }
+
+  @Test
   void exactNativeItemAndWidgetInputsSurviveCompilerMapping() throws Exception {
     ArrayNode exported = objectMapper.createArrayNode();
     for (var fixture :

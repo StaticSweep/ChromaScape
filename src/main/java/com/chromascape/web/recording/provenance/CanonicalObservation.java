@@ -62,7 +62,13 @@ public final class CanonicalObservation {
         if (player.has(key)) value = player.get(key);
         else if (key.equals("x")) value = player.path("worldX");
         else if (key.equals("y")) value = player.path("worldY");
+        else if (key.equals("moving")) value = player.path("isMoving");
+        else if (key.equals("idle")) value = player.path("isIdle");
         if (value.isMissingNode()) value = JSON.nullNode();
+        if ((key.equals("moving") || key.equals("idle")) && !value.isBoolean())
+          value = JSON.nullNode();
+        if (!(key.equals("moving") || key.equals("idle")) && !value.isIntegralNumber())
+          value = JSON.nullNode();
       } else if (id.startsWith("inventory.")) {
         // Derived inventory aggregates must be supplied from the frozen frame or remain unknown.
         value = input.path("semanticSnapshot").path("inventory").path(id.substring(10));
@@ -87,11 +93,20 @@ public final class CanonicalObservation {
     boolean suppliesKnown = input.path("semanticSnapshot").path("requiredSupplies").isBoolean();
     for (String id : BehaviorSemanticContract.actionIds())
       mask.add(
-          id.equals("WAIT")
-              || targetKnown
-                  && suppliesKnown
-                  && input.path("semanticSnapshot").path("visibleTarget").asBoolean()
-                  && input.path("semanticSnapshot").path("requiredSupplies").asBoolean());
+          HumanFishingFrameContract.applies(input)
+              ? explicitHumanLegal(input.path("semanticSnapshot").path("legalActionIds"), id)
+              : id.equals("WAIT")
+                  || targetKnown
+                      && suppliesKnown
+                      && input.path("semanticSnapshot").path("visibleTarget").asBoolean()
+                      && input.path("semanticSnapshot").path("requiredSupplies").asBoolean());
     return new CanonicalObservation(out, vector);
+  }
+
+  private static boolean explicitHumanLegal(JsonNode ids, String id) {
+    if (!ids.isArray()) throw new ProvenanceException("HUMAN_LEGAL_MASK_MISSING");
+    for (JsonNode allowed : ids)
+      if (allowed.isTextual() && id.equals(allowed.asText())) return true;
+    return false;
   }
 }
