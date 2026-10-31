@@ -258,6 +258,52 @@ class MouseVideoJobServiceTest {
   }
 
   @Test
+  void ownerReconciliationSettlesAFencedJobAsFailedWithTheProof() {
+    MouseVideoJob running = runningJob();
+    UUID jobId = running.getId();
+    running.reconciliationRequired(MouseVideoException.CODE_INTERRUPTED, "lease expired");
+    when(jobs.findForUpdate(jobId)).thenReturn(Optional.of(running));
+
+    MouseVideoJob settled =
+        service.resolveReconciliation(jobId, "owner", java.util.Map.of("activeScopes", 0));
+
+    assertThat(settled.getStatus()).isEqualTo(MouseVideoJob.STATUS_FAILED);
+    assertThat(settled.getErrorCode()).isEqualTo(MouseVideoException.CODE_INTERRUPTED);
+    assertThat(settled.isTerminal()).isTrue();
+    verify(events)
+        .save(
+            org.mockito.ArgumentMatchers.argThat(
+                event -> "RECONCILED".equals(event.getEventType())));
+  }
+
+  @Test
+  void ownerReconciliationRefusesAJobThatDoesNotNeedIt() {
+    MouseVideoJob running = runningJob();
+    when(jobs.findForUpdate(running.getId())).thenReturn(Optional.of(running));
+
+    assertThatThrownBy(
+            () -> service.resolveReconciliation(running.getId(), "owner", java.util.Map.of()))
+        .isInstanceOf(MouseVideoException.class)
+        .extracting(error -> ((MouseVideoException) error).getCode())
+        .isEqualTo(MouseVideoException.CODE_CONFLICT);
+    assertThat(running.getStatus()).isEqualTo(MouseVideoJob.STATUS_RUNNING);
+  }
+
+  @Test
+  void ownerReconciliationIsOwnerScoped() {
+    MouseVideoJob running = runningJob();
+    running.reconciliationRequired(MouseVideoException.CODE_INTERRUPTED, "lease expired");
+    when(jobs.findForUpdate(running.getId())).thenReturn(Optional.of(running));
+
+    assertThatThrownBy(
+            () -> service.resolveReconciliation(running.getId(), "intruder", java.util.Map.of()))
+        .isInstanceOf(MouseVideoException.class)
+        .extracting(error -> ((MouseVideoException) error).getCode())
+        .isEqualTo(MouseVideoException.CODE_NOT_FOUND);
+    assertThat(running.getStatus()).isEqualTo(MouseVideoJob.STATUS_NEEDS_RECONCILIATION);
+  }
+
+  @Test
   void cancellingJobWithClearedLeaseIsNotFencedByTheExpiryPoller() {
     UUID runningId = UUID.randomUUID();
     MouseVideoJob cancelling = runningJob();

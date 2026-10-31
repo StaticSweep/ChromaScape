@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -27,6 +28,7 @@ import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoImportServ
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoJobService;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoObservationsService;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoPreviewService;
+import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoReconciliationService;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoRequestGuard;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoRestrictedLauncher;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoReviewService;
@@ -71,6 +73,7 @@ class MouseVideoControllerHttpTest {
   private MouseVideoReviewService reviewService;
   private MouseVideoSchedulingService schedulingService;
   private MouseVideoPreviewService previewService;
+  private MouseVideoReconciliationService reconciliation;
 
   @BeforeEach
   void setUp() throws Exception {
@@ -84,6 +87,7 @@ class MouseVideoControllerHttpTest {
     reviewService = mock(MouseVideoReviewService.class);
     schedulingService = mock(MouseVideoSchedulingService.class);
     previewService = mock(MouseVideoPreviewService.class);
+    reconciliation = mock(MouseVideoReconciliationService.class);
     when(imports.stagingRoot()).thenReturn(root);
     when(imports.reserve(any(), anyString(), anyLong()))
         .thenReturn(
@@ -106,6 +110,7 @@ class MouseVideoControllerHttpTest {
             new MouseVideoTelemetry(),
             workerRegistry,
             mock(MouseVideoReviewSessionService.class),
+            reconciliation,
             new ObjectMapper());
     mvc = MockMvcBuilders.standaloneSetup(controller).build();
   }
@@ -186,6 +191,33 @@ class MouseVideoControllerHttpTest {
         .andExpect(content().bytes(new byte[] {1, 2, 3, 4}));
 
     verify(previewService).media("owner", previewId);
+  }
+
+  @Test
+  void reconcileSettlesAProvenJob() throws Exception {
+    UUID jobId = UUID.randomUUID();
+    when(reconciliation.reconcile(jobId, "owner")).thenReturn(mock(MouseVideoJob.class));
+    when(jobService.view(any())).thenReturn(jobView(jobId, "FAILED"));
+
+    mvc.perform(
+            post("/api/debug/mouse-videos/jobs/{jobId}/reconcile", jobId).principal(() -> "owner"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("FAILED"));
+  }
+
+  @Test
+  void reconcileWithoutProvenCleanupIsAConflict() throws Exception {
+    UUID jobId = UUID.randomUUID();
+    when(reconciliation.reconcile(jobId, "owner"))
+        .thenThrow(
+            new MouseVideoException(
+                MouseVideoException.CODE_CONFLICT,
+                "Cleanup is not proven: A workspace of this job is still mounted"));
+
+    mvc.perform(
+            post("/api/debug/mouse-videos/jobs/{jobId}/reconcile", jobId).principal(() -> "owner"))
+        .andExpect(status().isConflict());
+    verify(jobService, never()).view(any());
   }
 
   @Test

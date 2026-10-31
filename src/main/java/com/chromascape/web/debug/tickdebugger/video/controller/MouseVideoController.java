@@ -13,6 +13,7 @@ import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoImportServ
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoJobService;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoObservationsService;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoPreviewService;
+import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoReconciliationService;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoRequestGuard;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoRestrictedLauncher;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoReviewService;
@@ -78,6 +79,7 @@ public class MouseVideoController {
   private final MouseVideoTelemetry telemetry;
   private final MouseVideoWorkerRegistry workerRegistry;
   private final MouseVideoReviewSessionService reviewSessions;
+  private final MouseVideoReconciliationService reconciliation;
   private final ObjectMapper mapper;
 
   /**
@@ -106,6 +108,7 @@ public class MouseVideoController {
       MouseVideoTelemetry telemetry,
       MouseVideoWorkerRegistry workerRegistry,
       MouseVideoReviewSessionService reviewSessions,
+      MouseVideoReconciliationService reconciliation,
       ObjectMapper mapper) {
     this.access = access;
     this.imports = imports;
@@ -123,6 +126,7 @@ public class MouseVideoController {
     this.telemetry = telemetry;
     this.workerRegistry = workerRegistry;
     this.reviewSessions = reviewSessions;
+    this.reconciliation = reconciliation;
     this.mapper = mapper;
   }
 
@@ -402,6 +406,18 @@ public class MouseVideoController {
     HttpStatus status =
         "CANCELLED".equals(cancelled.status()) ? HttpStatus.OK : HttpStatus.ACCEPTED;
     return ResponseEntity.status(status).body(toMap(cancelled));
+  }
+
+  /**
+   * Settles the owner's NEEDS_RECONCILIATION job once cleanup is proven (no worker, no mounted
+   * workspace, no unattributed video scope). Otherwise 409 with the blocker; nothing changes.
+   */
+  @PostMapping("/jobs/{jobId}/reconcile")
+  public Map<String, Object> reconcile(
+      @PathVariable String jobId, HttpServletRequest request, Principal principal) {
+    MouseVideoAccess.Actor actor = access.require(principal);
+    guard.requireWrite(request, actor);
+    return toMap(jobService.view(reconciliation.reconcile(parseId(jobId), actor.owner())));
   }
 
   @GetMapping("/sources/{sourceId}/exports")

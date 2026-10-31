@@ -245,11 +245,15 @@ output limits, hard job storage, network/secret denial, descendant termination, 
   analysing for ~12 min and held its job volume (`fuse2fs`) until it reached publication, where
   the fence correctly refused it. `MouseVideoVisualAnalyzer` now checks the job's cancellation
   before every sample of each full pass.
-- **Open:** no operator path resolves `NEEDS_RECONCILIATION`. The row keeps an admission slot
+- **Done (was open):** no operator path resolved `NEEDS_RECONCILIATION`. The row keeps an admission slot
   forever; `reconcileExpiredClaims`/`reconcileOnStartup` only create such rows. W13 needs an
   owner-scoped "confirm cleanup" action that first proves the scope and volume are gone, then
   settles the row as failed/interrupted, with an event and an audit trail. Affected row on the
   library instance: job `6e505115` (Langsamt s1); the section was re-analysed under a new job.
+  Implemented as `POST /jobs/{id}/reconcile` (`MouseVideoReconciliationService` +
+  `MouseVideoCleanupProof`): refuses with 409 unless no worker, no mounted workspace of any
+  generation and no unattributed `chromascape-video-*` scope exist and scope state is readable;
+  then FAILED (error code kept) with a `RECONCILED` event carrying the proof.
 
 ### W13 — Telemetry, readiness, rollback (F10)
 

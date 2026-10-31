@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
@@ -355,6 +356,18 @@ public class MouseVideoProcessRunner {
     }
   }
 
+  /**
+   * Scope units this JVM has started and not yet closed. Any other active {@code
+   * chromascape-video-*} scope is unattributed (an earlier process, another instance, or a close
+   * that left it behind), so cleanup cannot be proven while one exists.
+   */
+  private static final Set<String> HELD_SCOPES = ConcurrentHashMap.newKeySet();
+
+  /** Snapshot of the scope units held by live executions in this JVM. */
+  static Set<String> heldScopeUnits() {
+    return Set.copyOf(HELD_SCOPES);
+  }
+
   /** Transient per-execution systemd scope backed by a cgroup that survives the root process. */
   private static final class SystemdScopeContainment implements Containment {
 
@@ -419,6 +432,7 @@ public class MouseVideoProcessRunner {
       wrapped.add("--collect");
       wrapped.add("--expand-environment=no");
       wrapped.add("--unit=" + unit);
+      HELD_SCOPES.add(unit + ".scope");
       if (properties != null) {
         // The budget is a total memory ceiling, not merely a resident-set ceiling. Without a swap
         // limit the kernel reclaims anon pages to swap and the child survives an allocation that
@@ -545,6 +559,9 @@ public class MouseVideoProcessRunner {
       // Stop is asynchronous for a unit that is still deactivating. Give the scope a bounded
       // moment to reach a terminal state so the runner's final emptiness check does not race it.
       waitEmpty(FORCE_MILLIS);
+      // Released whether or not it emptied: a scope left behind is then unattributed, which is
+      // exactly what blocks a cleanup proof.
+      HELD_SCOPES.remove(unit + ".scope");
     }
 
     private static String unitName() {

@@ -292,6 +292,30 @@ public class MouseVideoJobService {
   }
 
   /**
+   * Settles a NEEDS_RECONCILIATION job once its owner proved cleanup ({@link
+   * MouseVideoCleanupProof}): the job becomes FAILED, keeping its error code, and a RECONCILED
+   * event records the proof. Any other state is a conflict, so a job that moved on is untouched.
+   */
+  @Transactional
+  public MouseVideoJob resolveReconciliation(
+      UUID jobId, String owner, Map<String, Object> proofEvidence) {
+    MouseVideoJob job = lockFreshForOwner(jobId, owner);
+    if (!MouseVideoJob.STATUS_NEEDS_RECONCILIATION.equals(job.getStatus())) {
+      throw new MouseVideoException(
+          MouseVideoException.CODE_CONFLICT, "Job does not need reconciliation");
+    }
+    String code =
+        job.getErrorCode() == null ? MouseVideoException.CODE_INTERRUPTED : job.getErrorCode();
+    job.fail(code, "Reconciled by its owner after cleanup was proven");
+    settleBoundPreview(job);
+    Map<String, Object> metadata = new LinkedHashMap<>();
+    metadata.put("code", code);
+    metadata.put("proof", proofEvidence);
+    record(job, "RECONCILED", metadata);
+    return jobs.save(job);
+  }
+
+  /**
    * Records uncertain cleanup only for the reporting execution, under the job row lock. User
    * cancellation preserves that execution's lease while advancing generation and cancellation
    * revision together; a replacement claim advances generation independently and is never changed.
