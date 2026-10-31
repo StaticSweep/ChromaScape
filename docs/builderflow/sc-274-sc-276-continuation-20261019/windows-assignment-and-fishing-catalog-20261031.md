@@ -188,10 +188,11 @@ The bridge must be recreated if its owned registry network namespace or expected
 identity changes. Stop only this labelled bridge during rollback; no volumes are mounted
 into it and no fences are reset.
 
-The evidence scan found two matches for the existing compiled legacy development registry
-default in a class/resource. They are not newly generated experiment credentials. The
-serving launch environment is ACL-protected; no signing private key is in the client.
-Do not claim a workspace-wide secret-free result from this scoped scan.
+The evidence scan found two matches for an 11-character legacy registry value in existing
+compiled/tracked class and configuration bytes. No other scanned owned-purpose credential
+matched. That legacy value was not rotated. The serving launch environment is ACL-protected;
+no signing private key is in the client. This is a scoped scan, not a workspace-wide
+secret-free or legacy-credential audit result.
 
 The finished capture client was brought forward with Computer Use. It is still at the
 login screen. The user must log into TrumpSniper there; no authentication was automated.
