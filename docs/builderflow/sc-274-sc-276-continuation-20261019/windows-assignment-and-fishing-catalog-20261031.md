@@ -150,3 +150,53 @@ server-issued recorder connection selector over authenticated health, obtain the
 actual logged-in account observation, issue the bounded DEV grant, save the real profile,
 then start a context-bound HUMAN recording before the user fishes. No raw gameplay input
 is dispatched by the setup. The original provider-origin prerequisite remains open.
+
+## Live deployment and handoff verification
+
+The tested ChromaScape candidate is deployed as Windows PID 189168 on `0.0.0.0:8090`,
+using an immutable copy of the compiled classes/resources under the evidence directory.
+The owned capture database remains `sc274_capture`, Hibernate validate, replay worker off,
+automatic recording off. Original TrumpSniper PID 94796 remains alive and was not stopped.
+The helper's process/stream completion was not used as deployment proof: the live PID,
+HTTP protocol behavior and authenticated source observations are the evidence.
+
+Final live setup checks: **15/15**. Local and LAN debugger return 200. Missing/wrong
+executor credentials return 401. The authenticated executor reports the exact allocated
+instance, authoritative source, ready recorder and remote gameplay disabled. Its actual
+WebSocket selector is `5119a542-dd07-25d5-5e09-118453fe7886`. An unknown recorder selector
+returns 503 RECORDER_UNAVAILABLE before capture; recording inventory is unchanged and
+recording remains stopped. Discovery contains the actual executor exactly once, with its
+matching catalog hash. Before login it is correctly unselectable: ENDPOINT_GRANT_MISSING.
+The older authored registry fixture remains stale; it is not the selected capture runtime.
+
+Container-to-Windows catalog routing was qualified separately. Mule proxies catalog reads
+from Linux, so its own loopback cannot directly address the Windows process. The existing
+Docker Desktop host gateway does reach the Windows loopback listener. An owned read-only
+bridge now listens only on `127.0.0.1:8180` inside the owned Mule network namespace and
+forwards GET `/health` and `/api/v1/catalog` to fixed `192.168.65.254:8180`. It publishes
+no Windows ports, runs non-root/read-only with dropped capabilities and bounded CPU,
+memory/PIDs. It supplies the owned executor credential only on that fixed local hop;
+public registry authorization is unchanged. The actual executor and artifact are checked
+on every response. Other routes/methods/queries, redirects, wrong credentials and changed
+upstream identity are refused. Three Go test functions (including six route/method/query
+subcases) pass. Real health and full-catalog reads from Mule's namespace both return the
+exact expected instance/artifact. No shared registry restart or broad runtime bind occurred.
+
+Bridge container: `sc274-registry-windows-catalog-20261031`, image
+`sha256:18e23f7f3a9275e289ba96c262e3b40ca210f47257365dbe510b920f83fb31a0`.
+The bridge must be recreated if its owned registry network namespace or expected runtime
+identity changes. Stop only this labelled bridge during rollback; no volumes are mounted
+into it and no fences are reset.
+
+The evidence scan found two matches for the existing compiled legacy development registry
+default in a class/resource. They are not newly generated experiment credentials. The
+serving launch environment is ACL-protected; no signing private key is in the client.
+Do not claim a workspace-wide secret-free result from this scoped scan.
+
+The finished capture client was brought forward with Computer Use. It is still at the
+login screen. The user must log into TrumpSniper there; no authentication was automated.
+After actual account verification, the bounded supervisor can issue the DEV endpoint grant.
+Full authenticated registry catalog selection, saved profile, context-bound capture,
+published curation and genuine compilation remain pending that handoff. A HUMAN capture
+does not discharge SC-1498's provider-origin requirement. No acceptance row, Felix task or
+Shortcut story was marked complete, and these local commits have not been pushed.
