@@ -54,7 +54,11 @@ The production `HumanFishingActionReader` was run in two fresh JVMs over the rea
 - Canonical output digest: `sha256:9e030b18827f40010762f8187c7142713ac4c3e9b644200f764eb4598a3ee329`.
 - Source is `MICRO6_CLIENT_OBSERVATION`, not a bot dispatch. The older failed attempt still returns `CAPTURE_INCOMPLETE` in both JVMs.
 
-This proves captured conversion determinism, **not a generated runnable manifest or native fidelity**. Live capabilities still report causal simulation false, certifiable false, fidelity SYNTHETIC_CONTRACT. The first two selected-curation preflights returned HTTP 500 because a caught expected compiler refusal poisoned the surrounding transaction. The new narrowly scoped transaction fix and its real PostgreSQL/Spring regression tests pass; live replacement/recheck results must be recorded separately after they actually run.
+This proves captured conversion determinism, **not a generated runnable manifest or native fidelity**. Live capabilities still report causal simulation false, certifiable false, fidelity SYNTHETIC_CONTRACT. The first two selected-curation preflights returned HTTP 500 because a caught expected compiler refusal poisoned the surrounding transaction.
+
+The narrowly scoped fix is committed in `b29c7d5fcd1367ba3b50c7248db6d40d5d0d0019` and is now live in owned Windows service PID 159760. Only that service was restarted; the logged-in source client PID 16048 was preserved. All 11 post-restart checks passed. Two live preflight calls now return HTTP **200**, state **BLOCKED**, playback eligible, simulation/certification false, with causal blocker **XRSPS_CAPABILITY_UNAVAILABLE**. The separate POLICY_REPLAY refusal is the existing v1 unsupported-mode declaration. No capability/qualification gate was changed and no full scenario manifest was published.
+
+Post-restart checks independently confirm the first canonical frame and complete media hash are unchanged, the published held-out curation checksum is unchanged, the genuine capture remains eligible, and old incomplete captures are not promoted. The rejected first attempt is still readable with `training=false` and refuses `training=true` with HTTP 400 `CAPTURE_INCOMPLETE`. Replay configuration remains `enabled=true, worker=false`. All owned disposable test databases were removed after ownership checks.
 
 ## Tests
 
@@ -64,15 +68,16 @@ This proves captured conversion determinism, **not a generated runnable manifest
 - Live exact-artifact source verification: signature and all 34 files, real verifier 15/15; readiness 14/14; owned bridge 2/2.
 - Final capture: 20/20 explicit checks; all 4,060 video frames decoded and matched the measured physical index.
 - Real stored production conversion: two fresh JVMs, identical bytes/checksum, read-only database, no authored fixtures.
+- Post-restart/live error-path verification: 11/11; two HTTP-200 truthful blocked previews; playback-versus-training refusal distinction retained.
+- Public uncompressed evidence text scan: 198 files / 3,498,273 bytes compared against seven protected credential types, no matches (a scoped text check, not a binary/security certification).
 
 No full repository/native/JS/Watch certification suite or power-loss test was run in this increment. Earlier rejected captures are preserved and remain ineligible; the first too-short window and later inventory/movement inputs are not hidden or retroactively upgraded.
 
 ## Remaining work
 
-1. Finish live verification of the structured preflight transaction fix; the expected outcome is a truthful simulator blocker, not a simulated pass.
-2. Provide a supported, qualified runtime on the appropriate target (Windows service currently has no causal capability; Linux safety/qualification remains SC-2201). Only then generate the full manifest twice from this published curation, compare bytes/checksum, run bounded native import and assess world/cache/source gaps.
-3. Independently satisfy original provider-origin first input, bank/travel/world and privacy/role acceptance where still missing. This user-operated HUMAN recording does not substitute for those requirements or independently qualify game fidelity.
-4. Reconcile every original SC-274 acceptance row and workflow gates. No Done transition is justified by this capture alone.
+1. Provide a supported, qualified runtime on the appropriate target (Windows service currently has no causal capability; Linux safety/qualification remains SC-2201). Only then generate the full manifest twice from this published curation, compare bytes/checksum, run bounded native import and assess world/cache/source gaps.
+2. Independently satisfy original provider-origin first input, bank/travel/world and privacy/role acceptance where still missing. This user-operated HUMAN recording does not substitute for those requirements or independently qualify game fidelity.
+3. Reconcile every original SC-274 acceptance row and workflow gates. No Done transition is justified by this capture alone. The live transaction error-path fix is complete, not a remaining blocker.
 
 ## Risks
 
@@ -86,4 +91,10 @@ Keep all finalized recordings, private raw evidence, signed bundles, checksums, 
 
 Evidence root: `C:\Dev\IdeaProjects\verification\sc274-sc276-continuation-20261031\human-fishing-coverage`; final records under `delay-correction`, transaction follow-up under `preflight-transaction-fix`. Raw snapshots, media metadata and converter logs remain in the protected private root; public reports contain checks/hashes and safe identities.
 
-The existing Felix continuation plan was updated successfully earlier this session. Original task `task_1789960012362_td2qnusp` still cannot be resolved; canonical project task searches found no replacement. No duplicate task or task-state success is claimed. Shortcut was read as In Review and has not been advanced to Done. Existing pending records remain pending their missing task reconciliation.
+The final plan and complete implementation/verification increment were successfully saved to the existing Felix notes, preserving their prior content:
+
+- Plan: `note_1793383300090_26c4edf1`.
+- Implementation Evidence: `note_1793383660891_e2cb85fe`.
+- Verification Evidence: `note_1793383661203_c8c05411`.
+
+Original task `task_1789960012362_td2qnusp` was checked again and still returns Task not found; canonical project task searches found no replacement. No duplicate task or task-state success is claimed. A fresh official Shortcut read confirms story 274 is not completed and remains workflow state `500000009` (In Review); no external transition/comment was written. Existing pending records remain pending their missing task reconciliation. New source/test commits in this increment are local; no push or merge was performed.

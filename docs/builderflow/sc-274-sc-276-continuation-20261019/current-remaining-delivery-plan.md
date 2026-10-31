@@ -1,5 +1,39 @@
 # SC-274 / SC-276 current remaining delivery plan
 
+## Current status — genuine Windows Fishing capture verified, 31 October 2026
+
+This section supersedes older current-blocker summaries below; their dated evidence is retained.
+The current user-authorized Windows/saved-profile workflow governs this continuation rather than
+the earlier operational restrictions quoted in historical sections.
+
+Completed: separately sourced manual lure observation, signed clean Windows client deployment,
+actual context/profile-bound Fishing recording `recording_af17d0dc`, normal finalization, five raw
+trout plus three salmon, +460 XP, 236/236 calibrated continuous ticks, zero unknown/dropped frames,
+complete 4,060-frame media decode, and immutable HELD_OUT curation
+`bf83bfe1-636d-4728-99e0-516038198e1b`. Two fresh JVMs using the production reader over real
+read-only database rows produce identical converted bytes with one action and no gaps.
+
+The live preflight HTTP-500 transaction defect is fixed. Two real calls now return HTTP 200 with
+state BLOCKED, playback eligible, and causal blocker `XRSPS_CAPABILITY_UNAVAILABLE`; no simulation
+or certification flag was enabled. Post-restart checks pass 11/11. Final regression scopes pass:
+Micro6 111, recording/provenance 199, selected compiler/conversion/preflight 69, no failures/skips.
+
+Next implementation sequence:
+
+1. Supply the supported qualified runtime/target; Windows currently reports no causal capability.
+   Linux safety/qualification remains SC-2201 and was not started here.
+2. Use the actual published curation above to generate the full manifest twice, compare bytes and
+   checksum, then execute bounded native import and assess recorded world/cache/source gaps.
+3. Resolve original provider-origin first input, bank/travel/world and privacy/role gates where
+   still missing. A genuine HUMAN lure capture is not provider or oracle evidence.
+4. Reconcile the original acceptance matrix and actual workflow validation before any Done claim.
+   The original Felix task metadata remains unresolved; no duplicate task or successful transition
+   is claimed, and Shortcut remains In Review.
+
+Full implementation, verification, risks, rollback and evidence:
+[genuine Fishing capture results](genuine-fishing-capture-results-20261031.md).
+The obsolete “no genuine recording exists” blocker is resolved for this manual capture scope.
+
 Latest after WP1-WP6 review: [remaining implementation plan, 21 October](remaining-implementation-plan-20261021.md).
 Use that execution sequence; preserve earlier evidence and the original17 acceptance rows.
 
