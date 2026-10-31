@@ -12,7 +12,8 @@ For each encoded frame, the label is the last crosshair render at or before the 
 time, mapped from canvas to captured pixels (stretched mode scales them). A frame with no render
 within --max-age-ms of its capture (while it is shown), or captured before the trace started, is
 marked `dropped`
-and excluded from scoring rather than guessed. CFR duplicate frames carry the label of the
+and excluded from scoring rather than guessed; so is a frame whose sidecar brackets the grab
+(`requestNanos`, written by `record_x11_canvas.py`) when a render falls inside that bracket. CFR duplicate frames carry the label of the
 image they repeat. Output follows the corpus label schema read by the FA12 scorer; it never
 copies media.
 
@@ -85,6 +86,16 @@ def main():
         entry = {"compose_ordinal": frame["frame"], "pts_time": frame["frame"] / fps,
                  "capture_nanos": capture, "duplicate": frame["duplicate"]}
         render = renders[index] if index >= 0 else None
+        # A sidecar that also records when the grab was requested (the Linux X11 recorder) brackets
+        # the instant the image was taken: a render inside (request, capture] may or may not be in
+        # the image, so that frame is left out rather than labelled with either render.
+        request = frame.get("requestNanos")
+        if request is not None and index >= 0 and bisect.bisect_right(times, request) - 1 != index:
+            entry.update(state="UNKNOWN", visible=False, dropped=True,
+                         drop_reason="render during capture")
+            counts["dropped"] += 1
+            labels.append(entry)
+            continue
         # A hidden marker is written once per transition, so it holds until the next render;
         # a visible render is only trusted for --max-age-ms.
         if render is None or (render["visible"]
