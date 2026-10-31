@@ -235,6 +235,35 @@ class MouseVideoDerivativeWorkerTest {
     assertThat(index.path("frames").get(0).path("pts").asLong()).isEqualTo(9000L);
   }
 
+  @Test
+  void aFailedFfmpegProbeIsRetriedAfterBackoffAndAConfirmedResultIsKept() throws Exception {
+    MouseVideoProcessRunner probe = mock(MouseVideoProcessRunner.class);
+    when(probe.run(anyList(), anyLong(), any(), any(), anyInt()))
+        .thenReturn(
+            new MouseVideoProcessRunner.Result(-1, "", "", false, false, false, false, false, true))
+        .thenReturn(
+            new MouseVideoProcessRunner.Result(
+                0, "ffmpeg", "", false, false, true, false, false, false));
+    MouseVideoDerivativeWorker worker =
+        new MouseVideoDerivativeWorker(properties, byteStore, probe);
+
+    assertThat(worker.ffmpegAvailable()).isFalse();
+    // Within the back-off the failure is reused without another probe.
+    assertThat(worker.ffmpegAvailable()).isFalse();
+    org.mockito.Mockito.verify(probe, org.mockito.Mockito.times(1))
+        .run(anyList(), anyLong(), any(), any(), anyInt());
+
+    // After the back-off the probe runs again; a busy host's transient failure is not permanent.
+    ReflectionTestUtils.setField(
+        worker,
+        "ffmpegRetryAt",
+        new java.util.concurrent.atomic.AtomicLong(System.nanoTime() - 1L));
+    assertThat(worker.ffmpegAvailable()).isTrue();
+    assertThat(worker.ffmpegAvailable()).isTrue();
+    org.mockito.Mockito.verify(probe, org.mockito.Mockito.times(2))
+        .run(anyList(), anyLong(), any(), any(), anyInt());
+  }
+
   private JsonNode indexFromOutput(String timeBase, String frame) throws Exception {
     MouseVideoProcessRunner fixture = mock(MouseVideoProcessRunner.class);
     when(fixture.run(anyList(), anyLong(), any(), any(), anyInt()))

@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.stereotype.Component;
 
@@ -34,7 +36,12 @@ public class MouseVideoDerivativeWorker {
   private final MouseVideoProperties properties;
   private final MouseVideoByteStore byteStore;
   private final MouseVideoProcessRunner runner;
-  private final AtomicReference<Boolean> ffmpegStatus = new AtomicReference<>();
+
+  /** A failed ffmpeg probe is retried after this delay instead of being remembered forever. */
+  static final long FFMPEG_RETRY_NANOS = TimeUnit.SECONDS.toNanos(30);
+
+  private final AtomicBoolean ffmpegConfirmed = new AtomicBoolean();
+  private final AtomicLong ffmpegRetryAt = new AtomicLong(Long.MIN_VALUE);
   private final AtomicReference<String> proxyEncoderStatus = new AtomicReference<>();
 
   public MouseVideoDerivativeWorker(
@@ -56,13 +63,27 @@ public class MouseVideoDerivativeWorker {
       long indexedFrames,
       List<DerivedArtifact> artifacts) {}
 
+  /**
+   * Whether ffmpeg runs. A confirmed result is kept for the process lifetime. A failed probe is
+   * only remembered for {@link #FFMPEG_RETRY_NANOS}: the probe runs through the restricted launcher
+   * with a short timeout, so a busy host can fail it transiently, and caching that failure forever
+   * would silently import every later video without its frame index, thumbnail and proxy.
+   */
   public boolean ffmpegAvailable() {
-    Boolean cached = ffmpegStatus.get();
-    if (cached != null) {
-      return cached;
+    if (ffmpegConfirmed.get()) {
+      return true;
+    }
+    long now = System.nanoTime();
+    long retryAt = ffmpegRetryAt.get();
+    if (retryAt != Long.MIN_VALUE && now - retryAt < 0) {
+      return false;
     }
     boolean available = binaryAvailable(properties.getFfmpeg());
-    ffmpegStatus.set(available);
+    if (available) {
+      ffmpegConfirmed.set(true);
+    } else {
+      ffmpegRetryAt.set(now + FFMPEG_RETRY_NANOS);
+    }
     return available;
   }
 
