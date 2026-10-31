@@ -44,4 +44,27 @@ class BuilderGoalTopologyGuardTest {
   void unknownEnvironmentRejected() {
     assertThrows(IllegalStateException.class, () -> guard("anything", token, false));
   }
+
+  @Test
+  void childReceivesSeparateConfiguredCredentialsWithoutInventingAllocation() {
+    var heartbeat = "1".repeat(40);
+    var g = guard("DEV", heartbeat, true);
+    var environment = new java.util.HashMap<String, String>();
+    g.configureExecutorEnvironment(environment);
+    assertEquals(token, environment.get("MICRO6_BUILDER_EXECUTOR_AUTH_TOKEN"));
+    assertEquals(heartbeat, environment.get("CHROMASCAPE_BUILDER_HEARTBEAT_TOKEN"));
+    assertEquals(2, environment.size());
+  }
+
+  @Test
+  void invalidOrSharedChildCredentialsFailBeforeChangingEnvironment() {
+    for (String heartbeat : new String[] {"", "dev-token", token}) {
+      var environment = new java.util.HashMap<String, String>();
+      environment.put("EXISTING", "preserve");
+      assertThrows(
+          IllegalStateException.class,
+          () -> guard("DEV", heartbeat, true).configureExecutorEnvironment(environment));
+      assertEquals(java.util.Map.of("EXISTING", "preserve"), environment);
+    }
+  }
 }

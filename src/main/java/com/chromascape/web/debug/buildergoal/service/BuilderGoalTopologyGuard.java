@@ -87,4 +87,15 @@ public class BuilderGoalTopologyGuard {
     if (!strong(executorToken)) throw new IllegalStateException("EXECUTOR_AUTH_NOT_CONFIGURED");
     return "Bearer " + executorToken;
   }
+
+  /** Copies only validated server-owned transport credentials into an owned child process. */
+  void configureExecutorEnvironment(java.util.Map<String, String> environment) {
+    if (!strong(executorToken)
+        || !strong(heartbeatToken)
+        || java.util.Objects.equals(executorToken, heartbeatToken)) {
+      throw new IllegalStateException("EXECUTOR_TRANSPORT_AUTH_NOT_CONFIGURED");
+    }
+    environment.put("MICRO6_BUILDER_EXECUTOR_AUTH_TOKEN", executorToken);
+    environment.put("CHROMASCAPE_BUILDER_HEARTBEAT_TOKEN", heartbeatToken);
+  }
 }
