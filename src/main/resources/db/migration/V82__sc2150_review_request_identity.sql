@@ -1,5 +1,5 @@
--- V44: SC-2150 review request identity and correction contract version. Additive only; V42 and
--- V43 are never rewritten and historical revisions keep their stored content untouched.
+-- V82: SC-2150 review request identity and correction contract version. Additive only; V80 and
+-- V81 are never rewritten and historical revisions keep their stored content untouched.
 --
 -- request_digest is the canonical digest of the validated correction payload plus its binding
 -- fields, used to distinguish a transport retry from a changed body that reuses the same request

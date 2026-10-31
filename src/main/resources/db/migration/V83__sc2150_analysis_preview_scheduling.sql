@@ -1,4 +1,4 @@
--- V45: SC-2150 durable analysis scheduling and exact-frame previews. Additive only: V42-V44 are
+-- V83: SC-2150 durable analysis scheduling and exact-frame previews. Additive only: V80-V82 are
 -- never rewritten, and historical analyses, review revisions and exports keep their stored bytes.
 --
 -- A preview pins the immutable frame-index content address, the decode ordinal and the source PTS it

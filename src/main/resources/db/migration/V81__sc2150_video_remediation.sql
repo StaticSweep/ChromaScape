@@ -1,4 +1,4 @@
--- V43: SC-2150 review-remediation schema. Additive only; V42 is never rewritten. Adds trusted
+-- V81: SC-2150 review-remediation schema. Additive only; V80 is never rewritten. Adds trusted
 -- original qualification, intake reservations and owner budgets, fenced job row versioning, and
 -- immutable versioned export snapshots, and narrows the artifact uniqueness rules so ORIGINAL and
 -- other singleton roles stay unique while EXPORT snapshots may accumulate.

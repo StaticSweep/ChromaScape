@@ -1,4 +1,4 @@
--- V42: SC-2150 external video import and human-behavior analysis.
+-- V80: SC-2150 external video import and human-behavior analysis.
 -- Additive, owner-scoped metadata for uploaded and supported YouTube sources. Media bytes stay on
 -- the content-addressed filesystem byte store; these tables hold durable provenance, fenced job
 -- state, verified artifact registration and append-only review history. External media never uses

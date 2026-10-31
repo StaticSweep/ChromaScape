@@ -99,6 +99,14 @@ class LabelFromMouseTraceTest(unittest.TestCase):
                                 [render(0, 20, 100, 200), render(1, 30, 110, 210)])
         self.assertEqual(document["labels"][0]["render_seq"], 1)
 
+    def test_uses_the_per_frame_media_time_when_the_sidecar_records_it(self):
+        frames = [self.frame(0, 15), self.frame(1, 35)]
+        frames[1]["ptsMicros"] = 100_000  # a skipped slot: frame 1 is shown at 0.1 s, not 1/30 s
+        document = self.convert(frames, [render(0, 10, 100, 200), render(1, 30, 110, 210)])
+        first, second = document["labels"]
+        self.assertAlmostEqual(first["pts_time"], 0.0)
+        self.assertAlmostEqual(second["pts_time"], 0.1)
+
     def test_hidden_marker_labels_absent(self):
         document = self.convert(
             [self.frame(0, 500)],

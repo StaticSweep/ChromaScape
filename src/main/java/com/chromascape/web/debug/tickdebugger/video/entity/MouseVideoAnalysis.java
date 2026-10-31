@@ -11,7 +11,7 @@ import java.util.UUID;
 
 /**
  * Immutable analysis of an external source. The four capability flags are constrained false in
- * {@code V42__sc2150_mouse_video_sources.sql}: video-derived observations are estimates and never
+ * {@code V80__sc2150_mouse_video_sources.sql}: video-derived observations are estimates and never
  * claim native telemetry, exact ticks, control, or training eligibility.
  */
 @Entity

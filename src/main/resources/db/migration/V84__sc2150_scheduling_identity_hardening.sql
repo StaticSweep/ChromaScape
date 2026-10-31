@@ -1,4 +1,4 @@
--- V46: SC-2150 scheduling identity hardening. Additive only.
+-- V84: SC-2150 scheduling identity hardening. Additive only.
 --
 -- Analyses pin the frozen cursor-template content address so queued work executes the exact
 -- template bytes its identity was scheduled with, not whatever a mutable configured path holds

@@ -12,7 +12,7 @@ import java.util.UUID;
 /**
  * Owner-scoped external media source. Never represents a native tick session: external media keeps
  * its own UUID identity and acquisition provenance, and native ticks/physical clicks are never
- * inferred from it. See {@code V42__sc2150_mouse_video_sources.sql}.
+ * inferred from it. See {@code V80__sc2150_mouse_video_sources.sql}.
  */
 @Entity
 @Table(name = "mouse_video_sources")

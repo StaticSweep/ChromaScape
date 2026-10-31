@@ -83,7 +83,10 @@ def main():
     for frame in frames:
         capture = frame["captureNanos"]
         index = bisect.bisect_right(times, capture) - 1
-        entry = {"compose_ordinal": frame["frame"], "pts_time": frame["frame"] / fps,
+        # Current ChromaScape writes each frame's media time (frames sit on capture-time slots and
+        # empty slots are skipped); older sidecars and the X11 recorder are constant frame rate.
+        pts = frame["ptsMicros"] / 1e6 if "ptsMicros" in frame else frame["frame"] / fps
+        entry = {"compose_ordinal": frame["frame"], "pts_time": pts,
                  "capture_nanos": capture, "duplicate": frame["duplicate"]}
         render = renders[index] if index >= 0 else None
         # A sidecar that also records when the grab was requested (the Linux X11 recorder) brackets

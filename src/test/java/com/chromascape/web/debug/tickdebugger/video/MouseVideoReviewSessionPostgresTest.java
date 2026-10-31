@@ -71,7 +71,7 @@ class MouseVideoReviewSessionPostgresTest {
         .locations("classpath:db/migration")
         .baselineOnMigrate(true)
         .baselineVersion("41")
-        .target("46")
+        .target("84")
         .load()
         .migrate();
     JdbcTemplate jdbc =
@@ -95,7 +95,7 @@ class MouseVideoReviewSessionPostgresTest {
         .locations("classpath:db/migration")
         .baselineOnMigrate(true)
         .baselineVersion("41")
-        .target("48")
+        .target("86")
         .load()
         .migrate();
     assertThat(

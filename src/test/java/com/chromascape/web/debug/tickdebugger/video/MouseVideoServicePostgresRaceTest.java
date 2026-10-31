@@ -67,7 +67,7 @@ class MouseVideoServicePostgresRaceTest {
         .locations("classpath:db/migration")
         .baselineOnMigrate(true)
         .baselineVersion("41")
-        .target("46")
+        .target("84")
         .load()
         .migrate();
     context = new AnnotationConfigApplicationContext(DatabaseConfig.class);

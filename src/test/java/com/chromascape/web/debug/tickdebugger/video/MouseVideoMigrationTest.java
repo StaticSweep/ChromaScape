@@ -17,7 +17,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * Real-PostgreSQL proof for the additive SC-2150 migration. V42 is applied against a baseline of
+ * Real-PostgreSQL proof for the additive SC-2150 migration. V80 is applied against a baseline of
  * the prior schema, so the test isolates this migration while still executing real PostgreSQL
  * constraints (not an embedded stand-in).
  */
@@ -34,7 +34,7 @@ class MouseVideoMigrationTest {
         .locations("classpath:db/migration")
         .baselineOnMigrate(true)
         .baselineVersion("41")
-        .target("46")
+        .target("84")
         .load()
         .migrate();
   }

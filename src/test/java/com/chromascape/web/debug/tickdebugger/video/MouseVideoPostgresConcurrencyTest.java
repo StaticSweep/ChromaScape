@@ -34,7 +34,7 @@ class MouseVideoPostgresConcurrencyTest {
         .locations("classpath:db/migration")
         .baselineOnMigrate(true)
         .baselineVersion("41")
-        .target("46")
+        .target("84")
         .load()
         .migrate();
   }
