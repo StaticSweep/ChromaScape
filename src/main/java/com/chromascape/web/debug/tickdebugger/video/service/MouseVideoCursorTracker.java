@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * {@code cursor-template/v5}: locates one reviewed cursor template in downscaled grayscale samples.
+ * {@code cursor-template/v7}: locates one reviewed cursor template in downscaled grayscale samples.
  *
  * <p>The template is rendered at the scale it appears in the analysis frame, with sub-pixel phase,
  * by exact area coverage of its opaque pixels. Only analysis pixels the sprite fully covers are
@@ -24,6 +24,19 @@ import java.util.Map;
  * Unchanged versus only one neighbour is a cursor arriving or leaving, or art on the far side of a
  * scene cut, so it is accepted only near the previous detection and only if it changed since the
  * previous sample or is that held detection. Changed versus all neighbours is foreground.
+ *
+ * <p>A placement that starts a track (v7) must also be an appearance: the match at that location
+ * has to be better than it already was one sample earlier, by more than the ambiguity margin.
+ * Interface art that merely looked new because a neighbouring placement disappeared, or because the
+ * world behind a semi-transparent panel scrolled, was already matching that well, so it cannot open
+ * a track. A cursor that arrives was not: that location held background a moment before.
+ *
+ * <p>While a track exists the search is restricted to the area near it, which keeps a wrong track
+ * wrong: a real cursor elsewhere is never compared. Every {@link #RECHECK_SECONDS} of video (v7)
+ * the whole frame is therefore searched as well. A placement away from the track takes over when it
+ * scores higher than the track's placement by more than the ambiguity margin and would start a
+ * track on its own: start score, appearance, and no competitor within the margin. Anything less
+ * keeps the windowed result, so a genuine resting cursor is never lost to the check.
  *
  * <p>Tracking uses hysteresis: a detection that does not continue the previous sample's detection
  * (within the arrival radius) must reach the stricter start score, while a continuation needs only
@@ -53,7 +66,7 @@ import java.util.Map;
  * event.
  */
 final class MouseVideoCursorTracker {
-  static final String METHOD = "cursor-template/v5";
+  static final String METHOD = "cursor-template/v7";
 
   /** Offset of the temporal neighbours used to recognise static look-alikes. */
   static final double NEIGHBOR_SECONDS = 1.5d;
@@ -81,6 +94,9 @@ final class MouseVideoCursorTracker {
   /** Consecutive missed samples after which a track is forgotten. */
   private static final int MAX_GAP_SAMPLES = 8;
 
+  /** Video time after which the whole frame is searched again while a track exists. */
+  static final double RECHECK_SECONDS = 2.0d;
+
   private final int templateWidth;
   private final int templateHeight;
   private final double[] templateGray;
@@ -102,6 +118,8 @@ final class MouseVideoCursorTracker {
   private double scale = Double.NaN;
   private Candidate last;
   private int missed;
+  private int recheckSamples = Integer.MAX_VALUE;
+  private int sinceRecheck;
   private final Map<Double, Patch[]> patches = new LinkedHashMap<>();
 
   /**
@@ -143,8 +161,11 @@ final class MouseVideoCursorTracker {
       int spanX,
       int spanY) {}
 
-  /** One placement of a patch: its corner in analysis pixels and its match statistics. */
-  private record Candidate(int x, int y, Patch patch, double score, double gain) {}
+  /**
+   * One placement of a patch: its corner in analysis pixels, its match statistics, and the rule
+   * that admitted it ({@code changed}, {@code arrival} or {@code held}).
+   */
+  private record Candidate(int x, int y, Patch patch, double score, double gain, String rule) {}
 
   /** Per-scale calibration totals over the unambiguous confident best matches. */
   private record Evidence(int[] confident, double[] total, double[] fisherZ) {
@@ -188,6 +209,18 @@ final class MouseVideoCursorTracker {
 
   static int calibrationSamples() {
     return CALIBRATION_SAMPLES;
+  }
+
+  /**
+   * Sets the sample cadence so the whole frame can be re-checked every {@link #RECHECK_SECONDS}.
+   * Without it the re-check stays off and the windowed search can never be escaped.
+   */
+  void setSampleIntervalSeconds(double seconds) {
+    recheckSamples =
+        seconds > 0.0d
+            ? (int) Math.max(1L, Math.round(RECHECK_SECONDS / seconds))
+            : Integer.MAX_VALUE;
+    sinceRecheck = 0;
   }
 
   /**
@@ -338,6 +371,7 @@ final class MouseVideoCursorTracker {
   void restartTrack() {
     last = null;
     missed = 0;
+    sinceRecheck = 0;
   }
 
   /** Tracks one sample. Samples must be supplied in source order for the hold and hysteresis. */
@@ -369,10 +403,26 @@ final class MouseVideoCursorTracker {
               last.y() + radius);
       windowed = !foreground.isEmpty() && foreground.get(0).score() >= minScore;
     }
+    boolean rechecked = false;
+    boolean takeover = false;
     if (!windowed) {
       foreground = foreground(frame, set, last, 0, 0, frame.width() - 1, frame.height() - 1);
+    } else if (++sinceRecheck >= recheckSamples) {
+      // The track has been alive long enough to stop trusting the window it created: a placement
+      // elsewhere that would start a track on its own replaces it, so a track cannot sit on
+      // interface art for the rest of the clip.
+      sinceRecheck = 0;
+      rechecked = true;
+      List<Candidate> whole =
+          foreground(frame, set, last, 0, 0, frame.width() - 1, frame.height() - 1);
+      if (takesOver(whole, foreground.get(0))) {
+        foreground = whole;
+        takeover = true;
+      }
     }
     evidence.put("windowed", windowed);
+    evidence.put("rechecked", rechecked);
+    evidence.put("takeover", takeover);
     if (foreground.isEmpty()) {
       evidence.put("reason", "no foreground placement");
       miss();
@@ -406,6 +456,8 @@ final class MouseVideoCursorTracker {
         runnerUp != null
             && runnerUp.score() >= best.score() - ambiguityMargin
             && !(continuation && !near(runnerUp, last));
+    String rule = best.rule();
+    evidence.put("rule", rule);
     double required = continuation ? minScore : startScore;
     if (best.score() < required || ambiguous) {
       evidence.put(
@@ -424,6 +476,23 @@ final class MouseVideoCursorTracker {
     int x = (int) Math.round(cornerX + spriteScale * (hotspotX + 0.5d) - 0.5d);
     int y = (int) Math.round(cornerY + spriteScale * (hotspotY + 0.5d) - 0.5d);
     return new Detection(true, best.score(), x, y, evidence);
+  }
+
+  /**
+   * Whether the whole-frame best placement ends the windowed track: it must lie away from the
+   * track, beat the track's placement by more than the ambiguity margin, and be accepted as a track
+   * start in its own right (start score, no competing placement within the margin). A challenger
+   * that could not start a track would only turn a kept continuation into a miss.
+   */
+  private boolean takesOver(List<Candidate> whole, Candidate incumbent) {
+    if (whole.isEmpty()) {
+      return false;
+    }
+    Candidate challenger = whole.get(0);
+    return !near(challenger, last)
+        && challenger.score() >= startScore
+        && challenger.score() > incumbent.score() + ambiguityMargin
+        && (whole.size() < 2 || whole.get(1).score() < challenger.score() - ambiguityMargin);
   }
 
   /** Records a missed sample; the track survives a short run of misses. */
@@ -667,6 +736,12 @@ final class MouseVideoCursorTracker {
     long delta0 = 0L;
     long delta1 = 0L;
     long sumPrevious = 0L;
+    boolean startCandidate =
+        held == null || Math.hypot(x - held.x(), y - held.y()) > ARRIVAL_RADIUS * analysisWidth;
+    boolean appearedBefore = startCandidate && previous != null;
+    long sumBefore = 0L;
+    long sumSquaresBefore = 0L;
+    double sumItBefore = 0.0d;
     int n = 0;
     int base = y * width + x;
     int[] offsets = patch.offsets();
@@ -699,6 +774,12 @@ final class MouseVideoCursorTracker {
       }
       if (previous != null) {
         sumPrevious += Math.abs(intensity - previous[pixel]);
+        if (appearedBefore) {
+          int before = previous[pixel];
+          sumBefore += before;
+          sumSquaresBefore += (long) before * before;
+          sumItBefore += before * t;
+        }
       }
       n++;
     }
@@ -727,7 +808,31 @@ final class MouseVideoCursorTracker {
     if (gain < minGain || gain > maxGain) {
       return null;
     }
-    return new Candidate(x, y, patch, covariance / Math.sqrt(varianceI * varianceT), gain);
+    double score = covariance / Math.sqrt(varianceI * varianceT);
+    if (appearedBefore) {
+      // A track may start only where the sprite appeared: the match has to be better here than it
+      // already was one sample earlier, by more than the ambiguity margin. Interface art that
+      // merely scrolled, or lost a competing placement, was already matching this well; a cursor
+      // that arrives was not. Requiring an improvement rather than an absolute floor keeps this
+      // from vetoing every start on a low-specificity template, where much of the frame matches.
+      double varianceBefore = sumSquaresBefore - (double) sumBefore * sumBefore / n;
+      if (varianceBefore > 1.0d) {
+        double covarianceBefore = sumItBefore - sumBefore * sumT / n;
+        double before = covarianceBefore / Math.sqrt(varianceBefore * varianceT);
+        if (before > score - ambiguityMargin) {
+          return null;
+        }
+      }
+    }
+    return new Candidate(
+        x,
+        y,
+        patch,
+        score,
+        gain,
+        unchanged == 0
+            ? "changed"
+            : holds(held, x, y) && !Boolean.TRUE.equals(sincePrevious) ? "held" : "arrival");
   }
 
   /** Rendered phases for one scale, or {@code null} when the sprite is too small to compare. */

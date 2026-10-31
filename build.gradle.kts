@@ -150,6 +150,12 @@ tasks.test {
 	// Required for Mockito inline mock-maker to attach to running JVM
 	// Used by tests that mock final classes and static methods
 	jvmArgs("-Djdk.attach.allowAttachSelf=true")
+	// Docker 29+ rejects docker-java's historical default API (1.32) before negotiation, which
+	// makes Testcontainers silently report Docker unavailable. This compatibility override is
+	// opt-in for the test process only; normal builds keep docker-java's default negotiating.
+	providers.environmentVariable("DOCKER_API_VERSION").orNull
+		?.takeIf { it.isNotBlank() }
+		?.let { systemProperty("api.version", it) }
 	// Certification runs ONLY under the hard-gated replayCertificationTest task; the ordinary
 	// suite must never discover it (its prerequisites are hard assertions, not skips).
 	exclude("com/chromascape/web/replay/certification/**")

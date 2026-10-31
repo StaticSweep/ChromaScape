@@ -13,6 +13,17 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "chromascape.mouse-video")
 public class MouseVideoProperties {
 
+  /** Operator-owned, bounded corpus policy file; never supplied by a browser. */
+  private String corpusManifest = "";
+
+  public String getCorpusManifest() {
+    return corpusManifest;
+  }
+
+  public void setCorpusManifest(String value) {
+    corpusManifest = value;
+  }
+
   /** Master switch for external video import and analysis. */
   private boolean enabled = false;
 
@@ -71,7 +82,14 @@ public class MouseVideoProperties {
   private long probeBudgetSeconds = 30L;
   private long analysisBudgetSeconds = 1_200L;
   private long childShutdownBudgetSeconds = 5L;
+
+  /**
+   * Hard per-execution memory budget. Enforced as a cgroup {@code MemoryMax} with swap disabled
+   * ({@code MemorySwapMax=0}), so over-budget allocations are killed instead of being hidden in
+   * swap.
+   */
   private long maxRssBytes = 2L * 1024 * 1024 * 1024;
+
   private int waitingSlots = 8;
   private long leaseHeartbeatSeconds = 5L;
   private long leaseExpirySeconds = 30L;

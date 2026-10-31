@@ -96,6 +96,7 @@ public class MouseVideoVisualAnalyzer {
     int neighborOffset = neighborOffset(samples);
     if (cursorAvailable) {
       tracker = new MouseVideoCursorTracker(template, properties);
+      tracker.setSampleIntervalSeconds(sampleIntervalSeconds(samples));
       calibration =
           calibrate(
               tracker, framesDirectory, samples.size(), neighborOffset, sourceWidth, sourceHeight);
@@ -409,6 +410,16 @@ public class MouseVideoVisualAnalyzer {
       }
     }
     return max;
+  }
+
+  /** Mean seconds between consecutive samples, or zero when it cannot be measured. */
+  private static double sampleIntervalSeconds(List<Sample> samples) {
+    if (samples.size() < 2) {
+      return 0.0d;
+    }
+    double span =
+        seconds(samples.get(samples.size() - 1).frame()) - seconds(samples.get(0).frame());
+    return span > 0.0d ? span / (samples.size() - 1) : 0.0d;
   }
 
   /** Samples about {@link MouseVideoCursorTracker#NEIGHBOR_SECONDS} apart, at least one. */

@@ -81,6 +81,38 @@ class MouseVideoExportServiceTest {
   }
 
   @Test
+  @SuppressWarnings("unchecked")
+  void versionedReviewExportPinsUnverifiedProvenance() {
+    var corrections =
+        com.fasterxml.jackson.databind.node.JsonNodeFactory.instance
+            .arrayNode()
+            .add(
+                com.fasterxml.jackson.databind.node.JsonNodeFactory.instance
+                    .objectNode()
+                    .put("kind", "CURSOR_VISIBILITY")
+                    .put("frameOrdinal", 0)
+                    .put("visibility", "HIDDEN")
+                    .put("unknownReason", "not visible")
+                    .put("provenance", "BLIND_UNVERIFIED"));
+    var revision =
+        new com.chromascape.web.debug.tickdebugger.video.entity.MouseVideoReviewRevision(
+            sourceId, null, null, "owner-1", "blind unverified", 0, "INSPECTION_ONLY", corrections);
+    ReflectionTestUtils.setField(revision, "id", UUID.randomUUID());
+    revision.setContractVersion("corrections/v2");
+    when(reviews.findBySourceIdOrderByCreatedAtAsc(sourceId)).thenReturn(List.of(revision));
+    Map<String, Object> block =
+        (Map<String, Object>) service.describe(sourceId, "owner-1").get("review");
+    assertThat(block.get("contract")).isEqualTo("corrections/v2");
+    assertThat(block.get("independenceVerified")).isEqualTo(false);
+    assertThat(block.get("provenance").toString()).isEqualTo("[BLIND_UNVERIFIED]");
+    assertThat(block.get("correctionsDigest").toString()).startsWith("sha256:");
+    revision.setContractVersion("corrections/v1");
+    block = (Map<String, Object>) service.describe(sourceId, "owner-1").get("review");
+    assertThat(block)
+        .doesNotContainKeys("contract", "independenceVerified", "provenance", "correctionsDigest");
+  }
+
+  @Test
   void manifestAlwaysDisclaimsNativeCapabilities() {
     Map<String, Object> manifest = service.describe(sourceId, "owner-1");
     assertThat(manifest.get("contract")).isEqualTo(MouseVideoExportService.CONTRACT);

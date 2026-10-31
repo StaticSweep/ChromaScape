@@ -142,6 +142,19 @@ class ConverterTest(unittest.TestCase):
         return CONVERTER.convert_paths(export_path, review_path, page_paths,
                                        self.options(**overrides))
 
+    def test_v2_preserves_assertions_but_refuses_heldout_qualification(self):
+        corrections = [visible(0, 10, 10, provenance="BLIND_UNVERIFIED")]
+        review = review_document(corrections)
+        review["contract"] = "corrections/v2"
+        document = self.convert(corrections, review=review)
+        self.assertFalse(document["provenance"]["independence_verified"])
+        self.assertEqual(document["provenance"]["label_provenance"], ["BLIND_UNVERIFIED"])
+        with self.assertRaisesRegex(CONVERTER.ConversionError, "trusted server review-session"):
+            self.convert(corrections, review=review, split="heldout")
+        corrections[0]["provenance"] = "INDEPENDENT"
+        with self.assertRaisesRegex(CONVERTER.ConversionError, "uncertified independent"):
+            self.convert(corrections, review=review)
+
     def test_visible_hidden_and_ambiguous_map_onto_scored_states(self):
         document = self.convert([visible(0, 100, 40), hidden(1), ambiguous(2)])
         labels = {label["ordinal"]: label for label in document["labels"]}
@@ -204,6 +217,10 @@ class ConverterTest(unittest.TestCase):
         with self.assertRaises(CONVERTER.ConversionError) as raised:
             self.convert([visible(0, 5, 5)], review=later)
         self.assertIn("not the revision the export pins", str(raised.exception))
+
+    def test_legacy_without_provenance_cannot_bypass_qualification_gate(self):
+        with self.assertRaisesRegex(CONVERTER.ConversionError, "trusted server review-session"):
+            self.convert([visible(0, 5, 5)], split="heldout")
 
     def test_refuses_detector_assisted_heldout_labels(self):
         with self.assertRaises(CONVERTER.ConversionError) as raised:
@@ -386,3 +403,75 @@ class ScorerIntegrationTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class SealedSessionConverterTest(unittest.TestCase):
+    setUp = ConverterTest.setUp
+    tearDown = ConverterTest.tearDown
+    write = ConverterTest.write
+    options = ConverterTest.options
+    def envelope(self):
+        from hashlib import sha256
+        session = {"id": "12345678-1234-4234-8234-123456789012", "sourceId": SOURCE_ID,
+                   "analysisId": ANALYSIS_ID, "state": "SEALED", "mode": "WITHOUT_SUGGESTIONS",
+                   "split": "heldout", "policyDigest": "sha256:policy", "originalDigest": "sha256:media",
+                   "frameIndexChecksum": "sha256:frame-index", "frameCount": 4,
+                   "startOrdinal": 0, "endOrdinal": 3,
+                   "coordinatePlane": {"contract": "coordinate-plane/v1",
+                                       "codedWidth": 192, "codedHeight": 108,
+                                       "rotationDegrees": 0, "displayWidth": 192,
+                                       "displayHeight": 108, "origin": "top-left",
+                                       "pixelCenter": True},
+                   "coordinatePlaneDigest": "sha256:plane"}
+        review = review_document([hidden(0), hidden(1), hidden(2), hidden(3)])
+        review.update(sessionId=session["id"], appliedSourceRevision=1,
+                      provenance={"session": dict(session), "origins": {str(i): "MANUAL_HIDDEN" for i in range(4)},
+                                  "suggestionsExposed": False})
+        revision_json = json.dumps(review, separators=(",", ":"))
+        return {"contract": "mouse-video-review-export/v2", "protocol": "review-provenance/v1",
+                "session": session, "revision": review, "revisionJson": revision_json,
+                "contentDigest": "sha256:" + sha256(revision_json.encode()).hexdigest(),
+                "independentProtocol": True, "attestation": True}
+
+    def convert_sealed(self, envelope, server_bytes=None, **overrides):
+        from unittest.mock import patch
+        path = self.write("session.json", envelope)
+        pages = [self.write("frames.json", frame_index_pages()[0])]
+        raw = path.read_bytes() if server_bytes is None else server_bytes
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *ignored): return False
+            def read(self, *ignored): return raw
+        with patch.object(CONVERTER, "fetch_sealed_export", return_value=raw):
+            return CONVERTER.convert_session_export(path, pages, self.options(
+                split="heldout", verify_server="http://127.0.0.1:18190", **overrides))
+
+    def test_sealed_protocol_emits_v3_but_never_human_or_training_claims(self):
+        document = self.convert_sealed(self.envelope())
+        self.assertEqual(document["schema"], "sc2150-fa12-labels/v3")
+        self.assertTrue(document["provenance"]["independent_protocol_verified"])
+        self.assertFalse(document["human_input_verified"])
+        self.assertFalse(document["training_eligible"])
+        self.assertEqual(document["labels"][0]["label_origin"], "MANUAL_HIDDEN")
+
+    def test_local_independent_claim_cannot_override_server_bytes(self):
+        with self.assertRaisesRegex(CONVERTER.ConversionError, "server's immutable"):
+            self.convert_sealed(self.envelope(), server_bytes=b"different")
+
+    def test_missing_or_mismatched_coordinate_plane_is_refused(self):
+        envelope = self.envelope()
+        del envelope["session"]["coordinatePlane"]
+        with self.assertRaisesRegex(CONVERTER.ConversionError, "authoritative coordinate plane"):
+            self.convert_sealed(envelope)
+        envelope = self.envelope()
+        with self.assertRaisesRegex(CONVERTER.ConversionError, "differs from the sealed coordinate"):
+            self.convert_sealed(envelope, source_size=(128, 72))
+
+    def test_assisted_or_unsealed_sessions_are_refused(self):
+        envelope = self.envelope()
+        envelope["session"]["mode"] = "DETECTOR_ASSISTED"
+        with self.assertRaisesRegex(CONVERTER.ConversionError, "detector-assisted"):
+            self.convert_sealed(envelope)
+        envelope = self.envelope()
+        envelope["session"]["state"] = "OPEN"
+        with self.assertRaisesRegex(CONVERTER.ConversionError, "sealed protocol"):
+            self.convert_sealed(envelope)

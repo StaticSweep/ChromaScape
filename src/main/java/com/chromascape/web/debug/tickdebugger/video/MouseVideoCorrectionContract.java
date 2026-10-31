@@ -32,6 +32,9 @@ public final class MouseVideoCorrectionContract {
   /** Stable contract identity persisted with every accepted revision. */
   public static final String VERSION = "corrections/v1";
 
+  /** Provenance is a reviewer assertion, never certification of independent truth. */
+  public static final String PROVENANCE_VERSION = "corrections/v2";
+
   public static final int MAX_CORRECTIONS = 2_000;
   public static final int MAX_ENCODED_BYTES = 512 * 1024;
   public static final int MAX_NOTE_LENGTH = 280;
@@ -61,7 +64,8 @@ public final class MouseVideoCorrectionContract {
 
   private static final Set<String> ACTIVITY = Set.of("VIEWPORT_MOTION", "REGION_CHANGE", "NONE");
 
-  private static final Set<String> COMMON_FIELDS = Set.of("kind", "note", "confidence");
+  private static final Set<String> COMMON_FIELDS =
+      Set.of("kind", "note", "confidence", "provenance");
 
   private static final Map<String, Set<String>> KIND_FIELDS =
       Map.of(
@@ -154,12 +158,13 @@ public final class MouseVideoCorrectionContract {
     if (encoded > MAX_ENCODED_BYTES) {
       throw invalid("Corrections exceed the " + MAX_ENCODED_BYTES + "-byte request bound");
     }
-    return new Validated(normalized, digestOf(normalized), VERSION, normalized.size());
+    return new Validated(
+        normalized, digestOf(normalized), versionOf(normalized), normalized.size());
   }
 
   /** Canonical digest over the contract version and a key-sorted correction projection. */
   public static String digestOf(JsonNode corrections) {
-    String canonical = VERSION + '\n' + canonical(corrections);
+    String canonical = versionOf(corrections) + '\n' + canonical(corrections);
     try {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
       return "sha256:"
@@ -167,6 +172,15 @@ public final class MouseVideoCorrectionContract {
     } catch (NoSuchAlgorithmException impossible) {
       throw new IllegalStateException("SHA-256 is always available", impossible);
     }
+  }
+
+  private static String versionOf(JsonNode corrections) {
+    if (corrections != null && corrections.isArray()) {
+      for (JsonNode correction : corrections) {
+        if (correction.has("provenance")) return PROVENANCE_VERSION;
+      }
+    }
+    return VERSION;
   }
 
   private static void rejectInventedFields(JsonNode node) {
@@ -217,6 +231,17 @@ public final class MouseVideoCorrectionContract {
       case KIND_TARGET_REGION -> normalizeRegion(entry, index, bounds, node);
       case KIND_CAMERA_ACTIVITY -> normalizeActivity(entry, index, bounds, node);
       default -> throw invalid("Correction " + index + " has an unsupported kind");
+    }
+    if (entry.has("provenance")) {
+      String provenance = text(entry, "provenance", index);
+      if (!Set.of("UNKNOWN", "BLIND_UNVERIFIED", "DETECTOR_ASSISTED")
+          .contains(provenance == null ? "" : provenance)) {
+        throw invalid(
+            "Correction "
+                + index
+                + " has unsupported provenance; independent review requires a trusted server session");
+      }
+      node.put("provenance", provenance);
     }
     node.put("confidence", confidence(entry, index));
     String note = optionalText(entry, "note", index, MAX_NOTE_LENGTH);

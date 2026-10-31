@@ -23,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,6 +65,33 @@ public class MouseVideoObservationsService {
           "indicator",
           "method",
           "methodVersion");
+
+  /**
+   * The only cursor evidence keys a read may expose, in output order. The map is deliberately
+   * small: it answers why a sample was accepted, held or rejected without publishing the whole
+   * tracking state, and it is projected by the streaming reader before anything is materialized.
+   */
+  private static final Set<String> CURSOR_EVIDENCE_FIELDS =
+      new java.util.LinkedHashSet<>(
+          List.of(
+              "rule",
+              "reason",
+              "continuation",
+              "windowed",
+              "rechecked",
+              "takeover",
+              "pass",
+              "score",
+              "runnerUpScore",
+              "sourceScale",
+              "centreDelta",
+              "meanDelta",
+              "windowMaxDelta",
+              "forwardReason",
+              "missedSamples"));
+
+  private static final Map<String, Set<String>> NESTED_FIELDS =
+      Map.of("evidence", CURSOR_EVIDENCE_FIELDS);
 
   private final MouseVideoProperties properties;
   private final MouseVideoSourceRepository sources;
@@ -192,9 +220,40 @@ public class MouseVideoObservationsService {
         view.put(field, value.booleanValue());
       } else if (value.isTextual()) {
         view.put(field, value.textValue());
+      } else if (value.isObject() && "evidence".equals(field)) {
+        Map<String, Object> evidence = cursorEvidence(observation, value);
+        if (!evidence.isEmpty()) {
+          view.put(field, evidence);
+        }
       }
     }
     return view;
+  }
+
+  /**
+   * Bounded evidence for one cursor sample. Other observation kinds keep their evidence internal:
+   * this passthrough exists to explain a cursor placement, and widening it to every kind would
+   * publish more of the tracker's state than a review needs.
+   */
+  private static Map<String, Object> cursorEvidence(JsonNode observation, JsonNode evidence) {
+    if (!"CURSOR_VISIBILITY".equals(observation.path("kind").asText(""))) {
+      return Map.of();
+    }
+    Map<String, Object> projected = new LinkedHashMap<>();
+    for (String key : CURSOR_EVIDENCE_FIELDS) {
+      JsonNode value = evidence.get(key);
+      if (value == null || value.isNull()) {
+        continue;
+      }
+      if (value.isNumber()) {
+        projected.put(key, value.numberValue());
+      } else if (value.isBoolean()) {
+        projected.put(key, value.booleanValue());
+      } else if (value.isTextual()) {
+        projected.put(key, value.textValue());
+      }
+    }
+    return projected;
   }
 
   private Artifact resolveArtifact(
@@ -271,7 +330,8 @@ public class MouseVideoObservationsService {
                 parser.skipChildren();
                 continue;
               }
-              JsonNode observation = MouseVideoJsonStream.scalars(parser, mapper, PROJECTED_FIELDS);
+              JsonNode observation =
+                  MouseVideoJsonStream.scalars(parser, mapper, PROJECTED_FIELDS, NESTED_FIELDS);
               if (matches(observation, kind, lower, upper) && position++ >= skip) {
                 page.add(observation);
               }

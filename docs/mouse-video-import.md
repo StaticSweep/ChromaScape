@@ -49,6 +49,8 @@ media.**
 | `GET /sources/{id}/reviews` | Append-only review revisions |
 | `POST /sources/{id}/reviews` | Append a correction with expected base revision |
 | `GET /reviews/{id}?sourceId=…` | Retrieve one review revision |
+| `GET /sources/{id}/analyses/{analysisId}/frame-index` | Bounded page of the frozen frame index |
+| `GET /sources/{id}/analyses/{analysisId}/observations` | Bounded page of published observations (`kind`, `sincePts`, `untilPts`) |
 
 ## Upload contract
 
@@ -162,8 +164,10 @@ Samples are decoded once with the fixed command in `MouseVideoAnalysisWorker.sam
 They are grayscale, at most `visual-sample-max-width` px wide (default 480), with a PTS-window
 stride.
 
-**Cursor: `cursor-template/v5`** (`MouseVideoCursorTracker`). This runs only when a reviewed
+**Cursor: `cursor-template/v7`** (`MouseVideoCursorTracker`). This runs only when a reviewed
 cursor template PNG is configured (`visual-cursor-template`, hotspot `visual-cursor-hotspot-x/-y`).
+`cursor-template/v6` was an unpublished intermediate without the guarded re-check takeover. The
+method id is part of the analysis identity, so the bump keeps local v6 analyses from being reused.
 - The template is rendered at its displayed scale with 4×4 sub-pixel phases. Only analysis pixels
   the sprite fully covers are compared, using zero-mean normalized correlation, with a luma-gain
   range and a minimum patch contrast.
@@ -179,15 +183,43 @@ cursor template PNG is configured (`visual-cursor-template`, hotspot `visual-cur
   qualifies.
 - A frame with a distinct runner-up within `visual-cursor-ambiguity-margin` is `AMBIGUOUS`. A
   detection never implies a click or a physical input event.
-- Two passes (v5): the analyzer tracks the samples forward, then backward from the last sample with
+- Two passes: the analyzer tracks the samples forward, then backward from the last sample with
   the track restarted and the calibration kept. A forward miss takes the backward detection only
   when it continues a backward track, so it needs `visual-cursor-min-score` exactly like a forward
   continuation. This recovers track starts and bridges short gaps from their far side; a forward
   detection is never replaced. Upgraded observations carry `evidence.pass = "backward"` and the
   forward `forwardReason`.
+- **Start must be an appearance (v7).** A placement that would start a track is rejected unless its
+  match beats the same patch at the same location in the preceding sample by more than
+  `visual-cursor-ambiguity-margin`. Interface
+  art that only looked new — because a competing placement closed, or because the world moved
+  behind a semi-transparent panel — is what made v5 resume on static marks; a cursor that arrives
+  leaves background at that location one sample earlier.
+- **Whole-frame re-check (v7).** While a track exists the search stays near it, which keeps a wrong
+  track wrong. Every 2 s of video the whole frame is searched too, and a placement away from the
+  track replaces the windowed one only when it scores higher by more than the ambiguity margin
+  and would start a track on its own: at least `visual-cursor-start-score`, an appearance, and no
+  other placement within the margin. Otherwise the windowed result stands, so the check can never
+  turn a kept continuation into a miss. The cadence comes from the sampled interval, so it is 2 s
+  of video rather than a fixed frame count.
+- The evidence map names the admitting rule in `evidence.rule` (`changed`, `arrival` or `held`)
+  and, for a rejected sample, the cause in `evidence.reason`. `evidence.windowed` marks a search
+  kept near the track, `evidence.rechecked` a sample that also ran the whole-frame search, and
+  `evidence.takeover` a re-check that moved the track.
 
 Supported cases are defined by geometry: at every sub-pixel phase, the displayed cursor and the
 next smaller calibration scale must render at least 12 fully covered analysis pixels.
+
+### Observation reads
+
+`GET /sources/{id}/analyses/{analysisId}/observations` pages one immutable published artifact. A
+`CURSOR_VISIBILITY` item carries a bounded `evidence` object so a read can say *why* a sample was
+accepted, held or rejected. Only these keys are ever passed through, in this order: `rule`,
+`reason`, `continuation`, `windowed`, `rechecked`, `takeover`, `pass`, `score`, `runnerUpScore`,
+`sourceScale`, `centreDelta`, `meanDelta`, `windowMaxDelta`, `forwardReason`, `missedSamples`. The projection happens while streaming the
+artifact, so an unlisted key is skipped without being materialized, and other observation kinds
+keep their evidence internal. `scripts/sc2150/explain_cursor_track.py` prints this projection per
+sample.
 
 **Cuts: `scene-diff/v3`.** A sampled pair is a cut when its mean luma difference is at least
 `cut-min-delta`, or at least `cut-spike-min-delta` and `cut-spike-ratio` times every other pair

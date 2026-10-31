@@ -1,5 +1,6 @@
 package com.chromascape.web.debug.tickdebugger.video.service;
 
+import com.chromascape.web.debug.tickdebugger.video.MouseVideoCorrectionContract;
 import com.chromascape.web.debug.tickdebugger.video.MouseVideoException;
 import com.chromascape.web.debug.tickdebugger.video.entity.MouseVideoAnalysis;
 import com.chromascape.web.debug.tickdebugger.video.entity.MouseVideoAnalysisRepository;
@@ -14,6 +15,7 @@ import com.chromascape.web.debug.tickdebugger.video.entity.MouseVideoReviewRevis
 import com.chromascape.web.debug.tickdebugger.video.entity.MouseVideoSource;
 import com.chromascape.web.debug.tickdebugger.video.entity.MouseVideoSourceRepository;
 import com.chromascape.web.debug.tickdebugger.video.store.MouseVideoByteStore;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import java.io.IOException;
@@ -445,6 +447,18 @@ public class MouseVideoExportService {
       block.put("latestId", latest.getId().toString());
       block.put("sourceUse", latest.getSourceUseReview());
       block.put("state", latest.getState());
+      if (MouseVideoCorrectionContract.PROVENANCE_VERSION.equals(latest.getContractVersion())) {
+        block.put("contract", latest.getContractVersion());
+        block.put(
+            "correctionsDigest",
+            MouseVideoCorrectionContract.digestOf(latest.getCorrectionsJson()));
+        block.put("independenceVerified", false);
+        java.util.Set<String> provenance = new java.util.TreeSet<>();
+        for (JsonNode correction : latest.getCorrectionsJson()) {
+          provenance.add(correction.path("provenance").asText("UNKNOWN"));
+        }
+        block.put("provenance", provenance);
+      }
     } else {
       block.put("latestId", "");
       block.put("sourceUse", MouseVideoReviewRevision.USE_INSPECTION_ONLY);

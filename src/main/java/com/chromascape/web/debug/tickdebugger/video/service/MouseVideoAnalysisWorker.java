@@ -214,6 +214,10 @@ public class MouseVideoAnalysisWorker {
     manifest.put("algorithmId", MouseVideoVisualAnalyzer.ALGORITHM_ID);
     manifest.put("toolchainPin", properties.getVisualToolchainPin());
     manifest.put("indexChecksum", frozen.checksum());
+    manifest.put(
+        "coordinatePlane",
+        MouseVideoCoordinatePlane.fromProbe(
+            probe.width(), probe.height(), probe.rotationDegrees()));
     manifest.put("observationsChecksum", observationsJson);
     manifest.put("qualityChecksum", qualityJson);
     List<Map<String, Object>> declared = new ArrayList<>();

@@ -230,6 +230,36 @@ class MouseVideoFrameIndexServiceTest {
   }
 
   @Test
+  void observationsExposeOnlyTheBoundedCursorEvidenceKeys() throws Exception {
+    String checksum = publishObservations(observationsWithEvidenceJson());
+    stubArtifact(MouseVideoArtifactRef.ROLE_OBSERVATIONS, checksum, "application/json");
+
+    Map<String, Object> page =
+        observations.list(OWNER, sourceId, analysisId, null, 10, null, null, null);
+
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> items = (List<Map<String, Object>>) page.get("items");
+    @SuppressWarnings("unchecked")
+    Map<String, Object> evidence = (Map<String, Object>) items.get(0).get("evidence");
+    assertThat(evidence)
+        .containsEntry("rule", "held")
+        .containsEntry("reason", "competing placement")
+        .containsEntry("continuation", true)
+        .containsEntry("windowed", true)
+        .containsEntry("rechecked", true)
+        .containsEntry("takeover", false)
+        .containsEntry("pass", "backward")
+        .containsEntry("score", 0.87d)
+        .containsEntry("missedSamples", 2)
+        .containsEntry("forwardReason", "below reviewed threshold");
+    assertThat(evidence).doesNotContainKeys("gain", "phaseX", "maskPixels", "notAllowed");
+
+    // Other observation kinds keep their evidence internal; only a cursor sample is explained.
+    assertThat(items.get(1).get("kind")).isEqualTo("SCENE_CUT");
+    assertThat(items.get(1)).doesNotContainKey("evidence");
+  }
+
+  @Test
   void observationsRejectAnInvertedPtsRange() throws Exception {
     String checksum = publishObservations(observationsJson());
     stubArtifact(MouseVideoArtifactRef.ROLE_OBSERVATIONS, checksum, "application/json");
@@ -397,6 +427,19 @@ class MouseVideoFrameIndexServiceTest {
         + "{\"kind\":\"SCENE_CUT\",\"frameOrdinal\":2,\"pts\":40,\"confidence\":0.99},"
         + "{\"kind\":\"CURSOR_VISIBILITY\",\"frameOrdinal\":3,\"pts\":60,\"visibility\":\"AMBIGUOUS\","
         + "\"confidence\":0.3,\"unknownReason\":\"compression\"}]}";
+  }
+
+  private static String observationsWithEvidenceJson() {
+    return "{\"schema\":\"observations/v1\",\"observations\":["
+        + "{\"kind\":\"CURSOR_VISIBILITY\",\"frameOrdinal\":0,\"pts\":0,\"visibility\":\"VISIBLE\","
+        + "\"confidence\":0.87,\"x\":10,\"y\":20,\"evidence\":{\"rule\":\"held\","
+        + "\"continuation\":true,\"pass\":\"backward\",\"score\":0.87,\"runnerUpScore\":0.41,"
+        + "\"sourceScale\":1.0,\"missedSamples\":2,\"forwardReason\":\"below reviewed threshold\","
+        + "\"gain\":0.9,\"phaseX\":0.5,\"maskPixels\":84,\"windowed\":true,"
+        + "\"rechecked\":true,\"takeover\":false,"
+        + "\"reason\":\"competing placement\",\"notAllowed\":\"secret\"}},"
+        + "{\"kind\":\"SCENE_CUT\",\"frameOrdinal\":1,\"pts\":20,\"confidence\":0.99,"
+        + "\"evidence\":{\"meanDelta\":0.9,\"rule\":\"absolute\"}}]}";
   }
 
   /** Re-encodes a cursor with a substituted artifact address to prove the pinning check. */

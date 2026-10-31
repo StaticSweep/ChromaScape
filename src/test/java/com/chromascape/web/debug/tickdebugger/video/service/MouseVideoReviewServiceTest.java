@@ -120,6 +120,65 @@ class MouseVideoReviewServiceTest {
   }
 
   @Test
+  void storesVersionedProvenanceAndRetriesWithoutAdvancingAgain() {
+    UUID id = geometricAnalysis();
+    var entry =
+        JsonNodeFactory.instance
+            .objectNode()
+            .put("kind", "CURSOR_VISIBILITY")
+            .put("frameOrdinal", 0)
+            .put("visibility", "HIDDEN")
+            .put("unknownReason", "not visible")
+            .put("provenance", "BLIND_UNVERIFIED");
+    var corrections = JsonNodeFactory.instance.arrayNode().add(entry);
+    var created =
+        service.create(
+            "owner-1",
+            "owner-1",
+            sourceId,
+            "provenance-request",
+            id,
+            0,
+            "blind unverified",
+            "INSPECTION_ONLY",
+            corrections);
+    assertThat(created.get("contract")).isEqualTo("corrections/v2");
+    assertThat(created.get("corrections").toString()).contains("BLIND_UNVERIFIED");
+    var saved = org.mockito.ArgumentCaptor.forClass(MouseVideoReviewRevision.class);
+    verify(revisions).save(saved.capture());
+    when(revisions.findBySourceIdAndRequestId(sourceId, "provenance-request"))
+        .thenReturn(Optional.of(saved.getValue()));
+    var retried =
+        service.create(
+            "owner-1",
+            "owner-1",
+            sourceId,
+            "provenance-request",
+            id,
+            0,
+            "blind unverified",
+            "INSPECTION_ONLY",
+            corrections);
+    assertThat(retried.get("id")).isEqualTo(created.get("id"));
+    assertThat(source.getReviewRevision()).isEqualTo(1);
+    entry.put("provenance", "DETECTOR_ASSISTED");
+    assertThatThrownBy(
+            () ->
+                service.create(
+                    "owner-1",
+                    "owner-1",
+                    sourceId,
+                    "provenance-request",
+                    id,
+                    0,
+                    "blind unverified",
+                    "INSPECTION_ONLY",
+                    corrections))
+        .isInstanceOf(MouseVideoException.class)
+        .hasMessageContaining("different review content");
+  }
+
+  @Test
   void quarterTurnUsesPortraitPreviewHeightRatherThanTheLandscapeIntakeLimit() {
     UUID id = geometricAnalysis();
     when(previews.requireFrameGeometry("owner-1", sourceId, id, 0, "index"))

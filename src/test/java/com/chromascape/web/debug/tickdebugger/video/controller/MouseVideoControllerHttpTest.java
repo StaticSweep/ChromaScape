@@ -30,6 +30,7 @@ import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoPreviewSer
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoRequestGuard;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoRestrictedLauncher;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoReviewService;
+import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoReviewSessionService;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoSchedulingService;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoTelemetry;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoWorkerRegistry;
@@ -104,6 +105,7 @@ class MouseVideoControllerHttpTest {
             mock(MouseVideoWriteNonceService.class),
             new MouseVideoTelemetry(),
             workerRegistry,
+            mock(MouseVideoReviewSessionService.class),
             new ObjectMapper());
     mvc = MockMvcBuilders.standaloneSetup(controller).build();
   }

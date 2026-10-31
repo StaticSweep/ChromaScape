@@ -83,6 +83,10 @@ public class MouseVideoReviewService {
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("items", items);
     body.put("contract", MouseVideoCorrectionContract.VERSION);
+    body.put(
+        "supportedContracts",
+        List.of(
+            MouseVideoCorrectionContract.VERSION, MouseVideoCorrectionContract.PROVENANCE_VERSION));
     return body;
   }
 
@@ -99,6 +103,20 @@ public class MouseVideoReviewService {
     return view(revision, successors(revisions.findBySourceIdOrderByCreatedAtAsc(sourceId)));
   }
 
+  /** Reads immutable revision content without materializing all source history. */
+  @Transactional(readOnly = true)
+  public Map<String, Object> getSnapshot(String owner, UUID sourceId, UUID revisionId) {
+    requireSource(owner, sourceId);
+    var revision =
+        revisions
+            .findByIdAndSourceId(revisionId, sourceId)
+            .orElseThrow(
+                () ->
+                    new MouseVideoException(
+                        MouseVideoException.CODE_NOT_FOUND, "Review revision is not available"));
+    return view(revision, Map.of());
+  }
+
   @Transactional
   public Map<String, Object> create(
       String owner,
@@ -110,6 +128,55 @@ public class MouseVideoReviewService {
       String reason,
       String sourceUseReview,
       JsonNode corrections) {
+    return createInternal(
+        owner,
+        actor,
+        sourceId,
+        requestId,
+        analysisId,
+        expectedBaseRevision,
+        reason,
+        sourceUseReview,
+        corrections,
+        true);
+  }
+
+  /** Appends a context-bound revision with bounded history work and a flushed immutable result. */
+  @Transactional
+  public Map<String, Object> createSnapshot(
+      String owner,
+      String actor,
+      UUID sourceId,
+      String requestId,
+      UUID analysisId,
+      long expectedBaseRevision,
+      String reason,
+      String sourceUseReview,
+      JsonNode corrections) {
+    return createInternal(
+        owner,
+        actor,
+        sourceId,
+        requestId,
+        analysisId,
+        expectedBaseRevision,
+        reason,
+        sourceUseReview,
+        corrections,
+        false);
+  }
+
+  private Map<String, Object> createInternal(
+      String owner,
+      String actor,
+      UUID sourceId,
+      String requestId,
+      UUID analysisId,
+      long expectedBaseRevision,
+      String reason,
+      String sourceUseReview,
+      JsonNode corrections,
+      boolean includeHistory) {
     MouseVideoSource source =
         sources
             .findForUpdateByIdAndOwner(sourceId, owner)
@@ -156,7 +223,11 @@ public class MouseVideoReviewService {
             "This request identifier was already used with different review content; submit a new"
                 + " request identifier");
       }
-      return view(revision, successors(revisions.findBySourceIdOrderByCreatedAtAsc(sourceId)));
+      return view(
+          revision,
+          includeHistory
+              ? successors(revisions.findBySourceIdOrderByCreatedAtAsc(sourceId))
+              : Map.of());
     }
     if (source.getReviewRevision() != expectedBaseRevision) {
       throw new MouseVideoException(
@@ -183,7 +254,12 @@ public class MouseVideoReviewService {
     source.advanceReviewRevision();
     source.setOriginReview(MouseVideoSource.REVIEW_REVIEWED);
     sources.save(source);
-    return view(revision, successors(revisions.findBySourceIdOrderByCreatedAtAsc(sourceId)));
+    if (!includeHistory) sources.flush();
+    return view(
+        revision,
+        includeHistory
+            ? successors(revisions.findBySourceIdOrderByCreatedAtAsc(sourceId))
+            : Map.of());
   }
 
   /**

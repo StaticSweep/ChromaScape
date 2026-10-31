@@ -29,7 +29,7 @@ class MouseVideoResourceLimitsTest {
                     "/usr/bin/python3",
                     "-c",
                     "import pathlib,json; p=pathlib.Path('/sys/fs/cgroup'+pathlib.Path('/proc/self/cgroup').read_text().strip().split('::')[1]); "
-                        + "print(json.dumps({f:(p/f).read_text().strip() for f in ('memory.max','cpu.max','pids.max')}))"),
+                        + "print(json.dumps({f:(p/f).read_text().strip() for f in ('memory.max','memory.swap.max','cpu.max','pids.max')}))"),
                 10_000,
                 new MouseVideoCancellation(),
                 null,
@@ -37,6 +37,9 @@ class MouseVideoResourceLimitsTest {
     assertThat(result.exitCode()).isZero();
     var limits = new ObjectMapper().readTree(result.stdout());
     assertThat(limits.path("memory.max").asText()).isEqualTo("67108864");
+    assertThat(limits.path("memory.swap.max").asText())
+        .as("the memory budget is a total ceiling, not a resident-only ceiling")
+        .isEqualTo("0");
     assertThat(limits.path("pids.max").asText()).isEqualTo("11");
     String[] cpu = limits.path("cpu.max").asText().split(" ");
     assertThat(Double.parseDouble(cpu[0]) / Double.parseDouble(cpu[1])).isBetween(.36, .38);

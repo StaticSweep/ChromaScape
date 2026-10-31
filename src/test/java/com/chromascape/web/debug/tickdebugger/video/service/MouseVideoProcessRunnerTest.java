@@ -55,6 +55,34 @@ class MouseVideoProcessRunnerTest {
   }
 
   @Test
+  void disappearingScopeAndUnreadableCgroupStatesAreInterpretedWithoutFalseAmbiguity() {
+    assertThat(MouseVideoProcessRunner.containmentMembership("inactive", "", null, null))
+        .isEqualTo(MouseVideoProcessRunner.Membership.EMPTY);
+    assertThat(MouseVideoProcessRunner.containmentMembership("", "", null, null))
+        .isEqualTo(MouseVideoProcessRunner.Membership.EMPTY);
+    assertThat(MouseVideoProcessRunner.containmentMembership("deactivating", "", null, null))
+        .isEqualTo(MouseVideoProcessRunner.Membership.EMPTY);
+    assertThat(
+            MouseVideoProcessRunner.containmentMembership(
+                "active", "/cg", null, new java.nio.file.NoSuchFileException("/cg/cgroup.procs")))
+        .isEqualTo(MouseVideoProcessRunner.Membership.EMPTY);
+    assertThat(
+            MouseVideoProcessRunner.containmentMembership("active", "/cg", List.of(" ", ""), null))
+        .isEqualTo(MouseVideoProcessRunner.Membership.EMPTY);
+    assertThat(MouseVideoProcessRunner.containmentMembership("active", "", null, null))
+        .isEqualTo(MouseVideoProcessRunner.Membership.PENDING);
+    assertThat(MouseVideoProcessRunner.containmentMembership("activating", "", null, null))
+        .isEqualTo(MouseVideoProcessRunner.Membership.PENDING);
+    assertThat(
+            MouseVideoProcessRunner.containmentMembership(
+                "active", "/cg", null, new java.nio.file.AccessDeniedException("/cg/cgroup.procs")))
+        .isEqualTo(MouseVideoProcessRunner.Membership.PENDING);
+    assertThat(
+            MouseVideoProcessRunner.containmentMembership("active", "/cg", List.of("1234"), null))
+        .isEqualTo(MouseVideoProcessRunner.Membership.PRESENT);
+  }
+
+  @Test
   @EnabledOnOs(OS.LINUX)
   void unavailableContainmentRefusesBeforeLaunchingTheRequestedCommand() throws Exception {
     MouseVideoProcessRunner unavailable = new MouseVideoProcessRunner(properties, () -> false);

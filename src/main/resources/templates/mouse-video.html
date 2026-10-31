@@ -4,8 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ChromaScape — External video import</title>
-    <link rel="stylesheet" href="/css/mouse-research.css?v=9" />
-    <script src="/js/mouse-video.js?v=4" defer></script>
+    <link rel="stylesheet" href="/css/mouse-research.css?v=10" />
+    <script src="/js/mouse-video-review-core.js?v=4" defer></script>
+    <script src="/js/mouse-video.js?v=8" defer></script>
   </head>
   <body class="mouse-page">
     <main class="mouse-workspace" data-mouse-video>
@@ -108,6 +109,37 @@
       >
         <h2 id="video-review-heading">Frame review</h2>
         <p data-review-status role="status" aria-live="polite"></p>
+
+        <div class="mouse-research-filters">
+          <label>Range start <input type="number" min="0" value="0" data-review-range-start /></label>
+          <label>Range end <input type="number" min="0" value="1999" data-review-range-end /></label>
+          <label><input type="checkbox" data-review-attestation /> I will follow the annotation protocol and disclose prior suggestion exposure.</label>
+          <button type="button" data-review-abandon hidden>Abandon qualification session (keep saved history)</button>
+          <button type="button" data-review-seal hidden>Seal completed range</button>
+          <a data-review-session-export hidden download="mouse-video-review-export.json">Download sealed review</a>
+        </div>
+        <div class="mouse-research-filters" data-review-mode-controls>
+          <label class="mouse-video-preview-toggle">
+            <input type="checkbox" data-review-mode-toggle />
+            Review mode
+          </label>
+          <label class="mouse-video-preview-toggle">
+            <input type="checkbox" data-review-blind-toggle />
+            Blind (unverified; hide detector suggestions)
+          </label>
+          <button type="button" data-review-accept disabled>Accept (Enter)</button>
+          <button type="button" data-review-hidden disabled>Hidden (H)</button>
+          <button type="button" data-review-ambiguous disabled>Ambiguous (A)</button>
+          <button type="button" data-review-skip disabled>Skip (S)</button>
+          <button type="button" data-review-prev disabled>Previous item</button>
+          <button type="button" data-review-next disabled>Next item</button>
+          <button type="button" data-review-undo disabled>Undo label</button>
+        </div>
+        <p class="mouse-video-frame-note" data-review-mode-status role="status" aria-live="polite" hidden></p>
+        <p class="mouse-video-frame-note" data-review-mode-counts hidden></p>
+        <p class="mouse-video-frame-note" data-review-mode-help hidden>
+          Enter accept · click label · H hidden · A ambiguous · S skip · ←/→ item · Z undo
+        </p>
 
         <div class="mouse-research-filters">
           <label>
@@ -226,6 +258,7 @@
 
         <h3>Revision history</h3>
         <ul data-review-history></ul>
+        <button type="button" data-review-history-older hidden>Show older saved revisions</button>
         <pre data-review-history-detail aria-live="polite" tabindex="0" aria-label="Selected review revision details"></pre>
       </section>
     </main>

@@ -16,6 +16,7 @@ import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoPreviewSer
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoRequestGuard;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoRestrictedLauncher;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoReviewService;
+import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoReviewSessionService;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoSchedulingService;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoTelemetry;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoWorkerRegistry;
@@ -76,7 +77,17 @@ public class MouseVideoController {
   private final MouseVideoWriteNonceService nonces;
   private final MouseVideoTelemetry telemetry;
   private final MouseVideoWorkerRegistry workerRegistry;
+  private final MouseVideoReviewSessionService reviewSessions;
   private final ObjectMapper mapper;
+
+  /**
+   * Every prediction-bearing route fails closed when the review-policy guard is unavailable: the
+   * dependency is required, so a missing bean prevents startup instead of silently bypassing
+   * exposure and membership enforcement.
+   */
+  private void predictionAccess(MouseVideoAccess.Actor actor, UUID sourceId, String kind) {
+    reviewSessions.expose(actor.owner(), actor.auditActor(), sourceId, kind);
+  }
 
   public MouseVideoController(
       MouseVideoAccess access,
@@ -94,6 +105,7 @@ public class MouseVideoController {
       MouseVideoWriteNonceService nonces,
       MouseVideoTelemetry telemetry,
       MouseVideoWorkerRegistry workerRegistry,
+      MouseVideoReviewSessionService reviewSessions,
       ObjectMapper mapper) {
     this.access = access;
     this.imports = imports;
@@ -110,6 +122,7 @@ public class MouseVideoController {
     this.nonces = nonces;
     this.telemetry = telemetry;
     this.workerRegistry = workerRegistry;
+    this.reviewSessions = reviewSessions;
     this.mapper = mapper;
   }
 
@@ -141,6 +154,7 @@ public class MouseVideoController {
     access.require(principal);
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("counters", telemetry.snapshot());
+    body.put("reviewProtocol", reviewSessions.counters());
     body.put("ownedWorkers", workerRegistry.ownedCount());
     return body;
   }
@@ -254,13 +268,24 @@ public class MouseVideoController {
       @RequestParam(value = "kind", required = false) String kind,
       Principal principal) {
     MouseVideoAccess.Actor actor = access.require(principal);
-    return catalog.list(actor.owner(), cursor, limit, kind);
+    Map<String, Object> result = catalog.list(actor.owner(), cursor, limit, kind);
+    if (result.get("items") instanceof java.util.List<?> items) {
+      for (Object item : items) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> entry = (Map<String, Object>) item;
+        reviewSessions.protectCatalog(
+            actor.owner(), actor.auditActor(), parseId((String) entry.get("id")), entry);
+      }
+    }
+    return result;
   }
 
   @GetMapping("/sources/{sourceId}")
   public Map<String, Object> source(@PathVariable String sourceId, Principal principal) {
     MouseVideoAccess.Actor actor = access.require(principal);
-    return catalog.get(actor.owner(), parseId(sourceId));
+    Map<String, Object> result = catalog.get(actor.owner(), parseId(sourceId));
+    return reviewSessions.protectCatalog(
+        actor.owner(), actor.auditActor(), parseId(sourceId), result);
   }
 
   @GetMapping("/sources/{sourceId}/media/{role}")
@@ -383,6 +408,7 @@ public class MouseVideoController {
   public Map<String, Object> exports(@PathVariable String sourceId, Principal principal) {
     MouseVideoAccess.Actor actor = access.require(principal);
     Map<String, Object> body = new LinkedHashMap<>();
+    predictionAccess(actor, parseId(sourceId), "EXPORT");
     body.put("items", exportService.list(actor.owner(), parseId(sourceId)));
     return body;
   }
@@ -399,6 +425,7 @@ public class MouseVideoController {
     UUID analysisId = optionalId(stringField(body, "analysisId"));
     Long reviewRevision =
         body.get("reviewRevision") instanceof Number number ? number.longValue() : null;
+    predictionAccess(actor, parseId(sourceId), "EXPORT");
     MouseVideoExportService.ExportBundle bundle =
         exportService.create(
             actor.owner(), parseId(sourceId), requestId, analysisId, reviewRevision);
@@ -419,6 +446,7 @@ public class MouseVideoController {
   public ResponseEntity<Resource> downloadExport(
       @PathVariable String exportId, Principal principal) {
     MouseVideoAccess.Actor actor = access.require(principal);
+    reviewSessions.exposeExport(actor.owner(), actor.auditActor(), parseId(exportId));
     MouseVideoExportService.ExportHandle handle =
         exportService.retrieve(actor.owner(), parseId(exportId));
     return ResponseEntity.ok()
@@ -435,6 +463,7 @@ public class MouseVideoController {
   public ResponseEntity<Map<String, Object>> exportManifest(
       @PathVariable String exportId, Principal principal) {
     MouseVideoAccess.Actor actor = access.require(principal);
+    reviewSessions.exposeExport(actor.owner(), actor.auditActor(), parseId(exportId));
     JsonNode manifest = readJson(exportService.manifestJson(actor.owner(), parseId(exportId)));
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("exportId", exportId);
@@ -473,6 +502,7 @@ public class MouseVideoController {
       @RequestParam(value = "untilPts", required = false) String untilPts,
       Principal principal) {
     MouseVideoAccess.Actor actor = access.require(principal);
+    predictionAccess(actor, parseId(sourceId), "OBSERVATIONS");
     return observationsService.list(
         actor.owner(),
         parseId(sourceId),
@@ -494,6 +524,7 @@ public class MouseVideoController {
     MouseVideoAccess.Actor actor = access.require(principal);
     guard.requireWrite(request, actor);
     String requestId = requireUuid(stringField(body, "requestId"));
+    predictionAccess(actor, parseId(sourceId), "ANALYSIS");
     MouseVideoSchedulingService.Receipt receipt =
         schedulingService.scheduleAnalysis(
             actor.owner(),
@@ -567,6 +598,7 @@ public class MouseVideoController {
   @GetMapping("/sources/{sourceId}/reviews")
   public Map<String, Object> reviews(@PathVariable String sourceId, Principal principal) {
     MouseVideoAccess.Actor actor = access.require(principal);
+    predictionAccess(actor, parseId(sourceId), "LEGACY_HISTORY");
     return reviewService.list(actor.owner(), parseId(sourceId));
   }
 
@@ -576,6 +608,7 @@ public class MouseVideoController {
       @RequestParam("sourceId") String sourceId,
       Principal principal) {
     MouseVideoAccess.Actor actor = access.require(principal);
+    predictionAccess(actor, parseId(sourceId), "LEGACY_HISTORY");
     return reviewService.get(actor.owner(), parseId(sourceId), parseId(revisionId));
   }
 
@@ -595,6 +628,7 @@ public class MouseVideoController {
     String sourceUse = stringField(body, "sourceUse");
     JsonNode corrections =
         body.get("corrections") == null ? null : mapper.valueToTree(body.get("corrections"));
+    predictionAccess(actor, parseId(sourceId), "LEGACY_REVIEW");
     Map<String, Object> created =
         reviewService.create(
             actor.owner(),

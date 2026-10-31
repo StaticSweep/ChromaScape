@@ -29,6 +29,40 @@ class MouseVideoCorrectionContractTest {
   }
 
   @Test
+  void provenanceIsVersionedPreservedAndNeverCertifiesIndependence() {
+    ObjectNode legacy = cursorCorrection();
+    var original =
+        MouseVideoCorrectionContract.validate(
+            JsonNodeFactory.instance.arrayNode().add(legacy), BOUNDS);
+    assertThat(original.version()).isEqualTo("corrections/v1");
+    assertThat(original.digest())
+        .isEqualTo("sha256:e40cfeacfd457f25bf9398502fc0f64dde7811338433738a521bc9b45a08eea9");
+    for (String provenance : new String[] {"UNKNOWN", "BLIND_UNVERIFIED", "DETECTOR_ASSISTED"}) {
+      ObjectNode entry = cursorCorrection();
+      entry.put("provenance", provenance);
+      var validated =
+          MouseVideoCorrectionContract.validate(
+              JsonNodeFactory.instance.arrayNode().add(entry), BOUNDS);
+      assertThat(validated.version()).isEqualTo("corrections/v2");
+      assertThat(validated.corrections().get(0).path("provenance").asText()).isEqualTo(provenance);
+      assertThat(validated.digest()).isNotEqualTo(original.digest());
+    }
+    for (String invalid : new String[] {"INDEPENDENT", "independent", "", "CERTIFIED"}) {
+      ObjectNode entry = cursorCorrection();
+      entry.put("provenance", invalid);
+      assertInvalid(entry);
+    }
+    ObjectNode malformed = cursorCorrection();
+    malformed.put("provenance", true);
+    assertInvalid(malformed);
+    assertThat(
+            MouseVideoCorrectionContract.validate(
+                    JsonNodeFactory.instance.arrayNode().add(legacy), BOUNDS)
+                .digest())
+        .isEqualTo(original.digest());
+  }
+
+  @Test
   void normalizesDeclaredKindAndDefaultsConfidence() {
     ArrayNode corrections = JsonNodeFactory.instance.arrayNode().add(cursorCorrection());
 

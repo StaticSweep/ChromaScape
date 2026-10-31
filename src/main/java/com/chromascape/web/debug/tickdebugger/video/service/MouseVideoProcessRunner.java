@@ -396,7 +396,11 @@ public class MouseVideoProcessRunner {
       wrapped.add("--expand-environment=no");
       wrapped.add("--unit=" + unit);
       if (properties != null) {
+        // The budget is a total memory ceiling, not merely a resident-set ceiling. Without a swap
+        // limit the kernel reclaims anon pages to swap and the child survives an allocation that
+        // exceeds the budget, so MemorySwapMax=0 makes the cgroup limit authoritative.
         wrapped.add("--property=MemoryMax=" + Math.max(1L, properties.getMaxRssBytes()));
+        wrapped.add("--property=MemorySwapMax=0");
         wrapped.add("--property=CPUQuota=" + Math.max(1, properties.getCpuQuotaPercent()) + "%");
         wrapped.add("--property=TasksMax=" + Math.max(1, properties.getTasksMax()));
       }
@@ -438,19 +442,17 @@ public class MouseVideoProcessRunner {
         return false;
       }
       String controlGroup = group.output().trim();
-      if (controlGroup.isEmpty()) {
-        // A failed/dead unit without a cgroup has no members. An active-looking unit without a
-        // cgroup is ambiguous and must fail closed.
-        return !"active".equals(value)
-            && !"activating".equals(value)
-            && !"deactivating".equals(value);
+      List<String> procs = null;
+      IOException readFailure = null;
+      if (!controlGroup.isEmpty()) {
+        Path path = Path.of("/sys/fs/cgroup" + controlGroup + "/cgroup.procs");
+        try {
+          procs = Files.readAllLines(path);
+        } catch (IOException unavailable) {
+          readFailure = unavailable;
+        }
       }
-      Path procs = Path.of("/sys/fs/cgroup" + controlGroup + "/cgroup.procs");
-      try {
-        return Files.readAllLines(procs).stream().allMatch(String::isBlank);
-      } catch (IOException unavailable) {
-        return false;
-      }
+      return containmentMembership(value, controlGroup, procs, readFailure) == Membership.EMPTY;
     }
 
     @Override
@@ -495,6 +497,9 @@ public class MouseVideoProcessRunner {
     @Override
     public void close() {
       exec(List.of("systemctl", "--user", "stop", unit + ".scope"), CONTROL_MILLIS);
+      // Stop is asynchronous for a unit that is still deactivating. Give the scope a bounded
+      // moment to reach a terminal state so the runner's final emptiness check does not race it.
+      waitEmpty(FORCE_MILLIS);
     }
 
     private static String unitName() {
@@ -572,6 +577,49 @@ public class MouseVideoProcessRunner {
   }
 
   private record Exec(int exitCode, String output) {}
+
+  /**
+   * One containment probe's verdict. {@code PENDING} means the control plane could not prove the
+   * scope is empty yet (a live scope without a readable cgroup, or an unreadable cgroup), so
+   * callers must wait or fail closed rather than claim cleanup.
+   */
+  enum Membership {
+    EMPTY,
+    PRESENT,
+    PENDING
+  }
+
+  /**
+   * Interprets an ActiveState/ControlGroup/cgroup.procs probe without doing I/O so the
+   * disappearing-scope races can be tested deterministically.
+   *
+   * <p>A scope whose cgroup disappears between the two {@code systemctl show} calls has no members:
+   * treating that as ambiguous made ordinary fast previews reconcile after their scope was
+   * collected. A live scope with no cgroup, or a cgroup that cannot be read for any other reason,
+   * stays ambiguous and fails closed.
+   */
+  static Membership containmentMembership(
+      String activeState, String controlGroup, List<String> procs, IOException readFailure) {
+    String state = activeState == null ? "" : activeState.trim();
+    if (state.isEmpty() || "inactive".equals(state)) {
+      return Membership.EMPTY;
+    }
+    String group = controlGroup == null ? "" : controlGroup.trim();
+    if (group.isEmpty()) {
+      return "active".equals(state) || "activating".equals(state)
+          ? Membership.PENDING
+          : Membership.EMPTY;
+    }
+    if (readFailure != null) {
+      return readFailure instanceof java.nio.file.NoSuchFileException
+          ? Membership.EMPTY
+          : Membership.PENDING;
+    }
+    if (procs == null) {
+      return Membership.PENDING;
+    }
+    return procs.stream().allMatch(String::isBlank) ? Membership.EMPTY : Membership.PRESENT;
+  }
 
   private static Exec exec(List<String> command, long timeoutMillis) {
     Process process;

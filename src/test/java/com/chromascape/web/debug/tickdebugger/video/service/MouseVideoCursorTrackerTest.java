@@ -43,6 +43,8 @@ class MouseVideoCursorTrackerTest {
   private static final int SOURCE_HEIGHT = 502;
   private static final int ANALYSIS_WIDTH = 480;
   private static final int ANALYSIS_HEIGHT = 316;
+  private static final int MARK_X = 500;
+  private static final int MARK_Y = 300;
 
   @Test
   void locatesTheHotspotOnTexturedBackgroundsAfterAreaDownscale() {
@@ -194,6 +196,204 @@ class MouseVideoCursorTrackerTest {
   }
 
   @Test
+  void doesNotStartATrackOnAMarkThatAlreadyMatchedInThePreviousSample() {
+    // Reproduction of the Langsamt s3 lock: a cursor-shaped mark is already matching while a
+    // second identical placement makes the sample ambiguous; the competitor then disappears and
+    // the survivor looks "changed" versus its 1.5 s neighbours. v5 opened a fresh track on it; a
+    // real cursor must appear, so v6 refuses a placement that already matched one sample earlier.
+    MouseVideoCursorTracker tracker =
+        new MouseVideoCursorTracker(arrow(), new MouseVideoProperties());
+    int[][] base = scene(31, -1, -1);
+    List<int[][]> frames = new ArrayList<>();
+    for (int frame = 0; frame < 21; frame++) {
+      int[][] image = copy(base);
+      if (frame >= 10 && frame <= 12) {
+        drawArrow(image, 600, 400);
+      }
+      if (frame == 10) {
+        drawArrow(image, 120, 300);
+      }
+      if (frame >= 15) {
+        drawArrow(image, 200 + (frame - 15) * 20, 120);
+      }
+      frames.add(downscale(image));
+    }
+    List<MouseVideoCursorTracker.Context> calibration = new ArrayList<>();
+    for (int frame : new int[] {0, 5, 10, 11, 12, 15, 20}) {
+      calibration.add(alone(frames.get(frame)));
+    }
+    tracker.calibrate(calibration, SOURCE_WIDTH, SOURCE_HEIGHT, ANALYSIS_WIDTH, ANALYSIS_HEIGHT);
+
+    assertThat(tracker.track(context(frames, 10)).visible()).isFalse();
+    assertThat(tracker.track(context(frames, 11)).visible()).isFalse();
+    assertThat(tracker.track(context(frames, 12)).visible()).isFalse();
+    // A cursor that genuinely arrives after frame 15 is still tracked.
+    for (int frame = 16; frame < 21; frame++) {
+      MouseVideoCursorTracker.Detection detection = tracker.track(context(frames, frame));
+      assertThat(detection.visible()).as("arriving cursor at frame %d", frame).isTrue();
+      assertThat(Math.abs(detection.x() - (200 + (frame - 15) * 20))).isLessThanOrEqualTo(2);
+      assertThat(Math.abs(detection.y() - 120)).isLessThanOrEqualTo(2);
+    }
+  }
+
+  @Test
+  void keepsARestingCursorVisibleForFiveSeconds() {
+    MouseVideoCursorTracker tracker =
+        new MouseVideoCursorTracker(arrow(), new MouseVideoProperties());
+    // Frames are samples at 0.25 s, so 20 resting samples are five seconds of video.
+    int[][] background = scene(17, -1, -1);
+    List<int[][]> frames = new ArrayList<>();
+    for (int frame = 0; frame < 32; frame++) {
+      int[][] image = copy(background);
+      int x = frame < 12 ? 80 + frame * 20 : 320;
+      int y = frame < 12 ? 100 + frame * 12 : 244;
+      drawArrow(image, x, y);
+      frames.add(downscale(image));
+    }
+    List<MouseVideoCursorTracker.Context> calibration = new ArrayList<>();
+    for (int frame = 0; frame < 12; frame++) {
+      calibration.add(alone(frames.get(frame)));
+    }
+    tracker.calibrate(calibration, SOURCE_WIDTH, SOURCE_HEIGHT, ANALYSIS_WIDTH, ANALYSIS_HEIGHT);
+
+    for (int frame = 0; frame < frames.size(); frame++) {
+      MouseVideoCursorTracker.Detection detection = tracker.track(context(frames, frame));
+      assertThat(detection.visible()).as("frame %d", frame).isTrue();
+    }
+  }
+
+  @Test
+  void rechecksTheWholeFrameWhileATrackExists() {
+    MouseVideoCursorTracker tracker =
+        new MouseVideoCursorTracker(arrow(), new MouseVideoProperties());
+    // 0.25 s samples, so the 2 s re-check falls every eight windowed samples.
+    tracker.setSampleIntervalSeconds(0.25d);
+    int[][] background = scene(23, -1, -1);
+    List<int[][]> frames = new ArrayList<>();
+    for (int frame = 0; frame < 32; frame++) {
+      int[][] image = copy(background);
+      int x = frame < 12 ? 90 + frame * 10 : 200;
+      drawArrow(image, x, frame < 12 ? 90 : 150);
+      frames.add(downscale(image));
+    }
+    List<MouseVideoCursorTracker.Context> calibration = new ArrayList<>();
+    for (int frame = 0; frame < 12; frame++) {
+      calibration.add(alone(frames.get(frame)));
+    }
+    tracker.calibrate(calibration, SOURCE_WIDTH, SOURCE_HEIGHT, ANALYSIS_WIDTH, ANALYSIS_HEIGHT);
+
+    boolean rechecked = false;
+    for (int frame = 0; frame < 32; frame++) {
+      MouseVideoCursorTracker.Detection detection = tracker.track(context(frames, frame));
+      rechecked |= Boolean.TRUE.equals(detection.evidence().get("rechecked"));
+      assertThat(detection.visible()).as("frame %d", frame).isTrue();
+      int expectedX = frame < 12 ? 90 + frame * 10 : 200;
+      int expectedY = frame < 12 ? 90 : 150;
+      assertThat(Math.abs(detection.x() - expectedX))
+          .as("frame %d x", frame)
+          .isLessThanOrEqualTo(2);
+      assertThat(Math.abs(detection.y() - expectedY))
+          .as("frame %d y", frame)
+          .isLessThanOrEqualTo(2);
+    }
+    assertThat(rechecked).isTrue();
+  }
+
+  @Test
+  void aHeldStaticMarkYieldsToAMovingCursorAtTheNextRecheck() {
+    // The Langsamt s3 trap: the cursor rests on a cursor-like interface mark and leaves. The mark
+    // then continues the track (it differs from the neighbour that still shows the cursor, then
+    // holds), and the windowed search never looks at the real cursor. The 2 s whole-frame re-check
+    // must hand the track over.
+    MouseVideoCursorTracker tracker =
+        new MouseVideoCursorTracker(arrow(), new MouseVideoProperties());
+    // 0.25 s samples, so the re-check falls on every eighth windowed sample: frames 8, 16, 24.
+    tracker.setSampleIntervalSeconds(0.25d);
+    int[][] background = scene(41, -1, -1);
+    drawMark(background, MARK_X, MARK_Y);
+    List<int[][]> frames = new ArrayList<>();
+    List<int[]> truth = new ArrayList<>();
+    for (int frame = 0; frame < 32; frame++) {
+      int[][] image = copy(background);
+      // Arrives over frames 0-4, rests on the mark for one second, then leaves for good.
+      int x = frame <= 8 ? MARK_X - Math.max(0, 4 - frame) * 15 : 150 + (frame - 9) * 10;
+      int y = frame <= 8 ? MARK_Y - Math.max(0, 4 - frame) * 8 : 80 + (frame - 9) * 5;
+      drawArrow(image, x, y);
+      frames.add(downscale(image));
+      truth.add(new int[] {x, y});
+    }
+    List<MouseVideoCursorTracker.Context> calibration = new ArrayList<>();
+    for (int frame = 0; frame < 9; frame++) {
+      calibration.add(alone(frames.get(frame)));
+    }
+    tracker.calibrate(calibration, SOURCE_WIDTH, SOURCE_HEIGHT, ANALYSIS_WIDTH, ANALYSIS_HEIGHT);
+
+    List<MouseVideoCursorTracker.Detection> detections = new ArrayList<>();
+    for (int frame = 0; frame < 32; frame++) {
+      detections.add(tracker.track(context(frames, frame)));
+    }
+    // Precondition: the trap is real. Between re-checks the track sits on the mark.
+    for (int frame = 10; frame < 16; frame++) {
+      MouseVideoCursorTracker.Detection detection = detections.get(frame);
+      assertThat(detection.visible()).as("held mark at frame %d", frame).isTrue();
+      assertThat(Math.abs(detection.x() - MARK_X)).as("frame %d", frame).isLessThanOrEqualTo(2);
+      assertThat(detection.evidence().get("rule")).as("frame %d", frame).isEqualTo("held");
+    }
+    MouseVideoCursorTracker.Detection handover = detections.get(16);
+    assertThat(handover.evidence())
+        .containsEntry("rechecked", true)
+        .containsEntry("takeover", true)
+        .containsEntry("continuation", false);
+    for (int frame = 16; frame < 32; frame++) {
+      MouseVideoCursorTracker.Detection detection = detections.get(frame);
+      assertThat(detection.visible()).as("cursor at frame %d", frame).isTrue();
+      assertThat(Math.abs(detection.x() - truth.get(frame)[0]))
+          .as("frame %d x", frame)
+          .isLessThanOrEqualTo(2);
+      assertThat(Math.abs(detection.y() - truth.get(frame)[1]))
+          .as("frame %d y", frame)
+          .isLessThanOrEqualTo(2);
+    }
+  }
+
+  @Test
+  void aRecheckDoesNotMoveARestingCursorToAWeakerPlacement() {
+    // A resting cursor and a moving look-alike that scores below it (but would pass the minimum):
+    // the re-check runs but must keep the resting track, and never turn it into a miss.
+    MouseVideoCursorTracker tracker =
+        new MouseVideoCursorTracker(arrow(), new MouseVideoProperties());
+    tracker.setSampleIntervalSeconds(0.25d);
+    int[][] background = scene(43, -1, -1);
+    List<int[][]> frames = new ArrayList<>();
+    for (int frame = 0; frame < 32; frame++) {
+      int[][] image = copy(background);
+      int x = frame < 8 ? 300 + frame * 15 : 405;
+      drawArrow(image, x, 260);
+      if (frame >= 9) {
+        drawMark(image, 120 + (frame - 9) * 10, 60);
+      }
+      frames.add(downscale(image));
+    }
+    List<MouseVideoCursorTracker.Context> calibration = new ArrayList<>();
+    for (int frame = 0; frame < 8; frame++) {
+      calibration.add(alone(frames.get(frame)));
+    }
+    tracker.calibrate(calibration, SOURCE_WIDTH, SOURCE_HEIGHT, ANALYSIS_WIDTH, ANALYSIS_HEIGHT);
+
+    boolean rechecked = false;
+    for (int frame = 0; frame < 32; frame++) {
+      MouseVideoCursorTracker.Detection detection = tracker.track(context(frames, frame));
+      rechecked |= Boolean.TRUE.equals(detection.evidence().get("rechecked"));
+      assertThat(detection.visible()).as("frame %d", frame).isTrue();
+      assertThat(detection.evidence()).as("frame %d", frame).containsEntry("takeover", false);
+      assertThat(Math.abs(detection.x() - (frame < 8 ? 300 + frame * 15 : 405)))
+          .as("frame %d x", frame)
+          .isLessThanOrEqualTo(2);
+    }
+    assertThat(rechecked).isTrue();
+  }
+
+  @Test
   void declaresCursorsTooSmallToResolveAtTheAnalysisResolution() {
     double nativeFactor = ANALYSIS_WIDTH / (double) SOURCE_WIDTH;
     assertThat(MouseVideoCursorTracker.resolvable(arrow(), 1.0d, nativeFactor)).isTrue();
@@ -202,6 +402,19 @@ class MouseVideoCursorTrackerTest {
 
   private static MouseVideoCursorTracker.Context alone(int[][] frame) {
     return new MouseVideoCursorTracker.Context(frame, List.of(), null);
+  }
+
+  /** The frame with its samples 1.5 s before and after (4 samples at the test cadence). */
+  private static MouseVideoCursorTracker.Context context(List<int[][]> frames, int index) {
+    List<int[][]> neighbors = new ArrayList<>();
+    if (index >= 4) {
+      neighbors.add(frames.get(index - 4));
+    }
+    if (index + 4 < frames.size()) {
+      neighbors.add(frames.get(index + 4));
+    }
+    return new MouseVideoCursorTracker.Context(
+        frames.get(index), neighbors, index > 0 ? frames.get(index - 1) : null);
   }
 
   private static int[][] copy(int[][] image) {
@@ -238,6 +451,22 @@ class MouseVideoCursorTrackerTest {
           continue;
         }
         image[y + row][x + column] = cell == 'B' ? 0 : 255;
+      }
+    }
+  }
+
+  /**
+   * A cursor-like interface mark: the arrow outline with a dimmed, striped fill, so it matches the
+   * template above the minimum score but clearly below a real cursor.
+   */
+  private static void drawMark(int[][] image, int x, int y) {
+    for (int row = 0; row < ARROW.length; row++) {
+      for (int column = 0; column < ARROW[row].length(); column++) {
+        char cell = ARROW[row].charAt(column);
+        if (cell == '.') {
+          continue;
+        }
+        image[y + row][x + column] = cell == 'B' ? 0 : row % 3 == 0 ? 110 : 235;
       }
     }
   }
