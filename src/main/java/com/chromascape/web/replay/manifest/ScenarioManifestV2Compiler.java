@@ -118,8 +118,12 @@ public class ScenarioManifestV2Compiler {
     return compileInternal(recordingId, requestedMode, selectedCurationId, ownerId, true);
   }
 
-  /** Uses the execution compiler without publishing a curation, child action or manifest. */
-  @Transactional(readOnly = true)
+  /**
+   * Uses the execution compiler without publishing a curation, child action or manifest. Expected
+   * domain refusals become preflight data; they must not poison the caller's read-only transaction.
+   * Unexpected persistence failures retain the ordinary rollback behavior.
+   */
+  @Transactional(readOnly = true, noRollbackFor = ReplayException.class)
   public Compilation preview(
       String recordingId, ConversionMode requestedMode, UUID selectedCurationId, String ownerId) {
     return compileInternal(recordingId, requestedMode, selectedCurationId, ownerId, false);
