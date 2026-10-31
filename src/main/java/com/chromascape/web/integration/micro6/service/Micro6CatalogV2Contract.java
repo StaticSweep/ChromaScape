@@ -95,7 +95,11 @@ public final class Micro6CatalogV2Contract {
     if (tasks == null || !tasks.isArray() || tasks.isEmpty()) {
       reasons.add("tasks_empty");
     }
-    validateTasks(payload, false, reasons);
+    // CanonicalCatalogModel producers retain complete settings in both modes to keep
+    // health/lightweight/full identities equal. Verify those schemas just as in full mode.
+    boolean canonicalModel = Micro6CanonicalHash.hasVerifiedCanonicalModel(payload);
+    validateTasks(payload, canonicalModel, reasons);
+    if (canonicalModel) validateSchemaHashes(payload, reasons);
 
     if (!payload.has("schema_not_requested_count")) {
       reasons.add("schema_not_requested_count_missing");

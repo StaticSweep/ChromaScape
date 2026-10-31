@@ -89,6 +89,13 @@ public final class Micro6CanonicalHash {
    * sorted normalized aliases — mirroring Micro6 exactly.
    */
   static String catalogHash(JsonNode payload, String defaultCapabilityVersion) {
+    // SC-572 producers publish CanonicalCatalogModel (including settings), while older
+    // CatalogV2Publication producers publish the summary model below. Accept either
+    // only after recomputing its complete canonical projection; never trust an attested hash.
+    String canonicalModelHash = canonicalModelCatalogHash(payload, defaultCapabilityVersion);
+    if (canonicalModelHash.equals(text(payload.get("catalog_hash")))) {
+      return canonicalModelHash;
+    }
     String catalogVersion =
         firstNonBlank(text(payload.get("catalog_version")), text(payload.get("version")), "2");
     String capabilityVersion =
@@ -135,6 +142,72 @@ public final class Micro6CanonicalHash {
     stable.put("tasks", summaryTasks);
     stable.put("aliases", summaryAliases);
     return sha256WithPrefix(stable);
+  }
+
+  static boolean hasVerifiedCanonicalModel(JsonNode payload) {
+    return canonicalModelCatalogHash(payload, DEFAULT_CAPABILITY_VERSION)
+        .equals(text(payload.get("catalog_hash")));
+  }
+
+  private static String canonicalModelCatalogHash(JsonNode payload, String capabilityVersion) {
+    Set<String> fields =
+        Set.of(
+            "key",
+            "task_key",
+            "name",
+            "display_name",
+            "category",
+            "category_family",
+            "enabled",
+            "runnable",
+            "task_type",
+            "type",
+            "target_enum",
+            "search_aliases",
+            "args_schema",
+            "settings_schema_version",
+            "supports_task_metadata",
+            "stability_tier",
+            "tags",
+            "membership",
+            "primary_skill",
+            "description",
+            "certification_allowed");
+    List<Map<String, Object>> tasks = new ArrayList<>();
+    for (JsonNode task : payload.path("tasks")) {
+      if (!task.isObject()) continue;
+      Map<String, Object> stableTask = new LinkedHashMap<>();
+      for (String key : fields) {
+        if (task.hasNonNull(key)) stableTask.put(key, nodeValue(task.get(key)));
+      }
+      tasks.add(stableTask);
+    }
+    tasks.sort(
+        Comparator.comparing(
+            row -> String.valueOf(row.getOrDefault("task_key", row.getOrDefault("key", "")))));
+    List<Map<String, Object>> aliases = new ArrayList<>();
+    for (JsonNode alias : payload.path("aliases")) {
+      if (!alias.isObject() || !alias.hasNonNull("alias") || !alias.hasNonNull("task_key"))
+        continue;
+      Map<String, Object> entry = new LinkedHashMap<>();
+      entry.put("alias", nodeValue(alias.get("alias")));
+      entry.put("task_key", nodeValue(alias.get("task_key")));
+      aliases.add(entry);
+    }
+    aliases.sort(Comparator.comparing(row -> String.valueOf(row.get("alias"))));
+    Map<String, Object> model = new LinkedHashMap<>();
+    model.put(
+        "catalog_version",
+        firstNonBlank(text(payload.get("catalog_version")), text(payload.get("version")), "2"));
+    model.put(
+        "capability_version",
+        firstNonBlank(
+            text(payload.get("capability_version")),
+            capabilityVersion,
+            DEFAULT_CAPABILITY_VERSION));
+    model.put("tasks", tasks);
+    model.put("aliases", aliases);
+    return sha256WithPrefix(model);
   }
 
   /**
