@@ -119,13 +119,13 @@ public class MouseVideoImportService {
 
   @PostConstruct
   void initialize() {
-    jobService.reconcileOnStartup();
+    telemetry.reconciliationsRequired(jobService.reconcileOnStartup());
   }
 
   /** Re-queues durable QUEUED jobs and fences claims whose lease expired without cleanup. */
   @Scheduled(fixedDelay = 3000L)
   public void pollQueued() {
-    jobService.reconcileExpiredClaims();
+    telemetry.reconciliationsRequired(jobService.reconcileExpiredClaims());
     if (!properties.isEnabled()) {
       return;
     }

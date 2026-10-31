@@ -2,6 +2,8 @@ package com.chromascape.web.debug.tickdebugger.video.service;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.stereotype.Component;
 
@@ -23,6 +25,12 @@ public class MouseVideoTelemetry {
   private final AtomicLong reconciliationsRequired = new AtomicLong();
   private final AtomicLong mediaRefused = new AtomicLong();
   private final AtomicLong exportsCreated = new AtomicLong();
+  private final AtomicLong reconciliationsResolved = new AtomicLong();
+
+  /** Refusals by error code. Codes are a fixed vocabulary; the cap only guards against misuse. */
+  private final Map<String, AtomicLong> refusalsByCode = new ConcurrentHashMap<>();
+
+  private static final int MAX_REFUSAL_CODES = 64;
 
   public void intakeAccepted() {
     intakeAccepted.incrementAndGet();
@@ -64,6 +72,27 @@ public class MouseVideoTelemetry {
     mediaRefused.incrementAndGet();
   }
 
+  /** Counts jobs fenced for reconciliation by lease expiry or startup. */
+  public void reconciliationsRequired(int count) {
+    if (count > 0) {
+      reconciliationsRequired.addAndGet(count);
+    }
+  }
+
+  /** Counts NEEDS_RECONCILIATION jobs settled by their owner after a cleanup proof. */
+  public void reconciliationResolved() {
+    reconciliationsResolved.incrementAndGet();
+  }
+
+  /** Counts one refused request under its error code (never an actor, source or URL). */
+  public void refused(String code) {
+    String key = code == null ? "UNKNOWN" : code;
+    if (!refusalsByCode.containsKey(key) && refusalsByCode.size() >= MAX_REFUSAL_CODES) {
+      key = "OTHER";
+    }
+    refusalsByCode.computeIfAbsent(key, ignored -> new AtomicLong()).incrementAndGet();
+  }
+
   public void exportCreated() {
     exportsCreated.incrementAndGet();
   }
@@ -81,6 +110,10 @@ public class MouseVideoTelemetry {
     counts.put("reconciliationsRequired", reconciliationsRequired.get());
     counts.put("mediaRefused", mediaRefused.get());
     counts.put("exportsCreated", exportsCreated.get());
+    counts.put("reconciliationsResolved", reconciliationsResolved.get());
+    Map<String, Long> refusals = new TreeMap<>();
+    refusalsByCode.forEach((code, count) -> refusals.put(code, count.get()));
+    counts.put("refusalsByCode", refusals);
     return counts;
   }
 }

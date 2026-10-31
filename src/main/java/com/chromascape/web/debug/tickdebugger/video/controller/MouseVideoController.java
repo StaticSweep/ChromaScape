@@ -417,7 +417,10 @@ public class MouseVideoController {
       @PathVariable String jobId, HttpServletRequest request, Principal principal) {
     MouseVideoAccess.Actor actor = access.require(principal);
     guard.requireWrite(request, actor);
-    return toMap(jobService.view(reconciliation.reconcile(parseId(jobId), actor.owner())));
+    Map<String, Object> settled =
+        toMap(jobService.view(reconciliation.reconcile(parseId(jobId), actor.owner())));
+    telemetry.reconciliationResolved();
+    return settled;
   }
 
   @GetMapping("/sources/{sourceId}/exports")
@@ -660,7 +663,15 @@ public class MouseVideoController {
   }
 
   @ExceptionHandler(MouseVideoException.class)
-  public ResponseEntity<Map<String, Object>> rejected(MouseVideoException error) {
+  public ResponseEntity<Map<String, Object>> rejected(
+      MouseVideoException error, HttpServletRequest request) {
+    telemetry.refused(error.getCode());
+    String path = request == null ? "" : request.getRequestURI();
+    if (path.contains("/imports/")) {
+      telemetry.intakeRefused();
+    } else if (path.contains("/media/")) {
+      telemetry.mediaRefused();
+    }
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("code", error.getCode());
     body.put("message", error.getMessage());

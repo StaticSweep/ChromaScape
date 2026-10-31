@@ -34,7 +34,8 @@ media.**
 |---|---|
 | `GET /capabilities` | Enabled flags, tools, formats, methods, features, limits and typed unknowns |
 | `GET /write-nonce` | Short-lived write nonce bound to the authenticated owner |
-| `GET /observability` | Bounded counters and owned-worker count (no media or credentials) |
+| `GET /observability` | Bounded counters (refusals by error code, intake/media refusals, reconciliations fenced and resolved) and owned-worker count (no media, credentials, actor, source or URL labels) |
+| `POST /jobs/{id}/reconcile` | Owner settles a `NEEDS_RECONCILIATION` job as `FAILED` after a cleanup proof (no worker, no mounted workspace, no unattributed `chromascape-video-*` scope); 409 with the blocker otherwise |
 | `POST /imports/upload` | Bounded streaming multipart (`file` + `metadata`), `X-Mouse-Video-Request-Id` UUID header |
 | `POST /imports/youtube` | Supported single-video link through the pinned constrained acquirer |
 | `GET /sources` | Owner-scoped catalog (`cursor`, `limit` 1–25, `kind`) |

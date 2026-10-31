@@ -203,6 +203,8 @@ class MouseVideoControllerHttpTest {
             post("/api/debug/mouse-videos/jobs/{jobId}/reconcile", jobId).principal(() -> "owner"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("FAILED"));
+    mvc.perform(get("/api/debug/mouse-videos/observability").principal(() -> "owner"))
+        .andExpect(jsonPath("$.counters.reconciliationsResolved").value(1));
   }
 
   @Test
@@ -218,6 +220,10 @@ class MouseVideoControllerHttpTest {
             post("/api/debug/mouse-videos/jobs/{jobId}/reconcile", jobId).principal(() -> "owner"))
         .andExpect(status().isConflict());
     verify(jobService, never()).view(any());
+    mvc.perform(get("/api/debug/mouse-videos/observability").principal(() -> "owner"))
+        .andExpect(jsonPath("$.counters.reconciliationsResolved").value(0))
+        .andExpect(jsonPath("$.counters.refusalsByCode.CONFLICT").value(1))
+        .andExpect(jsonPath("$.counters.intakeRefused").value(0));
   }
 
   @Test
