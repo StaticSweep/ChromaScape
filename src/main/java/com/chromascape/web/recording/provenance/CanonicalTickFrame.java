@@ -113,7 +113,11 @@ public final class CanonicalTickFrame {
       long sourceTick = event.path("sourceTick").asLong();
       if (sourceTick < 0) fail("INVALID_SOURCE_TICK");
       if (sourceTick > tick) fail("FUTURE_OBSERVATION");
-      if (sourceTick < tick - 1) fail("STALE_OBSERVATION");
+      long observationWindow =
+          HumanFishingFrameContract.applies(input)
+              ? HumanFishingFrameContract.MAX_TRANSITION_DELAY_TICKS
+              : 1;
+      if (sourceTick < tick - observationWindow) fail("STALE_OBSERVATION");
       if (!event.path("kind").isTextual() || !event.path("stage").isTextual())
         fail("INVALID_SEMANTIC_EVENT");
       if (!event

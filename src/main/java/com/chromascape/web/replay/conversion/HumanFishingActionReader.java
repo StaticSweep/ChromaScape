@@ -153,6 +153,22 @@ public class HumanFishingActionReader {
               && npc.path("fishingSpot").asBoolean()) matches++;
         }
         if (matches != 1) fail("HUMAN_PRIOR_TARGET_UNPROVEN");
+        for (long waitingTick = sourceTick;
+            waitingTick < observed.path("observationTick").asLong();
+            waitingTick++) {
+          var waiting = byTick.get(waitingTick);
+          if (waiting == null
+              || waiting.payload().path("humanCapture").path("pendingCount").asLong() != 1
+              || !waiting.payload().path("humanCapture").path("actions").isEmpty())
+            fail("HUMAN_PENDING_CONTINUITY_UNPROVEN");
+          int waitingMatches = 0;
+          for (JsonNode npc : waiting.payload().path("npcs")) {
+            if (npc.path("stableId").equals(target.path("stableId"))
+                && npc.path("index").asInt(-1) == target.path("clientIndex").asInt()
+                && npc.path("fishingSpot").asBoolean()) waitingMatches++;
+          }
+          if (waitingMatches != 1) fail("HUMAN_PENDING_TARGET_UNPROVEN");
+        }
         if (sourceTick < start || sourceTick > end) continue;
         if (beforeTick < start || observed.path("observationTick").asLong() > end)
           fail("HUMAN_TRANSITION_OUTSIDE_CURATION");

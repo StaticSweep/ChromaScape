@@ -11,11 +11,28 @@ class HumanFishingFrameContractTest {
   static final ObjectMapper JSON = new ObjectMapper();
 
   static JsonNode fixture() throws Exception {
+    return fixture("authored-observer.json");
+  }
+
+  static JsonNode fixture(String name) throws Exception {
     try (var input =
-        HumanFishingFrameContractTest.class.getResourceAsStream(
-            "/human-fishing/authored-observer.json")) {
+        HumanFishingFrameContractTest.class.getResourceAsStream("/human-fishing/" + name)) {
       return JSON.readTree(input);
     }
+  }
+
+  @Test
+  void sourceSerializedDelayedTransitionRequiresTheSpecializedBoundedWitness() throws Exception {
+    var data = fixture("authored-delayed-observer.json");
+    for (var frame : data.path("frames"))
+      assertDoesNotThrow(() -> CanonicalTickFrame.validate(frame, data.path("context")));
+    ObjectNode late = data.path("frames").get(5).deepCopy();
+    late.put("tick", 9);
+    ((ObjectNode) late.path("humanCapture")).put("tick", 9);
+    ((ObjectNode) late.path("humanCapture").path("actions").get(0)).put("observationTick", 9);
+    assertThrows(
+        ProvenanceException.class,
+        () -> HumanFishingFrameContract.validate(late, data.path("context")));
   }
 
   @Test

@@ -421,9 +421,14 @@ class ProvenancePostgresTest {
             Integer.class));
   }
 
-  @Test
-  void authoredHumanObserverRoundTripRetainsFrameEvidenceAndRestartIdentity() throws Exception {
-    JsonNode fixture = HumanFishingFrameContractTest.fixture();
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"authored-observer.json", "authored-delayed-observer.json"})
+  void authoredHumanObserverRoundTripRetainsFrameEvidenceAndRestartIdentity(String fixtureName)
+      throws Exception {
+    JsonNode fixture = HumanFishingFrameContractTest.fixture(fixtureName);
+    long lastTick =
+        fixture.path("frames").get(fixture.path("frames").size() - 1).path("tick").asLong();
     String recording = "authored-human-observer";
     row(recording, "capture-account", "FISHING_TRAINING", "{\"targetFish\":\"TROUT\"}");
     ObjectNode context = fixture.path("context").deepCopy();
@@ -436,7 +441,7 @@ class ProvenancePostgresTest {
         recording);
     finalized(recording, context.path("debugSessionId").asText());
     var session = sessions.findByRecordingId(recording).orElseThrow();
-    session.setEndTick(3L);
+    session.setEndTick(lastTick);
     when(sessions.findBySessionId(session.getSessionId())).thenReturn(Optional.of(session));
     var tx = new TransactionTemplate(new DataSourceTransactionManager(source));
     for (var input : fixture.path("frames")) {
@@ -460,7 +465,7 @@ class ProvenancePostgresTest {
             .convert(
                 session.getSessionId(),
                 1,
-                3,
+                lastTick,
                 com.chromascape.web.replay.conversion.ConversionMode.CAPTURED_ONLY)
             .orElseThrow();
     var restarted =
@@ -475,13 +480,15 @@ class ProvenancePostgresTest {
             .convert(
                 session.getSessionId(),
                 1,
-                3,
+                lastTick,
                 com.chromascape.web.replay.conversion.ConversionMode.CAPTURED_ONLY)
             .orElseThrow();
     assertEquals(first.conversionChecksum(), second.conversionChecksum());
     assertEquals(1, first.actions().size());
     assertEquals("MICRO6_CLIENT_OBSERVATION", first.actions().get(0).action().getSource());
-    assertEquals(3, frames.page(recording, java.math.BigInteger.ZERO, 200).size());
+    assertEquals(
+        fixture.path("frames").size(),
+        frames.page(recording, java.math.BigInteger.ZERO, 200).size());
   }
 
   @Test

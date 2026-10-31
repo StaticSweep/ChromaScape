@@ -25,9 +25,32 @@ class HumanFishingActionReaderTest {
           new CanonicalProjectionService());
 
   JsonNode fixture() throws Exception {
-    try (var stream = getClass().getResourceAsStream("/human-fishing/authored-observer.json")) {
+    return fixture("authored-observer.json");
+  }
+
+  JsonNode fixture(String name) throws Exception {
+    try (var stream = getClass().getResourceAsStream("/human-fishing/" + name)) {
       return json.readTree(stream);
     }
+  }
+
+  @Test
+  void delayedTransitionLinksAllPendingFramesWithoutMovingItsSourceTick() throws Exception {
+    var data = fixture("authored-delayed-observer.json");
+    var first = convert(data, 1, 7);
+    assertEquals(2, first.actions().get(0).action().getTick());
+    assertEquals(first.conversionChecksum(), convert(data, 1, 7).conversionChecksum());
+  }
+
+  @Test
+  void delayedTransitionRefusesBrokenPendingAccounting() throws Exception {
+    var data = fixture("authored-delayed-observer.json");
+    ObjectNode interrupted = (ObjectNode) data.path("frames").get(3);
+    ((ObjectNode) interrupted.path("humanCapture"))
+        .put("pendingCount", 0)
+        .put("observedCallbacks", 0);
+    rehash(interrupted);
+    assertThrows(ProvenanceException.class, () -> convert(data, 1, 7));
   }
 
   List<CanonicalTickFrame> frames(JsonNode data) {

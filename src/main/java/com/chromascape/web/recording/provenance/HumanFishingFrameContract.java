@@ -9,6 +9,7 @@ import java.util.UUID;
 public final class HumanFishingFrameContract {
   public static final String PRODUCER = "micro6-human-fishing-observer-v1";
   public static final String ADAPTER = "human-fishing-observation-adapter-v1";
+  public static final int MAX_TRANSITION_DELAY_TICKS = 6;
 
   private HumanFishingFrameContract() {}
 
@@ -101,7 +102,8 @@ public final class HumanFishingFrameContract {
         || !action.path("beforeSnapshotTick").isIntegralNumber()
         || action.path("beforeSnapshotTick").asLong() != action.path("sourceTick").asLong() - 1
         || !frame.path("tick").equals(action.path("observationTick"))
-        || action.path("sourceTick").asLong() < frame.path("tick").asLong() - 1
+        || action.path("sourceTick").asLong()
+            < frame.path("tick").asLong() - MAX_TRANSITION_DELAY_TICKS
         || action.path("sourceTick").asLong() > frame.path("tick").asLong()
         || action.path("beforeAnimationId").asInt(-2) != -1
         || action.path("afterAnimationId").asInt(-1) != 623
