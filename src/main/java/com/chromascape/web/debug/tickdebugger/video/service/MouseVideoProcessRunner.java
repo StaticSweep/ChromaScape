@@ -17,6 +17,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -56,6 +57,7 @@ public class MouseVideoProcessRunner {
   private final MouseVideoProperties properties;
   private final BooleanSupplier scopeAvailable;
   private final MouseVideoRestrictedLauncher restrictedLauncher;
+  private final Supplier<Containment> containmentFactory;
 
   @Autowired
   public MouseVideoProcessRunner(
@@ -78,6 +80,16 @@ public class MouseVideoProcessRunner {
     this.properties = properties;
     this.scopeAvailable = scopeAvailable;
     this.restrictedLauncher = restrictedLauncher;
+    this.containmentFactory = null;
+  }
+
+  /** Test seam: supplies the containment instead of opening a systemd scope. */
+  MouseVideoProcessRunner(
+      MouseVideoProperties properties, Supplier<Containment> containmentFactory) {
+    this.properties = properties;
+    this.scopeAvailable = () -> true;
+    this.restrictedLauncher = null;
+    this.containmentFactory = containmentFactory;
   }
 
   /** Receives complete stdout lines; returning false stops consuming further output. */
@@ -119,7 +131,10 @@ public class MouseVideoProcessRunner {
     if (cancellation.isCancelled()) {
       throw new InterruptedException("Execution cancelled before process start");
     }
-    Containment containment = Containment.open(scopeAvailable, properties, restrictedLauncher);
+    Containment containment =
+        containmentFactory != null
+            ? containmentFactory.get()
+            : Containment.open(scopeAvailable, properties, restrictedLauncher);
     Process process;
     try {
       process = containment.start(command);
@@ -164,7 +179,6 @@ public class MouseVideoProcessRunner {
 
     boolean cleanupInterrupted = interrupted || Thread.interrupted();
     cleanupInterrupted |= terminateIfNeeded(containment, process, rootExited);
-    boolean cleanupConfirmed = containment.isEmpty();
     waitForProcessExit(process);
 
     long drainBudget =
@@ -188,9 +202,11 @@ public class MouseVideoProcessRunner {
     }
     closeQuietly(process.getOutputStream());
     containment.close();
-    if (!containment.isEmpty()) {
-      cleanupConfirmed = false;
-    }
+    // The probe after close() is authoritative: close() stops the scope (systemd terminates every
+    // remaining member) and waits for it to settle. A probe taken just after the root exits can
+    // still see a deactivating scope on a busy host; letting that earlier reading stand made clean
+    // jobs ambiguous even though this final probe proved the scope inactive and empty.
+    boolean cleanupConfirmed = containment.isEmpty();
 
     boolean outputComplete = stdout.complete() && stderr.complete();
     boolean readFailed = stdout.readFailed() || stderr.readFailed();
@@ -202,7 +218,9 @@ public class MouseVideoProcessRunner {
     if (!cleanupConfirmed) {
       throw new MouseVideoException(
           MouseVideoException.CODE_CLEANUP_UNCONFIRMED,
-          "Owned process cleanup could not be confirmed; process state is ambiguous");
+          "Owned process cleanup could not be confirmed; process state is ambiguous (last probe: "
+              + containment.lastProbe()
+              + ")");
     }
     if (cancelled || interrupted) {
       Thread.currentThread().interrupt();
@@ -289,11 +307,16 @@ public class MouseVideoProcessRunner {
    * Execution-owned process containment. A containment is opened before the tool starts, remains
    * enumerable after the original root exits, and is the only authority for cleanup confirmation.
    */
-  private interface Containment extends AutoCloseable {
+  interface Containment extends AutoCloseable {
 
     Process start(List<String> command) throws IOException;
 
     boolean isEmpty();
+
+    /** The last emptiness probe, for private diagnostics only; never part of a public message. */
+    default String lastProbe() {
+      return "";
+    }
 
     /** Terminates every member, escalating after the grace period; returns an interrupt flag. */
     boolean terminate(long graceMillis, long forceMillis);
@@ -338,6 +361,7 @@ public class MouseVideoProcessRunner {
     private static volatile Boolean available;
 
     private final String unit = unitName();
+    private volatile String lastProbe = "none";
     private final MouseVideoProperties properties;
     private final MouseVideoRestrictedLauncher restrictedLauncher;
 
@@ -422,10 +446,12 @@ public class MouseVideoProcessRunner {
                   "--value"),
               CONTROL_MILLIS);
       if (state.exitCode() != 0) {
+        lastProbe = "activeState exit=" + state.exitCode();
         return false;
       }
       String value = state.output().trim();
       if (value.isEmpty() || "inactive".equals(value)) {
+        lastProbe = "activeState=" + (value.isEmpty() ? "<empty>" : value);
         return true;
       }
       Exec group =
@@ -439,6 +465,7 @@ public class MouseVideoProcessRunner {
                   "--value"),
               CONTROL_MILLIS);
       if (group.exitCode() != 0) {
+        lastProbe = "activeState=" + value + " controlGroup exit=" + group.exitCode();
         return false;
       }
       String controlGroup = group.output().trim();
@@ -452,7 +479,25 @@ public class MouseVideoProcessRunner {
           readFailure = unavailable;
         }
       }
-      return containmentMembership(value, controlGroup, procs, readFailure) == Membership.EMPTY;
+      Membership membership = containmentMembership(value, controlGroup, procs, readFailure);
+      lastProbe =
+          "activeState="
+              + value
+              + " controlGroup="
+              + (controlGroup.isEmpty() ? "<empty>" : "set")
+              + " members="
+              + (procs == null ? "unread" : procs.stream().filter(p -> !p.isBlank()).count())
+              + (readFailure == null
+                  ? ""
+                  : " readFailure=" + readFailure.getClass().getSimpleName())
+              + " verdict="
+              + membership;
+      return membership == Membership.EMPTY;
+    }
+
+    @Override
+    public String lastProbe() {
+      return lastProbe;
     }
 
     @Override

@@ -54,6 +54,59 @@ class MouseVideoProcessRunnerTest {
     }
   }
 
+  /** A scope that reports members until it is stopped, like a busy host's deactivating scope. */
+  private static final class SettlingScope implements MouseVideoProcessRunner.Containment {
+    private final boolean emptyAfterStop;
+    private boolean stopped;
+
+    SettlingScope(boolean emptyAfterStop) {
+      this.emptyAfterStop = emptyAfterStop;
+    }
+
+    @Override
+    public Process start(List<String> command) throws java.io.IOException {
+      return new ProcessBuilder("true").start();
+    }
+
+    @Override
+    public boolean isEmpty() {
+      return stopped && emptyAfterStop;
+    }
+
+    @Override
+    public boolean terminate(long graceMillis, long forceMillis) {
+      return false;
+    }
+
+    @Override
+    public void close() {
+      stopped = true;
+    }
+  }
+
+  @Test
+  void aScopeStillSettlingWhenTheToolExitsIsConfirmedByTheProbeAfterStop() throws Exception {
+    MouseVideoProcessRunner settling =
+        new MouseVideoProcessRunner(properties, () -> new SettlingScope(true));
+
+    MouseVideoProcessRunner.Result result =
+        settling.run(List.of("ignored"), 5_000L, new MouseVideoCancellation(), null, 1024);
+
+    assertThat(result.exitCode()).isZero();
+  }
+
+  @Test
+  void aScopeStillOccupiedAfterStopRemainsUnconfirmed() {
+    MouseVideoProcessRunner occupied =
+        new MouseVideoProcessRunner(properties, () -> new SettlingScope(false));
+
+    assertThatThrownBy(
+            () ->
+                occupied.run(List.of("ignored"), 5_000L, new MouseVideoCancellation(), null, 1024))
+        .isInstanceOf(MouseVideoException.class)
+        .hasMessageContaining("could not be confirmed");
+  }
+
   @Test
   void disappearingScopeAndUnreadableCgroupStatesAreInterpretedWithoutFalseAmbiguity() {
     assertThat(MouseVideoProcessRunner.containmentMembership("inactive", "", null, null))
