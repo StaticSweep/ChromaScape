@@ -1,0 +1,17 @@
+src/main/java/com/chromascape/web/debug/tickdebugger/video/MouseVideoException.java
+src/main/java/com/chromascape/web/debug/tickdebugger/video/MouseVideoPublicErrors.java
+src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoAdmission.java
+src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoAnalysisIdentity.java
+src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoAnalysisWorker.java
+src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoJobService.java
+src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoPreviewService.java
+src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoRegistrationService.java
+src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoSchedulingService.java
+src/main/resources/static/js/mouse-video.js
+src/test/java/com/chromascape/web/debug/tickdebugger/video/MouseVideoSchedulingPostgresTest.java
+src/test/java/com/chromascape/web/debug/tickdebugger/video/MouseVideoServicePostgresRaceTest.java
+src/test/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoAnalysisIdentityTest.java
+src/test/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoJobServiceTest.java
+src/test/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoPreviewServiceTest.java
+src/test/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoSchedulingServiceTest.java
+src/test/js/mouse-video.test.js

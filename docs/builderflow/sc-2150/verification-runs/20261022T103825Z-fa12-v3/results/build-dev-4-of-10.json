@@ -1,0 +1,56 @@
+[
+  {
+    "source": "11e2eec3",
+    "variant": "hidpi-2.0-resized-0.7x",
+    "clip": "dev--11e2eec3--hidpi-2.0-resized-0.7x",
+    "skipped": null
+  },
+  {
+    "source": "2e64e2fc",
+    "variant": "hidpi-1.5-cut",
+    "clip": "dev--2e64e2fc--hidpi-1.5-cut",
+    "skipped": null
+  },
+  {
+    "source": "4c4898c5",
+    "variant": "native",
+    "clip": "dev--4c4898c5--native",
+    "skipped": null
+  },
+  {
+    "source": "6a594507",
+    "variant": "hidpi-2.0",
+    "clip": "dev--6a594507--hidpi-2.0",
+    "skipped": null
+  },
+  {
+    "source": "78cde7ca",
+    "variant": "hidpi-2.0-resized-0.7x",
+    "clip": "dev--78cde7ca--hidpi-2.0-resized-0.7x",
+    "skipped": null
+  },
+  {
+    "source": "87a88065",
+    "variant": "hidpi-1.5-cut",
+    "clip": "dev--87a88065--hidpi-1.5-cut",
+    "skipped": null
+  },
+  {
+    "source": "f16b6dd7",
+    "variant": "native",
+    "clip": "dev--f16b6dd7--native",
+    "skipped": null
+  },
+  {
+    "source": "f9f78ab0",
+    "variant": "hidpi-2.0",
+    "clip": "dev--f9f78ab0--hidpi-2.0",
+    "skipped": null
+  },
+  {
+    "source": "fa5228cb",
+    "variant": "hidpi-2.0-resized-0.7x",
+    "clip": "dev--fa5228cb--hidpi-2.0-resized-0.7x",
+    "skipped": null
+  }
+]

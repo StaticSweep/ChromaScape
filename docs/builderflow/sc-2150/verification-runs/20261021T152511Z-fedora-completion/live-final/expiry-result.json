@@ -1,0 +1,14 @@
+{
+  "id": "621c64a2-0c49-4658-809b-6db8e5e5f4dd",
+  "sourceId": "58d65069-2552-4fc1-ad46-e800b7649383",
+  "kind": "IMPORT",
+  "stage": "PROBE",
+  "status": "NEEDS_RECONCILIATION",
+  "progress": 0,
+  "attempt": 1,
+  "generation": 6,
+  "cancellationRevision": 0,
+  "errorCode": "INTERRUPTED",
+  "errorMessage": "Cleanup could not be confirmed; operator reconciliation is required (reference 621c64a2-0c49-4658-809b-6db8e5e5f4dd)",
+  "cleanupReason": "Cleanup could not be confirmed; operator reconciliation is required (reference 621c64a2-0c49-4658-809b-6db8e5e5f4dd)"
+}

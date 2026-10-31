@@ -1,0 +1,122 @@
+[
+  {
+    "path": "/sources/fe4b7f1b-278a-4ac3-93c9-b44266499b16",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/sources/fe4b7f1b-278a-4ac3-93c9-b44266499b16",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/sources/fe4b7f1b-278a-4ac3-93c9-b44266499b16/media/ORIGINAL",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/sources/fe4b7f1b-278a-4ac3-93c9-b44266499b16/media/ORIGINAL",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/sources/fe4b7f1b-278a-4ac3-93c9-b44266499b16/media/PROXY?analysisId=31a08a7a-70f8-4ad5-aa9e-a389b9516e7b",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/sources/fe4b7f1b-278a-4ac3-93c9-b44266499b16/media/PROXY?analysisId=31a08a7a-70f8-4ad5-aa9e-a389b9516e7b",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/sources/fe4b7f1b-278a-4ac3-93c9-b44266499b16/analyses/31a08a7a-70f8-4ad5-aa9e-a389b9516e7b/frame-index",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/sources/fe4b7f1b-278a-4ac3-93c9-b44266499b16/analyses/31a08a7a-70f8-4ad5-aa9e-a389b9516e7b/frame-index",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/sources/fe4b7f1b-278a-4ac3-93c9-b44266499b16/analyses/31a08a7a-70f8-4ad5-aa9e-a389b9516e7b/observations",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/sources/fe4b7f1b-278a-4ac3-93c9-b44266499b16/analyses/31a08a7a-70f8-4ad5-aa9e-a389b9516e7b/observations",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/frame-previews/92aa7fdd-f6f1-450e-b24c-17d95048895f",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/frame-previews/92aa7fdd-f6f1-450e-b24c-17d95048895f",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/frame-previews/92aa7fdd-f6f1-450e-b24c-17d95048895f/media",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/frame-previews/92aa7fdd-f6f1-450e-b24c-17d95048895f/media",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/sources/fe4b7f1b-278a-4ac3-93c9-b44266499b16/reviews",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/sources/fe4b7f1b-278a-4ac3-93c9-b44266499b16/reviews",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/sources/fe4b7f1b-278a-4ac3-93c9-b44266499b16/exports",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/sources/fe4b7f1b-278a-4ac3-93c9-b44266499b16/exports",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/jobs/d6bf9fe1-5e83-4d9d-9d17-8ec9b5492e0c",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/jobs/d6bf9fe1-5e83-4d9d-9d17-8ec9b5492e0c",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/reviews/7765b894-4a5d-494f-9e39-fff38aff037f?sourceId=fe4b7f1b-278a-4ac3-93c9-b44266499b16",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/reviews/7765b894-4a5d-494f-9e39-fff38aff037f?sourceId=fe4b7f1b-278a-4ac3-93c9-b44266499b16",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/exports/b3469a44-299b-4cc8-85a2-8cfe754176bb",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/exports/b3469a44-299b-4cc8-85a2-8cfe754176bb",
+    "port": 18192,
+    "status": 401
+  }
+]

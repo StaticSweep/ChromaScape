@@ -1,0 +1,108 @@
+Picked up JAVA_TOOL_OPTIONS: -Dapi.version=1.44
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :compileJava UP-TO-DATE
+> Task :copyNativeLibraries SKIPPED
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileTestJava UP-TO-DATE
+> Task :processTestResources UP-TO-DATE
+> Task :testClasses UP-TO-DATE
+
+> Task :test
+SC-967 vectors: /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/contracts/sc967/ed25519-vectors.json
+Picked up JAVA_TOOL_OPTIONS: -Dapi.version=1.44
+
+MouseVideoMultipartReaderTest > rejectsDuplicateFilePart() FAILED
+    java.lang.AssertionError at MouseVideoMultipartReaderTest.java:59
+
+MouseVideoMultipartReaderTest > invalidMetadataJsonIsSeparateFromStorageFailures() FAILED
+    java.lang.NoClassDefFoundError at MouseVideoMultipartReaderTest.java:109
+        Caused by: java.lang.ClassNotFoundException at MouseVideoMultipartReaderTest.java:109
+
+MouseVideoMultipartReaderTest > rejectsOversizedFileWhileStreaming() FAILED
+    java.lang.AssertionError at MouseVideoMultipartReaderTest.java:94
+
+MouseVideoMultipartReaderTest > streamsOneFileAndOneMetadataPart() FAILED
+    java.lang.NoClassDefFoundError at MouseVideoMultipartReaderTest.java:29
+        Caused by: java.lang.ClassNotFoundException at MouseVideoMultipartReaderTest.java:29
+
+MouseVideoMultipartReaderTest > rejectsUnknownPart() FAILED
+    java.lang.AssertionError at MouseVideoMultipartReaderTest.java:76
+
+MouseVideoMultipartReaderTest > missingMetadataStagingFileRemainsAStorageFailure() FAILED
+    java.lang.AssertionError at MouseVideoMultipartReaderTest.java:102
+
+MouseVideoMultipartReaderTest > oversizedFileIsATypedLimitFailure() FAILED
+    java.lang.NoClassDefFoundError at MouseVideoMultipartReaderTest.java:143
+        Caused by: java.lang.ClassNotFoundException at MouseVideoMultipartReaderTest.java:143
+
+MouseVideoMultipartReaderTest > malformedMetadataIsATypedClientInputFailure() FAILED
+    java.lang.NoClassDefFoundError at MouseVideoMultipartReaderTest.java:126
+        Caused by: java.lang.ClassNotFoundException at MouseVideoMultipartReaderTest.java:126
+
+MouseVideoRequestIdentityTest > differentMetadataOrOwnerConflicts() FAILED
+    java.lang.NoClassDefFoundError at MouseVideoRequestIdentityTest.java:46
+        Caused by: java.lang.ClassNotFoundException at MouseVideoRequestIdentityTest.java:46
+
+MouseVideoRequestIdentityTest > identicalContentAndMetadataProduceTheSameIdentity() FAILED
+    java.lang.NoClassDefFoundError at MouseVideoRequestIdentityTest.java:20
+        Caused by: java.lang.ClassNotFoundException at MouseVideoRequestIdentityTest.java:20
+
+MouseVideoRequestIdentityTest > differentBytesConflictForTheSameRequest() FAILED
+    java.lang.NoClassDefFoundError at MouseVideoRequestIdentityTest.java:31
+        Caused by: java.lang.ClassNotFoundException at MouseVideoRequestIdentityTest.java:31
+
+MouseVideoRequestIdentityTest > youtubeIdentityBindsTheCanonicalProviderId() FAILED
+    java.lang.NoClassDefFoundError at MouseVideoRequestIdentityTest.java:61
+        Caused by: java.lang.ClassNotFoundException at MouseVideoRequestIdentityTest.java:61
+
+MouseVideoServicePostgresRaceTest > initializationError FAILED
+    org.springframework.beans.factory.UnsatisfiedDependencyException at MouseVideoServicePostgresRaceTest.java:73
+        Caused by: org.springframework.beans.factory.NoSuchBeanDefinitionException at MouseVideoServicePostgresRaceTest.java:73
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :test
+
+143 tests completed, 13 failed
+
+> Task :test FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':test'.
+> Multiple build operations failed.
+      Could not write XML test results for com.chromascape.web.debug.tickdebugger.video.MouseVideoConfigurationTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.debug.tickdebugger.video.MouseVideoConfigurationTest.xml.
+      Could not write XML test results for com.chromascape.web.debug.tickdebugger.video.MouseVideoMigrationTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.debug.tickdebugger.video.MouseVideoMigrationTest.xml.
+      Could not write XML test results for com.chromascape.web.debug.tickdebugger.video.MouseVideoPostgresConcurrencyTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.debug.tickdebugger.video.MouseVideoPostgresConcurrencyTest.xml.
+      Could not write XML test results for com.chromascape.web.debug.tickdebugger.video.service.MouseVideoReviewServiceTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.debug.tickdebugger.video.service.MouseVideoReviewServiceTest.xml.
+      Could not write XML test results for com.chromascape.web.debug.tickdebugger.video.service.MouseVideoExportServiceTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.debug.tickdebugger.video.service.MouseVideoExportServiceTest.xml.
+      Could not write XML test results for com.chromascape.web.MouseResearchPageTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.MouseResearchPageTest.xml.
+      Could not write XML test results for com.chromascape.web.debug.tickdebugger.video.controller.MouseVideoControllerHttpTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.debug.tickdebugger.video.controller.MouseVideoControllerHttpTest.xml.
+      Could not write XML test results for com.chromascape.web.debug.tickdebugger.video.service.MouseVideoImportServiceTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.debug.tickdebugger.video.service.MouseVideoImportServiceTest.xml.
+      Could not write XML test results for com.chromascape.web.debug.tickdebugger.video.service.MouseVideoCatalogServiceTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.debug.tickdebugger.video.service.MouseVideoCatalogServiceTest.xml.
+      Could not write XML test results for com.chromascape.web.debug.tickdebugger.video.MouseVideoServicePostgresRaceTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.debug.tickdebugger.video.MouseVideoServicePostgresRaceTest.xml.
+      ...and 2 more failures.
+   > Could not write XML test results for com.chromascape.web.debug.tickdebugger.video.MouseVideoConfigurationTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.debug.tickdebugger.video.MouseVideoConfigurationTest.xml.
+   > Could not write XML test results for com.chromascape.web.debug.tickdebugger.video.MouseVideoMigrationTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.debug.tickdebugger.video.MouseVideoMigrationTest.xml.
+   > Could not write XML test results for com.chromascape.web.debug.tickdebugger.video.MouseVideoPostgresConcurrencyTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.debug.tickdebugger.video.MouseVideoPostgresConcurrencyTest.xml.
+   > Could not write XML test results for com.chromascape.web.debug.tickdebugger.video.service.MouseVideoReviewServiceTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.debug.tickdebugger.video.service.MouseVideoReviewServiceTest.xml.
+   > Could not write XML test results for com.chromascape.web.debug.tickdebugger.video.service.MouseVideoExportServiceTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.debug.tickdebugger.video.service.MouseVideoExportServiceTest.xml.
+   > Could not write XML test results for com.chromascape.web.MouseResearchPageTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.MouseResearchPageTest.xml.
+   > Could not write XML test results for com.chromascape.web.debug.tickdebugger.video.controller.MouseVideoControllerHttpTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.debug.tickdebugger.video.controller.MouseVideoControllerHttpTest.xml.
+   > Could not write XML test results for com.chromascape.web.debug.tickdebugger.video.service.MouseVideoImportServiceTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.debug.tickdebugger.video.service.MouseVideoImportServiceTest.xml.
+   > Could not write XML test results for com.chromascape.web.debug.tickdebugger.video.service.MouseVideoCatalogServiceTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.debug.tickdebugger.video.service.MouseVideoCatalogServiceTest.xml.
+   > Could not write XML test results for com.chromascape.web.debug.tickdebugger.video.MouseVideoServicePostgresRaceTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.debug.tickdebugger.video.MouseVideoServicePostgresRaceTest.xml.
+   > Could not write XML test results for com.chromascape.web.debug.tickdebugger.video.service.MouseVideoDerivativeWorkerTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.debug.tickdebugger.video.service.MouseVideoDerivativeWorkerTest.xml.
+   > Could not write XML test results for com.chromascape.web.debug.tickdebugger.video.service.MouseVideoJobServiceTest to file /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/test-results/test/TEST-com.chromascape.web.debug.tickdebugger.video.service.MouseVideoJobServiceTest.xml.
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 3m 10s
+5 actionable tasks: 1 executed, 4 up-to-date

@@ -1,0 +1,40 @@
+Picked up JAVA_TOOL_OPTIONS: -Dapi.version=1.44
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :compileJava UP-TO-DATE
+> Task :copyNativeLibraries SKIPPED
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileTestJava
+> Task :processTestResources UP-TO-DATE
+> Task :testClasses
+
+> Task :test
+SC-967 vectors: /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/contracts/sc967/ed25519-vectors.json
+Picked up JAVA_TOOL_OPTIONS: -Dapi.version=1.44
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :test
+
+MouseVideoIndependentReviewProbeTest > metadataFilesystemReadFailureRemainsAnInfrastructureFailure() FAILED
+    java.lang.AssertionError at MouseVideoIndependentReviewProbeTest.java:246
+
+MouseVideoIndependentReviewProbeTest > existingPersistedFailureDoesNotExposeItsPrivatePath() FAILED
+    java.lang.AssertionError at MouseVideoIndependentReviewProbeTest.java:254
+
+4 tests completed, 2 failed
+
+> Task :test FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':test'.
+> There were failing tests. See the report at: file:///run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights.
+
+BUILD FAILED in 52s
+5 actionable tasks: 2 executed, 3 up-to-date

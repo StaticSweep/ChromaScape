@@ -1,0 +1,28 @@
+{
+  "project": "C:\\Dev\\IdeaProjects\\ChromaScape",
+  "jdk": "Temurin 17.0.20.1+1",
+  "dockerApiOverride": "process-local JAVA_TOOL_OPTIONS=-Dapi.version=1.44",
+  "baselineSelection": [
+    "com.chromascape.web.debug.tickdebugger.video.*",
+    "com.chromascape.web.debug.tickdebugger.video.service.*",
+    "com.chromascape.web.debug.tickdebugger.video.controller.*",
+    "com.chromascape.web.MouseResearchPageTest"
+  ],
+  "testExecution": "test --rerun",
+  "staticTasks": [
+    "spotlessJavaCheck",
+    "checkstyleMain"
+  ],
+  "probeSelection": [
+    "retainedRequestContextAcceptsWorkerSettlementBeforeSecondLock",
+    "controllerCancellationAcceptsWorkerSettlementWithRetainedRequestContext",
+    "metadataFilesystemReadFailureRemainsAnInfrastructureFailure",
+    "existingPersistedFailureDoesNotExposeItsPrivatePath",
+    "legacyFailureWithMissingCodeReturnsSafePublicMessage"
+  ],
+  "fixture": "C:\\Dev\\IdeaProjects\\contracts\\sc967\\ed25519-vectors.json",
+  "isolatedBuild": true,
+  "isolatedProjectCache": true,
+  "scopedSpotlessProperty": "-Psc2150ScopedStyle=true",
+  "globalSpotlessResult": "FAILED: five unrelated aiplayer files"
+}

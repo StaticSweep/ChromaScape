@@ -67,6 +67,20 @@ public class RecordingConfig {
   /** Minimum canvas height accepted as a stable recording size before the readiness deadline. */
   private int minCaptureHeight = 400;
 
+  /**
+   * Whether to write {@code <recording>.frames.jsonl} with each encoded frame's capture time, so
+   * per-frame traces (for example micro6's mouse trace) can be aligned to exact frames.
+   */
+  private boolean frameTimingSidecar = true;
+
+  public boolean isFrameTimingSidecar() {
+    return frameTimingSidecar;
+  }
+
+  public void setFrameTimingSidecar(boolean frameTimingSidecar) {
+    this.frameTimingSidecar = frameTimingSidecar;
+  }
+
   public boolean isEnabled() {
     return enabled;
   }

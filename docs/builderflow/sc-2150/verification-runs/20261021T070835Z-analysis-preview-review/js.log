@@ -1,0 +1,88 @@
+TAP version 13
+# Subtest: newRequestId returns a non-empty unique identifier
+ok 1 - newRequestId returns a non-empty unique identifier
+  ---
+  duration_ms: 15.148094
+  type: 'test'
+  ...
+# Subtest: formatBytes scales units
+ok 2 - formatBytes scales units
+  ---
+  duration_ms: 0.532218
+  type: 'test'
+  ...
+# Subtest: formatLimits renders bounded limits
+ok 3 - formatLimits renders bounded limits
+  ---
+  duration_ms: 0.832259
+  type: 'test'
+  ...
+# Subtest: player proxy is pinned to the selected completed analysis
+ok 4 - player proxy is pinned to the selected completed analysis
+  ---
+  duration_ms: 0.575726
+  type: 'test'
+  ...
+# Subtest: describeSource never claims native ticks
+ok 5 - describeSource never claims native ticks
+  ---
+  duration_ms: 0.528909
+  type: 'test'
+  ...
+# Subtest: state persistence survives a storage implementation
+ok 6 - state persistence survives a storage implementation
+  ---
+  duration_ms: 0.743876
+  type: 'test'
+  ...
+# Subtest: state persistence degrades safely when storage is unavailable
+ok 7 - state persistence degrades safely when storage is unavailable
+  ---
+  duration_ms: 3.466993
+  type: 'test'
+  ...
+# Subtest: describeFrame preserves exact integer PTS text
+ok 8 - describeFrame preserves exact integer PTS text
+  ---
+  duration_ms: 0.55908
+  type: 'test'
+  ...
+# Subtest: buildCorrection records an explicit unknown instead of guessing coordinates
+ok 9 - buildCorrection records an explicit unknown instead of guessing coordinates
+  ---
+  duration_ms: 2.698935
+  type: 'test'
+  ...
+# Subtest: buildCorrection derives frame ranges from the selected frame
+ok 10 - buildCorrection derives frame ranges from the selected frame
+  ---
+  duration_ms: 1.755058
+  type: 'test'
+  ...
+# Subtest: buildCorrection ignores out-of-range confidence and bounds the note
+ok 11 - buildCorrection ignores out-of-range confidence and bounds the note
+  ---
+  duration_ms: 0.559983
+  type: 'test'
+  ...
+# Subtest: addCorrection appends immutably and refuses duplicates
+ok 12 - addCorrection appends immutably and refuses duplicates
+  ---
+  duration_ms: 0.822996
+  type: 'test'
+  ...
+# Subtest: addCorrection enforces the server count cap
+ok 13 - addCorrection enforces the server count cap
+  ---
+  duration_ms: 0.805243
+  type: 'test'
+  ...
+1..13
+# tests 13
+# suites 0
+# pass 13
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 395.717976

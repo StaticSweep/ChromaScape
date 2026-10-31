@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ChromaScape — External video import</title>
+    <link rel="stylesheet" href="/css/mouse-research.css?v=10" />
+    <script src="/js/mouse-video-review-core.js?v=4" defer></script>
+    <script src="/js/mouse-video.js?v=8" defer></script>
+  </head>
+  <body class="mouse-page">
+    <main class="mouse-workspace" data-mouse-video>
+      <header class="mouse-page-header">
+        <h1>External video import</h1>
+        <a href="/mouse">← Mouse Engine Catalog</a>
+      </header>
+
+      <p class="mouse-video-disclaimer" role="note">
+        Video observations are estimates; importing a clip does not verify human input. Native ticks
+        and physical clicks are never derived from external media.
+      </p>
+
+      <p data-video-status role="status" aria-live="polite">Loading capabilities…</p>
+
+      <section class="glass-panel mouse-research-panel" aria-labelledby="video-import-heading">
+        <h2 id="video-import-heading">Import a video</h2>
+        <form data-video-import>
+          <div class="mouse-research-filters">
+            <label>
+              Source
+              <select data-video-mode>
+                <option value="upload">Upload file</option>
+                <option value="youtube">YouTube link</option>
+              </select>
+            </label>
+            <label>
+              Declared origin
+              <select data-video-origin>
+                <option value="UNKNOWN">Unknown</option>
+                <option value="HUMAN">Human</option>
+                <option value="GENERATED">Generated</option>
+              </select>
+            </label>
+            <label>Task key<input type="text" data-video-task maxlength="120" /></label>
+            <label>Skill<input type="text" data-video-skill maxlength="120" /></label>
+            <label>Context<input type="text" data-video-context maxlength="120" /></label>
+            <label>Place<input type="text" data-video-place maxlength="120" /></label>
+          </div>
+          <div class="mouse-video-source-fields" data-video-upload-field>
+            <label>Video file<input type="file" accept="video/*" data-video-file /></label>
+          </div>
+          <div class="mouse-video-source-fields" data-video-youtube-field hidden>
+            <label>YouTube URL<input type="url" data-video-url placeholder="https://www.youtube.com/watch?v=…" /></label>
+          </div>
+          <p data-video-limits></p>
+          <button type="submit" data-video-submit>Import video</button>
+        </form>
+      </section>
+
+      <section class="glass-panel mouse-research-panel" aria-labelledby="video-catalog-heading">
+        <h2 id="video-catalog-heading">Imported sources</h2>
+        <div class="mouse-research-filters">
+          <label>
+            Source kind
+            <select data-video-filter-kind>
+              <option value="">All</option>
+              <option value="UPLOAD">Uploaded</option>
+              <option value="YOUTUBE">YouTube</option>
+            </select>
+          </label>
+          <button type="button" data-video-refresh>Refresh</button>
+        </div>
+        <div class="mouse-video-table-scroll" role="region" aria-label="Imported video sources" tabindex="0">
+        <table class="mouse-research-table">
+          <thead>
+            <tr>
+              <th scope="col">Source</th>
+              <th scope="col">Origin</th>
+              <th scope="col">Status</th>
+              <th scope="col">Coverage</th>
+              <th scope="col">Inspect</th>
+            </tr>
+          </thead>
+          <tbody data-video-rows></tbody>
+        </table>
+        </div>
+      </section>
+
+      <section class="glass-panel mouse-research-panel" data-video-inspector hidden aria-labelledby="video-inspector-heading">
+        <h2 id="video-inspector-heading">Inspection</h2>
+        <p data-video-inspector-title></p>
+        <video data-video-player controls preload="metadata" style="max-width: 100%"></video>
+        <dl data-video-metadata></dl>
+        <h3>Jobs</h3>
+        <ul data-video-jobs></ul>
+        <h3>Artifacts</h3>
+        <ul data-video-artifacts></ul>
+        <p data-video-unknowns></p>
+        <button type="button" data-video-export>Create immutable export</button>
+        <h3>Export versions</h3>
+        <ul data-video-exports></ul>
+      </section>
+
+      <section
+        class="glass-panel mouse-research-panel mouse-video-review"
+        data-video-review
+        hidden
+        aria-labelledby="video-review-heading"
+      >
+        <h2 id="video-review-heading">Frame review</h2>
+        <p data-review-status role="status" aria-live="polite"></p>
+
+        <div class="mouse-research-filters">
+          <label>Range start <input type="number" min="0" value="0" data-review-range-start /></label>
+          <label>Range end <input type="number" min="0" value="1999" data-review-range-end /></label>
+          <label><input type="checkbox" data-review-attestation /> I will follow the annotation protocol and disclose prior suggestion exposure.</label>
+          <button type="button" data-review-abandon hidden>Abandon qualification session (keep saved history)</button>
+          <button type="button" data-review-seal hidden>Seal completed range</button>
+          <a data-review-session-export hidden download="mouse-video-review-export.json">Download sealed review</a>
+        </div>
+        <div class="mouse-research-filters" data-review-mode-controls>
+          <label class="mouse-video-preview-toggle">
+            <input type="checkbox" data-review-mode-toggle />
+            Review mode
+          </label>
+          <label class="mouse-video-preview-toggle">
+            <input type="checkbox" data-review-blind-toggle />
+            Blind (unverified; hide detector suggestions)
+          </label>
+          <button type="button" data-review-accept disabled>Accept (Enter)</button>
+          <button type="button" data-review-hidden disabled>Hidden (H)</button>
+          <button type="button" data-review-ambiguous disabled>Ambiguous (A)</button>
+          <button type="button" data-review-skip disabled>Skip (S)</button>
+          <button type="button" data-review-prev disabled>Previous item</button>
+          <button type="button" data-review-next disabled>Next item</button>
+          <button type="button" data-review-undo disabled>Undo label</button>
+        </div>
+        <p class="mouse-video-frame-note" data-review-mode-status role="status" aria-live="polite" hidden></p>
+        <p class="mouse-video-frame-note" data-review-mode-counts hidden></p>
+        <p class="mouse-video-frame-note" data-review-mode-help hidden>
+          Enter accept · click label · H hidden · A ambiguous · S skip · ←/→ item · Z undo
+        </p>
+
+        <div class="mouse-research-filters">
+          <label>
+            Analysis
+            <select data-review-analysis aria-label="Analysis to review"></select>
+          </label>
+          <button type="button" data-review-load-more disabled>Load more frames</button>
+        </div>
+
+        <div data-review-frames tabindex="0" role="group" aria-label="Frozen frame index">
+          <div class="mouse-video-frame-nav">
+            <button type="button" data-frame-first aria-label="First frame">⏮ First</button>
+            <button type="button" data-frame-prev aria-label="Previous frame">◀ Previous</button>
+            <label class="mouse-video-frame-jump">
+              Frame
+              <input type="number" min="0" data-frame-ordinal aria-label="Frame ordinal" />
+            </label>
+            <button type="button" data-frame-next aria-label="Next frame">Next ▶</button>
+            <button type="button" data-frame-last aria-label="Last loaded frame">Last ⏭</button>
+          </div>
+          <p data-frame-detail aria-live="polite">No frame selected</p>
+          <p class="mouse-video-frame-note" data-frame-note></p>
+
+          <div class="mouse-video-preview" data-preview-panel>
+            <div class="mouse-video-preview-toolbar">
+              <button type="button" data-preview-retry>Load exact preview</button>
+              <label class="mouse-video-preview-toggle">
+                <input type="checkbox" data-preview-predictions checked />
+                Show original predictions
+              </label>
+              <label class="mouse-video-preview-toggle">
+                Interaction
+                <select data-preview-mode aria-label="Exact preview interaction mode">
+                  <option value="point">Cursor point</option>
+                  <option value="region">Region</option>
+                </select>
+              </label>
+              <button type="button" data-preview-clear>Clear overlay</button>
+            </div>
+            <div class="mouse-video-preview-stage" data-preview-stage>
+              <img data-preview-image alt="Exact source frame preview" hidden />
+              <svg
+                data-preview-overlay
+                class="mouse-video-preview-overlay"
+                role="img"
+                aria-label="Reviewed corrections over the exact source frame"
+              ></svg>
+              <p class="mouse-video-preview-empty" data-preview-empty>
+                Select a frame to request an exact source preview.
+              </p>
+            </div>
+            <p data-preview-status role="status" aria-live="polite"></p>
+            <p class="mouse-video-frame-note" data-preview-identity></p>
+            <p class="mouse-video-frame-note" data-preview-selection></p>
+          </div>
+          <div class="mouse-video-table-scroll" role="region" aria-label="Frozen source frames" tabindex="0">
+          <table class="mouse-research-table">
+            <caption class="mouse-video-visually-hidden">Frozen frame index</caption>
+            <thead>
+              <tr>
+                <th scope="col">Ordinal</th>
+                <th scope="col">PTS</th>
+                <th scope="col">Time</th>
+                <th scope="col">Key</th>
+                <th scope="col">Select</th>
+              </tr>
+            </thead>
+            <tbody data-frame-rows></tbody>
+          </table>
+          </div>
+        </div>
+
+        <h3>Draft corrections</h3>
+        <p>
+          Draft corrections are local until saved. Kinds that need source pixel coordinates (a
+          visible cursor point, target region or camera region) stay unavailable until an exact
+          frame preview is qualified; the browser does not guess source pixels.
+        </p>
+        <div class="mouse-research-filters">
+          <label>
+            Correction kind
+            <select data-correction-kind aria-label="Correction kind"></select>
+          </label>
+        </div>
+        <div class="mouse-video-correction-fields" data-correction-fields></div>
+        <button type="button" data-correction-add>Add to draft</button>
+
+        <p>
+          Draft entries: <span data-review-draft-count>0</span>
+        </p>
+        <ul data-review-draft class="mouse-video-draft"></ul>
+
+        <div class="mouse-research-filters">
+          <label>
+            Review reason (required)
+            <input type="text" maxlength="1024" data-review-reason />
+          </label>
+          <label>
+            Source use
+            <select data-source-use>
+              <option value="INSPECTION_ONLY">Inspection only</option>
+              <option value="TRAINING_REQUESTED">Training requested (policy review)</option>
+              <option value="TRAINING_DENIED">Training denied</option>
+            </select>
+          </label>
+        </div>
+        <p class="mouse-video-frame-note">
+          TRAINING_REQUESTED records a request for downstream policy review. It never enables
+          training: video-derived observations keep trainingEligible, nativeTelemetry, exactTicks
+          and control flags false.
+        </p>
+        <button type="button" data-review-save>Save review revision</button>
+
+        <p class="mouse-video-conflict" data-review-conflict role="alert" hidden></p>
+        <button type="button" data-review-reload hidden>Reload base revision</button>
+
+        <h3>Revision history</h3>
+        <ul data-review-history></ul>
+        <button type="button" data-review-history-older hidden>Show older saved revisions</button>
+        <pre data-review-history-detail aria-live="polite" tabindex="0" aria-label="Selected review revision details"></pre>
+      </section>
+    </main>
+  </body>
+</html>

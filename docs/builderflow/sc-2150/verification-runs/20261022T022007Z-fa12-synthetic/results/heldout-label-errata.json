@@ -1,0 +1,36 @@
+{
+  "schema": "sc2150-fa12-label-errata/v1",
+  "found_after": "held-out scoring (2026-10-22); verified by inspecting decoded frames, not by detector output",
+  "source_id": "87a88065",
+  "finding": "The 'game' segment start (52.5 s), chosen from a 4-second contact sheet, lies on the login -> 'Click here to play' -> gameplay transition. Frames 0-1 show the login screen, 2-4 the welcome screen, 5+ gameplay, so every clip from this segment contains two real source cuts at composed frames 2 and 5 that the corpus labels omit.",
+  "affected_clips": [
+    "heldout--87a88065--capture-1.5x",
+    "heldout--87a88065--compressed-300k",
+    "heldout--87a88065--native-4m",
+    "heldout--87a88065--overlay",
+    "heldout--87a88065--resized-0.7x",
+    "heldout--87a88065--vfr-drop"
+  ],
+  "extra_cut_compose_ordinals": [
+    2,
+    5
+  ],
+  "evidence": "First 8 frames of heldout--87a88065--native-4m rendered to a local contact sheet (not committed: login frames show an account email).",
+  "corrected_cuts": {
+    "tp": 16,
+    "fp": 0,
+    "fn": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0
+  },
+  "raw_cuts": {
+    "tp": 4,
+    "fp": 12,
+    "fn": 0,
+    "precision": 0.25,
+    "recall": 1.0,
+    "f1": 0.4
+  },
+  "applies_to": "clips whose first piece starts at 52.5 s of 87a88065"
+}

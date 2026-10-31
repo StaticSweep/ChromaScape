@@ -1,0 +1,9 @@
+# SC-2150 execution resumed and Windows scope split — 2026-10-26
+
+Owner authorized completing remaining SC-2150 work. Reuse task task_1792382767281_cd8dbu69 and full plan note_1792968401062_022f7432, with F1–F3 interim fixes preserved. V47 is confirmed free. Frozen baseline: C:\Dev\IdeaProjects\ChromaScape\build\sc2150-sessions-20261026\baseline-hashes.json.
+
+Owner explicitly instructed: “skip windows on make a new story for this”. Created SC-2204 https://app.shortcut.com/leeuwbot/story/2204 in Backlog, same epic, preserving section 11 Windows design and CP25I21/I22/T19 and Windows portions of A16/T12. Updated SC-2150 description and reciprocal external links successfully. Windows is excluded from SC-2150 completion, not implemented or waived as passed.
+
+Continue authorized Fedora packages: P2 trusted operator-manifest membership, source/group exposure ledger, immutable bounded sessions and sealed provenance; P1 bounded complete queue and client sessions; P3 actual Spring/PostgreSQL/browser/converter qualification; then independent dev/provider/regression work. Existing full scope, exclusions, Gherkin acceptance, design notes, security, observability and test checklists remain authoritative except the explicit Windows transfer. No independent label evidence or native capture is fabricated. Await owner artifact locations while progressing independent work. No gameplay dispatch, production restart, model activation or commit/push is authorized by this execution.
+
+New server routes reuse principal/nonce guards; legacy v1/v2 records remain immutable/unqualified. Planned review-provenance/v1 and sealed export/v2 are additive. No edited applied migration. All package completion requires actual retained evidence; task remains in_progress and whole-story review/done remain gated.

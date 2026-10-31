@@ -1,0 +1,94 @@
+TAP version 13
+# Subtest: newRequestId returns a non-empty unique identifier
+ok 1 - newRequestId returns a non-empty unique identifier
+  ---
+  duration_ms: 15.841772
+  type: 'test'
+  ...
+# Subtest: previewTerminalError stops polling on cancelled and failed previews
+ok 2 - previewTerminalError stops polling on cancelled and failed previews
+  ---
+  duration_ms: 0.805749
+  type: 'test'
+  ...
+# Subtest: formatBytes scales units
+ok 3 - formatBytes scales units
+  ---
+  duration_ms: 0.563347
+  type: 'test'
+  ...
+# Subtest: formatLimits renders bounded limits
+ok 4 - formatLimits renders bounded limits
+  ---
+  duration_ms: 0.638503
+  type: 'test'
+  ...
+# Subtest: player proxy is pinned to the selected completed analysis
+ok 5 - player proxy is pinned to the selected completed analysis
+  ---
+  duration_ms: 0.659773
+  type: 'test'
+  ...
+# Subtest: describeSource never claims native ticks
+ok 6 - describeSource never claims native ticks
+  ---
+  duration_ms: 0.490175
+  type: 'test'
+  ...
+# Subtest: state persistence survives a storage implementation
+ok 7 - state persistence survives a storage implementation
+  ---
+  duration_ms: 1.014022
+  type: 'test'
+  ...
+# Subtest: state persistence degrades safely when storage is unavailable
+ok 8 - state persistence degrades safely when storage is unavailable
+  ---
+  duration_ms: 3.356786
+  type: 'test'
+  ...
+# Subtest: describeFrame preserves exact integer PTS text
+ok 9 - describeFrame preserves exact integer PTS text
+  ---
+  duration_ms: 1.272617
+  type: 'test'
+  ...
+# Subtest: buildCorrection records an explicit unknown instead of guessing coordinates
+ok 10 - buildCorrection records an explicit unknown instead of guessing coordinates
+  ---
+  duration_ms: 2.598244
+  type: 'test'
+  ...
+# Subtest: buildCorrection derives frame ranges from the selected frame
+ok 11 - buildCorrection derives frame ranges from the selected frame
+  ---
+  duration_ms: 1.186932
+  type: 'test'
+  ...
+# Subtest: buildCorrection ignores out-of-range confidence and bounds the note
+ok 12 - buildCorrection ignores out-of-range confidence and bounds the note
+  ---
+  duration_ms: 0.413377
+  type: 'test'
+  ...
+# Subtest: addCorrection appends immutably and refuses duplicates
+ok 13 - addCorrection appends immutably and refuses duplicates
+  ---
+  duration_ms: 1.047707
+  type: 'test'
+  ...
+# Subtest: addCorrection enforces the server count cap
+ok 14 - addCorrection enforces the server count cap
+  ---
+  duration_ms: 0.926261
+  type: 'test'
+  ...
+1..14
+# tests 14
+# suites 0
+# pass 14
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 604.223454
