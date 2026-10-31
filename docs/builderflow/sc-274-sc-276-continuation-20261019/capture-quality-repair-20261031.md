@@ -103,3 +103,26 @@ playable recovered media, old immutable ChromaScape snapshot and old signed clie
 Rollback the server using the prior immutable classpath; roll back client activation
 using the prior signed artifact/bundle. Revert only these scoped commits; do not reset
 runtime fences or unrelated work. No tracker state or story completion is claimed.
+
+## Owned deployment verification
+
+Deployed ChromaScape commit 2b413a09's tested classes/resources into a new immutable
+owned snapshot and restarted only the idle Windows 8090 service with the same owned
+sc274_capture database. Retained the prior immutable classpath for rollback. The game
+client PID 188552 was not restarted. The explicit target window still belongs to that
+same process.
+
+Post-deployment normal API start/stop passed: labelled non-training diagnostic
+recording_79788aef, 29 physically indexed frames, measured-video-index/v1, zero quality
+codes, and recording=false afterward. This is a live Windows video-only check; the
+automatic-duration regression runs through real FFmpeg and the real dispatcher in the
+focused test suite. No live calibrated game tick or authoritative fidelity is claimed.
+
+The client correction remains a clean, signed deployment-ready bundle, not activated
+in the running game process. The rebuilt bundle must replace the old attested runtime
+as a whole when the HUMAN semantic coverage implementation is qualified; no hot class
+replacement or repeated user capture is appropriate while that gate remains open.
+
+Local commits only; no pushes, Felix transitions or Shortcut changes in this repair.
+Original raw archive and recovered playable recording are both retained. The old
+metadata's wall-clock duration must not be treated as measured media duration.
