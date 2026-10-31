@@ -785,6 +785,23 @@
     return Number(labelsSinceSave) >= AUTOSAVE_EVERY;
   }
 
+  const SEALED_NOTICE = 'This session is sealed and read-only.';
+  // Prompts that ask for a label; on a sealed session they would invite an edit that is refused.
+  const EDIT_PROMPT = /click the cursor|press H|Nothing to undo|Undid the last label/;
+
+  /**
+   * Review status text for a session state. A sealed session always leads with the read-only
+   * notice, so loading or moving through the queue after a reload cannot replace it, and edit
+   * prompts are dropped because sealed labels cannot change.
+   */
+  function reviewStatusText(message, sessionState) {
+    const text = message ? String(message) : '';
+    if (sessionState !== 'SEALED') return text;
+    if (!text || EDIT_PROMPT.test(text)) return SEALED_NOTICE;
+    if (/sealed/i.test(text)) return text;
+    return SEALED_NOTICE + ' ' + text;
+  }
+
   return {
     TICK_SECONDS,
     AUTOSAVE_EVERY,
@@ -819,6 +836,7 @@
     isHeldoutContext,
     reviewReason,
     autosaveDue,
+    reviewStatusText,
     sampleOrdinals,
   };
 });

@@ -1366,8 +1366,9 @@
     function setReviewModeStatus(message) {
       const status = panel.querySelector('[data-review-mode-status]');
       if (!status) return;
-      status.hidden = !message;
-      status.textContent = message || '';
+      const text = reviewCore ? reviewCore.reviewStatusText(message, review.session?.state) : message || '';
+      status.hidden = !text;
+      status.textContent = text;
     }
 
     function setReviewModeCounts() {

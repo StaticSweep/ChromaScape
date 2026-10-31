@@ -794,3 +794,18 @@ test('next-position estimates use actual PTS deltas and source bounds', () => {
   assert.equal(reviewCore.expectedNextPoint(segments, { nextTime: NaN }), null);
   assert.equal(reviewCore.expectedNextPoint([[{ x: 10, y: 10 }, { x: 14, y: 12 }]]), null);
 });
+
+test('a sealed session keeps its read-only notice after reload and queue prompts', () => {
+  const notice = 'This session is sealed and read-only.';
+  assert.equal(reviewCore.reviewStatusText('Blind mode has no detector guess; click the cursor or press H.', 'SEALED'), notice);
+  assert.equal(reviewCore.reviewStatusText('Undid the last label.', 'SEALED'), notice);
+  assert.equal(reviewCore.reviewStatusText('', 'SEALED'), notice);
+  assert.equal(reviewCore.reviewStatusText('Loading the frozen frame index for review…', 'SEALED'),
+    notice + ' Loading the frozen frame index for review…');
+  assert.equal(reviewCore.reviewStatusText('Review session sealed. Labels are immutable and ready to export.', 'SEALED'),
+    'Review session sealed. Labels are immutable and ready to export.');
+  assert.equal(reviewCore.reviewStatusText('Blind mode has no detector guess; click the cursor or press H.', 'OPEN'),
+    'Blind mode has no detector guess; click the cursor or press H.');
+  assert.equal(reviewCore.reviewStatusText('', 'OPEN'), '');
+  assert.equal(reviewCore.reviewStatusText(undefined, undefined), '');
+});
