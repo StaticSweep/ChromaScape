@@ -129,6 +129,22 @@ public final class CatalogNormalizer {
           });
     }
     ObjectNode out = JSON.createObjectNode();
+    if (raw.has("catalog_task_scope")) {
+      JsonNode scope = raw.path("catalog_task_scope");
+      if (!scope.isArray() || scope.size() > 16) {
+        throw invalid("Invalid catalog task scope.");
+      }
+      Set<String> scopedKeys = new java.util.HashSet<>();
+      for (JsonNode value : scope) {
+        if (!value.isTextual() || !scopedKeys.add(canonical(value.asText()))) {
+          throw invalid("Invalid catalog task scope.");
+        }
+      }
+      if (!scopedKeys.isEmpty() && !scopedKeys.equals(tasks.keySet())) {
+        throw invalid("Catalog task scope does not match its canonical inventory.");
+      }
+      out.set("catalog_task_scope", scope.deepCopy());
+    }
     for (String field :
         Set.of(
             "catalog_version",

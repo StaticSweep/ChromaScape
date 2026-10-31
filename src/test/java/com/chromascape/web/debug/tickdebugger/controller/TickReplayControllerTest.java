@@ -171,6 +171,30 @@ class TickReplayControllerTest {
   }
 
   @Test
+  void contextBoundCaptureForwardsValidatedReferencesToTheRecorder() throws Exception {
+    var outcome = manualStart(true);
+    var request = new TickReplayController.RecordingStartRequest();
+    var json = new ObjectMapper();
+    var args = json.readTree("{\"targetFish\":\"TROUT\"}");
+    var context = json.readTree("{\"dataOrigin\":\"HUMAN\",\"behaviorProfileVersion\":1}");
+    request.setTaskKey("FISHING_TRAINING");
+    request.setTaskArgs(args);
+    request.setRunContext(context);
+    var response = controller.startRecording(request);
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    assertSame(outcome.response(), response.getBody());
+    var ordered = inOrder(debugSessionService, manualRecordingCoordinator);
+    ordered
+        .verify(debugSessionService)
+        .startSessionWithOutcome(
+            any(), any(), any(), any(), any(), eq("FISHING_TRAINING"), eq(args), eq(context));
+    ordered
+        .verify(manualRecordingCoordinator)
+        .startAndAwaitTick(
+            "socket", "debug_manual", "Manual Recording", "FISHING_TRAINING", args, context);
+  }
+
+  @Test
   void readinessFailureDrainsAndCompensatesOnlyTheNewSession() {
     var outcome = manualStart(true);
     doThrow(new IllegalStateException("RECORDER_TICK_TIMEOUT"))

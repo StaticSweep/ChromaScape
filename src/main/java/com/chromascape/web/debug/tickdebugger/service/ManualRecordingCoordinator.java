@@ -29,10 +29,29 @@ public class ManualRecordingCoordinator {
     return transport.selectManualRecorder(preferredSessionId);
   }
 
+  public String selectRecorder(String preferredSessionId, String recorderConnectionId) {
+    return transport.selectManualRecorder(preferredSessionId, recorderConnectionId);
+  }
+
   public void startAndAwaitTick(String clientId, String sessionId, String scriptName) {
+    startAndAwaitTick(clientId, sessionId, scriptName, null, null, null);
+  }
+
+  public void startAndAwaitTick(
+      String clientId,
+      String sessionId,
+      String scriptName,
+      String taskKey,
+      com.fasterxml.jackson.databind.JsonNode taskArgs,
+      com.fasterxml.jackson.databind.JsonNode runContext) {
     long before = snapshots.countBySessionId(sessionId);
     if (!transport.isRecorderBound(clientId, sessionId)) {
-      transport.sendRecordingControl(clientId, "START", sessionId, scriptName);
+      if (runContext == null || runContext.isNull()) {
+        transport.sendRecordingControl(clientId, "START", sessionId, scriptName);
+      } else {
+        transport.sendRecordingControl(
+            clientId, "START", sessionId, scriptName, taskKey, taskArgs, runContext);
+      }
     }
     await(
         () ->
