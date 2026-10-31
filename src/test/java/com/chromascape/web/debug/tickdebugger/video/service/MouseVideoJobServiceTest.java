@@ -491,4 +491,64 @@ class MouseVideoJobServiceTest {
     assertThat(view.cleanupReason()).contains("reference " + job.getId());
     assertThat(view.cleanupReason()).doesNotContain("/tmp").doesNotContain("private");
   }
+
+  @Test
+  void gracefulShutdownRequeuesTheExactExecutionAndFencesIt() {
+    UUID id = UUID.randomUUID();
+    MouseVideoJob job = runningJob();
+    job.setLeaseOwner("worker");
+    when(jobs.findForUpdate(id)).thenReturn(Optional.of(job));
+    when(jobs.findById(id)).thenReturn(Optional.of(job));
+    long generation = job.getGeneration();
+    int attempt = job.getAttempt();
+
+    MouseVideoJob requeued =
+        service.requeueAfterShutdown(id, generation, job.getCancellationRevision(), "worker");
+
+    assertThat(requeued.getStatus()).isEqualTo(MouseVideoJob.STATUS_QUEUED);
+    assertThat(requeued.getGeneration()).isGreaterThan(generation);
+    assertThat(requeued.getAttempt()).isEqualTo(attempt + 1);
+    assertThat(requeued.getLeaseOwner()).isNull();
+    assertThat(requeued.getLeaseExpiresAt()).isNull();
+    assertThat(service.mayPublish(id, generation)).isFalse();
+    verify(events)
+        .save(org.mockito.ArgumentMatchers.argThat(e -> "REQUEUED".equals(e.getEventType())));
+  }
+
+  @Test
+  void shutdownRequeueRefusesAStaleOrForeignExecution() {
+    UUID id = UUID.randomUUID();
+    MouseVideoJob job = runningJob();
+    job.setLeaseOwner("worker");
+    when(jobs.findForUpdate(id)).thenReturn(Optional.of(job));
+    long generation = job.getGeneration();
+
+    assertThatThrownBy(
+            () ->
+                service.requeueAfterShutdown(
+                    id, generation - 1, job.getCancellationRevision(), "worker"))
+        .isInstanceOf(MouseVideoException.class);
+    assertThatThrownBy(
+            () ->
+                service.requeueAfterShutdown(
+                    id, generation, job.getCancellationRevision(), "other"))
+        .isInstanceOf(MouseVideoException.class);
+    assertThat(job.getStatus()).isEqualTo(MouseVideoJob.STATUS_RUNNING);
+  }
+
+  @Test
+  void userCancellationInProgressWinsOverShutdownRequeue() {
+    UUID id = UUID.randomUUID();
+    MouseVideoJob job = runningJob();
+    job.setLeaseOwner("worker");
+    when(jobs.findForUpdate(id)).thenReturn(Optional.of(job));
+    when(jobs.findById(id)).thenReturn(Optional.of(job));
+    long generation = job.getGeneration();
+    long revision = job.getCancellationRevision();
+    service.requestCancellation(id, "owner", 0L);
+
+    MouseVideoJob settled = service.requeueAfterShutdown(id, generation, revision, "worker");
+
+    assertThat(settled.getStatus()).isEqualTo(MouseVideoJob.STATUS_CANCELLED);
+  }
 }

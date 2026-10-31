@@ -163,6 +163,8 @@ public class MouseVideoScheduledJobRunner {
         reconcile(jobId, generation, cancellationRevision, "Worker lost its job lease");
       } else if (MouseVideoException.CODE_CLEANUP_UNCONFIRMED.equals(failure.getCode())) {
         reconcile(jobId, generation, cancellationRevision, failure.getMessage());
+      } else if (cancellation.isShutdownRequested()) {
+        requeueAfterShutdown(jobId, generation, cancellationRevision);
       } else if (cancellation.isCancelled()
           || MouseVideoException.CODE_INTERRUPTED.equals(failure.getCode())) {
         confirmCancelled(jobId, generation, cancellationRevision);
@@ -171,7 +173,12 @@ public class MouseVideoScheduledJobRunner {
       }
     } catch (InterruptedException interrupted) {
       Thread.currentThread().interrupt();
-      confirmCancelled(jobId, generation, cancellationRevision);
+      // The process runner raises InterruptedException only after it confirmed empty containment.
+      if (cancellation.isShutdownRequested() && !heartbeat.leaseLost()) {
+        requeueAfterShutdown(jobId, generation, cancellationRevision);
+      } else {
+        confirmCancelled(jobId, generation, cancellationRevision);
+      }
     } catch (IOException failure) {
       settleFailure(job, generation, MouseVideoException.CODE_DECODER_FAILED);
     } catch (RuntimeException failure) {
@@ -283,6 +290,14 @@ public class MouseVideoScheduledJobRunner {
       jobService.confirmExecutionCancelled(jobId, generation, cancellationRevision, WORKER_ID);
     } catch (RuntimeException fenced) {
       // Already terminal or fenced by another actor.
+    }
+  }
+
+  private void requeueAfterShutdown(UUID jobId, long generation, long cancellationRevision) {
+    try {
+      jobService.requeueAfterShutdown(jobId, generation, cancellationRevision, WORKER_ID);
+    } catch (RuntimeException fenced) {
+      // Already settled or fenced; restart reconciliation handles anything left running.
     }
   }
 

@@ -52,16 +52,31 @@ Effect: every ordinary restart during a job leaves operator reconciliation work,
 probe proves cleanup happened. For JVM death this is the correct, truthful outcome; for a graceful
 shutdown it is avoidable.
 
-Proposed fix (needs an owner decision on the settled state):
+Root cause: the worker did clean up, then called `confirmExecutionCancelled`, which only settles a
+job a user put into `CANCELLING`; the conflict was swallowed and the job stayed `RUNNING`.
 
-1. A `SmartLifecycle` bean with a phase that stops before the datasource/JPA beans: request
-   cancellation, then wait up to a bounded budget (child shutdown budget + margin) for each owned
-   worker to finish `terminate()` → `isEmpty()` and record its outcome.
-2. Outcome when emptiness is confirmed: either `CANCELLED` with reason `SERVER_SHUTDOWN`, or re-queue
-   (attempt + 1, new generation) so work resumes after restart. Unconfirmed emptiness or budget
-   exhaustion keeps today's reconciliation path.
-3. Regression: lifecycle test with a fake containment proving the job is settled before the
-   repository closes; live rerun of the SIGTERM case expecting no `RECONCILE_REQUIRED`.
+### Fix (owner decision 2026-10-31: re-queue)
+
+- `MouseVideoCancellation.requestShutdown()` marks a cancellation as caused by server shutdown.
+- `MouseVideoWorkerRegistry` drains on `ContextClosedEvent` (before executors stop and the datasource
+  closes): signals shutdown to every owned worker and waits within 30 s for their cleanup.
+- `MouseVideoScheduledJobRunner`: after a shutdown signal, with cleanup confirmed and the lease
+  intact, calls `MouseVideoJobService.requeueAfterShutdown`; lease loss and `CLEANUP_UNCONFIRMED`
+  keep reconciliation; a user cancellation already in progress still ends `CANCELLED`.
+- `requeueAfterShutdown`: exact-claim fenced; `QUEUED`, attempt + 1, new generation, lease cleared,
+  event `REQUEUED {reason: SERVER_SHUTDOWN}`.
+
+### Fix verification
+
+| Check | Result |
+|---|---|
+| `MouseVideoJobServiceTest` (3 new: re-queue exact claim, refuse stale/foreign, user cancel wins) | 29/29 |
+| `MouseVideoWorkerRegistryTest` (2 new: drain signals and waits; drain reports a stuck worker) | 4/4 |
+| `MouseVideoImportServiceTest`, `MouseVideoProcessRunnerTest` | 10/10, 10/10 |
+| `spotlessJavaCheck` | passed |
+| Live SIGTERM mid-analysis (job `af16cc99…`) | `QUEUED → CLAIMED → REQUEUED(SERVER_SHUTDOWN) → CLAIMED → SUCCEEDED` after restart; 0 survivors, scope removed |
+| Regression: 10 more preview jobs on the fixed build | 10/10 CONTAINED |
+| SIGKILL path | unchanged by design (no evidence → reconciliation) |
 
 ## Tests
 

@@ -310,6 +310,33 @@ public class MouseVideoJobService {
     return jobs.save(job);
   }
 
+  /**
+   * Returns a job interrupted by this server's graceful shutdown to the queue, only for the exact
+   * execution and only after its worker confirmed that its processes are gone. A new generation
+   * fences any late publication from the interrupted execution. A user cancellation already in
+   * progress wins and is completed instead.
+   */
+  @Transactional
+  public MouseVideoJob requeueAfterShutdown(
+      UUID jobId, long generation, long cancellationRevision, String leaseOwner) {
+    MouseVideoJob job =
+        requireExecutionForUpdate(jobId, generation, cancellationRevision, leaseOwner);
+    if (job.isSettled()) {
+      return job;
+    }
+    if (job.isCancelling()) {
+      return finishCancellation(job);
+    }
+    job.incrementAttempt();
+    job.bumpGeneration();
+    job.setStatus(MouseVideoJob.STATUS_QUEUED);
+    job.setProgress(0);
+    job.setLeaseOwner(null);
+    job.setLeaseExpiresAt(null);
+    record(job, "REQUEUED", Map.of("reason", "SERVER_SHUTDOWN"));
+    return jobs.save(job);
+  }
+
   private MouseVideoJob requireExecutionForUpdate(
       UUID jobId, long generation, long cancellationRevision, String leaseOwner) {
     MouseVideoJob job = lockFresh(jobId);
