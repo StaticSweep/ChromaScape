@@ -68,6 +68,7 @@ W10 runs **once**, only after W8 and W9 are frozen.
 | D5 | **Keep the 0.90 cut-F1 gate**; a failed gate stays failed. |
 | D6 | **Record, don't block:** the pre-existing/other-story full-suite failures (`full-suite-dispositions-20261031.md`) do not block SC-2150. |
 | OWN-1/D4 | Owner review and recording sessions **soon**: prepare the dev review queue and the recording setup next. |
+| D4 (W12) | **Record with a real dispatched task** (owner, 2026-10-31: "better to have a task"), so the trace carries generated bot paths; purchasing off, run stopped after the recording. |
 
 Progress 2026-10-31: W1–W5 complete (see `verification-evidence-w2…`, `-w3…`, `-w5…`,
 `full-suite-dispositions-20261031.md`). D3 (YouTube acquisition pins/clip/egress) is still open.
@@ -232,7 +233,7 @@ Keep `youtube-enabled=false` until all pass.
 ### W12 — Native round trip (F9; D4)
 
 Owner records a micro6 developer-mode session with the existing sidecar/trace paths enabled
-(no dispatched gameplay). Convert with `label_from_mouse_trace.py`; verify source identity,
+while a short owner-approved task runs (D4: dispatched task; purchasing off; stopped afterwards). Convert with `label_from_mouse_trace.py`; verify source identity,
 PTS/trace skew ≤ 50 ms, drops/duplicates, exact ordinals; classify generated vs human. Restore
 settings. Also rerun the Fedora host boundary proof (memory + `MemorySwapMax=0`, CPU/PID/time/
 output limits, hard job storage, network/secret denial, descendant termination, restart/sweep).

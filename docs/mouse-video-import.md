@@ -164,10 +164,10 @@ Samples are decoded once with the fixed command in `MouseVideoAnalysisWorker.sam
 They are grayscale, at most `visual-sample-max-width` px wide (default 480), with a PTS-window
 stride.
 
-**Cursor: `cursor-template/v7`** (`MouseVideoCursorTracker`). This runs only when a reviewed
+**Cursor: `cursor-template/v8`** (`MouseVideoCursorTracker`). This runs only when a reviewed
 cursor template PNG is configured (`visual-cursor-template`, hotspot `visual-cursor-hotspot-x/-y`).
 `cursor-template/v6` was an unpublished intermediate without the guarded re-check takeover. The
-method id is part of the analysis identity, so the bump keeps local v6 analyses from being reused.
+method id is part of the analysis identity, so each bump keeps older local analyses from being reused.
 - The template is rendered at its displayed scale with 4×4 sub-pixel phases. Only analysis pixels
   the sprite fully covers are compared, using zero-mean normalized correlation, with a luma-gain
   range and a minimum patch contrast.
@@ -176,7 +176,10 @@ method id is part of the analysis identity, so the bump keeps local v6 analyses 
   cursor is reported as **too small to resolve** and every frame stays ambiguous.
 - Static interface art that resembles the cursor is rejected by comparing each placement with the
   samples about 1.5 s before and after it, and with the preceding sample. A cursor that stops is
-  held only where it was last detected and only while it is unchanged.
+  held only where it was detected in the **previous sample** and only while it is unchanged.
+  **(v8)** A missed sample ends the hold: in FA12 dev `compressed-300k` the cursor left over
+  cursor-like art during one missed sample and v7 resumed that art as a "held" cursor for 87
+  samples (all 47 absent-frame false detections of R28).
 - Hysteresis: a detection that does not continue the previous one must reach
   `visual-cursor-start-score`; a continuation needs `visual-cursor-min-score`. While a track
   exists, only the area near it is searched, falling back to the whole frame when nothing there

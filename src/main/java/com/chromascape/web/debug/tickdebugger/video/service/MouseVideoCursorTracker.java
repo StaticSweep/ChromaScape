@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * {@code cursor-template/v7}: locates one reviewed cursor template in downscaled grayscale samples.
+ * {@code cursor-template/v8}: locates one reviewed cursor template in downscaled grayscale samples.
  *
  * <p>The template is rendered at the scale it appears in the analysis frame, with sub-pixel phase,
  * by exact area coverage of its opaque pixels. Only analysis pixels the sprite fully covers are
@@ -20,7 +20,9 @@ import java.util.Map;
  * is compared with the samples about {@link #NEIGHBOR_SECONDS} before and after it, within each
  * difference map's own noise floor. Unchanged versus every neighbour is background unless it is
  * exactly where the cursor was detected in the previous sample and also unchanged since that sample
- * (a cursor that stopped; a cursor that vanished changes those pixels and so ends the hold).
+ * (a cursor that stopped; a cursor that vanished changes those pixels and so ends the hold). A
+ * missed sample ends the hold too (v8): a detection remembered across it is not "the previous
+ * sample's", so static art the cursor uncovered during the miss cannot be resumed as held.
  * Unchanged versus only one neighbour is a cursor arriving or leaving, or art on the far side of a
  * scene cut, so it is accepted only near the previous detection and only if it changed since the
  * previous sample or is that held detection. Changed versus all neighbours is foreground.
@@ -66,7 +68,7 @@ import java.util.Map;
  * event.
  */
 final class MouseVideoCursorTracker {
-  static final String METHOD = "cursor-template/v7";
+  static final String METHOD = "cursor-template/v8";
 
   /** Offset of the temporal neighbours used to recognise static look-alikes. */
   static final double NEIGHBOR_SECONDS = 1.5d;
@@ -609,8 +611,16 @@ final class MouseVideoCursorTracker {
     return flat;
   }
 
-  private static boolean holds(Candidate held, int x, int y) {
-    return held != null && Math.abs(x - held.x()) <= 1 && Math.abs(y - held.y()) <= 1;
+  /**
+   * Whether (x, y) is where the cursor was detected in the previous sample. A detection remembered
+   * across a missed sample is not held (v8): the cursor may have left during the miss, and the
+   * static pixels it uncovered would otherwise be resumed as a resting cursor.
+   */
+  private boolean holds(Candidate held, int x, int y) {
+    return held != null
+        && missed == 0
+        && Math.abs(x - held.x()) <= 1
+        && Math.abs(y - held.y()) <= 1;
   }
 
   /**

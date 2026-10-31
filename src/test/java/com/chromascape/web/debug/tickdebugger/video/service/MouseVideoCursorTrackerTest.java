@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.chromascape.web.debug.tickdebugger.video.MouseVideoProperties;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -193,6 +194,58 @@ class MouseVideoCursorTrackerTest {
         assertThat(detection.visible()).as("frame %d after the cursor vanished", index).isFalse();
       }
     }
+  }
+
+  @Test
+  void aHoldDoesNotSurviveAMissedSample() {
+    // Reproduction of the FA12 compressed-300k ghost: the cursor leaves over a cursor-like mark,
+    // the sample in which it leaves is missed, and the mark, unchanged from then on, was resumed
+    // as the "held" cursor because the hold compared with the last detection, not the previous
+    // sample's.
+    MouseVideoCursorTracker tracker =
+        new MouseVideoCursorTracker(arrow(), new MouseVideoProperties());
+    int[][] background = scene(13, -1, -1);
+    int[][] marked = copy(background);
+    drawMark(marked, 600, 400);
+    List<int[][]> moving = new ArrayList<>();
+    for (int frame = 0; frame < 10; frame++) {
+      int[][] image = copy(marked);
+      drawArrow(image, 330 + frame * 30, 130 + frame * 30);
+      moving.add(downscale(image));
+    }
+    List<MouseVideoCursorTracker.Context> contexts = new ArrayList<>();
+    for (int index = 0; index < moving.size(); index++) {
+      List<int[][]> neighbors = new ArrayList<>();
+      neighbors.add(moving.get(Math.max(0, index - 4)));
+      neighbors.add(moving.get(Math.min(moving.size() - 1, index + 4)));
+      contexts.add(
+          new MouseVideoCursorTracker.Context(
+              moving.get(index), neighbors, index > 0 ? moving.get(index - 1) : null));
+    }
+    tracker.calibrate(contexts, SOURCE_WIDTH, SOURCE_HEIGHT, ANALYSIS_WIDTH, ANALYSIS_HEIGHT);
+    MouseVideoCursorTracker.Detection onMark = null;
+    for (MouseVideoCursorTracker.Context context : contexts) {
+      onMark = tracker.track(context);
+    }
+    assertThat(onMark.visible()).as("cursor arriving on the mark").isTrue();
+
+    int[][] flat = new int[ANALYSIS_HEIGHT][ANALYSIS_WIDTH];
+    for (int[] row : flat) {
+      Arrays.fill(row, 128);
+    }
+    assertThat(
+            tracker
+                .track(new MouseVideoCursorTracker.Context(flat, List.<int[][]>of(flat), flat))
+                .visible())
+        .as("the sample in which the cursor leaves is missed")
+        .isFalse();
+
+    int[][] markOnly = downscale(marked);
+    MouseVideoCursorTracker.Detection afterMiss =
+        tracker.track(
+            new MouseVideoCursorTracker.Context(
+                markOnly, List.of(moving.get(moving.size() - 1), markOnly), markOnly));
+    assertThat(afterMiss.visible()).as("the unchanged mark after a missed sample").isFalse();
   }
 
   @Test
