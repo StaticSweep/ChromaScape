@@ -1,0 +1,75 @@
+{
+ "schema": "sc2150-yt-screening/v1",
+ "createdAt": "2026-10-31T23:05:00Z",
+ "method": "one midpoint frame per section at 960 px, one montage per video (tools/screen_sections.py)",
+ "rule": "full = playable OSRS client view with the cursor visible in the sampled frame; cut_only = edits without a playable client view",
+ "counts": {
+  "full": 9,
+  "cut_only": 0
+ },
+ "sections": [
+  {
+   "videoId": "NTe3PTTBhuU",
+   "section": 1,
+   "verdict": "full",
+   "cursorFraction": null,
+   "note": "overworld skilling and walking, chat open"
+  },
+  {
+   "videoId": "NTe3PTTBhuU",
+   "section": 2,
+   "verdict": "full",
+   "cursorFraction": null,
+   "note": "overworld skilling and walking, chat open"
+  },
+  {
+   "videoId": "NTe3PTTBhuU",
+   "section": 3,
+   "verdict": "full",
+   "cursorFraction": null,
+   "note": "overworld skilling and walking, chat open"
+  },
+  {
+   "videoId": "lM4EJ4UuSZ8",
+   "section": 1,
+   "verdict": "full",
+   "cursorFraction": null,
+   "note": "Royal Titans boss combat, resizable client with side panel"
+  },
+  {
+   "videoId": "lM4EJ4UuSZ8",
+   "section": 2,
+   "verdict": "full",
+   "cursorFraction": null,
+   "note": "Royal Titans boss combat, resizable client with side panel"
+  },
+  {
+   "videoId": "lM4EJ4UuSZ8",
+   "section": 3,
+   "verdict": "full",
+   "cursorFraction": null,
+   "note": "Royal Titans boss combat, resizable client with side panel"
+  },
+  {
+   "videoId": "qJXe6GUepmk",
+   "section": 1,
+   "verdict": "full",
+   "cursorFraction": null,
+   "note": "Mastering Mixology lab: fixed-camera minigame interface"
+  },
+  {
+   "videoId": "qJXe6GUepmk",
+   "section": 2,
+   "verdict": "full",
+   "cursorFraction": null,
+   "note": "Mastering Mixology lab: fixed-camera minigame interface"
+  },
+  {
+   "videoId": "qJXe6GUepmk",
+   "section": 3,
+   "verdict": "full",
+   "cursorFraction": null,
+   "note": "Mastering Mixology lab: fixed-camera minigame interface"
+  }
+ ]
+}
