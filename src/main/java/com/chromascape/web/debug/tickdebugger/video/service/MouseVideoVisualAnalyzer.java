@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 import javax.imageio.ImageIO;
 import org.springframework.stereotype.Component;
 
@@ -73,6 +74,39 @@ public class MouseVideoVisualAnalyzer {
       double sourceDurationSeconds,
       Path cursorTemplate)
       throws IOException {
+    try {
+      return analyze(
+          index,
+          framesDirectory,
+          step,
+          sourceWidth,
+          sourceHeight,
+          sourceDurationSeconds,
+          cursorTemplate,
+          () -> false);
+    } catch (InterruptedException impossible) {
+      throw new IllegalStateException("analysis without a stop condition was stopped", impossible);
+    }
+  }
+
+  /**
+   * As {@link #analyze(List, Path, int, int, int, double, Path)}, checking {@code stopRequested}
+   * before every sample of each full pass. The passes run in this JVM, not in a contained process,
+   * so this is the only way a cancellation or a lost lease can stop them; without it a fenced job
+   * kept analysing (and holding its job volume) for the rest of a long source.
+   *
+   * @throws InterruptedException when {@code stopRequested} becomes true; nothing is published
+   */
+  public Result analyze(
+      List<MouseVideoFrameIndexService.Frame> index,
+      Path framesDirectory,
+      int step,
+      int sourceWidth,
+      int sourceHeight,
+      double sourceDurationSeconds,
+      Path cursorTemplate,
+      BooleanSupplier stopRequested)
+      throws IOException, InterruptedException {
     List<Sample> samples = samples(index, framesDirectory, step);
     List<Map<String, Object>> observations = new ArrayList<>();
     int[][] previous = null;
@@ -102,13 +136,14 @@ public class MouseVideoVisualAnalyzer {
               tracker, framesDirectory, samples.size(), neighborOffset, sourceWidth, sourceHeight);
     }
 
-    double[] pairDeltas = pairDeltas(framesDirectory, samples.size());
+    double[] pairDeltas = pairDeltas(framesDirectory, samples.size(), stopRequested);
     // Where each sample's forward cursor observation sits in the list, and whether it is visible,
     // so the backward pass can upgrade a forward miss in place without reordering observations.
     int[] cursorSlots = new int[samples.size()];
     boolean[] forwardVisible = new boolean[samples.size()];
     Arrays.fill(cursorSlots, -1);
     for (int position = 0; position < samples.size(); position++) {
+      checkStop(stopRequested);
       Sample sample = samples.get(position);
       int[][] current = loadSample(framesDirectory, position);
       if (current == null) {
@@ -265,7 +300,8 @@ public class MouseVideoVisualAnalyzer {
               neighborOffset,
               cursorSlots,
               forwardVisible,
-              observations);
+              observations,
+              stopRequested);
       cursorVisible += recovered;
       cursorAmbiguous -= recovered;
     }
@@ -383,10 +419,13 @@ public class MouseVideoVisualAnalyzer {
    * Mean difference of each sample to the one before it ({@code NaN} when either is unreadable or
    * the sizes differ), decoding each sample once.
    */
-  private static double[] pairDeltas(Path framesDirectory, int sampleCount) throws IOException {
+  private static double[] pairDeltas(
+      Path framesDirectory, int sampleCount, BooleanSupplier stopRequested)
+      throws IOException, InterruptedException {
     double[] deltas = new double[sampleCount];
     int[][] before = null;
     for (int position = 0; position < sampleCount; position++) {
+      checkStop(stopRequested);
       int[][] frame = loadSample(framesDirectory, position);
       deltas[position] =
           before != null
@@ -450,6 +489,12 @@ public class MouseVideoVisualAnalyzer {
     return neighbors;
   }
 
+  private static void checkStop(BooleanSupplier stopRequested) throws InterruptedException {
+    if (stopRequested.getAsBoolean()) {
+      throw new InterruptedException("Analysis stopped: cancelled or lease lost");
+    }
+  }
+
   private static int[][] loadSample(Path framesDirectory, int position) throws IOException {
     return loadGrayscale(
         framesDirectory.resolve(String.format(Locale.ROOT, "%06d.png", position + 1)));
@@ -468,12 +513,14 @@ public class MouseVideoVisualAnalyzer {
       int neighborOffset,
       int[] cursorSlots,
       boolean[] forwardVisible,
-      List<Map<String, Object>> observations)
-      throws IOException {
+      List<Map<String, Object>> observations,
+      BooleanSupplier stopRequested)
+      throws IOException, InterruptedException {
     tracker.restartTrack();
     int recovered = 0;
     int[][] later = null;
     for (int position = samples.size() - 1; position >= 0; position--) {
+      checkStop(stopRequested);
       int[][] current = loadSample(framesDirectory, position);
       if (current == null) {
         tracker.restartTrack();

@@ -1,6 +1,7 @@
 package com.chromascape.web.debug.tickdebugger.video.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.chromascape.web.debug.tickdebugger.video.MouseVideoProperties;
 import java.awt.Color;
@@ -12,6 +13,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,6 +40,35 @@ class MouseVideoVisualAnalyzerTest {
     properties.setActivityMinDelta(0.05d);
     properties.setMaxVisualFrames(200);
     analyzer = new MouseVideoVisualAnalyzer(properties);
+  }
+
+  @Test
+  void stopsMidPassWhenTheStopConditionTurnsTrue() throws IOException {
+    // The passes run in the JVM, so a cancellation or lost lease can only stop them through this
+    // check; before it, a fenced job kept analysing to the end of the source.
+    List<MouseVideoFrameIndexService.Frame> index = new ArrayList<>();
+    Path frames = root.resolve("frames");
+    Files.createDirectories(frames);
+    for (int position = 0; position < 30; position++) {
+      writeFrame(
+          frames.resolve(String.format("%06d.png", position + 1)),
+          position % 2 == 0 ? new Color(20, 20, 20) : new Color(200, 200, 200));
+      index.add(
+          new MouseVideoFrameIndexService.Frame(
+              Integer.toString(position),
+              String.format(java.util.Locale.ROOT, "%.2f", position * 0.1d),
+              "0.10",
+              position == 0));
+    }
+    AtomicInteger checks = new AtomicInteger();
+
+    assertThatThrownBy(
+            () ->
+                analyzer.analyze(
+                    index, frames, 1, 320, 180, 3.0d, null, () -> checks.incrementAndGet() > 40))
+        .isInstanceOf(InterruptedException.class);
+    // One full pass is 30 checks; it stopped on the 41st, inside the second pass, not at the end.
+    assertThat(checks.get()).isEqualTo(41);
   }
 
   @Test

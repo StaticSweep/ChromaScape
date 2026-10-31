@@ -183,7 +183,8 @@ public class MouseVideoAnalysisWorker {
             sourceWidth,
             sourceHeight,
             probe.durationSeconds(),
-            template);
+            template,
+            cancellation::isCancelled);
 
     String observationsJson =
         publishJson(

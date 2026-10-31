@@ -238,6 +238,19 @@ PTS/trace skew ≤ 50 ms, drops/duplicates, exact ordinals; classify generated v
 settings. Also rerun the Fedora host boundary proof (memory + `MemorySwapMax=0`, CPU/PID/time/
 output limits, hard job storage, network/secret denial, descendant termination, restart/sweep).
 
+### W13 addendum (found 2026-10-31 on the dev library instance)
+
+- **Fixed:** in-JVM analysis passes ignored cancellation. A job fenced to
+  `NEEDS_RECONCILIATION` (its lease expired during 72 s of host thread starvation) kept
+  analysing for ~12 min and held its job volume (`fuse2fs`) until it reached publication, where
+  the fence correctly refused it. `MouseVideoVisualAnalyzer` now checks the job's cancellation
+  before every sample of each full pass.
+- **Open:** no operator path resolves `NEEDS_RECONCILIATION`. The row keeps an admission slot
+  forever; `reconcileExpiredClaims`/`reconcileOnStartup` only create such rows. W13 needs an
+  owner-scoped "confirm cleanup" action that first proves the scope and volume are gone, then
+  settles the row as failed/interrupted, with an event and an audit trail. Affected row on the
+  library instance: job `6e505115` (Langsamt s1); the section was re-analysed under a new job.
+
 ### W13 — Telemetry, readiness, rollback (F10)
 
 Low-cardinality metrics for session create/refuse/seal/abandon, exposure, retry/conflict,
