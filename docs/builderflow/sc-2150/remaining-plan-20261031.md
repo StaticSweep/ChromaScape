@@ -60,6 +60,18 @@ W10 runs **once**, only after W8 and W9 are frozen.
 
 ---
 
+### Owner decisions recorded 2026-10-31
+
+| ID | Decision |
+|---|---|
+| D-HO | **Option A + 0.2 s density:** add 2–3 new held-out longplay channels (sections fixed at 20/50/80 % before viewing), blind labels every 0.2 s (~300 per section). |
+| D5 | **Keep the 0.90 cut-F1 gate**; a failed gate stays failed. |
+| D6 | **Record, don't block:** the pre-existing/other-story full-suite failures (`full-suite-dispositions-20261031.md`) do not block SC-2150. |
+| OWN-1/D4 | Owner review and recording sessions **soon**: prepare the dev review queue and the recording setup next. |
+
+Progress 2026-10-31: W1–W5 complete (see `verification-evidence-w2…`, `-w3…`, `-w5…`,
+`full-suite-dispositions-20261031.md`). D3 (YouTube acquisition pins/clip/egress) is still open.
+
 ## 3. Work packages with implementation details
 
 ### W1 — Freeze and commit the delivery bundle (R28 P1 follow-through)
