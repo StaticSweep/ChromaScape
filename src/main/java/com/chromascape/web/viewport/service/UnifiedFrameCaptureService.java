@@ -57,6 +57,7 @@ public class UnifiedFrameCaptureService {
 
   private ScheduledExecutorService captureScheduler;
   private ExecutorService dispatchExecutor;
+  private final ThreadLocal<Boolean> deliveringFrame = ThreadLocal.withInitial(() -> false);
   private volatile boolean capturing = false;
   private volatile long lastErrorLogTimeMs = 0;
   private static final long ERROR_LOG_INTERVAL_MS = 5000;
@@ -205,13 +206,18 @@ public class UnifiedFrameCaptureService {
 
     if (dispatchExecutor != null) {
       dispatchExecutor.shutdown();
-      try {
-        if (!dispatchExecutor.awaitTermination(2, TimeUnit.SECONDS)) {
+      // A listener may unregister itself (e.g. the recording duration limit). Its
+      // callback is part of this executor: awaiting it here would await ourselves,
+      // then shutdownNow would interrupt recorder finalization on this very thread.
+      if (!deliveringFrame.get()) {
+        try {
+          if (!dispatchExecutor.awaitTermination(2, TimeUnit.SECONDS)) {
+            dispatchExecutor.shutdownNow();
+          }
+        } catch (InterruptedException e) {
           dispatchExecutor.shutdownNow();
+          Thread.currentThread().interrupt();
         }
-      } catch (InterruptedException e) {
-        dispatchExecutor.shutdownNow();
-        Thread.currentThread().interrupt();
       }
       dispatchExecutor = null;
     }
@@ -295,6 +301,7 @@ public class UnifiedFrameCaptureService {
       staleSourceDispatches.incrementAndGet();
       return;
     }
+    deliveringFrame.set(true);
     try {
       subscriber.onFrameCaptured(event);
     } catch (Exception e) {
@@ -303,6 +310,8 @@ public class UnifiedFrameCaptureService {
           "Error delivering frame to subscriber {}: {}",
           subscriber.getClass().getSimpleName(),
           e.getMessage());
+    } finally {
+      deliveringFrame.remove();
     }
   }
 

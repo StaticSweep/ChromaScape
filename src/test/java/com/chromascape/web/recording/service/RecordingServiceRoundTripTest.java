@@ -24,6 +24,43 @@ import org.junit.jupiter.api.Test;
 class RecordingServiceRoundTripTest {
 
   @Test
+  void automaticDurationStopPublishesIndexFromRealDispatchThread() throws Exception {
+    var output = Files.createTempDirectory("auto-stop-index");
+    var config = new RecordingConfig();
+    config.setEnabled(true);
+    config.setOutputDirectory(output.toString());
+    config.setMinCaptureWidth(16);
+    config.setMinCaptureHeight(16);
+    config.setStabilityWindowMs(0);
+    config.setMaxDurationMinutes(1);
+    var captureConfig = new UnifiedCaptureConfig();
+    captureConfig.setEnabled(true);
+    captureConfig.setFps(5);
+    var capture = mock(WindowFrameCapture.class);
+    when(capture.captureEvent())
+        .thenAnswer(call -> event(binding(), Color.GREEN, System.nanoTime()));
+    var unified = new UnifiedFrameCaptureService(captureConfig, capture);
+    var service = new RecordingService(config, captureConfig, unified, capture);
+    try {
+      String id = service.startRecording();
+      // Expire only the duration guard; no wall-clock change or minute-long sleep.
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          service, "recordingStartTime", System.currentTimeMillis() - 60_001L);
+      Path video = output.resolve(id + ".mp4");
+      Path sidecar = MeasuredVideoIndex.sidecar(video);
+      long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(12);
+      while (!Files.exists(sidecar) && System.nanoTime() < deadline) Thread.sleep(20);
+      assertThat(service.isActive()).isFalse();
+      assertThat(sidecar).exists();
+      // This virtual elapsed-time injection may mark a clock reset; it must still
+      // finalize honest index bytes rather than interrupting the owning callback.
+      assertThat(MeasuredVideoIndex.read(video, id).frames()).isNotEmpty();
+    } finally {
+      service.cleanup();
+    }
+  }
+
+  @Test
   void burstInOneCaptureSlotDoesNotStretchTheMediaTimeline() throws Exception {
     RecordingConfig config = new RecordingConfig();
     config.setEnabled(true);
