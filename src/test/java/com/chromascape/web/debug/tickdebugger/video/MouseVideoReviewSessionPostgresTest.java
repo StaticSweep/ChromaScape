@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.persistence.EntityManagerFactory;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -658,5 +659,99 @@ class MouseVideoReviewSessionPostgresTest {
       return new MouseVideoReviewSessionService(
           db, sources, analyses, indices, reviews, planes, p, mapper);
     }
+  }
+
+  ObjectNode rebased(ObjectNode wrapped, int expectedBaseRevision) throws Exception {
+    ObjectNode body = (ObjectNode) M.readTree(wrapped.path("snapshotJson").asText());
+    body.put("expectedBaseRevision", expectedBaseRevision);
+    return M.createObjectNode().put("snapshotJson", body.toString());
+  }
+
+  @Test
+  void removingEveryLabelSavesAnEmptyRevisionAndKeepsHistory() throws Exception {
+    UUID id = open();
+    sessions.submit("owner", "actor", id, snapshot(30, 1));
+
+    sessions.submit("owner", "actor", id, rebased(snapshot(0, 2), 1));
+
+    List<Map<String, Object>> revisions =
+        db.queryForList(
+            "select jsonb_array_length(corrections_json) as size from mouse_video_review_revisions"
+                + " where review_session_id=? order by client_edit_version",
+            id);
+    assertThat(revisions)
+        .extracting(row -> ((Number) row.get("size")).intValue())
+        .containsExactly(30, 0);
+    UUID latest =
+        db.queryForObject(
+            "select latest_revision_id from mouse_video_review_sessions where id=?",
+            UUID.class,
+            id);
+    assertThat(
+            db.queryForObject(
+                "select jsonb_array_length(corrections_json) from mouse_video_review_revisions"
+                    + " where id=?",
+                Integer.class,
+                latest))
+        .isZero();
+  }
+
+  @Test
+  void sessionRangeIsBoundedAtTwoThousandFramesAndAFullRangeSnapshotSaves() {
+    var frames = new ArrayList<MouseVideoFrameIndexService.Frame>();
+    for (int i = 0; i < 2001; i++)
+      frames.add(new MouseVideoFrameIndexService.Frame("" + i, "" + (i / 30.0), "1", i == 0));
+    var index =
+        new MouseVideoFrameIndexService.FrozenFrameIndex(
+            checksum, "mouse-video-frame-index/v1", true, "1/30", "1", "30", List.copyOf(frames));
+    when(context
+            .getBean(MouseVideoFrameIndexService.class)
+            .requireIndex("owner", source.getId(), analysis.getId()))
+        .thenReturn(index);
+    when(context
+            .getBean(MouseVideoFrameIndexService.class)
+            .bounds("owner", source.getId(), analysis.getId()))
+        .thenReturn(new MouseVideoCorrectionContract.Bounds(2001, 160, 96));
+
+    // 2,001 frames is refused for its size before any overlap check can apply.
+    ObjectNode tooLong = createBody().put("endOrdinal", 2000);
+    assertThatThrownBy(() -> sessions.create("owner", "actor", source.getId(), tooLong))
+        .isInstanceOf(MouseVideoException.class)
+        .hasMessageContaining("1–2000 indexed frames");
+
+    UUID id =
+        UUID.fromString(
+            (String)
+                sessions
+                    .create("owner", "actor", source.getId(), createBody().put("endOrdinal", 1999))
+                    .get("id"));
+    ObjectNode full = snapshot(2000, 1);
+    assertThat(full.path("snapshotJson").asText().getBytes(StandardCharsets.UTF_8).length)
+        .isLessThan(600 * 1024);
+    sessions.submit("owner", "actor", id, full);
+    assertThat(
+            db.queryForObject(
+                "select jsonb_array_length(r.corrections_json) from mouse_video_review_sessions s"
+                    + " join mouse_video_review_revisions r on r.id=s.latest_revision_id"
+                    + " where s.id=?",
+                Integer.class,
+                id))
+        .isEqualTo(2000);
+  }
+
+  @Test
+  void snapshotLargerThanTheWireBoundIsRefusedBeforeParsing() {
+    UUID id = open();
+    String oversized = "x".repeat(600 * 1024 + 1);
+    ObjectNode request = M.createObjectNode().put("snapshotJson", oversized);
+    assertThatThrownBy(() -> sessions.submit("owner", "actor", id, request))
+        .isInstanceOf(MouseVideoException.class)
+        .hasMessageContaining("exceeds request bound");
+    assertThat(
+            db.queryForObject(
+                "select count(*) from mouse_video_review_revisions where review_session_id=?",
+                Long.class,
+                id))
+        .isZero();
   }
 }
