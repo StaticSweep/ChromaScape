@@ -1,0 +1,50 @@
+{
+ "schema": "sc2150-yt-split/v1",
+ "createdAt": "2026-10-31T23:00:00Z",
+ "rule": "channels are assigned before any label exists; a channel never appears on both sides",
+ "assignmentBasis": "D-HO held-out expansion: channel identity and title only, chosen before any footage was viewed; all three channels are new to the split",
+ "sources": {
+  "qJXe6GUepmk": {
+   "split": "heldout",
+   "kind": "longplay",
+   "channel": "cape's second screen",
+   "url": "https://www.youtube.com/watch?v=qJXe6GUepmk",
+   "sections": {
+    "full": [
+     1,
+     2,
+     3
+    ],
+    "cutOnly": []
+   }
+  },
+  "NTe3PTTBhuU": {
+   "split": "heldout",
+   "kind": "longplay",
+   "channel": "GrimsEpicGames",
+   "url": "https://www.youtube.com/watch?v=NTe3PTTBhuU",
+   "sections": {
+    "full": [
+     1,
+     2,
+     3
+    ],
+    "cutOnly": []
+   }
+  },
+  "lM4EJ4UuSZ8": {
+   "split": "heldout",
+   "kind": "longplay",
+   "channel": "TheEdB0ys",
+   "url": "https://www.youtube.com/watch?v=lM4EJ4UuSZ8",
+   "sections": {
+    "full": [
+     1,
+     2,
+     3
+    ],
+    "cutOnly": []
+   }
+  }
+ }
+}
