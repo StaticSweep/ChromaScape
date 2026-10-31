@@ -66,9 +66,14 @@ W10 runs **once**, only after W8 and W9 are frozen.
 |---|---|
 | D-HO | **Option A + 0.2 s density:** add 2–3 new held-out longplay channels (sections fixed at 20/50/80 % before viewing), blind labels every 0.2 s (~300 per section). |
 | D5 | **Keep the 0.90 cut-F1 gate**; a failed gate stays failed. |
+| D-RECALL | **Recall gate 95 %** (owner, 2026-10-31: "95%+ is fine"), replacing 99 %. Other gates unchanged (median ≤ 4 px, p95 ≤ 12 px, absent-span false ≤ 1 %, cut F1 ≥ 0.90). v8 dev: recall 96.57 %, absent false 0.0 % — all dev gates pass; held-out still to be evaluated. |
 | D6 | **Record, don't block:** the pre-existing/other-story full-suite failures (`full-suite-dispositions-20261031.md`) do not block SC-2150. |
 | OWN-1/D4 | Owner review and recording sessions **soon**: prepare the dev review queue and the recording setup next. |
 | D4 (W12) | **Record with a real dispatched task** (owner, 2026-10-31: "better to have a task"), so the trace carries generated bot paths; purchasing off, run stopped after the recording. |
+
+Delivery 2026-10-31: SC-2150 ported onto current main as `codex/sc-2150-on-main` (29 SC-2150
+commits; migrations renumbered V80–V86; the replay-catalog "From others" tab not ported because its
+base exists only in preserved non-SC-2150 commits). Supersedes PR #70, which keeps those commits.
 
 Progress 2026-10-31: W1–W5 complete (see `verification-evidence-w2…`, `-w3…`, `-w5…`,
 `full-suite-dispositions-20261031.md`). D3 (YouTube acquisition pins/clip/egress) is still open.
