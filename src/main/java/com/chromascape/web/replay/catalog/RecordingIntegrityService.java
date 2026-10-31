@@ -25,12 +25,20 @@ public class RecordingIntegrityService {
   }
 
   public ReplayEligibility evaluate(ResolvedRecording resolved) {
+    return evaluate(resolved, false);
+  }
+
+  public ReplayEligibility evaluateCatalog(ResolvedRecording resolved) {
+    return evaluate(resolved, true);
+  }
+
+  private ReplayEligibility evaluate(ResolvedRecording resolved, boolean metadataOnly) {
     boolean playback = checkPlayback(resolved);
     // POLICY_REPLAY is unavailable in v1 — decided HERE, not overwritten later by preflight.
     boolean policyReplay = false;
     // Simulation blockers are computed ONCE and directly gate simulationEligibility so the
     // service's own verdict can never contradict the blockers it reports.
-    List<ReplayBlockingReason> simulationBlockers = buildSimulationBlockers(resolved);
+    List<ReplayBlockingReason> simulationBlockers = buildSimulationBlockers(resolved, metadataOnly);
 
     List<ReplayBlockingReason> blockingReasons = new ArrayList<>();
 
@@ -130,7 +138,8 @@ public class RecordingIntegrityService {
     return reasons;
   }
 
-  private List<ReplayBlockingReason> buildSimulationBlockers(ResolvedRecording resolved) {
+  private List<ReplayBlockingReason> buildSimulationBlockers(
+      ResolvedRecording resolved, boolean metadataOnly) {
     List<ReplayBlockingReason> reasons = new ArrayList<>();
     // Inherits all policy-replay blockers
     reasons.addAll(buildPolicyReplayBlockers(resolved));
@@ -144,9 +153,25 @@ public class RecordingIntegrityService {
     if (minTick == null || maxTick == null) {
       return reasons;
     }
-    var snapshots =
-        tickSnapshotRepository.findBySessionIdAndTickBetweenOrderByTick(
-            sessionId, minTick, maxTick);
+    List<com.chromascape.web.debug.tickdebugger.entity.TickSnapshot> snapshots;
+    if (metadataOnly) {
+      snapshots = new ArrayList<>();
+      for (var metadata : tickSnapshotRepository.findEvidenceMetadataBySessionId(sessionId)) {
+        var snapshot = new com.chromascape.web.debug.tickdebugger.entity.TickSnapshot();
+        snapshot.setTick(metadata.getTick());
+        snapshot.setSchemaVersion(metadata.getSchemaVersion());
+        snapshots.add(snapshot);
+      }
+      if (!snapshots.isEmpty()) {
+        tickSnapshotRepository
+            .findFirstBySessionIdOrderByTickAsc(sessionId)
+            .ifPresent(first -> snapshots.set(0, first));
+      }
+    } else {
+      snapshots =
+          tickSnapshotRepository.findBySessionIdAndTickBetweenOrderByTick(
+              sessionId, minTick, maxTick);
+    }
 
     // ONE shared interpretation of evidence validity (preflight AND compiler): tick
     // continuity, explicit supported schema versions on EVERY snapshot (null is never

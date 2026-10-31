@@ -30,6 +30,51 @@ import org.slf4j.LoggerFactory;
  */
 public class WindowHandler {
   private static final Logger logger = LoggerFactory.getLogger(WindowHandler.class);
+
+  /**
+   * Per-thread handler for the shared native enumeration callback. Passing a fresh lambda to every
+   * EnumWindows/EnumChildWindows call makes JNA allocate a new native callback and JNI weak global
+   * reference each time, and those were not reclaimed (about 2.5 per call, retained across GC).
+   * Window lookup runs per captured frame, so that accumulated hundreds of references per second.
+   * The enumeration is synchronous, so the handler can be handed over through a thread-local.
+   */
+  private static final ThreadLocal<WNDENUMPROC> ENUM_HANDLER = new ThreadLocal<>();
+
+  private static final WNDENUMPROC SHARED_ENUM_PROC =
+      (hwnd, data) -> {
+        WNDENUMPROC handler = ENUM_HANDLER.get();
+        return handler != null && handler.callback(hwnd, data);
+      };
+
+  private static void enumWindows(User32 user32, WNDENUMPROC handler, Pointer arg) {
+    WNDENUMPROC previous = ENUM_HANDLER.get();
+    ENUM_HANDLER.set(handler);
+    try {
+      user32.EnumWindows(SHARED_ENUM_PROC, arg);
+    } finally {
+      restoreEnumHandler(previous);
+    }
+  }
+
+  private static void enumChildWindows(
+      User32 user32, HWND parent, WNDENUMPROC handler, Pointer data) {
+    WNDENUMPROC previous = ENUM_HANDLER.get();
+    ENUM_HANDLER.set(handler);
+    try {
+      user32.EnumChildWindows(parent, SHARED_ENUM_PROC, data);
+    } finally {
+      restoreEnumHandler(previous);
+    }
+  }
+
+  private static void restoreEnumHandler(WNDENUMPROC previous) {
+    if (previous == null) {
+      ENUM_HANDLER.remove();
+    } else {
+      ENUM_HANDLER.set(previous);
+    }
+  }
+
   private static final String _windowName = "RuneLite";
   private static final String CANVAS_CLASS_NAME = "SunAwtCanvas";
   private static final String[] SUPPORTED_CLIENTS = {"RuneLite", "Leeuwbot", "VitaLite"};
@@ -139,7 +184,8 @@ public class WindowHandler {
 
     // Tier 1: Try exact match
     AtomicReference<WindowInfo> exactMatch = new AtomicReference<>();
-    user32.EnumWindows(
+    enumWindows(
+        user32,
         (hwnd, arg) -> {
           totalWindows.incrementAndGet();
           byte[] buffer = new byte[512];
@@ -233,7 +279,8 @@ public class WindowHandler {
     User32 user32 = User32.INSTANCE;
     int[] count = {0};
 
-    user32.EnumChildWindows(
+    enumChildWindows(
+        user32,
         parent,
         (hwnd, data) -> {
           byte[] buffer = new byte[512];
@@ -261,7 +308,8 @@ public class WindowHandler {
 
     AtomicInteger count = new AtomicInteger();
     User32 user32 = User32.INSTANCE;
-    user32.EnumChildWindows(
+    enumChildWindows(
+        user32,
         parent,
         (hwnd, data) -> {
           byte[] buffer = new byte[512];
@@ -331,7 +379,8 @@ public class WindowHandler {
     User32 user32 = User32.INSTANCE;
     AtomicInteger index = new AtomicInteger(1);
 
-    user32.EnumWindows(
+    enumWindows(
+        user32,
         (hwnd, arg) -> {
           byte[] buffer = new byte[512];
           user32.GetWindowTextA(hwnd, buffer, 512);
@@ -455,7 +504,8 @@ public class WindowHandler {
     User32 user32 = User32.INSTANCE;
     AtomicInteger index = new AtomicInteger(1);
 
-    user32.EnumWindows(
+    enumWindows(
+        user32,
         (hwnd, arg) -> {
           byte[] titleBuffer = new byte[512];
           user32.GetWindowTextA(hwnd, titleBuffer, 512);
@@ -731,7 +781,9 @@ public class WindowHandler {
     String previous = lastPreferredWindowLogKey.getAndSet(logKey);
     if (!logKey.equals(previous)) {
       logger.info(
-          "Preferred target window changed: title='{}', pid={}, role={}, canvases={}, secondaryCanvas={}, exactMatch={}, reason={}, enumeratedWindows={}, sampleTitles={}",
+          "Preferred target window changed: title='{}', pid={}, role={}, canvases={},"
+              + " secondaryCanvas={}, exactMatch={}, reason={}, enumeratedWindows={},"
+              + " sampleTitles={}",
           window != null ? window.getTitle() : "<none>",
           window != null ? window.getPid() : -1,
           window != null ? clientRole(window) : ClientWindowRole.OTHER,

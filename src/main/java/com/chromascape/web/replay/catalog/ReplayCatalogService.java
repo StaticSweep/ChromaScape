@@ -48,7 +48,7 @@ public class ReplayCatalogService {
   private ReplayRecordingCatalogEntry buildEntry(RecordingSession recording) {
     try {
       ResolvedRecording resolved = resolver.resolve(recording.getRecordingId());
-      var eligibility = integrityService.evaluate(resolved);
+      var eligibility = integrityService.evaluateCatalog(resolved);
 
       DebugSession ds = resolved.debugSession();
       return new ReplayRecordingCatalogEntry(

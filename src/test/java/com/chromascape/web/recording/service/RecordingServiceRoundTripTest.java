@@ -24,12 +24,53 @@ import org.junit.jupiter.api.Test;
 class RecordingServiceRoundTripTest {
 
   @Test
+  void burstInOneCaptureSlotDoesNotStretchTheMediaTimeline() throws Exception {
+    RecordingConfig config = new RecordingConfig();
+    config.setEnabled(true);
+    config.setMinCaptureWidth(16);
+    config.setMinCaptureHeight(16);
+    config.setStabilityWindowMs(0);
+    config.setOutputDirectory(Files.createTempDirectory("calibrated-burst").toString());
+    UnifiedCaptureConfig captureConfig = new UnifiedCaptureConfig();
+    captureConfig.setEnabled(true);
+    captureConfig.setFps(10);
+    WindowFrameCapture capture = mock(WindowFrameCapture.class);
+    when(capture.captureEvent()).thenAnswer(call -> event(binding(), Color.RED, System.nanoTime()));
+    RecordingService service =
+        new RecordingService(
+            config, captureConfig, mock(UnifiedFrameCaptureService.class), capture);
+    try {
+      String id = service.startRecording();
+      long origin =
+          (long)
+              org.springframework.test.util.ReflectionTestUtils.getField(
+                  service, "recordingStartTimeNano");
+      FrameEvent burst = event(binding(), Color.GREEN, origin + 1_000_000);
+      for (int i = 0; i < 1000; i++) service.onFrameCaptured(burst);
+      Thread.sleep(120);
+      service.onFrameCaptured(event(binding(), Color.BLUE, System.nanoTime()));
+      var metadata = service.stopRecording();
+      assertThat(metadata).isNotNull();
+      var index = MeasuredVideoIndex.read(Path.of(metadata.getFilePath()), id);
+      assertThat(index.mediaDurationMicros())
+          .isLessThanOrEqualTo((metadata.getDuration() + 200) * 1000);
+      assertThat(index.frames().size()).isLessThan(100);
+      assertThat(metadata.getFrameCount()).isEqualTo(index.frames().size());
+    } finally {
+      service.cleanup();
+    }
+  }
+
+  @Test
   void failedReleaseRefusesAnotherStartAndRetainsMedia() throws Exception {
     Path output = Files.createTempDirectory("recorder-release-failure");
     Path media = Files.writeString(output.resolve("previous.mp4"), "preserve-existing-media");
     RecordingConfig config = new RecordingConfig();
     config.setEnabled(true);
     config.setOutputDirectory(output.toString());
+    config.setMinCaptureWidth(16);
+    config.setMinCaptureHeight(16);
+    config.setStabilityWindowMs(0);
     RecordingService service =
         new RecordingService(
             config,
