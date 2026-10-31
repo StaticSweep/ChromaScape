@@ -194,7 +194,9 @@ public class HumanFishingActionReader {
                 before.digest(),
                 "eventId",
                 observed.path("eventId").asText());
-        action.setArguments(Map.of("option", "Lure", "observationEvidence", evidence));
+        // Semantic options use the compiler's canonical lowercase vocabulary. The original
+        // client callback remains unchanged in the content-addressed observation evidence.
+        action.setArguments(Map.of("option", "lure", "observationEvidence", evidence));
         actions.add(
             new ConvertedReplayAction(
                 action,
@@ -208,7 +210,7 @@ public class HumanFishingActionReader {
     if (actions.isEmpty()) fail("HUMAN_LURE_OBSERVATION_MISSING");
     var doc =
         json.createObjectNode()
-            .put("converterVersion", "human-fishing-observation-converter-v1")
+            .put("converterVersion", "human-fishing-observation-converter-v2")
             .put("sessionId", session)
             .put("startTick", start)
             .put("endTick", end)

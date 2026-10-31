@@ -1,5 +1,14 @@
 # SC-274 / SC-276 current remaining delivery plan
 
+## Closure audit follow-up — 31 October 2026
+
+The follow-up [closure audit](closure-audit-20261031.md) fixes the human converter's
+uppercase Lure mapping, with converter-v2 identity and 68 passing selected tests.
+Two fresh read-only JVM conversions of the genuine clip are byte-identical. A deeper
+compiler-prerequisite audit confirms missing graphRevision, snapshot NPC spotId and
+initial world ID, plus a required dynamic-world binding. These are additional blockers
+beyond the live capability gate. No original capture bytes were amended; no story closed.
+
 ## Current status — genuine Windows Fishing capture verified, 31 October 2026
 
 This section supersedes older current-blocker summaries below; their dated evidence is retained.

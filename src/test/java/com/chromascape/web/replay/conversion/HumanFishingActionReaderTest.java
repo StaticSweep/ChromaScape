@@ -4,8 +4,11 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository;
+import com.chromascape.web.debug.tickdebugger.entity.TickSnapshot;
 import com.chromascape.web.integration.micro6.service.Micro6CanonicalHash;
 import com.chromascape.web.recording.provenance.*;
+import com.chromascape.web.replay.capability.CapabilityManifest;
+import com.chromascape.web.replay.manifest.ScenarioCompilationEvidence;
 import com.chromascape.web.replay.projection.CanonicalProjectionService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -86,6 +89,29 @@ class HumanFishingActionReaderTest {
     assertEquals("MICRO6_CLIENT_OBSERVATION", first.actions().get(0).action().getSource());
     assertTrue(first.actions().get(0).action().getArguments().containsKey("observationEvidence"));
     assertTrue(first.gaps().isEmpty());
+  }
+
+  @Test
+  void observedLureUsesFishingVocabularyWithoutInventingBankSemantics() throws Exception {
+    var data = fixture();
+    var conversion = convert(data, 1, 3);
+    assertEquals("lure", conversion.actions().get(0).action().getArguments().get("option"));
+    List<TickSnapshot> snapshots = new ArrayList<>();
+    for (var frame : data.path("frames")) {
+      var snapshot = new TickSnapshot();
+      snapshot.setTick(frame.path("tick").asLong());
+      snapshot.setPlayerState(frame.path("playerState"));
+      snapshot.setNpcs(frame.path("npcs"));
+      snapshots.add(snapshot);
+    }
+    var capability = mock(CapabilityManifest.class, RETURNS_DEEP_STUBS);
+    var world =
+        new ScenarioCompilationEvidence(json, new CanonicalProjectionService())
+            .world(snapshots, conversion, capability);
+    assertEquals(1, world.path("actionTargets").size());
+    for (var binding : world.path("requiredNativeBindings")) {
+      assertNotEquals("EXACT_BANK_WIDGET_OR_EXCHANGE_SEMANTICS", binding.path("kind").asText());
+    }
   }
 
   @Test
