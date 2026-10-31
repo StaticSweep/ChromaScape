@@ -53,6 +53,13 @@ media.**
 | `GET /sources/{id}/analyses/{analysisId}/frame-index` | Bounded page of the frozen frame index |
 | `GET /sources/{id}/analyses/{analysisId}/observations` | Bounded page of published observations (`kind`, `sincePts`, `untilPts`) |
 
+`GET /capabilities` also carries `readiness`: one ladder per capability (`media-import`,
+`cursor-tracking`, `youtube-acquisition`, `review-protocol`) with `configured` → `available` →
+`runnable` → `isolated` → `qualified`. Each rung implies the ones before it and `limitedBy` names
+the first that fails. `qualified` is never inferred from the host: the operator records it in
+`chromascape.mouse-video.qualified-capabilities` (env `CHROMASCAPE_MOUSE_VIDEO_QUALIFIED_CAPABILITIES`)
+once that capability's evidence has been accepted.
+
 ## Upload contract
 
 Global eager multipart parsing remains disabled (`spring.servlet.multipart.enabled: false`) so

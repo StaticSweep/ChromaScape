@@ -363,6 +363,11 @@ public class MouseVideoProcessRunner {
    */
   private static final Set<String> HELD_SCOPES = ConcurrentHashMap.newKeySet();
 
+  /** Whether this host can run executions in transient systemd scopes (probed once). */
+  static boolean scopeContainmentAvailable() {
+    return SystemdScopeContainment.available();
+  }
+
   /** Snapshot of the scope units held by live executions in this JVM. */
   static Set<String> heldScopeUnits() {
     return Set.copyOf(HELD_SCOPES);

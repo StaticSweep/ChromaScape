@@ -24,6 +24,21 @@ public class MouseVideoProperties {
     corpusManifest = value;
   }
 
+  /**
+   * Capabilities whose qualification evidence has been accepted for this deployment
+   * (comma-separated readiness ids, e.g. {@code media-import,review-protocol}). Qualification is a
+   * recorded decision, never inferred from the host; empty means nothing is claimed qualified.
+   */
+  private String qualifiedCapabilities = "";
+
+  public String getQualifiedCapabilities() {
+    return qualifiedCapabilities;
+  }
+
+  public void setQualifiedCapabilities(String value) {
+    qualifiedCapabilities = value == null ? "" : value;
+  }
+
   /** Master switch for external video import and analysis. */
   private boolean enabled = false;
 

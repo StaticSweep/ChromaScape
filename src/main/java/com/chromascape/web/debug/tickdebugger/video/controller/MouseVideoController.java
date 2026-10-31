@@ -13,6 +13,7 @@ import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoImportServ
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoJobService;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoObservationsService;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoPreviewService;
+import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoReadiness;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoReconciliationService;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoRequestGuard;
 import com.chromascape.web.debug.tickdebugger.video.service.MouseVideoRestrictedLauncher;
@@ -80,6 +81,7 @@ public class MouseVideoController {
   private final MouseVideoWorkerRegistry workerRegistry;
   private final MouseVideoReviewSessionService reviewSessions;
   private final MouseVideoReconciliationService reconciliation;
+  private final MouseVideoReadiness readiness;
   private final ObjectMapper mapper;
 
   /**
@@ -109,6 +111,7 @@ public class MouseVideoController {
       MouseVideoWorkerRegistry workerRegistry,
       MouseVideoReviewSessionService reviewSessions,
       MouseVideoReconciliationService reconciliation,
+      MouseVideoReadiness readiness,
       ObjectMapper mapper) {
     this.access = access;
     this.imports = imports;
@@ -127,12 +130,15 @@ public class MouseVideoController {
     this.workerRegistry = workerRegistry;
     this.reviewSessions = reviewSessions;
     this.reconciliation = reconciliation;
+    this.readiness = readiness;
     this.mapper = mapper;
   }
 
   @GetMapping("/capabilities")
   public Map<String, Object> capabilities() {
-    return catalog.capabilities();
+    Map<String, Object> body = new LinkedHashMap<>(catalog.capabilities());
+    body.put("readiness", readiness.report());
+    return body;
   }
 
   @GetMapping("/sandbox")
