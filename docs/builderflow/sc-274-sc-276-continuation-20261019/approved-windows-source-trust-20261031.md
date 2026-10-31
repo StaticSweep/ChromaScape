@@ -53,7 +53,9 @@ deleted. The user's real game client was not restarted or reconfigured.
   validation, no new migrations and no replay consumption.
 - Source-serving Windows PID 14576, loopback 8180, isolated state/home under this evidence
   directory. It serves signed source at the login screen and receives no signing private key.
-- The real logged-in user client PID 94796 remains independent. Capture was explicitly
+- The original user client PID 94796 remains independent and was not restarted. A final
+  visual check showed its disconnected dialog; the cause was not established and no login
+  was attempted. Capture was explicitly
   reselected from the API's current window inventory by PID/title, avoiding the extra source
   client's window. The final viewport probe delivered 15 complete JPEG frames.
 - Original recording `recording_770ef399` and its diagnostic database remain preserved;
