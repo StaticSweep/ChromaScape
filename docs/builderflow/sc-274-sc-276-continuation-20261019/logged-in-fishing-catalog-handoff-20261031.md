@@ -87,3 +87,37 @@ selected. The user was told capture is running and to fish, then report done.
 Finalization, catch/XP/inventory checks, source binding/curation and acceptance review
 remain pending the user's fishing. Recording remains active intentionally. The capture
 is HUMAN development evidence; no story or acceptance row was closed or pushed.
+
+## User-requested stop and capture review — 31 October, 19:49 UTC
+
+On arrival the video recorder was already stopped, but the debug session was still
+RECORDING. The normal stop-recording API returned 200 and finalized the exact session,
+including its final drain: 1,169 contiguous snapshots at ticks 1469–2637, all with
+position telemetry. The API's Replayable result establishes basic tick replay only.
+
+Measured Fishing XP rose 120999 to 121839 (+840). Inventory gained seven raw trout
+(335) and seven raw salmon (331), with seven +50 and seven +70 XP transitions.
+Feathers decreased by 14. These measurements agree on 14 catches; they are not
+independent oracle qualification or a provider-origin claim.
+
+The authenticated persisted-provenance API returns the original HUMAN run, exact saved
+profile/version, real allocation and signed source build/artifact/snapshot identities.
+It also correctly refuses eligibility with CAPTURE_INCOMPLETE. All 1,169 ticks lack
+the newer capture-quality/calibration data; quality reports CAPTURE_CALIBRATION_MISSING
+and CAPTURE_QUALITY_MISSING, with zero calibrated ticks. The media provenance check
+reports VIDEO_INDEX_OR_MEDIA_INVALID. The MP4 exists (531,365,936 bytes), but its
+.timing.json sidecar is absent; synchronized media acceptance is unverified.
+
+The video had stopped automatically at its configured duration limit: the service log
+records "Max recording duration reached, stopping" at 17:14:21 local, exactly one hour
+after start. The later explicit stop repairs final recording metadata; its elapsed
+duration must not be treated as a measured encoded-video duration. Raw video, ticks,
+failed checks and private run context are preserved. No quality data was fabricated or
+backfilled, and no story or acceptance row was closed. No product source or service
+restart was needed for this stop/review.
+
+Evidence: human-fishing-stop-result.json, human-fishing-final-check.json and
+human-fishing-final-context-check.json in the Windows handoff evidence directory;
+private raw ticks, quality and persisted context remain under the restricted
+final-fishing-capture directory. Fix/qualify capture-quality/calibration and the timing
+index finalization path before requesting another acceptance capture.
