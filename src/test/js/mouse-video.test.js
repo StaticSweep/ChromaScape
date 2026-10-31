@@ -809,3 +809,18 @@ test('a sealed session keeps its read-only notice after reload and queue prompts
   assert.equal(reviewCore.reviewStatusText('', 'OPEN'), '');
   assert.equal(reviewCore.reviewStatusText(undefined, undefined), '');
 });
+
+test('a job refresh on the reviewed source keeps a live review instead of resetting it', () => {
+  const live = (patch) => ({ sourceId: 's1', dirty: false, pendingSave: null, reviewMode: { active: false }, session: null, ...patch });
+  // Clean draft right after an acknowledged save, but review mode is still active.
+  assert.equal(reviewCore.preservesReviewOnRefresh(live({ reviewMode: { active: true } }), 's1'), true);
+  // Freshly reopened session seeded from server history: clean, not yet in review mode.
+  assert.equal(reviewCore.preservesReviewOnRefresh(live({ session: { state: 'OPEN' } }), 's1'), true);
+  assert.equal(reviewCore.preservesReviewOnRefresh(live({ dirty: true }), 's1'), true);
+  assert.equal(reviewCore.preservesReviewOnRefresh(live({ pendingSave: { version: 3 } }), 's1'), true);
+  // Nothing live, a sealed session, or another source: a full reset is still correct.
+  assert.equal(reviewCore.preservesReviewOnRefresh(live({}), 's1'), false);
+  assert.equal(reviewCore.preservesReviewOnRefresh(live({ session: { state: 'SEALED' } }), 's1'), false);
+  assert.equal(reviewCore.preservesReviewOnRefresh(live({ reviewMode: { active: true } }), 's2'), false);
+  assert.equal(reviewCore.preservesReviewOnRefresh(null, 's1'), false);
+});

@@ -564,10 +564,21 @@
     async function openReview(source) {
       const section = panel.querySelector('[data-video-review]');
       if (!section) return;
-      if (review.sourceId === source.id && review.dirty) {
+      // A job finishing on this source re-inspects it. That refresh must not reset the review in
+      // progress: right after an acknowledged save the draft is clean but review mode, the open
+      // session and its seeded labels are still live, and a reset would drop the next label.
+      if (
+        reviewCore
+          ? reviewCore.preservesReviewOnRefresh(review, source.id)
+          : review.sourceId === source.id && review.dirty
+      ) {
         review.source = source;
         await loadHistory();
-        setReviewStatus('Source refreshed. Unsaved review and its base revision were preserved.');
+        setReviewStatus(
+          review.dirty
+            ? 'Source refreshed. Unsaved review and its base revision were preserved.'
+            : 'Source refreshed. The open review was preserved.'
+        );
         return;
       }
       review.sourceId = source.id;

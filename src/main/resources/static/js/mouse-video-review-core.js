@@ -785,6 +785,21 @@
     return Number(labelsSinceSave) >= AUTOSAVE_EVERY;
   }
 
+  /**
+   * Whether re-inspecting a source (for example after one of its jobs finishes) must keep the
+   * review state instead of resetting it. Any live review on the same source is kept: unsaved
+   * edits, a pending save, review mode, or an open server session seeded from its history.
+   */
+  function preservesReviewOnRefresh(review, sourceId) {
+    if (!review || review.sourceId !== sourceId) return false;
+    return Boolean(
+      review.dirty ||
+        review.pendingSave ||
+        review.reviewMode?.active ||
+        (review.session && review.session.state === 'OPEN')
+    );
+  }
+
   const SEALED_NOTICE = 'This session is sealed and read-only.';
   // Prompts that ask for a label; on a sealed session they would invite an edit that is refused.
   const EDIT_PROMPT = /click the cursor|press H|Nothing to undo|Undid the last label/;
@@ -837,6 +852,7 @@
     reviewReason,
     autosaveDue,
     reviewStatusText,
+    preservesReviewOnRefresh,
     sampleOrdinals,
   };
 });
