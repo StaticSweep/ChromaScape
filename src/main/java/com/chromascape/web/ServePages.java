@@ -38,4 +38,10 @@ public class ServePages {
     model.addAttribute("supervisorBaseUrl", supervisorBaseUrl);
     return "debugger";
   }
+
+  /** External video import and human-behavior inspection workspace (SC-2150). */
+  @GetMapping("/mouse/video")
+  public String serveMouseVideoPage() {
+    return "mouse-video";
+  }
 }
