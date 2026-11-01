@@ -68,12 +68,41 @@ public class GraphSchemaValidator {
     try {
       SchemaValidatorsConfig config = new SchemaValidatorsConfig();
       config.setFailFast(false);
-      JsonSchemaFactory factory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012);
+      JsonSchemaFactory factory =
+          JsonSchemaFactory.getInstance(
+              SpecVersion.VersionFlag.V202012,
+              builder ->
+                  builder.schemaLoaders(
+                      loaders ->
+                          loaders.add(
+                              new com.networknt.schema.resource.MapSchemaLoader(
+                                  GraphSchemaValidator::localSchemaContent))));
       try (InputStream in = new ClassPathResource(location).getInputStream()) {
         return factory.getSchema(in, config);
       }
     } catch (IOException e) {
       throw new IllegalStateException("unable to load graph schema " + location, e);
+    }
+  }
+
+  /**
+   * Resolves sibling contract schemas from the classpath before any network loader applies.
+   *
+   * <p>Each contract schema declares a public {@code $id}, so a relative {@code $ref} resolves to
+   * that network base. Offline and air-gapped installs then fail draft/publication validation with
+   * an unreachable URI even though the referenced file ships on the classpath. Unknown or unsafe
+   * names return {@code null} so the normal loader chain still applies.
+   */
+  static String localSchemaContent(String uri) {
+    if (uri == null) return null;
+    String name = uri.substring(uri.lastIndexOf('/') + 1);
+    if (!name.endsWith(".schema.json") || name.contains("..")) return null;
+    ClassPathResource resource = new ClassPathResource("contracts/" + name);
+    if (!resource.exists()) return null;
+    try (InputStream in = resource.getInputStream()) {
+      return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+    } catch (IOException e) {
+      return null;
     }
   }
 
