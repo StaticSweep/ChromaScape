@@ -159,6 +159,24 @@ class MouseVideoImportServiceTest {
   }
 
   @Test
+  void providerOutcomeUsesTheFixedTelemetryVocabulary() {
+    assertThat(MouseVideoImportService.providerOutcome(MouseVideoException.CODE_SOURCE_AUTH_REQUIRED))
+        .isEqualTo("auth-required");
+    assertThat(MouseVideoImportService.providerOutcome(MouseVideoException.CODE_SOURCE_RATE_LIMITED))
+        .isEqualTo("rate-limited");
+    assertThat(MouseVideoImportService.providerOutcome(MouseVideoException.CODE_SOURCE_UNAVAILABLE))
+        .isEqualTo("unavailable");
+    assertThat(MouseVideoImportService.providerOutcome(MouseVideoException.CODE_MEDIA_LIMIT))
+        .isEqualTo("limit");
+    assertThat(MouseVideoImportService.providerOutcome(MouseVideoException.CODE_TOOL_UNAVAILABLE))
+        .isEqualTo("tool");
+    assertThat(MouseVideoImportService.providerOutcome(MouseVideoException.CODE_INTERRUPTED))
+        .isEqualTo("interrupted");
+    assertThat(MouseVideoImportService.providerOutcome("SOMETHING_NEW")).isEqualTo("other");
+    assertThat(MouseVideoImportService.providerOutcome(null)).isEqualTo("other");
+  }
+
+  @Test
   void youtubeDisabledIsRejected() {
     properties.setYoutubeEnabled(false);
     assertThatThrownBy(

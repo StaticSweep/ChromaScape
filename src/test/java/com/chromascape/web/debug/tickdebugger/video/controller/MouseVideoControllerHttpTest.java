@@ -89,6 +89,14 @@ class MouseVideoControllerHttpTest {
     schedulingService = mock(MouseVideoSchedulingService.class);
     previewService = mock(MouseVideoPreviewService.class);
     reconciliation = mock(MouseVideoReconciliationService.class);
+    when(jobService.coverage())
+        .thenReturn(
+            java.util.Map.of(
+                "queued", 0L,
+                "running", 0L,
+                "cancelling", 0L,
+                "needsReconciliation", 0L,
+                "oldestQueuedSeconds", 0L));
     when(imports.stagingRoot()).thenReturn(root);
     when(imports.reserve(any(), anyString(), anyLong()))
         .thenReturn(
@@ -206,7 +214,9 @@ class MouseVideoControllerHttpTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("FAILED"));
     mvc.perform(get("/api/debug/mouse-videos/observability").principal(() -> "owner"))
-        .andExpect(jsonPath("$.counters.reconciliationsResolved").value(1));
+        .andExpect(jsonPath("$.counters.reconciliationsResolved").value(1))
+        .andExpect(jsonPath("$.queue.queued").value(0))
+        .andExpect(jsonPath("$.queue.needsReconciliation").value(0));
   }
 
   @Test

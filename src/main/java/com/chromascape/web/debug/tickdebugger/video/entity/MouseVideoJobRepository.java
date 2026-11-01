@@ -72,4 +72,15 @@ public interface MouseVideoJobRepository extends JpaRepository<MouseVideoJob, UU
   Timestamp databaseNow();
 
   long countByStatus(String status);
+
+  /**
+   * Age of the oldest job in a status, measured with the database clock (seconds, 0 when none).
+   * Queue coverage must not depend on the reporting instance's wall clock.
+   */
+  @Query(
+      value =
+          "SELECT COALESCE(EXTRACT(EPOCH FROM (now() - min(created_at))), 0)"
+              + " FROM mouse_video_jobs WHERE status = :status",
+      nativeQuery = true)
+  double oldestAgeSecondsByStatus(@Param("status") String status);
 }

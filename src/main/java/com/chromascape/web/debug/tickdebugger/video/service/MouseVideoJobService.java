@@ -384,6 +384,25 @@ public class MouseVideoJobService {
     return job;
   }
 
+  /**
+   * Queue coverage for the observability endpoint: how much work is waiting, with the database
+   * clock's age of the oldest queued job so a stalled queue is visible without naming any job.
+   */
+  @Transactional(readOnly = true)
+  public Map<String, Object> coverage() {
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("queued", jobs.countByStatus(MouseVideoJob.STATUS_QUEUED));
+    body.put("running", jobs.countByStatus(MouseVideoJob.STATUS_RUNNING));
+    body.put("cancelling", jobs.countByStatus(MouseVideoJob.STATUS_CANCELLING));
+    body.put(
+        "needsReconciliation", jobs.countByStatus(MouseVideoJob.STATUS_NEEDS_RECONCILIATION));
+    body.put(
+        "oldestQueuedSeconds",
+        Math.max(
+            0L, Math.round(jobs.oldestAgeSecondsByStatus(MouseVideoJob.STATUS_QUEUED))));
+    return body;
+  }
+
   @Transactional(readOnly = true)
   public List<MouseVideoJob> unsettled() {
     return jobs.findByStatusIn(

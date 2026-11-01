@@ -2,6 +2,7 @@ package com.chromascape.web.debug.tickdebugger.video.service;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -30,7 +31,24 @@ public class MouseVideoTelemetry {
   /** Refusals by error code. Codes are a fixed vocabulary; the cap only guards against misuse. */
   private final Map<String, AtomicLong> refusalsByCode = new ConcurrentHashMap<>();
 
+  /**
+   * Provider/egress outcomes for acquisition. Unlike request refusals these happen inside a job, so
+   * they never pass through the controller error handler.
+   */
+  private final Map<String, AtomicLong> providerOutcomes = new ConcurrentHashMap<>();
+
   private static final int MAX_REFUSAL_CODES = 64;
+
+  private static final Set<String> PROVIDER_OUTCOME_KEYS =
+      Set.of(
+          "acquired",
+          "auth-required",
+          "rate-limited",
+          "unavailable",
+          "limit",
+          "tool",
+          "interrupted",
+          "other");
 
   public void intakeAccepted() {
     intakeAccepted.incrementAndGet();
@@ -93,6 +111,12 @@ public class MouseVideoTelemetry {
     refusalsByCode.computeIfAbsent(key, ignored -> new AtomicLong()).incrementAndGet();
   }
 
+  /** Counts one acquisition outcome under its fixed category (never an actor, source or URL). */
+  public void providerOutcome(String outcome) {
+    String key = outcome != null && PROVIDER_OUTCOME_KEYS.contains(outcome) ? outcome : "other";
+    providerOutcomes.computeIfAbsent(key, ignored -> new AtomicLong()).incrementAndGet();
+  }
+
   public void exportCreated() {
     exportsCreated.incrementAndGet();
   }
@@ -114,6 +138,9 @@ public class MouseVideoTelemetry {
     Map<String, Long> refusals = new TreeMap<>();
     refusalsByCode.forEach((code, count) -> refusals.put(code, count.get()));
     counts.put("refusalsByCode", refusals);
+    Map<String, Long> outcomes = new TreeMap<>();
+    providerOutcomes.forEach((outcome, count) -> outcomes.put(outcome, count.get()));
+    counts.put("providerOutcomes", outcomes);
     return counts;
   }
 }

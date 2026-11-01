@@ -37,4 +37,23 @@ class MouseVideoTelemetryTest {
     assertThat(snapshot).containsEntry("reconciliationsRequired", 3L);
     assertThat(snapshot).containsEntry("reconciliationsResolved", 1L);
   }
+
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void countsProviderOutcomesUnderAFixedVocabulary() {
+    MouseVideoTelemetry telemetry = new MouseVideoTelemetry();
+    telemetry.providerOutcome("acquired");
+    telemetry.providerOutcome("rate-limited");
+    telemetry.providerOutcome("rate-limited");
+    telemetry.providerOutcome("not-a-real-outcome");
+    telemetry.providerOutcome(null);
+
+    Map<String, Long> outcomes = (Map<String, Long>) telemetry.snapshot().get("providerOutcomes");
+    assertThat(outcomes)
+        .containsEntry("acquired", 1L)
+        .containsEntry("rate-limited", 2L)
+        .containsEntry("other", 2L);
+    assertThat(outcomes).hasSize(3);
+  }
 }

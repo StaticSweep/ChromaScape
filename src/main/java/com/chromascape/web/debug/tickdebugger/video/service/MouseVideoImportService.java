@@ -283,9 +283,19 @@ public class MouseVideoImportService {
       Path workspace = volume.path();
       if (MouseVideoSource.KIND_YOUTUBE.equals(source.getSourceKind())) {
         jobService.progress(jobId, generation, workerId(), MouseVideoJob.STAGE_ACQUIRE, 10);
-        MouseVideoYouTubeAcquirer.Acquired acquired =
-            youtubeAcquirer.acquire(
-                workspace, source.getProviderUrl(), source.getProviderId(), cancellation);
+        MouseVideoYouTubeAcquirer.Acquired acquired;
+        try {
+          acquired =
+              youtubeAcquirer.acquire(
+                  workspace, source.getProviderUrl(), source.getProviderId(), cancellation);
+        } catch (MouseVideoException refused) {
+          telemetry.providerOutcome(providerOutcome(refused.getCode()));
+          throw refused;
+        } catch (java.io.IOException | InterruptedException failure) {
+          telemetry.providerOutcome("interrupted");
+          throw failure;
+        }
+        telemetry.providerOutcome("acquired");
         registration.attachAcquiredOriginal(
             source.getId(),
             source.getOwner(),
@@ -512,6 +522,22 @@ public class MouseVideoImportService {
       return "video/ogg";
     }
     return null;
+  }
+
+  /** Maps an acquisition failure code onto the telemetry vocabulary (never the raw message). */
+  static String providerOutcome(String code) {
+    if (code == null) {
+      return "other";
+    }
+    return switch (code) {
+      case MouseVideoException.CODE_SOURCE_AUTH_REQUIRED -> "auth-required";
+      case MouseVideoException.CODE_SOURCE_RATE_LIMITED -> "rate-limited";
+      case MouseVideoException.CODE_SOURCE_UNAVAILABLE -> "unavailable";
+      case MouseVideoException.CODE_MEDIA_LIMIT -> "limit";
+      case MouseVideoException.CODE_TOOL_UNAVAILABLE -> "tool";
+      case MouseVideoException.CODE_INTERRUPTED -> "interrupted";
+      default -> "other";
+    };
   }
 
   private Optional<MouseVideoByteStore.StagedArtifact> publishArtifact(
