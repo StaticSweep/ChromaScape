@@ -166,6 +166,7 @@ public class MouseVideoController {
     body.put("counters", telemetry.snapshot());
     body.put("reviewProtocol", reviewSessions.counters());
     body.put("ownedWorkers", workerRegistry.ownedCount());
+    body.put("queue", jobService.coverage());
     return body;
   }
 

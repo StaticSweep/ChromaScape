@@ -268,6 +268,13 @@ reconciliation (no actor/source/URL labels). Capability report: configured / ava
 runnable / isolated / qualified. Rehearse rollout and rollback on a disposable clone (migration
 first; never reverse V47/V48 destructively; old exports untouched).
 
+Progress 2026-11-01: metrics and the readiness ladder are in `/observability` and `/capabilities`;
+queue coverage and provider/egress outcomes were the two gaps and are now added
+(`w13-observability-and-rollout-20261101.md`). The migrations are renumbered `V80`–`V86` on main
+and are additive: `V80` creates only `mouse_video_*` tables and `V81`–`V86` alter only those. That
+note records the 8090 rollout/rollback checklist, including the Flyway `*:missing` consequence of
+reverting code without the database.
+
 ### W14 — Delivery (F11)
 
 Feature-only diff on PR #70 matching the final candidate; implementation and verification

@@ -597,4 +597,29 @@ class MouseVideoJobServiceTest {
 
     assertThat(settled.getStatus()).isEqualTo(MouseVideoJob.STATUS_CANCELLED);
   }
+
+  @Test
+  void coverageReportsQueueDepthAndTheDatabaseClockAge() {
+    when(jobs.countByStatus(MouseVideoJob.STATUS_QUEUED)).thenReturn(2L);
+    when(jobs.countByStatus(MouseVideoJob.STATUS_RUNNING)).thenReturn(1L);
+    when(jobs.countByStatus(MouseVideoJob.STATUS_CANCELLING)).thenReturn(0L);
+    when(jobs.countByStatus(MouseVideoJob.STATUS_NEEDS_RECONCILIATION)).thenReturn(3L);
+    when(jobs.oldestAgeSecondsByStatus(MouseVideoJob.STATUS_QUEUED)).thenReturn(12.6d);
+
+    java.util.Map<String, Object> coverage = service.coverage();
+
+    assertThat(coverage)
+        .containsEntry("queued", 2L)
+        .containsEntry("running", 1L)
+        .containsEntry("cancelling", 0L)
+        .containsEntry("needsReconciliation", 3L)
+        .containsEntry("oldestQueuedSeconds", 13L);
+  }
+
+  @Test
+  void coverageNeverReportsANegativeQueueAge() {
+    when(jobs.oldestAgeSecondsByStatus(MouseVideoJob.STATUS_QUEUED)).thenReturn(-4.0d);
+
+    assertThat(service.coverage()).containsEntry("oldestQueuedSeconds", 0L);
+  }
 }
