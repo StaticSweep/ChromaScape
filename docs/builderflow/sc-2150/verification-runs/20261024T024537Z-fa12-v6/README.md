@@ -20,3 +20,10 @@ Usage (unchanged):
 python3 tools/score.py --corpus <corpus> --split dev|heldout \
     --predictions <predictions-dir> [--compare <second-run-dir>] --out <report.json>
 ```
+
+## Reproduction check (2026-11-01)
+
+`score.py --corpus build/sc2150-fa12 --split dev --predictions build/sc2150-fa12-out-v8` reproduces
+`20261031T160000Z-fa12-v8-dev/results/v8-dev.score.json` exactly — every field except the
+`determinism` block (which depends on `--compare`) and the per-clip `analyze_millis` timings. The
+corpus and predictions are local build artifacts on the Fedora host, not committed.
