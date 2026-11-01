@@ -17,9 +17,18 @@ reference for detailed contracts) and §2 of `fa12-review-mode-and-real-footage-
 > Landed on `main`: #86 (SC-2150 code, migrations renumbered `V80`–`V86`), #87 (held-out expansion
 > and the owner's blind labelling guide), #88 (post-merge verification), #89 (W13 queue coverage,
 > provider outcomes, rollout/rollback checklist), #90 (W10 preparation: frozen scorer in-repo,
-> recorded gate decision, corpus staging, runbook), #91 (2026-10-25 triage snapshot). PR #71 is
-> **closed as superseded** (main carries `cursor-template/v8`); PR #70 holds nothing SC-2150 that
-> `main` lacks and stays open only for other stories' commits.
+> recorded gate decision, corpus staging, runbook), #91 (2026-10-25 triage snapshot), #93
+> (reproducible dev evidence + recorded gate decision), #94 (`/mouse/video` route — it had only
+> ever existed as an uncommitted edit, so a clean build served 404), #95 (rollout/rollback
+> rehearsal against the live 8090 datasource). PR #71 is **closed as superseded** (main carries
+> `cursor-template/v8`); PR #70 holds nothing SC-2150 that `main` lacks and stays open only for
+> other stories' commits.
+>
+> The 8090 deploy now has a verified precondition (`rollout-rehearsal-20261101.md`): the existing
+> `chromascape` database is at Flyway V36 from the diverged `wip/chromascape-checkpoint-20261007`
+> checkout and **cannot** accept `main`; it needs recreating from `main`'s migrations, with the
+> three populated tables (`logs`, `task_recording_preferences`, `debug_sessions`) decided on.
+> Rollback is a snapshot restore plus the previous build.
 >
 > Detector on dev (`cursor-template/v8`, `20261031T160000Z-fa12-v8-dev`): recall 96.57 %, absent
 > false 0.0 %, median 0 px, p95 2.15 px, cut F1 pass — every gate passes under D-RECALL's 95 %
