@@ -331,6 +331,37 @@ class ScenarioManifestV2CompilerTest {
   }
 
   @Test
+  void capturedNestedWorldIdentityAndObservedSpotPinsCompile() {
+    ScenarioManifestV2Compiler compiler = compiler();
+    TickSnapshot first = initialSnapshot();
+    ObjectNode playerState = (ObjectNode) first.getPlayerState();
+    // The producer records the world identity as its own observation node.
+    playerState.remove("worldId");
+    playerState.putObject("world").put("worldId", 301).put("regionId", 12850).put("plane", 0);
+    ObjectNode targetNpc = (ObjectNode) first.getNpcs().get(1);
+    targetNpc.put("npcId", 42);
+    targetNpc.put("npcTypeId", 1518);
+    targetNpc.put("size", 1);
+    targetNpc.put("spotId", "river_lure_bait");
+    targetNpc.put("spotType", "lure");
+
+    ObjectNode target = objectMapper.createObjectNode();
+    target.put("kind", "NPC");
+    target.put("stableId", "npc:1518:42");
+    target.put("npcTypeId", 1518);
+    target.put("size", 1);
+    target.put("spotId", "river_lure_bait");
+    RecordingAction action = npcAction("npc:1518:42", "lure", 0);
+    action.setTarget(objectMapper.convertValue(target, Map.class));
+
+    ObjectNode state = compiler.buildInitialState(first, certifiedConversion(action));
+
+    assertThat(state.path("worldId").asInt()).isEqualTo(301);
+    assertThat(state.path("npcs").get(0).path("spotId").asText()).isEqualTo("river_lure_bait");
+    assertThat(state.path("npcs").get(0).path("spotType").asText()).isEqualTo("lure");
+  }
+
+  @Test
   void certifiedInitialStateRejectsMissingNpcPin() {
     ScenarioManifestV2Compiler compiler = compiler();
 
@@ -340,6 +371,43 @@ class ScenarioManifestV2CompilerTest {
             () ->
                 compiler.buildInitialState(
                     initialSnapshot(), certifiedConversion(npcAction("npc:1518:42", "net", 0))));
+
+    assertThat(exception.getErrorCode()).isEqualTo(ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE);
+  }
+
+  @Test
+  void pinnedContentIdentitySuppliesAnOmittedCollisionRevision() {
+    ScenarioManifestV2Compiler compiler = compiler();
+    TickSnapshot first = goldenSnapshot();
+    ((ObjectNode) first.getPlayerState()).remove("collisionRevision");
+
+    ObjectNode state =
+        compiler.buildInitialState(first, goldenConversion(), false, null, "sha256:pinned-content");
+
+    assertThat(state.path("collisionRevision").asText()).isEqualTo("sha256:pinned-content");
+  }
+
+  @Test
+  void capturedCollisionRevisionIsNotReplacedByThePinnedIdentity() {
+    ScenarioManifestV2Compiler compiler = compiler();
+
+    ObjectNode state =
+        compiler.buildInitialState(
+            goldenSnapshot(), goldenConversion(), false, null, "sha256:pinned-content");
+
+    assertThat(state.path("collisionRevision").asText()).isEqualTo("golden-collision-rev-1");
+  }
+
+  @Test
+  void missingCollisionRevisionWithoutAPinnedIdentityStaysIncomplete() {
+    ScenarioManifestV2Compiler compiler = compiler();
+    TickSnapshot first = goldenSnapshot();
+    ((ObjectNode) first.getPlayerState()).remove("collisionRevision");
+
+    ReplayException exception =
+        assertThrows(
+            ReplayException.class,
+            () -> compiler.buildInitialState(first, goldenConversion(), false, null, null));
 
     assertThat(exception.getErrorCode()).isEqualTo(ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE);
   }
@@ -1024,6 +1092,39 @@ class ScenarioManifestV2CompilerTest {
         .endsWith("/initialStateOverrides/player/inventory/1/itemId");
     assertThat(captured.getInventory()).isNull();
     assertThat(captured.getEquipment()).isNull();
+    assertThat(captured.getPlayerState().has("collisionRevision")).isFalse();
+  }
+
+  @Test
+  void derivedCollisionRevisionNamesThePinnedContentAsItsSource() {
+    TickSnapshot captured = goldenSnapshot();
+    ((ObjectNode) captured.getPlayerState()).remove("collisionRevision");
+    var operator = operatorCuration("recording-fishing-golden", 3, CurationRole.HELD_OUT);
+
+    Compilation preview =
+        compileWith(
+            "recording-fishing-golden",
+            goldenSession(),
+            List.of(captured),
+            goldenConversion(),
+            goldenCapability(),
+            List.of(operator),
+            null,
+            goldenContext(),
+            true,
+            operator.getId(),
+            "operator-review");
+
+    var document = preview.manifest().getManifestJson();
+    assertThat(document.path("initialState").path("collisionRevision").asText())
+        .isEqualTo("sha256:content");
+    var provenance =
+        document
+            .path("compilationEvidence")
+            .path("fieldProvenance")
+            .path("/initialState/collisionRevision");
+    assertThat(provenance.path("provenance").asText()).isEqualTo("DERIVED");
+    assertThat(provenance.path("sourceRef").asText()).contains("build-golden");
     assertThat(captured.getPlayerState().has("collisionRevision")).isFalse();
   }
 

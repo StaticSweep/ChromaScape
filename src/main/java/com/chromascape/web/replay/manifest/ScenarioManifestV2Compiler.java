@@ -238,7 +238,12 @@ public class ScenarioManifestV2Compiler {
       throw ReplayException.invalid(violation.code(), violation.message());
     }
     ObjectNode initialState =
-        buildInitialState(snapshots.get(0), conversion, authoritativeNpcPins, published);
+        buildInitialState(
+            snapshots.get(0),
+            conversion,
+            authoritativeNpcPins,
+            published,
+            pinnedCollisionRevision(capability));
     NativeBankStateContract.validateInitialState(initialState);
     NativeNpcBindingContract.validateSourceSnapshots(
         initialState, snapshots, conversion, sourceAudit);
@@ -906,6 +911,15 @@ public class ScenarioManifestV2Compiler {
       ReplayActionConversionResult conversion,
       boolean authoritativeNpcPins,
       PublishedCurationSnapshot published) {
+    return buildInitialState(first, conversion, authoritativeNpcPins, published, null);
+  }
+
+  ObjectNode buildInitialState(
+      TickSnapshot first,
+      ReplayActionConversionResult conversion,
+      boolean authoritativeNpcPins,
+      PublishedCurationSnapshot published,
+      String pinnedCollisionRevision) {
     // Project into detached inert JSON before applying authorized fixtures. The captured row,
     // its checksum, and all execution-tick evidence remain untouched. Validate the resulting
     // input, not an incomplete captured base and not an unchecked post-validation patch.
@@ -929,14 +943,18 @@ public class ScenarioManifestV2Compiler {
     state.put("worldId", worldId.asInt());
 
     JsonNode collisionRevision = input.get("collisionRevision");
-    if (collisionRevision == null
-        || !collisionRevision.isTextual()
-        || collisionRevision.asText().isBlank()) {
+    String collision =
+        collisionRevision != null
+                && collisionRevision.isTextual()
+                && !collisionRevision.asText().isBlank()
+            ? collisionRevision.asText().trim()
+            : pinnedCollisionRevision;
+    if (collision == null) {
       throw ReplayException.invalid(
           ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
           "Recorded collision revision missing or blank at start tick");
     }
-    state.put("collisionRevision", collisionRevision.asText().trim());
+    state.put("collisionRevision", collision);
 
     // Start with the complete captured player object. The canonical fields below are normalized
     // for the worker, while every additional captured field (HP, prayer, animation, aliases,
@@ -1089,6 +1107,19 @@ public class ScenarioManifestV2Compiler {
           "Initial object and ground-item state must be present");
     }
     return state;
+  }
+
+  /**
+   * Derives the collision revision from the pinned simulator content identity. A capture may omit
+   * it, but the derived value must still name the revision it came from; without a pinned
+   * content/cache revision the scenario stays incomplete rather than defaulting silently.
+   */
+  private static String pinnedCollisionRevision(CapabilityManifest capability) {
+    if (capability == null) return null;
+    String content = capability.xrsps().contentRevision();
+    if (content != null && !content.isBlank()) return content.trim();
+    String cache = capability.xrsps().cacheRevision();
+    return cache != null && !cache.isBlank() ? cache.trim() : null;
   }
 
   private ObjectNode initialStateInput(TickSnapshot first) {

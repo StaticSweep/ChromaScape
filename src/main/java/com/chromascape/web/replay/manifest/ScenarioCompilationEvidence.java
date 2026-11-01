@@ -319,6 +319,17 @@ public final class ScenarioCompilationEvidence {
       reference = snapshotRef(snapshots.get(0));
       provenance =
           path.contains("/position") || path.endsWith("/spotType") ? "DERIVED" : "OBSERVED";
+      if (path.equals("/initialState/collisionRevision")
+          && capturedCollisionRevision(snapshots.get(0)) == null) {
+        // The compiler may supply this from the pinned content identity; name that source instead
+        // of presenting a derived revision as captured evidence.
+        provenance = "DERIVED";
+        reference =
+            "worker-build:"
+                + document.path("runtime").path("xrspsBuildCommit").asText()
+                + "/contentRevision:"
+                + document.path("runtime").path("contentRevision").asText();
+      }
       JsonNode selected = document.path("curation").path("sourceCuration");
       String pointer = path.substring("/initialState".length());
       String suppliedPointer = suppliedPointer(document, pointer);
@@ -406,6 +417,17 @@ public final class ScenarioCompilationEvidence {
         describe(value.get(index), path + "/" + index, fields, document, snapshots);
       }
     }
+  }
+
+  /** Returns the captured collision revision, or null when the recording never observed one. */
+  private static String capturedCollisionRevision(TickSnapshot snapshot) {
+    JsonNode state = snapshot == null ? null : snapshot.getPlayerState();
+    if (state == null || !state.isObject()) return null;
+    JsonNode value =
+        state.path("collisionRevision").isTextual()
+            ? state.path("collisionRevision")
+            : state.path("world").path("collisionRevision");
+    return value.isTextual() && !value.asText().isBlank() ? value.asText().trim() : null;
   }
 
   /** Slot/entity normalization must not point an output index at a different fixture entry. */
