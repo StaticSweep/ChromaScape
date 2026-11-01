@@ -20,9 +20,16 @@ reference for detailed contracts) and §2 of `fa12-review-mode-and-real-footage-
 > recorded gate decision, corpus staging, runbook), #91 (2026-10-25 triage snapshot), #93
 > (reproducible dev evidence + recorded gate decision), #94 (`/mouse/video` route — it had only
 > ever existed as an uncommitted edit, so a clean build served 404), #95 (rollout/rollback
-> rehearsal against the live 8090 datasource). PR #71 is **closed as superseded** (main carries
-> `cursor-template/v8`); PR #70 holds nothing SC-2150 that `main` lacks and stays open only for
-> other stories' commits.
+> rehearsal against the live 8090 datasource), #98 (8090 deployed on a rebuilt database), #99
+> (`/api/debug/mouse-videos/*` had lost its local-development principal, so every owner call was
+> 401), #100 (held-out review environment rebuilt; guide links regenerated), #101 (detector inputs
+> frozen and the whole W10 chain dry-run on the dev corpus). PR #71 is **closed as superseded**
+> (main carries `cursor-template/v8`); PR #70 holds nothing SC-2150 that `main` lacks and stays
+> open only for other stories' commits.
+>
+> Tooling state: 8090 runs `main`; the 18191 review instance runs `main` with the 33 corpus
+> sections and re-verified blind enforcement (observations 403); `freeze.json` pins the method,
+> thresholds, templates, scorer and gate decision.
 >
 > The 8090 deploy now has a verified precondition (`rollout-rehearsal-20261101.md`): the existing
 > `chromascape` database is at Flyway V36 from the diverged `wip/chromascape-checkpoint-20261007`
@@ -34,9 +41,8 @@ reference for detailed contracts) and §2 of `fa12-review-mode-and-real-footage-
 > false 0.0 %, median 0 px, p95 2.15 px, cut F1 pass — every gate passes under D-RECALL's 95 %
 > recall, and recall alone fails under the scorer's frozen 99 %.
 >
-> Remaining: sealed blind held-out labels plus a frozen cursor-template set (W10, owner), the W12
-> recording session (owner), and the 8090 deploy (owner's go-ahead). W11 (YouTube acquisition) is
-> automated work that is blocked on the D3 decision; nothing else on the story is outstanding.
+> Remaining: the owner's sealed blind held-out labels (the guide's links are current; the template
+set is frozen), the W12 recording session, and the D3 approvals for W11. The 8090 deploy is done.
 
 | Area | State | Evidence |
 |---|---|---|
