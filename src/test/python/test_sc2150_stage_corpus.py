@@ -69,7 +69,7 @@ class StageCorpusTest(unittest.TestCase):
         labels = [
             self.label("a.labels.json", "heldout--a--0", SOURCE_A, first),
             self.label("b.labels.json", "heldout--b--1", SOURCE_B, second,
-                       schema="sc2150-fa12-labels/v2"),
+                       schema="sc2150-fa12-labels/v1"),
         ]
         out = self.root / "corpus"
 
@@ -92,6 +92,24 @@ class StageCorpusTest(unittest.TestCase):
             self.assertEqual(entry["media_sha256"],
                              hashlib.sha256((out / "heldout" / (entry["clip_id"] + ".mp4"))
                                             .read_bytes()).hexdigest())
+
+    def test_resolves_media_next_to_the_labels_when_one_source_has_many_clips(self):
+        # Synthetic corpora share one source id across variants, so <clip_id>.mp4 is the only
+        # unambiguous resolution.
+        first = self.media("dev--same--one.mp4", b"variant-one")
+        second = self.media("dev--same--two.mp4", b"variant-two")
+        labels = [
+            self.label("one.labels.json", "dev--same--one", SOURCE_A, first),
+            self.label("two.labels.json", "dev--same--two", SOURCE_A, second),
+        ]
+        out = self.root / "corpus"
+
+        manifest = TOOL.stage(labels, [], self.templates, "heldout", out, self.root)
+
+        self.assertEqual([entry["clip_id"] for entry in manifest["clips"]],
+                         ["dev--same--one", "dev--same--two"])
+        self.assertEqual((out / "heldout" / "dev--same--one.mp4").read_bytes(), b"variant-one")
+        self.assertEqual((out / "heldout" / "dev--same--two.mp4").read_bytes(), b"variant-two")
 
     def test_refuses_media_that_does_not_match_the_label_digest(self):
         media = self.media("a.mp4", b"section-a")

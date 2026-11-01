@@ -15,7 +15,7 @@ labels and the frozen cursor template — see §1.
 | Frozen method | Done | `cursor-template/v8` (`MouseVideoCursorTracker.METHOD`) |
 | Frozen scorer | Done | `verification-runs/20261024T024537Z-fa12-v6/tools/score.py`, `sha256:43e2c40a…c238` |
 | Recorded gate decision | Done | `gate-decisions-20261101.json` (D-RECALL) |
-| Frozen cursor templates | **Open — must be fixed before any prediction** | a `templates/*.png` set whose hashes go into the staging manifest; no template PNG is committed yet |
+| Frozen cursor templates | Done | `verification-runs/20261101T180000Z-fa12-freeze/freeze.json` pins `arrow`, `dragon-dagger`, `rs3-gold` by hash |
 | Held-out membership | Done | server refuses observations for all 9 new sections and the older held-out sections (403) |
 
 Templates are an input, not truth: choosing them needs no labels, but their hashes must be in the
@@ -58,6 +58,10 @@ python3 scripts/sc2150/stage_corpus.py \
   --templates build/sc2150-heldout/templates \
   --split heldout --out build/sc2150-heldout/corpus
 ```
+
+If the media sits beside the label documents as `<clip_id>.mp4`, `--media-dir build/sc2150-heldout/media`
+replaces the repeated `--media` entries. The stager accepts `sc2150-fa12-labels/v1`–`v3` and refuses
+mismatched media digests, missing templates, duplicate clip ids and a non-empty destination.
 
 It refuses a non-empty destination, so a second staging run cannot silently mix sets.
 

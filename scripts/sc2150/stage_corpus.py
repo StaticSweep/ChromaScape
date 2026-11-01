@@ -27,7 +27,11 @@ import tempfile
 from pathlib import Path
 
 MANIFEST_SCHEMA = "sc2150-fa12-staging/v1"
-LABEL_SCHEMAS = {"sc2150-fa12-labels/v2", "sc2150-fa12-labels/v3"}
+LABEL_SCHEMAS = {
+    "sc2150-fa12-labels/v1",  # synthetic corpus builder output
+    "sc2150-fa12-labels/v2",
+    "sc2150-fa12-labels/v3",
+}
 MAX_DOC_BYTES = 64 * 1024 * 1024
 
 
@@ -96,7 +100,7 @@ def media_map(assignments: list[str]) -> dict[str, Path]:
     return mapping
 
 
-def stage(paths, media_assignments, templates, split, out) -> dict:
+def stage(paths, media_assignments, templates, split, out, media_directory=None) -> dict:
     documents = [(path, read_document(path)) for path in label_documents(paths)]
     media = media_map(media_assignments)
     templates = Path(templates)
@@ -119,8 +123,15 @@ def stage(paths, media_assignments, templates, split, out) -> dict:
             )
         source_id = document["source_id"]
         media_path = media.get(source_id)
+        if media_path is None and media_directory is not None:
+            candidate = Path(media_directory) / (clip_id + ".mp4")
+            if candidate.is_file():
+                media_path = candidate
         if media_path is None:
-            raise StagingError("%s has no --media entry for source %s" % (path, source_id))
+            raise StagingError(
+                "%s has no --media entry for source %s and no %s.mp4 under --media-dir"
+                % (path, source_id, clip_id)
+            )
         declared = normalize_digest(document.get("media_sha256"), str(path))
         actual = digest(media_path)
         if declared != actual:
@@ -182,13 +193,18 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--labels", action="append", required=True, type=Path)
     parser.add_argument("--media", action="append", default=[], metavar="SOURCE_ID=PATH")
+    parser.add_argument(
+        "--media-dir",
+        type=Path,
+        help="directory holding <clip_id>.mp4 next to the labels (one media per clip)",
+    )
     parser.add_argument("--templates", required=True, type=Path)
     parser.add_argument("--split", required=True)
     parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args(argv)
     try:
         manifest = stage(
-            args.labels, args.media, args.templates, args.split, args.out
+            args.labels, args.media, args.templates, args.split, args.out, args.media_dir
         )
     except (StagingError, OSError) as failure:
         print("refused: %s" % failure, file=sys.stderr)

@@ -1,0 +1,47 @@
+{
+  "schema": "sc2150-fa12-freeze/v1",
+  "frozenAt": "2026-11-01",
+  "purpose": "Inputs pinned before the first held-out scoring (W10). Nothing in this file may change after that run.",
+  "method": {
+    "algorithm": "visual/v1",
+    "cursorTracker": "cursor-template/v8",
+    "sampleStride": "pts-window-stride/v1",
+    "corrections": "corrections/v1",
+    "framePreview": "frame-png/v1"
+  },
+  "sampling": {
+    "visualSampleFps": 30.0,
+    "visualSampleMaxWidth": 480
+  },
+  "thresholds": {
+    "visualCursorMinScore": 0.85,
+    "visualCursorStartScore": 0.88,
+    "visualCursorMinGain": 0.35,
+    "visualCursorMaxGain": 1.6,
+    "visualCursorMinContrast": 12.0,
+    "visualCursorAmbiguityMargin": 0.05,
+    "visualCursorStaticMaxDelta": 6.0
+  },
+  "templates": {
+    "arrow": "sha256:ac2e3337c770108440c868d03ad3e133c9ed56e83eb9743179634a19f49819fd",
+    "dragon-dagger": "sha256:ad167e2a2cdb4a009cf2d44b43a9c9f522c8247ce1b0d84d768a40768c11b174",
+    "rs3-gold": "sha256:2e6d67f8819d34ff6612b6f5f219393a4a0672af1b22c21f15df9b5b631c2ed3"
+  },
+  "scorer": {
+    "path": "docs/builderflow/sc-2150/verification-runs/20261024T024537Z-fa12-v6/tools/score.py",
+    "sha256": "43e2c40a1cbdb9aba292d921c6ba9272e767a409686c3ac024b377329386c238"
+  },
+  "gateDecision": {
+    "path": "docs/builderflow/sc-2150/gate-decisions-20261101.json",
+    "sha256": "1c24df56d7fae8cb8566847d476e63b06109f64dfdb1eed44bef5c1a133f2c29",
+    "id": "D-RECALL",
+    "gates": {
+      "median_px": 4.0,
+      "p95_px": 12.0,
+      "recall": 0.95,
+      "absent_false_rate": 0.01,
+      "cut_f1": 0.9
+    }
+  },
+  "templateFiles": "The three template PNGs stay out of Git (they are cursor sprites taken from footage). Each scoring run copies them into its corpus and records their hashes in that run's staging manifest; the hashes above are the pinned set."
+}
