@@ -1,5 +1,22 @@
 # SC-274 / SC-276 current remaining delivery plan
 
+## Graph-bound capture prerequisite — 1 November 2026
+
+The first graph bound to the immutable Fishing profile is published: `sc274_human_fishing`
+version 1, revision `sha256:741a1131...476372`, `control_allowed=false`. Read-only checks
+reproduce every precondition `freezePublishedGraph` applies (9/9). The product draft/publish
+path required an offline fix: contract schemas now resolve sibling `$ref` files from the
+classpath instead of DNS. Local commits `952819c1`, `915f0d59`, `2113ad95` on
+`codex/sc274-completion-20261015`; the owned 8090 candidate was restarted with only
+`GraphSchemaValidator.class` replaced (backup retained). Details: [graph publication](graph-publication-20261101.md).
+
+Remaining before the next recording: rebuild/sign the Micro6 client with the producer fixes,
+then start the capture with a run context naming `graphId=sc274_human_fishing`,
+`graphVersion=1`, `graphRevision=sha256:741a...` plus live allocation/executor identities.
+Runtime qualification (SC-2201), provider origin (SC-1498) and SC-276 native world support
+still gate the runnable-scenario and bank/travel criteria. No acceptance row closed; Shortcut
+unchanged.
+
 ## Producer and world evidence — 1 November 2026
 
 Original scope is being finished, not narrowed. The [producer/world increment](producer-and-world-evidence-20261101.md)
