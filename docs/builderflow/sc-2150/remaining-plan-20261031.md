@@ -219,6 +219,17 @@ false ≤ 1 %, cut F1 ≥ 0.90, declared methods precision ≥ 0.95 / recall ≥
 two frame intervals, determinism (identical hashes), live/offline parity 0 mismatches.
 Report per-source results and source-clustered CIs. A failed gate stays failed.
 
+Progress 2026-11-01: the frozen scorer is now in the repository at
+`verification-runs/20261024T024537Z-fa12-v6/tools/score.py` (`sha256:43e2c40a…c238`); before this
+the committed v8 README pointed at a file that existed only in an untracked working directory.
+`gate-decisions-20261101.json` records D-RECALL and `scripts/sc2150/apply_gate_decision.py`
+re-evaluates a scorer report against it, keeping the frozen and decided verdicts side by side (on
+the committed dev report: every gate passes at 95 % recall, recall alone fails at 99 %).
+`scripts/sc2150/stage_corpus.py` builds the harness/scorer corpus from sealed converter documents
+and proves every media digest before copying, so scoring cannot run against substituted media.
+Executable order of operations: `w10-final-evaluation-runbook-20261101.md`. Still owner-blocked:
+the sealed held-out labels, and a frozen cursor-template set (no template PNG is committed yet).
+
 ### W11 — YouTube product acquisition (F8; D3)
 
 Files: `MouseVideoYouTubeAcquirer`, restricted runner, new acquisition sandbox + filtering proxy,
