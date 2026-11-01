@@ -12,6 +12,23 @@ reference for detailed contracts) and §2 of `fa12-review-mode-and-real-footage-
 
 ## 0. Where things stand (verified facts)
 
+> **Status 2026-11-01 — `main` is the source of truth; this table is the 2026-10-31 snapshot.**
+>
+> Landed on `main`: #86 (SC-2150 code, migrations renumbered `V80`–`V86`), #87 (held-out expansion
+> and the owner's blind labelling guide), #88 (post-merge verification), #89 (W13 queue coverage,
+> provider outcomes, rollout/rollback checklist), #90 (W10 preparation: frozen scorer in-repo,
+> recorded gate decision, corpus staging, runbook), #91 (2026-10-25 triage snapshot). PR #71 is
+> **closed as superseded** (main carries `cursor-template/v8`); PR #70 holds nothing SC-2150 that
+> `main` lacks and stays open only for other stories' commits.
+>
+> Detector on dev (`cursor-template/v8`, `20261031T160000Z-fa12-v8-dev`): recall 96.57 %, absent
+> false 0.0 %, median 0 px, p95 2.15 px, cut F1 pass — every gate passes under D-RECALL's 95 %
+> recall, and recall alone fails under the scorer's frozen 99 %.
+>
+> Remaining: sealed blind held-out labels plus a frozen cursor-template set (W10, owner), the W12
+> recording session (owner), and the 8090 deploy (owner's go-ahead). W11 (YouTube acquisition) is
+> automated work that is blocked on the D3 decision; nothing else on the story is outstanding.
+
 | Area | State | Evidence |
 |---|---|---|
 | Git | Local HEAD `e1eb17cd` = PR #70 head `16ecd839` + 1 unpushed commit; ~140 modified/added tracked files and ~425 untracked, mixed with other stories' WIP | `git status`; PR #70 OPEN, mergeable |
@@ -66,14 +83,9 @@ W10 runs **once**, only after W8 and W9 are frozen.
 |---|---|
 | D-HO | **Option A + 0.2 s density:** add 2–3 new held-out longplay channels (sections fixed at 20/50/80 % before viewing), blind labels every 0.2 s (~300 per section). |
 | D5 | **Keep the 0.90 cut-F1 gate**; a failed gate stays failed. |
-| D-RECALL | **Recall gate 95 %** (owner, 2026-10-31: "95%+ is fine"), replacing 99 %. Other gates unchanged (median ≤ 4 px, p95 ≤ 12 px, absent-span false ≤ 1 %, cut F1 ≥ 0.90). v8 dev: recall 96.57 %, absent false 0.0 % — all dev gates pass; held-out still to be evaluated. |
 | D6 | **Record, don't block:** the pre-existing/other-story full-suite failures (`full-suite-dispositions-20261031.md`) do not block SC-2150. |
 | OWN-1/D4 | Owner review and recording sessions **soon**: prepare the dev review queue and the recording setup next. |
 | D4 (W12) | **Record with a real dispatched task** (owner, 2026-10-31: "better to have a task"), so the trace carries generated bot paths; purchasing off, run stopped after the recording. |
-
-Delivery 2026-10-31: SC-2150 ported onto current main as `codex/sc-2150-on-main` (29 SC-2150
-commits; migrations renumbered V80–V86; the replay-catalog "From others" tab not ported because its
-base exists only in preserved non-SC-2150 commits). Supersedes PR #70, which keeps those commits.
 
 Progress 2026-10-31: W1–W5 complete (see `verification-evidence-w2…`, `-w3…`, `-w5…`,
 `full-suite-dispositions-20261031.md`). D3 (YouTube acquisition pins/clip/egress) is still open.
@@ -219,17 +231,6 @@ false ≤ 1 %, cut F1 ≥ 0.90, declared methods precision ≥ 0.95 / recall ≥
 two frame intervals, determinism (identical hashes), live/offline parity 0 mismatches.
 Report per-source results and source-clustered CIs. A failed gate stays failed.
 
-Progress 2026-11-01: the frozen scorer is now in the repository at
-`verification-runs/20261024T024537Z-fa12-v6/tools/score.py` (`sha256:43e2c40a…c238`); before this
-the committed v8 README pointed at a file that existed only in an untracked working directory.
-`gate-decisions-20261101.json` records D-RECALL and `scripts/sc2150/apply_gate_decision.py`
-re-evaluates a scorer report against it, keeping the frozen and decided verdicts side by side (on
-the committed dev report: every gate passes at 95 % recall, recall alone fails at 99 %).
-`scripts/sc2150/stage_corpus.py` builds the harness/scorer corpus from sealed converter documents
-and proves every media digest before copying, so scoring cannot run against substituted media.
-Executable order of operations: `w10-final-evaluation-runbook-20261101.md`. Still owner-blocked:
-the sealed held-out labels, and a frozen cursor-template set (no template PNG is committed yet).
-
 ### W11 — YouTube product acquisition (F8; D3)
 
 Files: `MouseVideoYouTubeAcquirer`, restricted runner, new acquisition sandbox + filtering proxy,
@@ -278,13 +279,6 @@ queue coverage, export/converter refusals, provider/egress outcomes, containment
 reconciliation (no actor/source/URL labels). Capability report: configured / available /
 runnable / isolated / qualified. Rehearse rollout and rollback on a disposable clone (migration
 first; never reverse V47/V48 destructively; old exports untouched).
-
-Progress 2026-11-01: metrics and the readiness ladder are in `/observability` and `/capabilities`;
-queue coverage and provider/egress outcomes were the two gaps and are now added
-(`w13-observability-and-rollout-20261101.md`). The migrations are renumbered `V80`–`V86` on main
-and are additive: `V80` creates only `mouse_video_*` tables and `V81`–`V86` alter only those. That
-note records the 8090 rollout/rollback checklist, including the Flyway `*:missing` consequence of
-reverting code without the database.
 
 ### W14 — Delivery (F11)
 
