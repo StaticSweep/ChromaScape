@@ -1,5 +1,20 @@
 # SC-274 / SC-276 current remaining delivery plan
 
+## Producer and world evidence — 1 November 2026
+
+Original scope is being finished, not narrowed. The [producer/world increment](producer-and-world-evidence-20261101.md)
+adds per-tick Fishing `spotId` and a recorded world node in the Micro6 producer, and derives a
+missing `collisionRevision` from the pinned content identity with `DERIVED` provenance. Local
+commits `952819c1` (ChromaScape) and `3817133f` (Micro6) are not pushed. Selected tests: 44
+Micro6 + 62 ChromaScape, zero failures.
+
+`graphRevision` is still missing and is not fixable inside these repositories: the capture run
+context is supplied externally through executor task metadata `behavior_run_context` and the
+session-start payload. One new genuine capture is required after that payload includes
+`graphId`/`graphVersion`/`graphRevision`. Runtime registration/qualification (SC-2201),
+provider-origin approval (SC-1498) and SC-276 native world support remain the gates for the
+runnable-scenario and bank/travel criteria. No acceptance row closed; Shortcut unchanged.
+
 ## Closure audit follow-up — 31 October 2026
 
 The follow-up [closure audit](closure-audit-20261031.md) fixes the human converter's
