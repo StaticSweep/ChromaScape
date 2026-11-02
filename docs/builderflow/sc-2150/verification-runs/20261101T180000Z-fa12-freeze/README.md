@@ -42,3 +42,27 @@ Two stager gaps surfaced and were fixed by this dry run: synthetic corpora emit
 `sc2150-fa12-labels/v1` (now accepted), and one source id can carry several clips, so
 `--media-dir` resolves `<clip_id>.mp4` next to the labels while `--media SOURCE_ID=PATH` stays
 available for media held elsewhere.
+
+## Dry run including the harness (2026-11-02)
+
+The remaining runbook step was exercised too, on the same staged corpus, so the whole order of
+operations is proven with the production code path:
+
+```
+SC2150_FA12_CORPUS=/tmp/sc2150-chain/corpus SC2150_FA12_SPLIT=dev \
+SC2150_FA12_OUT=/tmp/sc2150-chain/pred-harness \
+./gradlew test --tests '…MouseVideoCursorCorpusHarnessTest'
+score.py --corpus /tmp/sc2150-chain/corpus --split dev \
+    --predictions /tmp/sc2150-chain/pred-harness --out report-harness.json
+apply_gate_decision.py --report report-harness.json --decision-id D-RECALL --out decision.json
+```
+
+| Check | Result |
+|---|---|
+| Harness | 9 prediction documents produced from the staged corpus (9m 13s) |
+| Scorer `overall` | identical to `v8-dev.score.json` |
+| Per-clip `observations_sha256` | identical on all 9 clips — the harness reproduces the committed predictions exactly |
+| Gate decision | frozen fails recall (99 %), decided passes all gates (95 %), `relaxed: ["recall"]` |
+
+Every step of `w10-final-evaluation-runbook-20261101.md` has now been executed end to end; only the
+owner's sealed labels are missing.
