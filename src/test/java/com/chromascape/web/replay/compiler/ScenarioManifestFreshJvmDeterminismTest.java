@@ -451,7 +451,8 @@ class ScenarioManifestFreshJvmDeterminismTest {
     };
   }
 
-  private static Process spawn(Path output, String mainClass) throws IOException {
+  /** Shared with the refusal-stability lane so both child processes launch identically. */
+  static Process spawn(Path output, String mainClass) throws IOException {
     String executable =
         Path.of(
                 System.getProperty("java.home"),
