@@ -166,7 +166,6 @@ public class MouseVideoController {
     body.put("counters", telemetry.snapshot());
     body.put("reviewProtocol", reviewSessions.counters());
     body.put("ownedWorkers", workerRegistry.ownedCount());
-    body.put("queue", jobService.coverage());
     return body;
   }
 
@@ -755,6 +754,8 @@ public class MouseVideoController {
     body.put("errorCode", view.errorCode());
     body.put("errorMessage", view.errorMessage());
     body.put("cleanupReason", view.cleanupReason());
+    body.put("createdAt", view.createdAt());
+    body.put("updatedAt", view.updatedAt());
     return body;
   }
 

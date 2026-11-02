@@ -204,7 +204,13 @@ public class MouseVideoScheduledJobRunner {
     }
     jobService.progress(job.getId(), generation, WORKER_ID, MouseVideoJob.STAGE_ANALYSIS, 20);
     MouseVideoAnalysisWorker.Outcome outcome =
-        analysisWorker.run(cancellation, job.getSourceId(), job.getAnalysisId(), volume.path());
+        analysisWorker.run(
+            cancellation,
+            job.getSourceId(),
+            job.getAnalysisId(),
+            volume.path(),
+            (stage, percent) ->
+                jobService.progress(job.getId(), generation, WORKER_ID, stage, percent));
     volume.close();
     ensurePublishable(cancellation, heartbeat);
     jobService.progress(job.getId(), generation, WORKER_ID, MouseVideoJob.STAGE_PUBLISH, 90);

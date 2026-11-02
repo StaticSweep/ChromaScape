@@ -143,7 +143,7 @@ class MouseVideoSchedulingServiceTest {
 
     MouseVideoSchedulingService.Receipt receipt =
         service.scheduleAnalysis(
-            "owner", sourceId, UUID.randomUUID().toString(), "visual/v1", "pack-1");
+            "owner", sourceId, UUID.randomUUID().toString(), "visual/v1", null);
 
     assertThat(receipt.state()).isEqualTo("PENDING");
     assertThat(receipt.analysisId()).isEqualTo(analysisId);

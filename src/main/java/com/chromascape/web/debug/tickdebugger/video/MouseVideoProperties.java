@@ -146,6 +146,19 @@ public class MouseVideoProperties {
   /** Optional reviewed cursor template PNG; absent keeps cursor tracking explicitly unknown. */
   private String visualCursorTemplate = "";
 
+  /**
+   * Identity of the reviewed cursor-template pack the configured bytes belong to. Blank means no
+   * pack is selected, so callers may omit the pack but may not name one. A named pack is recorded
+   * on the analysis and resolved to exactly these template bytes.
+   */
+  private String visualCursorTemplatePackId = "";
+
+  /**
+   * Expected SHA-256 of the configured cursor template. When set, provisioning fails closed if the
+   * file is missing or its content no longer matches this digest.
+   */
+  private String visualCursorTemplateSha256 = "";
+
   private int visualCursorHotspotX;
   private int visualCursorHotspotY;
 
@@ -249,6 +262,22 @@ public class MouseVideoProperties {
 
   public void setVisualCursorTemplate(String visualCursorTemplate) {
     this.visualCursorTemplate = visualCursorTemplate;
+  }
+
+  public String getVisualCursorTemplatePackId() {
+    return visualCursorTemplatePackId;
+  }
+
+  public void setVisualCursorTemplatePackId(String visualCursorTemplatePackId) {
+    this.visualCursorTemplatePackId = visualCursorTemplatePackId;
+  }
+
+  public String getVisualCursorTemplateSha256() {
+    return visualCursorTemplateSha256;
+  }
+
+  public void setVisualCursorTemplateSha256(String visualCursorTemplateSha256) {
+    this.visualCursorTemplateSha256 = visualCursorTemplateSha256;
   }
 
   public int getVisualCursorHotspotX() {

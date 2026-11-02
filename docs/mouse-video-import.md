@@ -174,6 +174,11 @@ stride.
 
 **Cursor: `cursor-template/v8`** (`MouseVideoCursorTracker`). This runs only when a reviewed
 cursor template PNG is configured (`visual-cursor-template`, hotspot `visual-cursor-hotspot-x/-y`).
+The template belongs to one configured pack (`visual-cursor-template-pack-id`) and may be pinned
+by `visual-cursor-template-sha256`; see
+[assisted profile and cursor-template provisioning](builderflow/sc-2150/assisted-profile-provisioning.md)
+for the private seeding, digest verification and restart flow. `GET /capabilities` exposes the
+resolved `analysisProfile`, and a request may only name the configured pack.
 `cursor-template/v6` was an unpublished intermediate without the guarded re-check takeover. The
 method id is part of the analysis identity, so each bump keeps older local analyses from being reused.
 - The template is rendered at its displayed scale with 4×4 sub-pixel phases. Only analysis pixels
@@ -283,9 +288,9 @@ increment passes its safety gates.
 ## Persistence
 
 Additive migrations create `mouse_video_sources`, `mouse_video_jobs`, `mouse_video_job_events`,
-`mouse_video_analyses`, `mouse_video_artifact_refs` and `mouse_video_review_revisions` (V80), plus
+`mouse_video_analyses`, `mouse_video_artifact_refs` and `mouse_video_review_revisions` (V42), plus
 owner budgets, intake reservations, export snapshots, job row versioning, original qualification and
-export-specific artifact references (V81). V80 is never rewritten. Media bytes live in a
+export-specific artifact references (V43). V42 is never rewritten. Media bytes live in a
 content-addressed filesystem byte store; SQL rows register verified publication. Capability flags
 are constrained `false` in SQL.
 

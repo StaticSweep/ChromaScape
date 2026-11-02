@@ -28,6 +28,13 @@ public class MouseVideoJob {
   public static final String STAGE_PROBE = "PROBE";
   public static final String STAGE_INDEX = "INDEX";
   public static final String STAGE_ANALYSIS = "ANALYSIS";
+
+  /** Bounded sample extraction; reported so a long analysis is not stuck at its start. */
+  public static final String STAGE_ANALYSIS_SAMPLES = "ANALYSIS_SAMPLES";
+
+  /** In-JVM forward/backward tracking passes over the extracted samples. */
+  public static final String STAGE_ANALYSIS_TRACKING = "ANALYSIS_TRACKING";
+
   public static final String STAGE_PREVIEW = "PREVIEW";
   public static final String STAGE_PUBLISH = "PUBLISH";
   public static final String STAGE_DONE = "DONE";

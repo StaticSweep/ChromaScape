@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
+import java.util.function.IntConsumer;
 import javax.imageio.ImageIO;
 import org.springframework.stereotype.Component;
 
@@ -107,7 +108,37 @@ public class MouseVideoVisualAnalyzer {
       Path cursorTemplate,
       BooleanSupplier stopRequested)
       throws IOException, InterruptedException {
+    return analyze(
+        index,
+        framesDirectory,
+        step,
+        sourceWidth,
+        sourceHeight,
+        sourceDurationSeconds,
+        cursorTemplate,
+        stopRequested,
+        percent -> {});
+  }
+
+  /**
+   * As the overload above, reporting completed tracking work as a percentage of the forward and
+   * backward passes. The percentage describes work already done, so a long analysis shows real
+   * progress instead of a fixed value; it is not an estimate of remaining time.
+   */
+  public Result analyze(
+      List<MouseVideoFrameIndexService.Frame> index,
+      Path framesDirectory,
+      int step,
+      int sourceWidth,
+      int sourceHeight,
+      double sourceDurationSeconds,
+      Path cursorTemplate,
+      BooleanSupplier stopRequested,
+      IntConsumer trackingPercent)
+      throws IOException, InterruptedException {
     List<Sample> samples = samples(index, framesDirectory, step);
+    int sampleCount = Math.max(1, samples.size());
+    int lastReportedPercent = -1;
     List<Map<String, Object>> observations = new ArrayList<>();
     int[][] previous = null;
     double previousBrightness = 0.0d;
@@ -137,6 +168,7 @@ public class MouseVideoVisualAnalyzer {
     }
 
     double[] pairDeltas = pairDeltas(framesDirectory, samples.size(), stopRequested);
+    lastReportedPercent = reportProgress(trackingPercent, lastReportedPercent, 0);
     // Where each sample's forward cursor observation sits in the list, and whether it is visible,
     // so the backward pass can upgrade a forward miss in place without reordering observations.
     int[] cursorSlots = new int[samples.size()];
@@ -144,6 +176,8 @@ public class MouseVideoVisualAnalyzer {
     Arrays.fill(cursorSlots, -1);
     for (int position = 0; position < samples.size(); position++) {
       checkStop(stopRequested);
+      lastReportedPercent =
+          reportProgress(trackingPercent, lastReportedPercent, (position * 60) / sampleCount);
       Sample sample = samples.get(position);
       int[][] current = loadSample(framesDirectory, position);
       if (current == null) {
@@ -301,7 +335,8 @@ public class MouseVideoVisualAnalyzer {
               cursorSlots,
               forwardVisible,
               observations,
-              stopRequested);
+              stopRequested,
+              trackingPercent);
       cursorVisible += recovered;
       cursorAmbiguous -= recovered;
     }
@@ -495,6 +530,15 @@ public class MouseVideoVisualAnalyzer {
     }
   }
 
+  /** Reports bounded, deduplicated work progress so callers never see a value go backwards. */
+  private static int reportProgress(IntConsumer consumer, int last, int percent) {
+    int bounded = Math.max(0, Math.min(100, percent));
+    if (bounded != last) {
+      consumer.accept(bounded);
+    }
+    return bounded;
+  }
+
   private static int[][] loadSample(Path framesDirectory, int position) throws IOException {
     return loadGrayscale(
         framesDirectory.resolve(String.format(Locale.ROOT, "%06d.png", position + 1)));
@@ -514,13 +558,23 @@ public class MouseVideoVisualAnalyzer {
       int[] cursorSlots,
       boolean[] forwardVisible,
       List<Map<String, Object>> observations,
-      BooleanSupplier stopRequested)
+      BooleanSupplier stopRequested,
+      IntConsumer trackingPercent)
       throws IOException, InterruptedException {
     tracker.restartTrack();
     int recovered = 0;
+    int lastReportedPercent = 60;
     int[][] later = null;
     for (int position = samples.size() - 1; position >= 0; position--) {
       checkStop(stopRequested);
+      lastReportedPercent =
+          reportProgress(
+              trackingPercent,
+              lastReportedPercent,
+              60
+                  + (int)
+                      Math.round(
+                          40.0d * (samples.size() - 1 - position) / Math.max(1, samples.size())));
       int[][] current = loadSample(framesDirectory, position);
       if (current == null) {
         tracker.restartTrack();

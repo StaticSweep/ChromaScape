@@ -18,6 +18,7 @@ import com.chromascape.web.debug.tickdebugger.video.entity.MouseVideoSourceRepos
 import com.chromascape.web.debug.tickdebugger.video.store.MouseVideoByteStore;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -47,13 +48,14 @@ class MouseVideoCatalogServiceTest {
   @Mock MouseVideoDerivativeWorker derivativeWorker;
 
   private MouseVideoCatalogService service;
+  private MouseVideoProperties properties;
   private MouseVideoByteStore byteStore;
   private final UUID sourceId = UUID.randomUUID();
   private MouseVideoSource source;
 
   @BeforeEach
   void setUp() throws IOException {
-    MouseVideoProperties properties = new MouseVideoProperties();
+    properties = new MouseVideoProperties();
     properties.setDirectory(root.toString());
     byteStore = new MouseVideoByteStore(properties);
     source = new MouseVideoSource("owner-1", MouseVideoSource.KIND_UPLOAD);
@@ -69,6 +71,38 @@ class MouseVideoCatalogServiceTest {
             byteStore,
             probeWorker,
             derivativeWorker);
+  }
+
+  @Test
+  void capabilitiesExposeTheEffectiveAnalysisProfileAndTemplateState() throws IOException {
+    Path template = root.resolve("cursor.png");
+    Files.write(template, new byte[] {1, 2, 3});
+    properties.setVisualCursorTemplate(template.toString());
+    properties.setVisualCursorTemplatePackId("clip-arrow/v1");
+    properties.setVisualSampleFps(10.0d);
+    properties.setVisualSampleMaxWidth(960);
+
+    Map<String, Object> capabilities = service.capabilities();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> profile = (Map<String, Object>) capabilities.get("analysisProfile");
+    assertThat(profile).containsEntry("templatePackId", "clip-arrow/v1");
+    assertThat(profile).containsEntry("templateState", "AVAILABLE");
+    assertThat(profile).containsEntry("templateUsable", true);
+    assertThat(profile).containsEntry("sampleFps", 10.0d);
+    assertThat(profile).containsEntry("sampleMaxWidth", 960);
+    assertThat(profile.get("templateSha256")).asString().hasSize(64);
+    assertThat(((Map<?, ?>) capabilities.get("features")).get("cursorTrackingAvailable"))
+        .isEqualTo(true);
+
+    properties.setVisualCursorTemplateSha256("b".repeat(64));
+    Map<String, Object> mismatched = service.capabilities();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> changed = (Map<String, Object>) mismatched.get("analysisProfile");
+    assertThat(changed).containsEntry("templateState", "DIGEST_MISMATCH");
+    assertThat(changed).containsEntry("templateUsable", false);
+    assertThat(((Map<?, ?>) mismatched.get("features")).get("cursorTrackingAvailable"))
+        .isEqualTo(false);
+    assertThat(String.valueOf(mismatched.get("unknowns"))).contains("pinned SHA-256");
   }
 
   private String publish(String content) throws IOException {
