@@ -12,11 +12,11 @@ Worktree: `C:\Dev\IdeaProjects\.worktrees\sc274-completion`, commits `5775ffaf`,
 
 | Row | Claim | Status | Evidence |
 |---|---|---|---|
-| 274-1 determinism | two clean directories / processes produce identical manifest bytes | **PARTIAL** — the in-repo fresh-JVM lane is green (`ScenarioManifestFreshJvmDeterminismTest`); the genuine-input double compile (WP3.3) needs the WP2 capture | `wp0/baseline-failures.txt`, full-suite XML under `wp1/test-results-after/` |
+| 274-1 determinism | two clean directories / processes produce identical manifest bytes | **PARTIAL** — the in-repo fresh-JVM lane is green (`ScenarioManifestFreshJvmDeterminismTest`); the genuine-input double compile (WP3.3) needs the WP2 capture **and** a causal capability (see the gate finding below) | `wp0/baseline-failures.txt`, full-suite XML under `wp1/test-results-after/` |
 | 274-2 provenance | every field and action links to evidence with explicit provenance | **PARTIAL** — enforced and tested on fixtures, including the new region field (`everyOutputFieldOutsideProvenanceIndexHasAnExplicitSource`); the genuine-input audit (WP3.4) needs the capture | `wp1/coverage.md` |
 | 274-3 stable refusal | off-by-one, gap, duplicate, reorder, missing state, incompatible cache/collision refuse stably with a source ref | **CLOSED for the compiler lane** — 9 cases, one stable code each, byte-identical across two fresh JVMs | `wp1/refusal-a.json`, `wp1/refusal-b.json` (identical), `manifest.* + compiler.*` lane 145/145 |
 | 274-4 runnable Fishing | compiled scenario runs causally with no raw input dependency | **BLOCKED** (SC-2201 qualified runtime, SC-276 world). The "no raw input dependency" half is asserted on fixtures by `goldenFishingManifestHasNoRawInputDependency` and the new media-exclusion test; the genuine-input half needs the capture | — |
-| 274-5 incomplete boundary | playback allowed, causal refused with a stable blocker, nothing written, including across a restart | **CLOSED for the service boundary** — incomplete preflight refuses `SIM_INITIAL_STATE_INCOMPLETE`, import/validate still accepts, and row counts are unchanged after a Spring-context restart | `Sc274CompilerTransactionIntegrationTest.preflightIsZeroWriteAndSurvivesAServiceRestart` (disposable PostgreSQL 16 on 127.0.0.1:63471) |
+| 274-5 incomplete boundary | playback allowed, causal refused with a stable blocker, nothing written, including across a restart | **CLOSED (service boundary) and the genuine `af17d0dc` playback half is now verified**: v2 preflight with the real HELD_OUT curation returns 200, `playbackEligible=true`, `simulationEligible=false`, `BLOCKED`, blocker `CAUSAL_SIMULATION / XRSPS_CAPABILITY_UNAVAILABLE`; the fixture lane proves `SIM_INITIAL_STATE_INCOMPLETE` plus unchanged row counts across a context restart. The compile half on a genuine recording stays blocked by the capability gate (below) | `..\acceptance\row5-af17d0dc.md`, `..\acceptance\row5-af17d0dc-preflight.json`, `Sc274CompilerTransactionIntegrationTest.preflightIsZeroWriteAndSurvivesAServiceRestart` |
 | 274-6 roles/privacy | role, immutability and redaction hold for owner/foreign/missing principals | **PARTIAL** — existing role/ownership/redaction tests are green; the genuine exported package needs the capture (WP3.6) | — |
 | 274-7 bounded import | genuine package round-trips byte-identically; malformed/oversized/over-deep/code/network variants refused with zero writes | **PARTIAL** — bounded-import and inert-code/network refusals are covered by existing tests; the genuine package needs the capture | — |
 | 274-align provider first | lineage kept, simulator outputs use distinct identities | **BLOCKED** (SC-1498 one-use approval); identity separation half is now asserted (`simulatorOutputCannotClaimLiveOrHumanProvenance`) | — |
@@ -50,6 +50,28 @@ target, and 1 migration schema-version expectation.
 micro6 was **not** compiled or run (`AGENTS.md` no-build rule); its 1 November producer result of
 44/44 is cited, not re-run.
 
+## Capability gate found before the capture
+
+`GET /api/replay/v2/recordings/recording_af17d0dc/preflight` with the genuine HELD_OUT curation
+`bf83bfe1-636d-4728-99e0-516038198e1b` returns 200 with `playbackEligible=true` but
+**`compiledInput=null`**, blocked by `CAUSAL_SIMULATION / XRSPS_CAPABILITY_UNAVAILABLE`. The v2
+compiler requires a causal capability before it will produce any manifest, for `compile()` and
+`preview()` alike, and the live capability reports `causalSimulation=false` because no xRSPS worker
+is registered. Consequence: rows 1, 2, the compile half of 5, 6 and 7 cannot be evidenced in this
+environment even with a perfect capture. **Owner decision: capture anyway, keep those rows blocked
+on SC-2201; no authored capability fixture and no compiler change.** Full record:
+`..\acceptance\capability-gate-finding.md`.
+
+## WP2 status at the time of this note
+
+The expired supervisor was replaced with owner approval (supervisor PID 15736, client PID 18944,
+allocation `08ea8742…`, executor `1588e7fa…`, deadline `2026-11-02T16:35:10.241Z`); the capture
+reference was regenerated (all checks pass, graph revision pinned); the capture scripts were copied
+and retargeted with profile-identity and graph-identity assertions plus a stored-run-context check.
+The supervisor reports `AWAITING_USER_LOGIN` with catalog `READY`, schema bundle `AVAILABLE`,
+recorder ready and the pinned client artifact. **No recording has started and no gameplay was
+dispatched** — the owner's manual login is the outstanding input.
+
 ## Risks
 
 - **G1 hidden state is a real gap, not fixed.** Nothing in the compiler requires NPC/resource
@@ -69,9 +91,14 @@ micro6 was **not** compiled or run (`AGENTS.md` no-build rule); its 1 November p
 - **The per-launch `java.args` is writable by Authenticated Users** (`wp0/risks.md`): the
   `Set-Acl` hardening step fails with `PrivilegeNotHeld` on every launch. Not fixed; fixing it
   needs an elevated session and touches a live launcher.
-- **`observedPlayback`/`policyReplay` are currently `false`** on the live capability endpoint while
-  row 5 needs playback eligibility; only the causal refusal is explained by the worker-isolation
-  warning. WP3.7 must resolve this or record it as a named blocker; no flag was flipped.
+- **`observedPlayback`/`policyReplay` are `false` on the live capability endpoint**, but the v2
+  preflight still reports `playbackEligible=true` for the genuine recording — that inference was
+  wrong and is corrected in `wp0/risks.md` R3 with the response recorded. `policyReplay=false` does
+  correspond to a real refusal (`RUN_STATE_INVALID`, "POLICY_REPLAY is not available in v1"), which
+  row 5 does not require; no flag was flipped.
+- **The causal capability gate blocks every genuine manifest compile** (see the section above), so
+  rows 1, 2, 5-compile, 6 and 7 stay blocked until a qualified runtime exists. This is the largest
+  open constraint in this run and it is structural, not environmental noise.
 - The working tree's two CRLF files were reformatted to LF by `spotlessApply` and restored to the
   repository's CRLF afterwards, so the committed diff contains only semantic changes; formatting
   itself was produced by the project's pinned google-java-format and verified before the restore.

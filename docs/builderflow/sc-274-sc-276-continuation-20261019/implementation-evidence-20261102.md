@@ -80,15 +80,25 @@ producer lane result of 44/44 from 1 November is cited, not re-run.
 
 ## Remaining work
 
-1. WP2 capture (needs the user): the supervisor lease expired at `2026-11-02T04:06:01Z`; restarting
-   the supervisor relaunches the client, so it needs explicit approval. Then the bounded trout
-   capture, finalization and quality verification.
+1. WP2 capture (needs the owner at the keyboard): the expired supervisor was replaced with approval
+   (supervisor PID 15736, client PID 18944, allocation `08ea8742…`, deadline `16:35:10Z`), the
+   reference was regenerated and the scripts retargeted. The supervisor reports
+   `AWAITING_USER_LOGIN`; recording starts only after the owner's manual login. Nothing was
+   automated.
 2. WP3 acceptance on that capture: curation publish, double clean-directory compile, provenance and
-   output-completeness audits, rows 6/7 API evidence (G10 decision), row 5 on genuine inputs.
-3. G1 (hidden state: timers/varps/RNG/quest) is a **reported gap**, not fixed — see
+   output-completeness audits, rows 6/7 API evidence (G10 decision recorded: mixed 8090 build
+   acceptable, with the process identity and patched-class hash named in the evidence), row 5 on
+   genuine inputs — **the `af17d0dc` half of row 5 is already verified**.
+3. **Causal capability gate (new, structural):** the v2 compiler refuses every compile while
+   `causalSimulation=false`, so rows 1, 2, the compile half of 5, 6 and 7 cannot be evidenced in
+   this environment even after a good capture. Owner decision: capture anyway, keep them blocked on
+   SC-2201. No fixture, flag or compiler change was used to work around it. Record:
+   `C:\Dev\IdeaProjects\verification\sc274-sc276-continuation-20261102\acceptance\capability-gate-finding.md`.
+4. G1 (hidden state: timers/varps/RNG/quest) is a **reported gap**, not fixed — see
    `wp1\coverage.md`. It needs a contract decision before `simulationBlockedReasons()` can claim
    causal completeness for these families.
-4. G4/Mule exclusion is unimplemented (no interval concept exists); reported, not invented.
-5. Rows 4, `274-align` and the travel positive half stay blocked by SC-2201, SC-276 and SC-1498.
-6. The five SC-274 Felix outbox records and the review/merge route for the local commits are open
-   user decisions.
+5. G4/Mule exclusion is unimplemented (no interval concept exists); reported, not invented.
+6. Rows 4, `274-align` and the travel positive half stay blocked by SC-2201, SC-276 and SC-1498.
+7. The five SC-274 Felix outbox records were **replayed as notes and moved to `synced\sc-274\`**;
+   the review/merge route for the local commits is an open owner decision (owner chose: leave local,
+   review in place).
