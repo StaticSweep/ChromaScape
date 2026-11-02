@@ -938,21 +938,49 @@ public class ScenarioManifestV2Compiler {
         || worldId.asInt() <= 0) {
       throw ReplayException.invalid(
           ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
-          "Recorded world id missing or invalid at start tick");
+          "Recorded world id missing or invalid at start tick " + first.getTick());
     }
     state.put("worldId", worldId.asInt());
 
+    // Region identity is part of the initial world: collision data, spawn selection and travel are
+    // keyed by region, so a scenario that cannot name its region cannot be simulated. The producer
+    // records it inside the per-tick world observation; a captured or operator-supplied top-level
+    // region is accepted too, but it is never inferred from a world id or a coordinate.
+    JsonNode regionId = input.get("regionId");
+    if (regionId == null
+        || !regionId.isIntegralNumber()
+        || !regionId.canConvertToInt()
+        || regionId.asInt() <= 0) {
+      throw ReplayException.invalid(
+          ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
+          "Recorded region identity missing or invalid at start tick " + first.getTick());
+    }
+    state.put("regionId", regionId.asInt());
+
     JsonNode collisionRevision = input.get("collisionRevision");
-    String collision =
+    String capturedCollision =
         collisionRevision != null
                 && collisionRevision.isTextual()
                 && !collisionRevision.asText().isBlank()
             ? collisionRevision.asText().trim()
-            : pinnedCollisionRevision;
+            : null;
+    if (capturedCollision != null
+        && pinnedCollisionRevision != null
+        && !capturedCollision.equals(pinnedCollisionRevision)) {
+      // Derivation must never mask an incompatibility: a capture taken against different collision
+      // data than the pinned simulator content is a different world, so it is refused instead of
+      // being silently rewritten to the pinned value.
+      throw ReplayException.invalid(
+          ReplayErrorCode.SNAPSHOT_INCOMPATIBLE,
+          "Captured collision revision at start tick "
+              + first.getTick()
+              + " does not match the pinned simulator content revision");
+    }
+    String collision = capturedCollision != null ? capturedCollision : pinnedCollisionRevision;
     if (collision == null) {
       throw ReplayException.invalid(
           ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
-          "Recorded collision revision missing or blank at start tick");
+          "Recorded collision revision missing or blank at start tick " + first.getTick());
     }
     state.put("collisionRevision", collision);
 
@@ -1138,6 +1166,12 @@ public class ScenarioManifestV2Compiler {
             captured != null && captured.has("collisionRevision")
                 ? captured.get("collisionRevision")
                 : world.get("collisionRevision")));
+    input.set(
+        "regionId",
+        nullable(
+            world.isObject() && world.has("regionId")
+                ? world.get("regionId")
+                : captured == null ? null : captured.get("regionId")));
     if (captured != null && captured.isObject()) {
       ObjectNode player = ((ObjectNode) captured).deepCopy();
       player.set("inventory", nullable(first.getInventory()));

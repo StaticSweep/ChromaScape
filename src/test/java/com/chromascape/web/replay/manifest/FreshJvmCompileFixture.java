@@ -119,8 +119,7 @@ final class FreshJvmCompileFixture {
             new CanonicalProjectionService(),
             objectMapper);
 
-    Compilation compilation =
-        compiler.compile(RECORDING_ID, ConversionMode.AUTO, null, null);
+    Compilation compilation = compiler.compile(RECORDING_ID, ConversionMode.AUTO, null, null);
     CanonicalProjectionService projection = new CanonicalProjectionService();
     byte[] manifestBytes = projection.canonicalJsonBytes(compilation.manifest().getManifestJson());
     String compilerVersion =
@@ -173,7 +172,9 @@ final class FreshJvmCompileFixture {
   private static TickSnapshot snapshot(ObjectMapper objectMapper) {
     ObjectNode playerState = objectMapper.createObjectNode();
     playerState.put("worldId", 301);
-    playerState.put("collisionRevision", "golden-collision-rev-1");
+    playerState.put("regionId", 12850);
+    // Must equal the capability's pinned content revision; a contradicting capture is refused.
+    playerState.put("collisionRevision", "sha256:content");
     playerState.putObject("position").put("x", 3200).put("y", 3200).put("plane", 0);
     playerState.putObject("skills").putObject("fishing").put("level", 1).put("xp", 0);
 

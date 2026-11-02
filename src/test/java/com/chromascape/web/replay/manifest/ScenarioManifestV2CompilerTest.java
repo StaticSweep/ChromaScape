@@ -388,14 +388,31 @@ class ScenarioManifestV2CompilerTest {
   }
 
   @Test
-  void capturedCollisionRevisionIsNotReplacedByThePinnedIdentity() {
+  void capturedCollisionRevisionMatchingThePinIsPreservedAsObserved() {
     ScenarioManifestV2Compiler compiler = compiler();
 
     ObjectNode state =
         compiler.buildInitialState(
-            goldenSnapshot(), goldenConversion(), false, null, "sha256:pinned-content");
+            goldenSnapshot(), goldenConversion(), false, null, "sha256:content");
 
-    assertThat(state.path("collisionRevision").asText()).isEqualTo("golden-collision-rev-1");
+    assertThat(state.path("collisionRevision").asText()).isEqualTo("sha256:content");
+  }
+
+  @Test
+  void capturedCollisionRevisionContradictingThePinIsRefusedNotOverwritten() {
+    ScenarioManifestV2Compiler compiler = compiler();
+    TickSnapshot first = goldenSnapshot();
+    ((ObjectNode) first.getPlayerState()).put("collisionRevision", "different-collision-rev-2");
+
+    ReplayException exception =
+        assertThrows(
+            ReplayException.class,
+            () ->
+                compiler.buildInitialState(
+                    first, goldenConversion(), false, null, "sha256:pinned-content"));
+
+    assertThat(exception.getErrorCode()).isEqualTo(ReplayErrorCode.SNAPSHOT_INCOMPATIBLE);
+    assertThat(exception.getSafeMessage()).contains("start tick 0");
   }
 
   @Test
@@ -422,7 +439,7 @@ class ScenarioManifestV2CompilerTest {
    * revising this pin (and compiler-version-derived IDs and seed).
    */
   private static final String EXPECTED_GOLDEN_MANIFEST_CHECKSUM =
-      "sha256:2976e2bd3668831fb091ca2900e78d091326472257650ecb69f18f857e912cf1";
+      "sha256:5ec26b48ae669024295b57381378cd0f598ecde21f4145709c539cd525f513a7";
 
   @Test
   void goldenFishingCompileProducesExpectedChecksum() {
@@ -711,6 +728,7 @@ class ScenarioManifestV2CompilerTest {
                     null));
 
     assertThat(exception.getErrorCode()).isEqualTo(ReplayErrorCode.TICK_GAP_DETECTED);
+    assertThat(exception.getSafeMessage()).contains("0..2");
   }
 
   @Test
@@ -731,6 +749,7 @@ class ScenarioManifestV2CompilerTest {
                     null));
 
     assertThat(exception.getErrorCode()).isEqualTo(ReplayErrorCode.TICK_RANGE_INVALID);
+    assertThat(exception.getSafeMessage()).contains("tick 1").contains("0..0");
   }
 
   @Test
@@ -753,6 +772,7 @@ class ScenarioManifestV2CompilerTest {
                     null));
 
     assertThat(exception.getErrorCode()).isEqualTo(ReplayErrorCode.ACTION_SEQUENCE_INVALID);
+    assertThat(exception.getSafeMessage()).contains("not strictly ordered at tick 0");
   }
 
   @Test
@@ -775,6 +795,7 @@ class ScenarioManifestV2CompilerTest {
                     null));
 
     assertThat(exception.getErrorCode()).isEqualTo(ReplayErrorCode.ACTION_SEQUENCE_INVALID);
+    assertThat(exception.getSafeMessage()).contains("not strictly ordered at tick 0");
   }
 
   @Test
@@ -790,6 +811,7 @@ class ScenarioManifestV2CompilerTest {
                 compiler.buildInitialState(first, conversion(npcAction("npc:1518:42", "net", 0))));
 
     assertThat(exception.getErrorCode()).isEqualTo(ReplayErrorCode.PLAYER_STATE_MISSING);
+    assertThat(exception.getSafeMessage()).contains("Earliest tick snapshot");
   }
 
   @Test
@@ -814,6 +836,78 @@ class ScenarioManifestV2CompilerTest {
                     null));
 
     assertThat(exception.getErrorCode()).isEqualTo(ReplayErrorCode.XRSPS_VERSION_INCOMPATIBLE);
+    assertThat(exception.getSafeMessage()).contains("incomplete runtime pins");
+  }
+
+  @Test
+  void missingRegionIdentityFailsClosedWithTheStartTick() {
+    ScenarioManifestV2Compiler compiler = compiler();
+    TickSnapshot first = goldenSnapshot();
+    ((ObjectNode) first.getPlayerState()).remove("regionId");
+
+    ReplayException exception =
+        assertThrows(
+            ReplayException.class,
+            () ->
+                compiler.buildInitialState(
+                    first, goldenConversion(), false, null, "sha256:content"));
+
+    assertThat(exception.getErrorCode()).isEqualTo(ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE);
+    assertThat(exception.getSafeMessage()).contains("region identity").contains("start tick 0");
+  }
+
+  @Test
+  void nestedProducerWorldObservationSuppliesTheRegionIdentity() {
+    ScenarioManifestV2Compiler compiler = compiler();
+    TickSnapshot first = goldenSnapshot();
+    ObjectNode playerState = (ObjectNode) first.getPlayerState();
+    playerState.remove("regionId");
+    playerState.putObject("world").put("worldId", 301).put("regionId", 12850).put("plane", 0);
+
+    ObjectNode state =
+        compiler.buildInitialState(first, goldenConversion(), false, null, "sha256:content");
+
+    assertThat(state.path("regionId").asInt()).isEqualTo(12850);
+  }
+
+  @Test
+  void incompatibleCapturedCollisionRevisionFailsClosedDuringCompilation() {
+    TickSnapshot first = goldenSnapshot();
+    ((ObjectNode) first.getPlayerState()).put("collisionRevision", "different-collision-rev-2");
+
+    ReplayException exception =
+        assertThrows(
+            ReplayException.class,
+            () ->
+                compileWith(
+                    "recording-fishing-golden",
+                    goldenSession(),
+                    List.of(first),
+                    goldenConversion(),
+                    goldenCapability(),
+                    List.of(),
+                    null));
+
+    assertThat(exception.getErrorCode()).isEqualTo(ReplayErrorCode.SNAPSHOT_INCOMPATIBLE);
+    assertThat(exception.getSafeMessage()).contains("start tick 0");
+  }
+
+  @Test
+  void compilationWithoutAnyWorkerSupportedActionFailsClosed() {
+    ReplayException exception =
+        assertThrows(
+            ReplayException.class,
+            () ->
+                compileWith(
+                    "recording-fishing-golden",
+                    goldenSession(),
+                    List.of(goldenSnapshot()),
+                    conversion(),
+                    goldenCapability(),
+                    List.of(),
+                    null));
+
+    assertThat(exception.getErrorCode()).isEqualTo(ReplayErrorCode.ACTION_UNSUPPORTED);
   }
 
   @Test
@@ -1037,7 +1131,7 @@ class ScenarioManifestV2CompilerTest {
     ((ObjectNode) captured.getPlayerState()).remove("collisionRevision");
     var operator = operatorCuration("recording-fishing-golden", 3, CurationRole.HELD_OUT);
     ObjectNode overrides = (ObjectNode) operator.getContentJson().path("initialStateOverrides");
-    overrides.put("collisionRevision", "audited-fixture-collision");
+    overrides.put("collisionRevision", "sha256:content");
     ObjectNode player = overrides.putObject("player");
     var slots = player.putArray("inventory");
     slots.addObject().put("slot", 2).put("itemId", 314).put("quantity", 50);
@@ -2119,6 +2213,57 @@ class ScenarioManifestV2CompilerTest {
                 .getRunContext());
   }
 
+  @Test
+  void operatorMediaReferenceNeverBecomesStructuredStateOrActionEvidence() {
+    var operator = operatorCuration("recording-fishing-golden", 3, CurationRole.HELD_OUT);
+    ObjectNode content = (ObjectNode) operator.getContentJson();
+    content
+        .putObject("media")
+        .put("videoRef", "asset://review/clip-video-77.mp4")
+        .put("frameIndex", 12);
+    var canonical = new CanonicalProjectionService();
+    operator.setContentChecksum(canonical.sha256Hex(canonical.canonicalJsonBytes(content)));
+
+    Compilation compilation =
+        compileWith(
+            "recording-fishing-golden",
+            goldenSession(),
+            List.of(goldenSnapshot()),
+            goldenConversion(),
+            goldenCapability(),
+            List.of(operator),
+            null,
+            goldenContext(),
+            true,
+            operator.getId(),
+            "operator-review");
+
+    JsonNode document = compilation.manifest().getManifestJson();
+    var projection = new CanonicalProjectionService();
+    // The selected curation's media block stays a human-review artifact pinned on the curation; it
+    // is never promoted into structured initial state or into action evidence.
+    assertThat(content.path("media").path("videoRef").asText()).contains("clip-video-77");
+    assertThat(projection.canonicalJson(document.path("initialState")))
+        .doesNotContain("clip-video-77");
+    assertThat(projection.canonicalJson(document.path("actions"))).doesNotContain("clip-video-77");
+    for (JsonNode action : document.path("actions")) {
+      assertThat(action.path("sourceEvidence").toString()).doesNotContain("video");
+    }
+  }
+
+  @Test
+  void simulatorOutputCannotClaimLiveOrHumanProvenance() {
+    JsonNode document = goldenCompile().manifest().getManifestJson();
+
+    assertThat(document.path("fidelity").asText()).isEqualTo("SYNTHETIC_CONTRACT");
+    assertThat(document.path("controlAllowed").asBoolean()).isFalse();
+    assertThat(document.path("determinism").path("idNamespace").asText()).isEqualTo("replay-v2");
+    assertThat(document.path("fidelity").asText()).isNotIn("HUMAN", "LIVE", "XRSPS_AUTHORITATIVE");
+    // Fidelity and control are sourced from the pinned capability, not from the curation's dataset
+    // role, so a HELD_OUT human capture still cannot promote simulator output to a live claim.
+    assertThat(document.path("curation").path("datasetRole").asText()).isEqualTo("HELD_OUT");
+  }
+
   private void checkProvenance(JsonNode value, String path, JsonNode fields) {
     if (path.equals("/compilationEvidence")
         || path.startsWith("/compilationEvidence/fieldProvenance")) {
@@ -2546,7 +2691,9 @@ class ScenarioManifestV2CompilerTest {
   private TickSnapshot goldenSnapshot() {
     TickSnapshot snapshot = initialSnapshot();
     snapshot.setSessionId("session-fishing-golden");
-    ((ObjectNode) snapshot.getPlayerState()).put("collisionRevision", "golden-collision-rev-1");
+    // The captured collision identity must agree with the pinned content revision the golden
+    // capability declares; a capture taken against other collision data is refused.
+    ((ObjectNode) snapshot.getPlayerState()).put("collisionRevision", "sha256:content");
     return snapshot;
   }
 
@@ -2656,6 +2803,7 @@ class ScenarioManifestV2CompilerTest {
   private TickSnapshot initialSnapshot() {
     ObjectNode playerState = objectMapper.createObjectNode();
     playerState.put("worldId", 301);
+    playerState.put("regionId", 12850);
     playerState.put("collisionRevision", "test-collision-rev-1");
     playerState.putObject("position").put("x", 3200).put("y", 3200).put("plane", 0);
     playerState.putObject("skills").putObject("fishing").put("level", 1).put("xp", 0);
