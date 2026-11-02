@@ -56,6 +56,15 @@ previous session shows canvas 765x503 **stretched to 1224x842**.
 
 1. Preconditions: run `ss -ltnp '( sport = :8090 or sport = :8093 or sport = :8098 or sport = :8099 )'`.
    8093 and 8099 must be free. Confirm the account is not logged in on another client.
+   Then confirm the recorder can see the display and read the canvas size off it:
+
+   ```bash
+   python3 scripts/sc2150/record_x11_canvas.py --list --display :0
+   ```
+
+   It prints each viewable window as `id WxH class=…`; the game canvas is the RuneLite-owned
+   window (the qualification kit showed `1224x842` for a `765x503` canvas). The recorder needs
+   `libX11`/`libXext` and `ffmpeg` only — no `xdotool`/`xwd`/`wmctrl`.
 2. Start the qualification server: `sc2015-qual-20261026/start-qual-server.sh`. Wait for
    8093 health.
 3. **OWNER** authorizes the account launch. If the staged handoff is stale, re-stage it with the

@@ -153,6 +153,31 @@ def find_canvas(x, display, root, width, height):
     return result
 
 
+def list_viewable(x, display, root, min_width=200, min_height=200):
+    """Every viewable window at least min_width x min_height, with its size and class hint.
+
+    Used to find the game canvas before a session: the recorder needs an exact size, and that
+    size is read off this listing.
+    """
+    listed = []
+    for window, ancestors in windows(x, display, root):
+        attributes = XWindowAttributes()
+        if not x.XGetWindowAttributes(display, window, ctypes.byref(attributes)):
+            continue
+        if attributes.map_state != IS_VIEWABLE:
+            continue
+        if attributes.width < min_width or attributes.height < min_height:
+            continue
+        owner = ""
+        for candidate in (window,) + tuple(reversed(ancestors)):
+            hint = class_hint(x, display, candidate)
+            if hint and "mutter-x11-frames" not in hint:
+                owner = hint
+                break
+        listed.append((window, attributes.width, attributes.height, owner))
+    return listed
+
+
 def grab(x, display, window, width, height):
     image = x.XGetImage(display, window, 0, 0, width, height, ALL_PLANES, Z_PIXMAP)
     completed = time.monotonic_ns()
@@ -247,7 +272,8 @@ class ShmGrabber:
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--out-dir", type=Path, required=True)
+    parser.add_argument("--out-dir", type=Path,
+                        help="recording output directory (required unless --list)")
     parser.add_argument("--id", help="recording id (default: x11-<uuid>)")
     parser.add_argument("--canvas", help="canvas size WxH, e.g. 765x503 (from the mouse trace)")
     parser.add_argument("--window", help="X window id of the canvas (hex or decimal)")
@@ -267,6 +293,12 @@ def main():
     if not display:
         raise SystemExit(f"cannot open display {args.display}")
     root = x.XDefaultRootWindow(display)
+    if args.list and not args.canvas and not args.window:
+        for window, width, height, owner in list_viewable(x, display, root):
+            print(f"0x{window:x} {width}x{height} class={owner!r}")
+        return
+    if not args.list and args.out_dir is None:
+        raise SystemExit("--out-dir is required to record")
     if args.window:
         window = int(args.window, 0)
         attributes = XWindowAttributes()
