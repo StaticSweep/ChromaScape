@@ -149,6 +149,7 @@ class Sc274CompilerTransactionIntegrationTest {
   private static AnnotationConfigApplicationContext context;
   private static JdbcTemplate admin;
   private static JdbcTemplate jdbc;
+  private static DataSource contextDataSource;
   private static String schema;
   @TempDir static Path artifactRoot;
   private ScenarioManifestV2Compiler compiler;
@@ -167,6 +168,7 @@ class Sc274CompilerTransactionIntegrationTest {
     var dataSource =
         new DriverManagerDataSource(
             url + (url.contains("?") ? "&" : "?") + "currentSchema=" + schema, "test", "test");
+    contextDataSource = dataSource;
     jdbc = new JdbcTemplate(dataSource);
     Flyway.configure()
         .dataSource(dataSource)
@@ -175,8 +177,13 @@ class Sc274CompilerTransactionIntegrationTest {
         .schemas(schema)
         .load()
         .migrate();
+    openContext();
+  }
+
+  /** Rebuilds the Spring context over the same schema, as a real service restart would. */
+  private static void openContext() {
     context = new AnnotationConfigApplicationContext();
-    context.registerBean(DataSource.class, () -> dataSource);
+    context.registerBean(DataSource.class, () -> contextDataSource);
     context.register(Persistence.class);
     context.refresh();
   }
@@ -984,6 +991,37 @@ class Sc274CompilerTransactionIntegrationTest {
     assertSourceUnchanged();
   }
 
+  @Test
+  void preflightIsZeroWriteAndSurvivesAServiceRestart() {
+    // Row 5 uses an incomplete stream: playback/import stays available, causal simulation refuses.
+    when(converter.convert(eq(SESSION), eq(0L), eq(0L), any())).thenReturn(conversion(true));
+    ReplayV2PreflightService before = context.getBean(ReplayV2PreflightService.class);
+    var first = before.preflight(RECORDING, ConversionMode.CAPTURED_ONLY, source.getId(), OWNER);
+    List<Long> baseline = counts();
+    assertThat(first.simulationEligible()).isFalse();
+    assertThat(first.playbackEligible()).isTrue();
+    assertThat(first.blockingReasons()).isNotEmpty();
+
+    context.close();
+    openContext();
+
+    // The restarted context owns fresh mocks; re-seed only the conversion evidence it needs.
+    ReplayActionConversionService restartedConverter =
+        org.springframework.test.util.AopTestUtils.getUltimateTargetObject(
+            (ReplayActionConversionService) context.getBean(ReplayActionConversionService.class));
+    when(restartedConverter.convert(eq(SESSION), eq(0L), eq(0L), any()))
+        .thenReturn(conversion(true));
+
+    ReplayV2PreflightService after = context.getBean(ReplayV2PreflightService.class);
+    var second = after.preflight(RECORDING, ConversionMode.CAPTURED_ONLY, source.getId(), OWNER);
+    assertThat(second.simulationEligible()).isFalse();
+    assertThat(second.blockingReasons())
+        .extracting(reason -> reason.code().name())
+        .containsExactlyElementsOf(
+            first.blockingReasons().stream().map(reason -> reason.code().name()).toList());
+    assertThat(counts()).isEqualTo(baseline);
+  }
+
   private CreateXrspsRunRequest request(String key, String expected) {
     return new CreateXrspsRunRequest(
         ConversionMode.AUTO, false, ReplayStopPolicy.RUN_TO_END, key, source.getId(), expected);
@@ -1109,7 +1147,10 @@ class Sc274CompilerTransactionIntegrationTest {
     TickSnapshotRepository snapshots() {
       final var repository = mock(TickSnapshotRepository.class);
       ObjectNode player = JSON.createObjectNode();
-      player.put("worldId", 301).put("collisionRevision", "authored-collision");
+      player
+          .put("worldId", 301)
+          .put("regionId", 12850)
+          .put("collisionRevision", "sha256:" + "c".repeat(64));
       player.putObject("position").put("x", 3080).put("y", 3227).put("plane", 0);
       player.putObject("skills").putObject("fishing").put("level", 20).put("xp", 4470);
       var snapshot = new TickSnapshot(SESSION, 0L, LocalDateTime.of(2026, 10, 15, 0, 0), player);
