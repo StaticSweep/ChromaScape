@@ -70,3 +70,28 @@ summary in `qualification-fix-and-final-commit-20261030.md`.
 - Close a row only with positive or expected-negative evidence from the delivered inputs.
 - Never relabel a skip as a pass, or an authored fixture as independent evidence.
 - Keep the gate false until every required component passes and the change is reviewed.
+
+## 2 November 2026 — WP0/WP1/WP4 result of `remaining-plan-20261102.md`
+
+Working state: no row below is re-statused to Done. Evidence root
+`C:\Dev\IdeaProjects\verification\sc274-sc276-continuation-20261102\`; commits `5775ffaf`,
+`019c681f`, `1ac3fb22` on `codex/sc274-completion-20261015` (local, not pushed).
+
+| Row | Final status this pass | Evidence |
+|---|---|---|
+| 274-1 determinism | PARTIAL — fresh-JVM lane green on fixtures; genuine-input double compile not run (no capture) | full-suite XML, `wp1/test-results-after/` |
+| 274-2 provenance | PARTIAL — enforced/tested on fixtures incl. the new region field; genuine audit not run | `wp1/coverage.md` |
+| 274-3 stable refusal | **CLOSED (compiler lane)** — 9 refusal cases, one stable code each, source-linked, byte-identical across two fresh JVMs | `wp1/refusal-a.json`, `wp1/refusal-b.json` |
+| 274-4 runnable Fishing | BLOCKED — SC-2201 runtime, SC-276 world | — |
+| 274-5 incomplete boundary | **CLOSED (service boundary)** — causal refused with `SIM_INITIAL_STATE_INCOMPLETE`, playback/import still accepted, row counts unchanged across a context restart | `…preflightIsZeroWriteAndSurvivesAServiceRestart` |
+| 274-6 roles/privacy | PARTIAL — existing role/ownership tests green; genuine package not produced | — |
+| 274-7 bounded import | PARTIAL — bounds and inert code/network refusals tested; genuine round trip not run | — |
+| 274-align provider first | BLOCKED — SC-1498 approval; identity-separation half now asserted | — |
+| 274-travel amendment | negative half **CLOSED** (every negative has a named passing test, including the new region/collision refusals); positive half BLOCKED | `wp1/coverage.md` §1.5 |
+| 274-historical | **BLOCKED verdict kept and re-derived** — hashes 7/7 match, 6 gaps resolved, 8 blocked (44 % typed stream, absent `Cancel` messages, no tick↔frame map, no context/curation, missing initial NPCs, 23 unsupported actions); 23-vs-3 explained | `..\verification\sc274-sc276-continuation-20261102\historical\b83c-verdict.md` |
+
+Two defects were found and fixed: a captured `collisionRevision` that contradicted the pinned
+content revision was silently kept, and region identity was not part of the initial world at all.
+Two gaps are reported rather than implemented: G1 (no hidden-state requirement — timers, varps,
+RNG, quest) and G4 (no Mule/coordination interval concept). Both need a contract decision before
+`simulationBlockedReasons()` can claim causal completeness.

@@ -79,3 +79,26 @@ new publication, not an edit.
 Delete or stop referencing the new bundle and the `sc274_human_fishing` publication; both are
 inert until used. No recording, curation, manifest, trust root, credential or shared database
 was modified by this increment.
+
+## Correction — 2 November 2026 (this section supersedes the stale facts above, not the history)
+
+- **The 8090 candidate PID quoted above (65504) is no longer the live process.** The candidate was
+  relaunched at `2026-11-02T03:23:12` local and is now **PID 143068**, on the same
+  `runtime-8090\java.args` classpath (`C:/Dev/IdeaProjects/verification/sc274-live/build-b29c7d5f/classes`)
+  with the same patched `GraphSchemaValidator.class`
+  (`sha256:905563733cfd…`). The cause of the relaunch is undetermined and recorded in
+  `C:\Dev\IdeaProjects\verification\sc274-sc276-continuation-20261102\wp0\8090-restart.md`:
+  no JVM crash, no OOM, no WER/Application event, the previous JVM's GC log ends normally 10 s
+  earlier, and the transient parent process is gone. Nothing was restarted during the 2 November run.
+- **The capture reference IDs above are stale.** `capture-context/prepare-capture-context.py` was
+  changed on 2 November to read `live-handoff-state.json` and refuse stale or expired identities
+  (16 checks), so the reference must be regenerated for whatever allocation is live when the
+  capture starts — the 1 November `allocationId`/`executorId` values must not be reused.
+- **The supervisor lease expired at `2026-11-02T04:06:01Z`.** The supervisor (PID 57496) and client
+  (PID 128104) were still running at 03:40Z in phase `AWAITING_USER_LOGIN`, but a capture cannot
+  start on an expired lease; restarting the supervisor relaunches the client and needs the owner's
+  approval.
+- **The live capability endpoint reports every mode false**, including
+  `observedPlayback` and `policyReplay`, not only `causalSimulation`/`certifiable`. Row 5 needs
+  playback eligibility, so this must be resolved or recorded as a named blocker before the
+  acceptance run; no flag was changed.
