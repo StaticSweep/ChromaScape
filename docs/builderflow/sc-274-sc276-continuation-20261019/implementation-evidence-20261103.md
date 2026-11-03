@@ -37,4 +37,21 @@ tree is refused outright.
 2. `spotlessApply` on this branch reformats 1384 unrelated files, so it was applied to the touched
    files only and the unrelated churn was reverted. `spotlessCheck` cannot be green on this branch
    without that mass reformat; that is a pre-existing repository condition, not a result of this change.
-3. P5.4 (clean candidate build), P5.5 (push/PR — needs approval), P6 (Felix/outbox/Shortcut).
+3. P5.5 (push and PR — needs approval) and P6 (outbox, Shortcut).
+
+## P5.4 candidate build (3 November 2026)
+
+`gradlew.bat --offline bootJar` on `6622a23d` succeeded:
+
+| Field | Value |
+|---|---|
+| Artifact | `build/libs/chromascape-0.2.0-SNAPSHOT.jar` |
+| Size | 722,060,888 bytes |
+| SHA-256 | `3b82cee0758b8ea7607dde1e3f19d2996b81da442eea1f1c8914c4a277bc0025` |
+| Fix present | `BOOT-INF/classes/.../DebugSessionService.class` references `sameProvenance` and `differingFields`; `BehaviorRunContextService.class` defines `sameProvenance` |
+
+The 8090 overlay is exactly the two touched classes (`DebugSessionService`, `TickStreamWebSocketHandler`,
+12 class files at `verification\sc274-sc276-continuation-20261102\redeploy\classes`). That overlay is now
+redundant with the candidate, but it was **left in place**: retiring the mixed build means restarting
+8090, which rule 4 requires the owner to approve. Until then the running 8090 is still the old
+raw-tree guard and its evidence is not a clean-build result.
