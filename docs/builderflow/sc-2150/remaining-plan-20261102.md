@@ -159,6 +159,10 @@ workflow; the UI needs no temporary-worktree paths or hand-copied build resource
 
 **Owner:** agent. **Maps to:** W2/W5/W13 refresh; AC3, AC4, AC9 and AC10.
 
+**Executed:** measurements, both cancellation points, restart/lease-loss, operator reconcile,
+containment and quota receipts are recorded in
+[verification evidence R2](verification-evidence-r2-20261103.md).
+
 1. Measure the effective profile's sample count, workspace bytes, peak memory, elapsed
    time and cleanup. Record the chosen budget and account for concurrent jobs.
 2. Preserve hard storage limits. The former 128 MiB total budget provided only a 64 MiB
