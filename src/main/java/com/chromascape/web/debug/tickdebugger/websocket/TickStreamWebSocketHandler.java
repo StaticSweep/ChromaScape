@@ -80,6 +80,11 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
 
   private static final Logger log = LoggerFactory.getLogger(TickStreamWebSocketHandler.class);
 
+  /** Isolated logger so the bounded SESSION_START diagnosis can be enabled without noisy DEBUG. */
+  private static final Logger sessionStartDiagnostics =
+      LoggerFactory.getLogger(
+          TickStreamWebSocketHandler.class.getName() + ".SessionStartDiagnostics");
+
   private final ObjectMapper objectMapper;
   private final DebugSessionService sessionService;
 
@@ -522,6 +527,23 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
         return;
       }
       wsSession.getAttributes().put("selectedTickBatchVersion", selectedVersion);
+      // Bounded, value-free diagnosis of a SESSION_START (SC-274, 3 November 2026). Presence and
+      // shape only: the payload carries the account name and task settings, so neither is logged,
+      // and no body is serialized.
+      if (sessionStartDiagnostics.isDebugEnabled()) {
+        sessionStartDiagnostics.debug(
+            "SESSION_START request: clientRequestId={}, preferredSessionId={}, recordingEnabled={},"
+                + " triggerSource={}, taskKey={}, taskArgsFields={}, runContextFields={},"
+                + " captureIdentityPresent={}",
+            clientRequestId,
+            preferred,
+            recordingEnabled,
+            request.getTriggerSource(),
+            request.getTaskKey(),
+            fieldCount(request.getTaskArgs()),
+            fieldCount(request.getRunContext()),
+            request.getCaptureIdentity() != null);
+      }
       // Call the authoritative service outside the ownership lock.
       SessionStartOutcome outcome;
       try {
@@ -948,6 +970,15 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     synchronized (ownershipLock) {
       return preferredReservations.containsValue(wsId);
     }
+  }
+
+  /**
+   * Counts the top-level fields of a SESSION_START payload node for a value-free diagnostic, so the
+   * log shows whether a context was supplied without recording its contents.
+   */
+  private int fieldCount(com.fasterxml.jackson.databind.JsonNode value) {
+    if (value == null || value.isNull()) return -1;
+    return value.isObject() ? value.size() : -2;
   }
 
   /**
