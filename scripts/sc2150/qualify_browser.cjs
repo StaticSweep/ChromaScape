@@ -35,9 +35,15 @@ const assert = require('node:assert/strict');
     await page.locator('[data-review-save]').click();
     assert.equal((await response).status(), status);
   }
+  // The analysis already carries a saved revision from qualify_http.py, so the editor resumes
+  // with a seeded draft; every count assertion is relative to that baseline.
+  const draftCount = async page => Number(await page.locator('[data-review-draft-count]').innerText());
   try {
     const first = await open();
     const second = await open();
+    // The draft may resume saved cursor labels from an earlier revision; every later count is
+    // relative to whatever baseline this source currently has.
+    const seeded = await draftCount(first);
     const jobReads = {};
     first.on('request', request => {
       const match = request.url().match(/\/jobs\/([a-f0-9-]+)$/);
@@ -50,20 +56,20 @@ const assert = require('node:assert/strict');
     await first.locator('[data-correction-kind]').selectOption('CURSOR_VISIBILITY');
     await expect(first.locator('[data-field="visibility"]')).toHaveValue('VISIBLE');
     await first.locator('[data-correction-add]').click();
-    await expect(first.locator('[data-review-draft-count]')).toHaveText('1');
+    await expect(first.locator('[data-review-draft-count]')).toHaveText(String(seeded + 1));
     await first.locator('[data-review-reason]').fill('Synthetic browser visible point with conflict recovery');
     await first.locator('[data-source-use]').selectOption('TRAINING_REQUESTED');
     await second.locator('[data-review-reason]').fill('Concurrent source-use review');
     await second.locator('[data-source-use]').selectOption('TRAINING_DENIED');
     await save(second);
     await first.getByRole('button', { name: 'Inspect source ' + fixture.sourceId, exact: true }).click();
-    await expect(first.locator('[data-review-draft-count]')).toHaveText('1');
+    await expect(first.locator('[data-review-draft-count]')).toHaveText(String(seeded + 1));
     await save(first, 409);
     await expect(first.locator('[data-review-conflict]')).toBeVisible();
-    await expect(first.locator('[data-review-draft-count]')).toHaveText('1');
+    await expect(first.locator('[data-review-draft-count]')).toHaveText(String(seeded + 1));
     await first.locator('[data-review-reload]').click();
     await expect(first.locator('[data-review-conflict]')).toBeHidden();
-    await expect(first.locator('[data-review-draft-count]')).toHaveText('1');
+    await expect(first.locator('[data-review-draft-count]')).toHaveText(String(seeded + 1));
     await save(first);
     await expect(first.locator('[data-review-history] li')).toHaveCount(historyCount + 2);
     await first.locator('[data-review-history] button').first().click();
@@ -79,8 +85,9 @@ const assert = require('node:assert/strict');
     await first.mouse.move(region.x + region.width * .7, region.y + region.height * .8, { steps: 5 });
     await first.mouse.up();
     await first.locator('[data-correction-kind]').selectOption('TARGET_REGION');
+    const beforeRegion = await draftCount(first);
     await first.locator('[data-correction-add]').click();
-    await expect(first.locator('[data-review-draft-count]')).toHaveText('1');
+    await expect(first.locator('[data-review-draft-count]')).toHaveText(String(beforeRegion + 1));
     await first.locator('[data-review-reason]').fill('Synthetic browser region');
     await save(first);
     await expect(first.locator('[data-review-history] li')).toHaveCount(historyCount + 3);
@@ -88,8 +95,21 @@ const assert = require('node:assert/strict');
 
     await first.locator('[data-frame-rows] button').first().click();
     const frame = first.locator('[data-frame-ordinal]');
-    const before = Number(await frame.inputValue());
+    // With automatic suggestions shown, arrows follow visible suggestions. Frame-exact stepping is
+    // the contract once suggestions are hidden; the ordinal input itself never moves frames.
+    const predictions = first.locator('[data-preview-predictions]');
+    const suggestedBefore = Number(await frame.inputValue());
+    await predictions.check();
     await first.locator('[data-review-frames]').focus();
+    await first.keyboard.press('ArrowRight');
+    await expect.poll(async () => Number(await frame.inputValue())).toBeGreaterThan(suggestedBefore);
+    const suggestionOrdinal = Number(await frame.inputValue());
+    await expect(first.locator('[data-preview-image]')).toBeVisible({ timeout: 60000 });
+    await expect(first.locator('[data-preview-suggestion-status]')).toContainText('Suggested cursor on frame ' + suggestionOrdinal);
+    await predictions.uncheck();
+    await expect(first.locator('[data-preview-suggestion-status]')).toHaveText('Automatic suggestions hidden.');
+    await first.locator('[data-review-frames]').focus();
+    const before = Number(await frame.inputValue());
     await first.keyboard.press('ArrowRight');
     await expect(frame).toHaveValue(String(before + 1));
     await frame.focus();

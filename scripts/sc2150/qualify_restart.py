@@ -73,10 +73,14 @@ def main():
     if not isinstance(export_before, bytes):
         export_before = json.dumps(export_before, sort_keys=True)
     # Crash only after SQL proves a real HTTP-scheduled preview is still QUEUED.
-    for attempt in range(6):
+    for attempt in range(8):
+        # Equivalent previews coalesce onto an already-published READY row, so each run asks for a
+        # distinct size drawn from a wider band until it obtains a genuinely queued job.
         scheduled = request(f"/sources/{fixture['sourceId']}/analyses/{fixture['analysisId']}/frame-previews", {
-            "requestId": str(uuid.uuid4()), "frameOrdinal": 12, "maxWidth": 129 + attempt, "maxHeight": 81})
-        assert scheduled["state"] == "PENDING", scheduled
+            "requestId": str(uuid.uuid4()), "frameOrdinal": 12,
+            "maxWidth": 96 + int(time.time() * 1000) % 60 + attempt, "maxHeight": 61 + attempt})
+        if scheduled["state"] != "PENDING":
+            continue
         pid = owned_pid()
         os.kill(pid, signal.SIGSTOP)
         row = job_row(scheduled["jobId"])
