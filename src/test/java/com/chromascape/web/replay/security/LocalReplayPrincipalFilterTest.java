@@ -63,9 +63,47 @@ class LocalReplayPrincipalFilterTest {
   }
 
   private static LocalReplayPrincipalFilter filterFor(String profile) {
+    return filterFor(profile, false);
+  }
+
+  private static LocalReplayPrincipalFilter filterFor(String profile, boolean localOperator) {
     StandardEnvironment environment = new StandardEnvironment();
     environment.setActiveProfiles(profile);
-    return new LocalReplayPrincipalFilter(environment);
+    return new LocalReplayPrincipalFilter(environment, localOperator);
+  }
+
+  @Test
+  void fedoraDevelopmentNeedsTheExplicitLocalOperatorFlag() throws Exception {
+    for (boolean enabled : new boolean[] {false, true}) {
+      LocalReplayPrincipalFilter filter = filterFor("fedora-development", enabled);
+      MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/debug/mouse-videos/sources");
+      request.setRemoteAddr("127.0.0.1");
+      AtomicReference<Principal> observed = new AtomicReference<>();
+      filter.doFilter(
+          request,
+          new MockHttpServletResponse(),
+          (servletRequest, servletResponse) ->
+              observed.set(((HttpServletRequest) servletRequest).getUserPrincipal()));
+      if (enabled) {
+        assertEquals(System.getProperty("user.name"), observed.get().getName());
+      } else {
+        assertNull(observed.get());
+      }
+    }
+  }
+
+  @Test
+  void theLocalOperatorFlagNeverAppliesToAnotherProfile() throws Exception {
+    LocalReplayPrincipalFilter filter = filterFor("production", true);
+    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/debug/mouse-videos/sources");
+    request.setRemoteAddr("127.0.0.1");
+    AtomicReference<Principal> observed = new AtomicReference<>();
+    filter.doFilter(
+        request,
+        new MockHttpServletResponse(),
+        (servletRequest, servletResponse) ->
+            observed.set(((HttpServletRequest) servletRequest).getUserPrincipal()));
+    assertNull(observed.get());
   }
 
   @Test
@@ -85,7 +123,7 @@ class LocalReplayPrincipalFilterTest {
         var request = new MockHttpServletRequest("POST", "/api/xrsps/sessions");
         request.setRemoteAddr(peer);
         AtomicReference<Principal> observed = new AtomicReference<>();
-        new LocalReplayPrincipalFilter(environment)
+        new LocalReplayPrincipalFilter(environment, false)
             .doFilter(
                 request,
                 new MockHttpServletResponse(),

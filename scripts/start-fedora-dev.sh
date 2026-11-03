@@ -77,6 +77,7 @@ if local_env.is_file():
         if not (name.startswith(("CHROMASCAPE_SOURCE_", "MICRO6_SOURCE_",
                                  "CHROMASCAPE_MOUSE_VIDEO_"))
                 or name in ("STABILIZATION_AUTH_TOKEN", "STABILIZATION_AUTH_WRITE_TOKEN",
+                            "CHROMASCAPE_LOCAL_OPERATOR_PRINCIPAL_ENABLED",
                             "JAVA_HOME", "GRADLE_USER_HOME")):
             continue
         if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
