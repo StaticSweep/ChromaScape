@@ -16,3 +16,15 @@ Code: `331297cf` (tests + code) and `7d257581` (docs) on `codex/sc274-completion
 not pushed. Focused provenance lane 31/31; full `replayTest` 871 tests with the 16 recorded
 environmental failures plus 10 Docker-unavailable failures. Detail:
 `implementation-evidence-20261103.md`, `verification-evidence-20261103.md`.
+
+### Correction, 21:4xZ — runtime and delivery state after the 22:00Z run
+
+- Docker is running; the SC-274 capture PostgreSQL (15474) and mule registry (8182) are healthy. The
+  catalog-bridge container exited and is recreated against the live executor when needed.
+- 8090 runs the **clean candidate jar** (`6622a23d`, PID 233944); the class overlay is retired.
+- Lease `9a60481e…` / executor `f24979d6…` is live until `2026-11-03T23:28:09Z`, awaiting manual login.
+- SC-274 text narrowed; follow-up **SC-2273** created and linked.
+- **PR #108** open against `main`; the branch is pushed and unmerged.
+- The last pending SC-274 outbox record is replayed (note `note_1793741389129_fc38f89c`) and moved to
+  `synced/sc-274`; none remain pending.
+- Rows unchanged: the Capture and Output rows still need the genuine recording.
