@@ -755,6 +755,8 @@ public class MouseVideoController {
     body.put("errorCode", view.errorCode());
     body.put("errorMessage", view.errorMessage());
     body.put("cleanupReason", view.cleanupReason());
+    body.put("createdAt", view.createdAt());
+    body.put("updatedAt", view.updatedAt());
     return body;
   }
 

@@ -13,16 +13,28 @@ import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-/** Supplies a principal for same-host replay UI calls in the sole local-development profile. */
+/**
+ * Supplies a principal for same-host operator calls from the application host itself.
+ *
+ * <p>Enabled by the sole {@code local-development} profile, or by the Fedora development profile
+ * only when {@code chromascape.local.operator.principal.enabled} is explicitly set. The caller
+ * cannot opt in through a header: the flag is server configuration, the peer must be this machine,
+ * and any real principal always wins.
+ */
 @Component
 public class LocalReplayPrincipalFilter extends OncePerRequestFilter {
 
   private final boolean localDevelopment;
 
-  public LocalReplayPrincipalFilter(Environment environment) {
+  public LocalReplayPrincipalFilter(
+      Environment environment,
+      @org.springframework.beans.factory.annotation.Value(
+              "${chromascape.local.operator.principal.enabled:false}")
+          boolean localOperatorEnabled) {
     var activeProfiles = Arrays.asList(environment.getActiveProfiles());
     this.localDevelopment =
-        activeProfiles.size() == 1 && "local-development".equals(activeProfiles.get(0));
+        (activeProfiles.size() == 1 && "local-development".equals(activeProfiles.get(0)))
+            || (localOperatorEnabled && activeProfiles.contains("fedora-development"));
   }
 
   @Override

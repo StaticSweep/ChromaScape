@@ -265,6 +265,35 @@
     return headers;
   }
 
+  const JOB_STAGE_LABELS = {
+    ACQUIRE: 'fetching media',
+    PROBE: 'reading media facts',
+    INDEX: 'indexing frames',
+    ANALYSIS: 'preparing analysis',
+    ANALYSIS_SAMPLES: 'extracting samples',
+    ANALYSIS_TRACKING: 'tracking cursor',
+    PREVIEW: 'extracting frame',
+    PUBLISH: 'publishing results',
+    DONE: 'done',
+  };
+
+  function jobStageLabel(job) {
+    const stage = job && job.stage;
+    if (!stage) return '';
+    return JOB_STAGE_LABELS[stage] || String(stage).toLowerCase().replace(/_/g, ' ');
+  }
+
+  function jobElapsed(job) {
+    const terminal = ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'NEEDS_RECONCILIATION']
+      .includes(job && job.status);
+    const start = Date.parse((job && job.createdAt) || '');
+    const end = terminal ? Date.parse((job && job.updatedAt) || '') : Date.now();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return '';
+    const seconds = Math.round((end - start) / 1000);
+    if (seconds < 60) return seconds + 's';
+    return Math.floor(seconds / 60) + 'm ' + (seconds % 60) + 's';
+  }
+
   function mount(panel) {
     if (!panel || panel.dataset.mounted) return;
     panel.dataset.mounted = 'true';
@@ -283,6 +312,7 @@
     let capabilities = null;
     let pollTimer = null;
     let inspectorToken = 0;
+    const analysisRequests = new Map();
     let inspectedSourceId = null;
 
     const review = {
@@ -457,7 +487,31 @@
           'Native ticks: unavailable · Physical clicks: unavailable · Training eligibility: false';
       }
       await openReview(source);
+      renderAnalysisControls(source);
       if (review.policy?.predictionAccess && !review.reviewMode.blind) await loadExports(sourceId);
+    }
+
+    function renderAnalysisControls(source) {
+      const button = panel.querySelector('[data-video-analyze]');
+      const status = panel.querySelector('[data-video-analysis-status]');
+      if (!button || !status) return;
+      const allowed = review.policy?.predictionAccess === true;
+      const profile = capabilities?.analysisProfile;
+      const templateReady = !profile || profile.templateUsable !== false;
+      const running = (source.jobs || []).some(job => job.kind === 'ANALYSIS' &&
+        !['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'NEEDS_RECONCILIATION'].includes(job.status));
+      const complete = (source.analyses || []).some(analysis =>
+        analysis.algorithmId === 'visual/v1' && analysis.status === 'COMPLETE');
+      button.disabled = !allowed || !templateReady || running;
+      button.textContent = running ? 'Generating automatic cursor track…' : 'Generate automatic cursor track';
+      status.textContent = !allowed
+        ? 'Automatic suggestions are unavailable during independent held-out review.'
+        : !templateReady
+          ? 'Automatic suggestions are unavailable: ' +
+            (profile.templateProblem || 'no reviewed cursor template is configured on this server.')
+          : running ? 'Processing the clip automatically. No manual labels are required.'
+            : complete ? 'Automatic track ready. Use Show automatic suggestions below to display it.'
+              : 'Generate suggested cursor positions for the clip. Manual correction is optional.';
     }
 
     function renderMetadata(source) {
@@ -485,7 +539,9 @@
       jobs.innerHTML = '';
       for (const job of source.jobs || []) {
         const li = document.createElement('li');
-        li.textContent = job.kind + ' · ' + job.status + ' · ' + job.stage;
+        const detail = [jobStageLabel(job), job.progress ? job.progress + '%' : '', jobElapsed(job)]
+          .filter(Boolean).join(' · ');
+        li.textContent = job.kind + ' · ' + job.status + (detail ? ' · ' + detail : '');
         if (!['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'NEEDS_RECONCILIATION'].includes(job.status)) {
           const cancel = document.createElement('button');
           cancel.type = 'button';
@@ -637,7 +693,7 @@
       // A held-out source is blind from the first render, before any observation is displayed.
       const mode = review.reviewMode;
       mode.forcedBlind = reviewCore
-        ? Boolean(review.policy?.forcedBlind || reviewCore.isHeldoutContext(source.context))
+        ? reviewCore.requiresBlindReview(review.policy, source.context)
         : mode.forcedBlind;
       mode.blind = mode.forcedBlind || Boolean(review.policy?.eligibleModes?.includes('WITHOUT_SUGGESTIONS'));
       const heldoutBlind = panel.querySelector('[data-review-blind-toggle]');
@@ -797,9 +853,44 @@
       }
     }
 
-    function stepFrame(delta) {
+    function suggestionNavigationEnabled() {
+      return Boolean(reviewCore && !review.reviewMode.active && !review.reviewMode.blind &&
+        review.policy?.predictionAccess && panel.querySelector('[data-preview-predictions]')?.checked &&
+        reviewCore.adjacentCursorSuggestion(review.observations, -1, 1) !== null);
+    }
+
+    function renderSuggestionNavigation() {
+      const suggestions = suggestionNavigationEnabled();
+      for (const [selector, delta, label] of [
+        ['[data-frame-prev]', -1, 'Previous'], ['[data-frame-next]', 1, 'Next'],
+      ]) {
+        const button = panel.querySelector(selector);
+        if (!button) continue;
+        const text = label + (suggestions ? ' suggestion' : ' frame');
+        button.textContent = delta < 0 ? '◀ ' + text : text + ' ▶';
+        button.setAttribute('aria-label', text);
+        button.disabled = review.reviewMode.active || (suggestions &&
+          reviewCore.adjacentCursorSuggestion(review.observations, review.selectedOrdinal, delta) === null);
+      }
+    }
+
+    async function stepFrame(delta) {
       if (review.reviewMode.active) return;
       if (!review.frames.length) return;
+      if (suggestionNavigationEnabled()) {
+        const next = reviewCore.adjacentCursorSuggestion(review.observations, review.selectedOrdinal, delta);
+        if (next === null) return;
+        const sourceId = review.sourceId, analysisId = review.analysisId;
+        try {
+          if (!review.byOrdinal.has(next)) await ensureReviewFramesLoaded();
+          if (review.sourceId !== sourceId || review.analysisId !== analysisId) return;
+          selectFrame(next);
+        } catch (error) {
+          if (review.sourceId === sourceId && review.analysisId === analysisId)
+            setReviewStatus('Could not load the next suggestion: ' + error.message);
+        }
+        return;
+      }
       const index = review.frames.findIndex((frame) => frame.ordinal === review.selectedOrdinal);
       const next = Math.min(Math.max(0, (index < 0 ? 0 : index) + delta), review.frames.length - 1);
       selectFrame(review.frames[next].ordinal);
@@ -1112,6 +1203,21 @@
     }
 
     function renderOverlay() {
+      renderSuggestionNavigation();
+      const suggestionStatus = panel.querySelector('[data-preview-suggestion-status]');
+      if (suggestionStatus) {
+        const hidden = review.reviewMode.blind || !panel.querySelector('[data-preview-predictions]')?.checked;
+        const item = hidden ? null : review.observations.find(observation =>
+          observation.kind === 'CURSOR_VISIBILITY' && Number(observation.frameOrdinal) === review.selectedOrdinal);
+        suggestionStatus.textContent = hidden ? 'Automatic suggestions hidden.'
+          : !review.observations.length ? 'No automatic cursor suggestions loaded for this analysis.'
+            : !item ? 'No sampled cursor prediction for this frame. Next suggestion jumps to a frame with a position.'
+              : item.visibility !== 'VISIBLE' ? 'No marker: the cursor position on this frame is uncertain or not visible. Use Next suggestion to continue.'
+                : review.preview.imageOrdinal !== review.selectedOrdinal ? (review.preview.loading
+                  ? 'Loading the exact frame; its suggested cursor position will appear when ready.'
+                  : 'Click Load exact preview to display this frame and its suggested cursor position.')
+                  : 'Suggested cursor on frame ' + review.selectedOrdinal + ': (' + item.x + ', ' + item.y + ') · detector confidence ' + Math.round(Number(item.confidence) * 100) + '%. Next suggestion skips unsampled or uncertain frames.';
+      }
       const svg = panel.querySelector('[data-preview-overlay]');
       if (!svg) return;
       svg.replaceChildren();
@@ -1612,7 +1718,7 @@
       const mode = review.reviewMode;
       // Blind is decided before any observation loads or any overlay renders, so the first
       // held-out frame cannot expose a detector prediction.
-      mode.forcedBlind = Boolean(review.policy?.forcedBlind || reviewCore.isHeldoutContext(review.source && review.source.context));
+      mode.forcedBlind = reviewCore.requiresBlindReview(review.policy, review.source && review.source.context);
       const blind = panel.querySelector('[data-review-blind-toggle]');
       if (blind) {
         blind.disabled = mode.forcedBlind;
@@ -2293,6 +2399,35 @@
     globalThis.addEventListener('beforeunload', event => {
       if (review.dirty || review.pendingSave || review.reviewMode.saving) { event.preventDefault(); event.returnValue = ''; }
     });
+    panel.querySelector('[data-video-analyze]')?.addEventListener('click', async () => {
+      const sourceId = review.sourceId;
+      if (!sourceId || review.policy?.predictionAccess !== true) return;
+      const button = panel.querySelector('[data-video-analyze]');
+      const status = panel.querySelector('[data-video-analysis-status]');
+      button.disabled = true;
+      status.textContent = 'Starting automatic cursor tracking…';
+      try {
+        if (review.reviewMode.active && !(await exitReviewMode())) {
+          throw new Error('Save the current review before starting automatic tracking.');
+        }
+        if (!analysisRequests.has(sourceId)) analysisRequests.set(sourceId, newRequestId());
+        const receipt = await request(base + '/sources/' + sourceId + '/analyses', {
+          method: 'POST',
+          headers: await writeHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ requestId: analysisRequests.get(sourceId), algorithmId: 'visual/v1' }),
+        });
+        analysisRequests.delete(sourceId);
+        if (inspectedSourceId === sourceId) {
+          await inspect(sourceId);
+          if (receipt.jobId) pollJob(sourceId, receipt.jobId);
+        }
+      } catch (error) {
+        if (inspectedSourceId === sourceId) {
+          status.textContent = 'Automatic tracking could not start: ' + error.message;
+          button.disabled = review.policy?.predictionAccess !== true;
+        }
+      }
+    });
     panel.querySelector('[data-review-abandon]')?.addEventListener('click', async () => {
       try {
         if (!review.session || !(await flushReviewSaves())) throw new Error('Save the latest labels before abandoning qualification.');
@@ -2676,5 +2811,7 @@
     addCorrection,
     loadState,
     saveState,
+    jobStageLabel,
+    jobElapsed,
   };
 });

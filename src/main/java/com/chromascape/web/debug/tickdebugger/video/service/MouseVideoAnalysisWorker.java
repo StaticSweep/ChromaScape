@@ -7,6 +7,7 @@ import com.chromascape.web.debug.tickdebugger.video.entity.MouseVideoAnalysis;
 import com.chromascape.web.debug.tickdebugger.video.entity.MouseVideoAnalysisRepository;
 import com.chromascape.web.debug.tickdebugger.video.entity.MouseVideoArtifactRef;
 import com.chromascape.web.debug.tickdebugger.video.entity.MouseVideoArtifactRefRepository;
+import com.chromascape.web.debug.tickdebugger.video.entity.MouseVideoJob;
 import com.chromascape.web.debug.tickdebugger.video.entity.MouseVideoSource;
 import com.chromascape.web.debug.tickdebugger.video.entity.MouseVideoSourceRepository;
 import com.chromascape.web.debug.tickdebugger.video.store.MouseVideoByteStore;
@@ -74,8 +75,27 @@ public class MouseVideoAnalysisWorker {
       List<MouseVideoFinalizationService.ArtifactSpec> artifacts,
       String coverage) {}
 
+  /**
+   * Reports completed stage work to the owning job. Values are bounded percentages of work already
+   * done; the caller records them under the job's lease fence and may ignore them.
+   */
+  @FunctionalInterface
+  public interface Progress {
+    void report(String stage, int percent);
+  }
+
   public Outcome run(
       MouseVideoCancellation cancellation, UUID sourceId, UUID analysisId, Path workspace)
+      throws IOException, InterruptedException {
+    return run(cancellation, sourceId, analysisId, workspace, (stage, percent) -> {});
+  }
+
+  public Outcome run(
+      MouseVideoCancellation cancellation,
+      UUID sourceId,
+      UUID analysisId,
+      Path workspace,
+      Progress progress)
       throws IOException, InterruptedException {
     Files.createDirectories(workspace);
     MouseVideoSource source =
@@ -114,6 +134,7 @@ public class MouseVideoAnalysisWorker {
       throw new MouseVideoException(
           MouseVideoException.CODE_DECODER_FAILED, "Analysis probe did not produce usable facts");
     }
+    progress.report(MouseVideoJob.STAGE_ANALYSIS, 25);
     int sourceWidth = MouseVideoPreviewWorker.displayWidth(probe);
     int sourceHeight = MouseVideoPreviewWorker.displayHeight(probe);
 
@@ -164,6 +185,7 @@ public class MouseVideoAnalysisWorker {
 
     MouseVideoFrameIndexService.FrozenFrameIndex frozen =
         readIndex(byteStore.locate(index.getChecksum()).orElseThrow());
+    progress.report(MouseVideoJob.STAGE_ANALYSIS, 30);
     int step =
         MouseVideoSampleStride.compute(
             frozen, properties.getVisualSampleFps(), properties.getMaxVisualFrames());
@@ -173,8 +195,12 @@ public class MouseVideoAnalysisWorker {
       throw new MouseVideoException(
           MouseVideoException.CODE_DECODER_FAILED, "No source frames are available for analysis");
     }
+    // Reported before extraction so the long decode phase is visibly "extracting samples" instead
+    // of an apparently stalled ANALYSIS progress.
+    progress.report(MouseVideoJob.STAGE_ANALYSIS_SAMPLES, 40);
     extractSamples(cancellation, media, frames, step);
     Path template = frozenTemplate(analysis, workspace);
+    progress.report(MouseVideoJob.STAGE_ANALYSIS_TRACKING, 45);
     MouseVideoVisualAnalyzer.Result result =
         analyzer.analyze(
             frozen.frames(),
@@ -184,7 +210,10 @@ public class MouseVideoAnalysisWorker {
             sourceHeight,
             probe.durationSeconds(),
             template,
-            cancellation::isCancelled);
+            cancellation::isCancelled,
+            percent ->
+                progress.report(MouseVideoJob.STAGE_ANALYSIS_TRACKING, 45 + (percent * 40) / 100));
+    progress.report(MouseVideoJob.STAGE_ANALYSIS_TRACKING, 85);
 
     String observationsJson =
         publishJson(
@@ -301,10 +330,24 @@ public class MouseVideoAnalysisWorker {
             null,
             0);
     if (result.exitCode() != 0 || !result.outputComplete()) {
+      String code = samplingFailureCode(result);
       throw new MouseVideoException(
-          MouseVideoException.CODE_DECODER_FAILED,
-          "Visual sampling failed (exit " + result.exitCode() + ")");
+          code,
+          MouseVideoException.CODE_QUOTA_EXCEEDED.equals(code)
+              ? "Visual sampling exceeded the bounded job storage; no output was published"
+              : "Visual sampling failed (exit " + result.exitCode() + ")");
     }
+  }
+
+  /**
+   * Distinguishes a bounded-storage exhaustion from an undecodable source. The decoder's private
+   * stderr is inspected only to choose the stable error contract; it is never exposed.
+   */
+  static String samplingFailureCode(MouseVideoProcessRunner.Result result) {
+    String stderr = result.stderr() == null ? "" : result.stderr();
+    return stderr.contains("No space left on device") || stderr.contains("ENOSPC")
+        ? MouseVideoException.CODE_QUOTA_EXCEEDED
+        : MouseVideoException.CODE_DECODER_FAILED;
   }
 
   /**

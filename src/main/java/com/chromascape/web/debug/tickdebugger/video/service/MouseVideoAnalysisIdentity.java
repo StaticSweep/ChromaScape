@@ -27,11 +27,43 @@ public class MouseVideoAnalysisIdentity {
 
   private final MouseVideoProperties properties;
   private final ObjectMapper mapper;
+  private final MouseVideoCursorTemplate template;
 
   /** Creates the identity authority; callers must share the scheduler's mapper configuration. */
   public MouseVideoAnalysisIdentity(MouseVideoProperties properties, ObjectMapper mapper) {
     this.properties = properties;
     this.mapper = mapper;
+    this.template = new MouseVideoCursorTemplate(properties);
+  }
+
+  /**
+   * The effective pack the server is configured with, or {@code null} when no pack is selected.
+   * This is the only pack identity an analysis may be scheduled under.
+   */
+  public String effectiveTemplatePackId() {
+    String configured = properties.getVisualCursorTemplatePackId();
+    return configured == null || configured.isBlank() ? null : configured.trim();
+  }
+
+  /**
+   * Resolves a caller's pack label to the effective configured pack. Omitting the pack selects the
+   * configured pack; naming a different pack is refused rather than recorded as if those bytes had
+   * been used. Callers that omit the pack and callers that name it therefore share one identity.
+   */
+  public String resolveTemplatePackId(String requested) {
+    String effective = effectiveTemplatePackId();
+    String value = requested == null ? "" : requested.trim();
+    if (value.isEmpty()) {
+      return effective;
+    }
+    if (!value.equals(effective)) {
+      throw new MouseVideoException(
+          MouseVideoException.CODE_INVALID_REQUEST,
+          effective == null
+              ? "No cursor-template pack is configured; omit templatePackId"
+              : "Unsupported cursor-template pack; the configured pack is " + effective);
+    }
+    return effective;
   }
 
   /** Digest of the algorithm, template content and every output-affecting setting. */
@@ -93,15 +125,22 @@ public class MouseVideoAnalysisIdentity {
 
   /** Content address of the configured cursor template, or {@code null} when none is usable. */
   public String cursorTemplateChecksum() {
-    String template = properties.getVisualCursorTemplate();
-    if (template == null || template.isBlank()) {
-      return null;
-    }
-    Path path = Path.of(template);
-    if (!Files.isRegularFile(path)) {
-      return null;
-    }
-    return hashFile(path);
+    MouseVideoCursorTemplate.Status status = template.inspect();
+    return status.usable() ? "sha256:" + status.checksum() : null;
+  }
+
+  /**
+   * Content address scheduling must freeze. Unlike {@link #cursorTemplateChecksum()}, a configured
+   * template that is missing or no longer matches its pinned digest fails closed instead of
+   * silently producing an analysis without cursor suggestions.
+   */
+  public String requireCursorTemplateChecksum() {
+    return template.requireChecksum();
+  }
+
+  /** Provisioning state of the configured template, for capability reporting and diagnostics. */
+  public MouseVideoCursorTemplate.Status templateStatus() {
+    return template.inspect();
   }
 
   /**

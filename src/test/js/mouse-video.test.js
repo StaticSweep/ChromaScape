@@ -6,6 +6,55 @@ const assert = require('node:assert/strict');
 const api = require('../../main/resources/static/js/mouse-video.js');
 const reviewCore = require('../../main/resources/static/js/mouse-video-review-core.js');
 
+test('suggestion navigation skips unsampled and uncertain frames without inventing positions', () => {
+  const observations = [
+    { kind: 'CURSOR_VISIBILITY', visibility: 'VISIBLE', frameOrdinal: '9', x: '10', y: '20' },
+    { kind: 'CURSOR_VISIBILITY', visibility: 'VISIBLE', frameOrdinal: '0', x: 10, y: 20 },
+    { kind: 'CURSOR_VISIBILITY', visibility: 'VISIBLE', frameOrdinal: '3', x: 10, y: 20 },
+    { kind: 'CURSOR_VISIBILITY', visibility: 'AMBIGUOUS', frameOrdinal: '6' },
+    { kind: 'CURSOR_VISIBILITY', visibility: 'VISIBLE', frameOrdinal: '12', x: null, y: 20 },
+  ];
+  assert.equal(reviewCore.adjacentCursorSuggestion(observations, 0, 1), 3);
+  assert.equal(reviewCore.adjacentCursorSuggestion(observations, 3, 1), 9);
+  assert.equal(reviewCore.adjacentCursorSuggestion(observations, 9, -1), 3);
+  assert.equal(reviewCore.adjacentCursorSuggestion(observations, 1, 1), 3);
+  assert.equal(reviewCore.adjacentCursorSuggestion(observations, 1, -1), 0);
+  assert.equal(reviewCore.adjacentCursorSuggestion(observations, 0, -1), null);
+  assert.equal(reviewCore.adjacentCursorSuggestion(observations, 9, 1), null);
+  assert.equal(reviewCore.adjacentCursorSuggestion([], 0, 1), null);
+});
+
+test('job progress reports the real stage and elapsed time', () => {
+  assert.equal(api.jobStageLabel({ stage: 'ANALYSIS_SAMPLES' }), 'extracting samples');
+  assert.equal(api.jobStageLabel({ stage: 'ANALYSIS_TRACKING' }), 'tracking cursor');
+  assert.equal(api.jobStageLabel({ stage: 'CUSTOM_STAGE' }), 'custom stage');
+  assert.equal(api.jobStageLabel({}), '');
+  const job = {
+    status: 'SUCCEEDED',
+    createdAt: '2026-11-02T10:00:00Z',
+    updatedAt: '2026-11-02T10:02:05Z',
+  };
+  assert.equal(api.jobElapsed(job), '2m 5s');
+  assert.equal(
+    api.jobElapsed({
+      status: 'SUCCEEDED',
+      createdAt: '2026-11-02T10:00:00Z',
+      updatedAt: '2026-11-02T10:00:07Z',
+    }),
+    '7s',
+  );
+  assert.equal(api.jobElapsed({ status: 'RUNNING' }), '');
+});
+
+test('server policy controls blind review after withdrawal without weakening held-out policy', () => {
+  const oldContext = 'YouTube · channel · clip · heldout · full';
+  assert.equal(reviewCore.requiresBlindReview({ contract: 'review-policy/v1', forcedBlind: false }, oldContext), false);
+  assert.equal(reviewCore.requiresBlindReview({ contract: 'review-policy/v1', forcedBlind: true }, 'assisted'), true);
+  assert.equal(reviewCore.requiresBlindReview(null, oldContext), true);
+  assert.equal(reviewCore.requiresBlindReview({ contract: 'unknown', forcedBlind: false }, oldContext), true);
+  assert.equal(reviewCore.requiresBlindReview({ contract: 'review-policy/v1' }, oldContext), true);
+});
+
 function framesAt(fps, count, from) {
   const start = from || 0;
   return Array.from({ length: count }, (_, index) => ({

@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ChromaScape — External video import</title>
     <link rel="stylesheet" href="/css/mouse-research.css?v=10" />
-    <script src="/js/mouse-video-review-core.js?v=4" defer></script>
-    <script src="/js/mouse-video.js?v=8" defer></script>
+    <link rel="stylesheet" href="/css/mouse-video-review-guide.css?v=1" />
+    <script src="/js/mouse-video-review-core.js?v=6" defer></script>
+    <script src="/js/mouse-video.js?v=11" defer></script>
   </head>
   <body class="mouse-page">
     <main class="mouse-workspace" data-mouse-video>
@@ -109,6 +110,8 @@
       >
         <h2 id="video-review-heading">Frame review</h2>
         <p data-review-status role="status" aria-live="polite"></p>
+        <button type="button" data-video-analyze disabled>Generate automatic cursor track</button>
+        <p class="mouse-video-frame-note" data-video-analysis-status role="status" aria-live="polite"></p>
 
         <div class="mouse-research-filters">
           <label>Range start <input type="number" min="0" value="0" data-review-range-start /></label>
@@ -168,7 +171,7 @@
               <button type="button" data-preview-retry>Load exact preview</button>
               <label class="mouse-video-preview-toggle">
                 <input type="checkbox" data-preview-predictions checked />
-                Show original predictions
+                Show automatic suggestions
               </label>
               <label class="mouse-video-preview-toggle">
                 Interaction
@@ -179,17 +182,40 @@
               </label>
               <button type="button" data-preview-clear>Clear overlay</button>
             </div>
-            <div class="mouse-video-preview-stage" data-preview-stage>
-              <img data-preview-image alt="Exact source frame preview" hidden />
-              <svg
-                data-preview-overlay
-                class="mouse-video-preview-overlay"
-                role="img"
-                aria-label="Reviewed corrections over the exact source frame"
-              ></svg>
-              <p class="mouse-video-preview-empty" data-preview-empty>
-                Select a frame to request an exact source preview.
-              </p>
+            <p class="mouse-video-frame-note" data-preview-suggestion-status role="status" aria-live="polite"></p>
+            <div class="mouse-video-preview-layout">
+              <div class="mouse-video-preview-stage" data-preview-stage>
+                <img data-preview-image alt="Exact source frame preview" hidden />
+                <svg
+                  data-preview-overlay
+                  class="mouse-video-preview-overlay"
+                  role="img"
+                  aria-label="Reviewed corrections over the exact source frame"
+                ></svg>
+                <p class="mouse-video-preview-empty" data-preview-empty>
+                  Select a frame to request an exact source preview.
+                </p>
+              </div>
+              <aside class="mouse-video-label-guide" aria-labelledby="mouse-video-label-guide-title">
+                <h3 id="mouse-video-label-guide-title">Label this frame</h3>
+                <p>Move your own mouse pointer outside the image first. Look for the cursor recorded in the video.</p>
+                <ul class="mouse-video-label-choices">
+                  <li>
+                    <span class="mouse-video-label-key">Click</span>
+                    <div><strong>Cursor visible</strong><p>Click precisely on the arrow tip inside the image.</p></div>
+                  </li>
+                  <li>
+                    <kbd>H</kbd>
+                    <div><strong>No cursor visible</strong><p>Press H if you cannot see a cursor in this frame.</p></div>
+                  </li>
+                  <li>
+                    <kbd>A</kbd>
+                    <div><strong>Too unclear to judge</strong><p>Press A for blur, overlap or uncertainty. Avoid guessing.</p></div>
+                  </li>
+                </ul>
+                <p class="mouse-video-label-next">Each label moves to the next item automatically. Wait for its exact preview to load.</p>
+                <p><kbd>Z</kbd> Undo label · <kbd>←</kbd> <kbd>→</kbd> Previous / next item</p>
+              </aside>
             </div>
             <p data-preview-status role="status" aria-live="polite"></p>
             <p class="mouse-video-frame-note" data-preview-identity></p>

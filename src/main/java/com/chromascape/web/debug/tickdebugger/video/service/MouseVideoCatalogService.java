@@ -91,11 +91,9 @@ public class MouseVideoCatalogService {
                 && !properties.getYoutubeDownloader().isBlank()));
     body.put("formats", List.of("mp4", "webm", "mkv", "mov", "avi"));
     boolean ffmpeg = derivativeWorker.ffmpegAvailable();
-    boolean cursorTemplate =
-        properties.getVisualCursorTemplate() != null
-            && !properties.getVisualCursorTemplate().isBlank()
-            && java.nio.file.Files.isRegularFile(
-                java.nio.file.Path.of(properties.getVisualCursorTemplate()));
+    MouseVideoCursorTemplate.Status template = new MouseVideoCursorTemplate(properties).inspect();
+    boolean cursorTemplate = template.usable();
+    body.put("analysisProfile", analysisProfile(template));
     body.put(
         "methods",
         List.of(
@@ -123,7 +121,10 @@ public class MouseVideoCatalogService {
     body.put("features", features);
     List<String> unknowns = new ArrayList<>();
     if (!cursorTemplate) {
-      unknowns.add("cursor-tracking: unavailable until a reviewed cursor template is configured");
+      unknowns.add(
+          template.state() == MouseVideoCursorTemplate.State.NOT_CONFIGURED
+              ? "cursor-tracking: unavailable until a reviewed cursor template is configured"
+              : "cursor-tracking: unavailable — " + template.problem());
     }
     if (!ffmpeg) {
       unknowns.add("exact-frame-preview: unavailable because ffmpeg is not available");
@@ -144,6 +145,53 @@ public class MouseVideoCatalogService {
     return body;
   }
 
+  /**
+   * Effective, server-owned analysis profile: the settings, thresholds and template bytes a newly
+   * scheduled analysis will actually use. Exposing the resolved pack and its digest lets an
+   * operator verify provisioning instead of inferring it from a request label.
+   */
+  private Map<String, Object> analysisProfile(MouseVideoCursorTemplate.Status template) {
+    Map<String, Object> profile = new LinkedHashMap<>();
+    profile.put("algorithmId", MouseVideoVisualAnalyzer.ALGORITHM_ID);
+    profile.put("cursorMethod", MouseVideoCursorTracker.METHOD);
+    profile.put("toolchainPin", properties.getVisualToolchainPin());
+    String packId = properties.getVisualCursorTemplatePackId();
+    profile.put("templatePackId", packId == null || packId.isBlank() ? null : packId.trim());
+    profile.put("templateState", template.state().name());
+    profile.put("templateSha256", template.checksum());
+    profile.put("templatePinnedSha256", template.expectedSha256());
+    profile.put("templateUsable", template.usable());
+    if (template.problem() != null) {
+      profile.put("templateProblem", template.problem());
+    }
+    profile.put("sampleFps", Math.max(1.0d, Math.min(60.0d, properties.getVisualSampleFps())));
+    profile.put("sampleMaxWidth", properties.getVisualSampleMaxWidth());
+    profile.put("maxVisualFrames", properties.getMaxVisualFrames());
+    profile.put(
+        "hotspot",
+        Map.of(
+            "x", properties.getVisualCursorHotspotX(),
+            "y", properties.getVisualCursorHotspotY()));
+    Map<String, Object> thresholds = new LinkedHashMap<>();
+    thresholds.put("cursorMinScore", properties.getVisualCursorMinScore());
+    thresholds.put("cursorStartScore", properties.getVisualCursorStartScore());
+    thresholds.put("cursorMinGain", properties.getVisualCursorMinGain());
+    thresholds.put("cursorMaxGain", properties.getVisualCursorMaxGain());
+    thresholds.put("cursorMinContrast", properties.getVisualCursorMinContrast());
+    thresholds.put("cursorAmbiguityMargin", properties.getVisualCursorAmbiguityMargin());
+    thresholds.put("cursorStaticMaxDelta", properties.getVisualCursorStaticMaxDelta());
+    thresholds.put("pauseMinMillis", properties.getPauseMinMillis());
+    thresholds.put("pauseMaxDelta", properties.getPauseMaxDelta());
+    thresholds.put("cutMinDelta", properties.getCutMinDelta());
+    thresholds.put("activityMinDelta", properties.getActivityMinDelta());
+    profile.put("thresholds", thresholds);
+    Map<String, Object> storage = new LinkedHashMap<>();
+    storage.put("maxJobDiskBytes", properties.getMaxJobDiskBytes());
+    storage.put("jobVolumeBytes", properties.getMaxJobDiskBytes() / 2);
+    profile.put("storage", storage);
+    return profile;
+  }
+
   private Map<String, Object> limitsBlock() {
     Map<String, Object> limits = new LinkedHashMap<>();
     limits.put("maxUploadBytes", properties.getMaxUploadBytes());
@@ -153,7 +201,7 @@ public class MouseVideoCatalogService {
     limits.put("maxFps", properties.getMaxFps());
     limits.put("maxDecodeFrames", properties.getMaxDecodeFrames());
     limits.put("maxSourceDiskBytes", properties.getMaxSourceDiskBytes());
-    limits.put("jobVolumeBytes", properties.getJobVolumeBytes());
+    limits.put("jobVolumeBytes", properties.getMaxJobDiskBytes() / 2);
     limits.put("cpuQuotaPercent", properties.getCpuQuotaPercent());
     limits.put("tasksMax", properties.getTasksMax());
     limits.put("memoryMaxBytes", properties.getMaxRssBytes());

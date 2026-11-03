@@ -20,13 +20,17 @@ def main():
     parser.add_argument('--server-output', type=Path, required=True, help='Owned server-b output')
     parser.add_argument('--classpath', type=Path, required=True)
     parser.add_argument('--java', required=True)
+    parser.add_argument('--port', type=int, default=18191,
+                        help='Owned server-b port; must differ from the 18190 server-a port')
     args = parser.parse_args()
     assert args.database.startswith('sc2150_') and args.database.replace('_', '').isalnum()
     assert args.server_output.name == 'server-b'
+    assert 18190 <= args.port <= 18199 and args.port != 18190, args.port
     fixture = json.loads((args.evidence / 'fixture-results.json').read_text())[0]
     base_path = '/api/debug/mouse-videos'
 
-    def request(path, port=18191, body=None, raw=None, headers=None):
+    def request(path, port=None, body=None, raw=None, headers=None):
+        port = args.port if port is None else port
         headers = dict(headers or {})
         if body is not None or raw is not None:
             headers['X-Mouse-Video-Nonce'] = request('/write-nonce', port)[1]['nonce']
@@ -47,7 +51,10 @@ def main():
             '-v', 'ON_ERROR_STOP=1', '-U', 'chromascape', '-d', args.database], input=statement.encode()).decode().strip()
 
     def stop():
-        pid = int((args.server_output / 'server.pid').read_text())
+        pid_file = args.server_output / 'server.pid'
+        if not pid_file.exists():
+            return
+        pid = int(pid_file.read_text())
         proc = Path(f'/proc/{pid}/cmdline')
         if not proc.exists() or not proc.read_bytes():
             return
@@ -65,7 +72,7 @@ def main():
         stop()
         command = ['python3', 'scripts/sc2150/start_verification.py', '--classpath', str(args.classpath),
             '--java', args.java, '--output', str(args.server_output), '--database', args.database,
-            '--port', '18191', '--owner', 'sc2150-fedora-a']
+            '--port', str(args.port), '--owner', 'sc2150-fedora-a']
         if disabled:
             command.append('--disable-workers')
         label = 'disabled' if disabled else 'competing'
@@ -90,7 +97,7 @@ def main():
     print('Feature disabled: existing reads preserved, all three scheduling routes refused', flush=True)
     start(False)
     def schedule(index):
-        code, receipt = request(analysis + '/frame-previews', 18190 + index % 2,
+        code, receipt = request(analysis + '/frame-previews', (18190, args.port)[index % 2],
             body={'requestId': str(uuid.uuid4()), 'frameOrdinal': 20+index, 'maxWidth': 101+index, 'maxHeight': 79})
         assert code in (200,202), (code, receipt)
         return receipt

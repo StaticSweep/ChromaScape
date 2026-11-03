@@ -118,14 +118,14 @@ public class MouseVideoSchedulingService {
           MouseVideoException.CODE_INVALID_REQUEST,
           "Only the server-owned " + ANALYSIS_METHOD + " analysis method is available");
     }
+    String templatePack = identity.resolveTemplatePackId(templatePackId);
     try (var publication = byteStore.publicationLease()) {
       try {
         return transactions.execute(
-            status -> createAnalysis(owner, sourceId, requestId, algorithm, templatePackId));
+            status -> createAnalysis(owner, sourceId, requestId, algorithm, templatePack));
       } catch (DataIntegrityViolationException raced) {
         return transactions.execute(
-            status ->
-                existingAnalysisReceipt(owner, sourceId, requestId, algorithm, templatePackId));
+            status -> existingAnalysisReceipt(owner, sourceId, requestId, algorithm, templatePack));
       }
     }
   }
@@ -182,7 +182,7 @@ public class MouseVideoSchedulingService {
     lockAdmission(owner);
     analyses.lockPublication();
     MouseVideoSource source = requireQualifiedSource(owner, sourceId);
-    String templateChecksum = identity.cursorTemplateChecksum();
+    String templateChecksum = identity.requireCursorTemplateChecksum();
     String configDigest =
         identity.configDigest(
             algorithm, templatePackId, source.getVerifiedMediaType(), templateChecksum);
@@ -297,7 +297,7 @@ public class MouseVideoSchedulingService {
   private Receipt existingAnalysisReceipt(
       String owner, UUID sourceId, String requestId, String algorithm, String templatePackId) {
     MouseVideoSource source = requireQualifiedSource(owner, sourceId);
-    String templateChecksum = identity.cursorTemplateChecksum();
+    String templateChecksum = identity.requireCursorTemplateChecksum();
     String configDigest =
         identity.configDigest(
             algorithm, templatePackId, source.getVerifiedMediaType(), templateChecksum);

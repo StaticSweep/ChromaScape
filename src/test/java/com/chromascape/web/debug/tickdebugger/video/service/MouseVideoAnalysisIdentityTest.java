@@ -102,6 +102,56 @@ class MouseVideoAnalysisIdentityTest {
     assertThat(identity.configDigest("visual/v1", null, "video/mp4")).isNotEqualTo(before);
   }
 
+  @Test
+  void omittedPackResolvesToTheConfiguredPackAndSharesItsIdentity() {
+    properties.setVisualCursorTemplatePackId("clip-arrow/v1");
+    assertThat(identity.resolveTemplatePackId(null)).isEqualTo("clip-arrow/v1");
+    assertThat(identity.resolveTemplatePackId("  ")).isEqualTo("clip-arrow/v1");
+    assertThat(identity.resolveTemplatePackId("clip-arrow/v1")).isEqualTo("clip-arrow/v1");
+    assertThat(
+            identity.configDigest("visual/v1", identity.resolveTemplatePackId(null), "video/mp4"))
+        .isEqualTo(
+            identity.configDigest(
+                "visual/v1", identity.resolveTemplatePackId("clip-arrow/v1"), "video/mp4"));
+  }
+
+  @Test
+  void unsupportedPackIsRefusedInsteadOfImplyingOtherBytes() {
+    assertThatThrownBy(() -> identity.resolveTemplatePackId("another-pack"))
+        .isInstanceOf(MouseVideoException.class)
+        .extracting(error -> ((MouseVideoException) error).getCode())
+        .isEqualTo(MouseVideoException.CODE_INVALID_REQUEST);
+    properties.setVisualCursorTemplatePackId("clip-arrow/v1");
+    assertThatThrownBy(() -> identity.resolveTemplatePackId("another-pack"))
+        .isInstanceOf(MouseVideoException.class)
+        .extracting(error -> ((MouseVideoException) error).getCode())
+        .isEqualTo(MouseVideoException.CODE_INVALID_REQUEST);
+  }
+
+  @Test
+  void pinnedTemplateDigestMustMatchTheProvisionedBytes() throws Exception {
+    String actual = identity.templateStatus().checksum();
+    properties.setVisualCursorTemplateSha256(actual);
+    assertThat(identity.requireCursorTemplateChecksum()).isEqualTo("sha256:" + actual);
+
+    properties.setVisualCursorTemplateSha256("b".repeat(64));
+    assertThatThrownBy(() -> identity.requireCursorTemplateChecksum())
+        .isInstanceOf(MouseVideoException.class)
+        .extracting(error -> ((MouseVideoException) error).getCode())
+        .isEqualTo(MouseVideoException.CODE_CHECKSUM_MISMATCH);
+    assertThat(identity.cursorTemplateChecksum()).isNull();
+  }
+
+  @Test
+  void pinnedTemplateThatIsMissingFailsProvisioning() throws Exception {
+    properties.setVisualCursorTemplateSha256("c".repeat(64));
+    Files.delete(template);
+    assertThatThrownBy(() -> identity.requireCursorTemplateChecksum())
+        .isInstanceOf(MouseVideoException.class)
+        .extracting(error -> ((MouseVideoException) error).getCode())
+        .isEqualTo(MouseVideoException.CODE_SOURCE_UNAVAILABLE);
+  }
+
   private void assertIdentityChanged(MouseVideoAnalysis analysis, String mediaType) {
     assertThatThrownBy(() -> identity.requireUnchanged(analysis, mediaType))
         .isInstanceOf(MouseVideoException.class)

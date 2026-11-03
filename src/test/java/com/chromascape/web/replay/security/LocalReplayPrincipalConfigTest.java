@@ -15,7 +15,8 @@ class LocalReplayPrincipalConfigTest {
 
   @Test
   void coversReplayRecordingsAndExternalVideoApi() {
-    LocalReplayPrincipalFilter filter = new LocalReplayPrincipalFilter(new StandardEnvironment());
+    LocalReplayPrincipalFilter filter =
+        new LocalReplayPrincipalFilter(new StandardEnvironment(), false);
 
     var registration =
         new LocalReplayPrincipalConfig().localReplayPrincipalFilterRegistration(filter);

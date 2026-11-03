@@ -24,6 +24,10 @@ def main():
     parser.add_argument("phase", choices=("prepare", "capacity"))
     parser.add_argument("--database", required=True)
     parser.add_argument("--evidence", type=Path, required=True)
+    parser.add_argument("--owner-port", type=int, default=18191,
+                        help="independent-owner instance port (expects the source to be invisible)")
+    parser.add_argument("--anonymous-port", type=int, default=18192,
+                        help="anonymous verification-profile instance port (expects 401)")
     args = parser.parse_args()
     assert args.database.startswith("sc2150_") and args.database.replace("_", "").isalnum()
     evidence = args.evidence
@@ -86,12 +90,12 @@ def main():
             paths.append("/exports/" + exports[0]["id"])
         results = []
         for path in paths:
-            for port, expected in ((18191, 404), (18192, 401)):
+            for port, expected in ((args.owner_port, 404), (args.anonymous_port, 401)):
                 status, body = request(path, port)
                 assert status == expected, (path, port, status, body)
                 assert source["originalChecksum"] not in json.dumps(body), (path, body)
                 results.append({"path": path, "port": port, "status": status})
-        assert request("/sources", 18191)[1]["items"] == []
+        assert request("/sources", args.owner_port)[1]["items"] == []
         (evidence / "access-results.json").write_text(json.dumps(results, indent=2) + "\n")
         ledger = {"unexpired": [seed(), seed()], "expired": seed(expired=True)}
         (evidence / "lifecycle-fixtures.json").write_text(json.dumps(ledger, indent=2) + "\n")

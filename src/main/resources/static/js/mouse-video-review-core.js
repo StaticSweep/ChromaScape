@@ -774,6 +774,24 @@
     return /·\s*heldout\s*·/i.test(String(context == null ? '' : context));
   }
 
+  /** Verified server policy takes precedence over historical import descriptions. */
+  function requiresBlindReview(policy, context) {
+    if (policy && policy.contract === 'review-policy/v1' && typeof policy.forcedBlind === 'boolean') {
+      return policy.forcedBlind;
+    }
+    return isHeldoutContext(context);
+  }
+
+  function adjacentCursorSuggestion(observations, ordinal, direction) {
+    const ordinals = Array.from(new Set((observations || [])
+      .filter(item => item && item.kind === 'CURSOR_VISIBILITY' && item.visibility === 'VISIBLE' &&
+        item.x != null && item.y != null && Number.isFinite(Number(item.x)) && Number.isFinite(Number(item.y)))
+      .map(item => Number(item.frameOrdinal))
+      .filter(value => Number.isInteger(value) && value >= 0))).sort((a, b) => a - b);
+    if (direction < 0) ordinals.reverse();
+    return ordinals.find(value => direction < 0 ? value < ordinal : value > ordinal) ?? null;
+  }
+
   function reviewReason(options) {
     const seed = Number(options && options.seed) >>> 0;
     return options && options.blind && !options.exposed
@@ -849,6 +867,8 @@
     createSaveQueue,
     countLabels,
     isHeldoutContext,
+    requiresBlindReview,
+    adjacentCursorSuggestion,
     reviewReason,
     autosaveDue,
     reviewStatusText,
