@@ -76,7 +76,8 @@ class LocalReplayPrincipalFilterTest {
   void fedoraDevelopmentNeedsTheExplicitLocalOperatorFlag() throws Exception {
     for (boolean enabled : new boolean[] {false, true}) {
       LocalReplayPrincipalFilter filter = filterFor("fedora-development", enabled);
-      MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/debug/mouse-videos/sources");
+      MockHttpServletRequest request =
+          new MockHttpServletRequest("GET", "/api/debug/mouse-videos/sources");
       request.setRemoteAddr("127.0.0.1");
       AtomicReference<Principal> observed = new AtomicReference<>();
       filter.doFilter(
@@ -95,7 +96,8 @@ class LocalReplayPrincipalFilterTest {
   @Test
   void theLocalOperatorFlagNeverAppliesToAnotherProfile() throws Exception {
     LocalReplayPrincipalFilter filter = filterFor("production", true);
-    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/debug/mouse-videos/sources");
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("GET", "/api/debug/mouse-videos/sources");
     request.setRemoteAddr("127.0.0.1");
     AtomicReference<Principal> observed = new AtomicReference<>();
     filter.doFilter(

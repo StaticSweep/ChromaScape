@@ -85,9 +85,8 @@ class MouseVideoWorkspaceTest {
                               + "test ! -e /bypass && test ! -e /dev/bypass || exit 3; "
                               + "echo ok > "
                               + workspace.path().resolve("result")
-                              + "; "
-                              + "dd if=/dev/zero of=/tmp/fill bs=1M count=20 status=none 2>/dev/null; "
-                              + "test $? -ne 0"),
+                              + "; dd if=/dev/zero of=/tmp/fill bs=1M count=20 status=none"
+                              + " 2>/dev/null; test $? -ne 0"),
                       workspace.path(),
                       List.of()))
               .start();
