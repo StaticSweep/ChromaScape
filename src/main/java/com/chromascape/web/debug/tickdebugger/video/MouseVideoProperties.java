@@ -190,7 +190,6 @@ public class MouseVideoProperties {
 
   private int cpuQuotaPercent = 200;
   private int tasksMax = 64;
-  private long jobVolumeBytes = 4L * 1024 * 1024 * 1024;
 
   public String getVisualToolchainPin() {
     return visualToolchainPin;
@@ -406,14 +405,6 @@ public class MouseVideoProperties {
 
   public void setTasksMax(int tasksMax) {
     this.tasksMax = tasksMax;
-  }
-
-  public long getJobVolumeBytes() {
-    return jobVolumeBytes;
-  }
-
-  public void setJobVolumeBytes(long jobVolumeBytes) {
-    this.jobVolumeBytes = jobVolumeBytes;
   }
 
   public Path rootPath() {

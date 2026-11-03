@@ -187,7 +187,7 @@ public class MouseVideoCatalogService {
     profile.put("thresholds", thresholds);
     Map<String, Object> storage = new LinkedHashMap<>();
     storage.put("maxJobDiskBytes", properties.getMaxJobDiskBytes());
-    storage.put("jobVolumeBytes", properties.getJobVolumeBytes());
+    storage.put("jobVolumeBytes", properties.getMaxJobDiskBytes() / 2);
     profile.put("storage", storage);
     return profile;
   }
@@ -201,7 +201,7 @@ public class MouseVideoCatalogService {
     limits.put("maxFps", properties.getMaxFps());
     limits.put("maxDecodeFrames", properties.getMaxDecodeFrames());
     limits.put("maxSourceDiskBytes", properties.getMaxSourceDiskBytes());
-    limits.put("jobVolumeBytes", properties.getJobVolumeBytes());
+    limits.put("jobVolumeBytes", properties.getMaxJobDiskBytes() / 2);
     limits.put("cpuQuotaPercent", properties.getCpuQuotaPercent());
     limits.put("tasksMax", properties.getTasksMax());
     limits.put("memoryMaxBytes", properties.getMaxRssBytes());
