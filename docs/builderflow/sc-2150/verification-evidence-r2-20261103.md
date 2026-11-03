@@ -251,3 +251,62 @@ checkout plus `.env.local` and the private template/media prerequisites.
 - Cancelling frees admission immediately after confirmed cleanup; the fenced reconciliation
   path deliberately does **not** re-run work on its own.
 - Detector output coverage (592/597 visible) is output coverage, not recall or accuracy.
+
+## R1.3 assisted UI interaction receipt
+
+A dedicated disposable instance (`sc2150_r1ui_verify`, port 18194, assisted profile above) was
+created; the private assisted clip was imported and analysed there, then
+`scripts/sc2150/qualify_assisted_ui.cjs` drove a real Chromium session against it. The 18191
+review instance was never used for this run.
+
+```bash
+SC2150_BASE_URL=http://127.0.0.1:18194 SC2150_SOURCE_ID=<measurement sourceId> \
+SC2150_ANALYSIS_ID=<measurement analysisId> SC2150_EVIDENCE=…/evidence/ui \
+  node scripts/sc2150/qualify_assisted_ui.cjs
+```
+
+Result: **PASS**, nine assertions, no page or console errors, axe zero violations:
+
+|Assertion|Observed|
+|---|---|
+|Deep link reaches an automatic track|`?source=<id>` → “Automatic track ready” without an attestation or manual session|
+|Re-running the action reuses the analysis|analysis count unchanged, no new `ANALYSIS` job queued|
+|Toggle hides/restores the layer|unchecked → “Automatic suggestions hidden.” and zero marker circles; re-checked restores them|
+|Next/Previous follow suggestions|each landing ordinal is a `VISIBLE` suggestion, status names it, Previous disables at the first suggestion (ordinal 0)|
+|Navigation across an unloaded index page|the first index page is 200 frames (ordinal 199 → 201 crossing), and the remaining pages are fetched on demand|
+|Last suggestion ends navigation|ordinal 1776 disables Next and its marker still maps to the source pixel|
+|Unsampled/uncertain frame|ordinal 573 draws **no** marker, says “uncertain or not visible”, and Next suggestion recovers to 576|
+|Suggestions hidden, ordinary stepping|arrows move exactly one frame across the rendered row-window boundary (100 → 101 → 100)|
+|Marker alignment after resize|marker centre within 2 px of the observation's source coordinates at 1440×900 and 800×1000|
+|Pending-request source switch|a delayed `frame-previews` response for source A never marks source B; B keeps its own checksum and “Generate suggested cursor positions” status|
+|Human correction|one point correction saves, survives a reload, stays a review revision and leaves the detector observation artifact checksum unchanged|
+
+Harness fixes made while obtaining this receipt (no product behavior was weakened):
+
+- analysis selection resumes the saved revision draft, so draft counts are asserted relative to
+  the resumed baseline instead of a hard-coded `1`;
+- arrow keys follow suggestions when they are shown and step one frame when hidden — the
+  `qualify_browser.cjs` assumptions were corrected to that contract;
+- the marker geometry check maps the overlay `viewBox` (source frame) onto the rendered image box;
+  the preview `<img>` is a downscaled derivative and is not a valid scale reference;
+- the frame index loads page by page, so the harness crosses that boundary through the UI instead
+  of setting an ordinal that is not loaded yet;
+- the switch-target clip selects an encoder the local ffmpeg build actually provides.
+
+Evidence: `build/sc2150-closeout/r1-ui/` (`ui-results.json`, `ui-geometry.json`, five screenshots,
+axe report, trace) plus the instance measurement in `build/sc2150-closeout/r1-ui/measurement.json`.
+
+### 44-label lineage (read-only, 18191)
+
+```sql
+select s.id, s.state, s.latest_revision_id, jsonb_array_length(r.corrections_json::jsonb)
+from mouse_video_review_sessions s
+left join mouse_video_review_revisions r on r.id = s.latest_revision_id
+where s.id = '606b14b6-38af-4f99-a5ac-335f1b5b2416';
+```
+
+`606b14b6-38af-4f99-a5ac-335f1b5b2416 | ABANDONED | f0eadb77-3841-4ffb-b71a-ac1d081d92ee | 44`.
+The session's chain holds **44 revisions / 990 correction rows**, the latest revision
+(`"FA12 dev review · blind-unverified · seed=174455"`) holds all 44 labels. Nothing was updated,
+sealed or re-priced. The withdrawn group’s three sections (`NTe3PTTBhuU` s1–s3) remain present as
+preserved rows and stay excluded from independent evaluation.

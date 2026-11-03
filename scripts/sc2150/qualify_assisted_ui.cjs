@@ -57,24 +57,27 @@ async function allObservations(request, apiBase, sourceId, analysisId) {
   };
   const suggestionMarkers = page => page.locator('[data-preview-overlay] circle.prediction-point');
   const statusText = page => page.locator('[data-preview-suggestion-status]');
-  // Marker centre in CSS pixels against the rendered image box: the overlay uses the same
-  // xMidYMid-meet box as the image, so scale is uniform per axis over the source viewBox.
+  // Marker centre in CSS pixels against the rendered image box. The overlay viewBox is the source
+  // frame (the preview <img> is a downscaled derivative), and both use the same xMidYMid-meet box,
+  // so the mapping is the rendered box over the viewBox extent.
   const markerAgainstImage = async (page, observation) => {
     const marker = suggestionMarkers(page).first();
     await expect(marker).toBeVisible({ timeout: 60000 });
     const box = await page.locator('[data-preview-image]').boundingBox();
     const markerBox = await marker.boundingBox();
-    const metadata = await page.locator('[data-preview-image]').evaluate(image => ({
-      width: image.naturalWidth, height: image.naturalHeight }));
-    assert(box && markerBox && metadata.width > 0 && metadata.height > 0);
-    const scaleX = box.width / metadata.width;
-    const scaleY = box.height / metadata.height;
+    const viewBox = (await page.locator('[data-preview-overlay]').getAttribute('viewBox') || '')
+      .trim().split(/\s+/).map(Number);
+    assert(box && markerBox && viewBox.length === 4 && viewBox[2] > 0 && viewBox[3] > 0, String(viewBox));
+    const [originX, originY, width, height] = viewBox;
+    const scaleX = box.width / width;
+    const scaleY = box.height / height;
+    assert(Math.abs(scaleX - scaleY) < 0.01, 'the overlay must keep the source aspect ratio');
     const expected = {
-      x: box.x + Number(observation.x) * scaleX,
-      y: box.y + Number(observation.y) * scaleY,
+      x: box.x + (Number(observation.x) - originX) * scaleX,
+      y: box.y + (Number(observation.y) - originY) * scaleY,
     };
     const actual = { x: markerBox.x + markerBox.width / 2, y: markerBox.y + markerBox.height / 2 };
-    return { dx: Math.abs(expected.x - actual.x), dy: Math.abs(expected.y - actual.y), box, expected, actual };
+    return { dx: Math.abs(expected.x - actual.x), dy: Math.abs(expected.y - actual.y), box, viewBox, expected, actual };
   };
 
   let observations;
@@ -112,33 +115,65 @@ async function allObservations(request, apiBase, sourceId, analysisId) {
     checks.push('re-run reuses the completed analysis and queues no new job');
 
     // 3. The suggestion toggle hides and restores the layer, and Next/Previous follow VISIBLE
-    //    suggestions with the buttons disabling at the first and last suggestion.
+    //    suggestions. The frame index arrives page by page, so the first pass stays inside the
+    //    loaded page and the boundary crossing is exercised separately below.
     const predictions = page.locator('[data-preview-predictions]');
     assert.equal(await predictions.isChecked(), true);
     await predictions.uncheck();
     await expect(statusText(page)).toHaveText('Automatic suggestions hidden.');
     assert.equal(await suggestionMarkers(page).count(), 0);
     await predictions.check();
-    const lastSuggestion = visible[visible.length - 1].ordinal;
     const firstSuggestion = visible[0].ordinal;
+    const visibleOrdinals = new Set(visible.map(item => item.ordinal));
+    let walked = 0;
+    for (let step = 0; step < 3; step += 1) {
+      const from = await ordinalOf(page);
+      await page.locator('[data-frame-next]').click();
+      await expect.poll(() => ordinalOf(page)).toBeGreaterThan(from);
+      const to = await ordinalOf(page);
+      assert(visibleOrdinals.has(to), 'Next suggestion must land on a VISIBLE suggestion: ' + to);
+      await expect(statusText(page)).toContainText('Suggested cursor on frame ' + to, { timeout: 60000 });
+      walked += 1;
+    }
+    await expect(page.locator('[data-frame-prev]')).toBeEnabled();
+    for (let step = 0; step < walked; step += 1) {
+      const from = await ordinalOf(page);
+      await page.locator('[data-frame-prev]').click();
+      await expect.poll(() => ordinalOf(page)).toBeLessThan(from);
+    }
+    await jump(page, visible[1].ordinal);
+    await page.locator('[data-frame-prev]').click();
+    await expect.poll(() => ordinalOf(page)).toBe(firstSuggestion);
+    await expect(page.locator('[data-frame-prev]')).toBeDisabled();
+    checks.push('suggestion toggle plus Next/Previous follow VISIBLE ordinals and disable at the first suggestion');
+
+    // 3b. The index is loaded page by page: stepping from the last loaded frame to the next
+    //     suggestion must fetch the remaining pages instead of failing or silently stopping.
+    await predictions.check();
+    await page.locator('[data-frame-last]').click();
+    const lastLoaded = await ordinalOf(page);
+    assert(lastLoaded < visible[visible.length - 1].ordinal, 'the index must still be partially loaded');
+    await page.locator('[data-frame-next]').click();
+    await expect.poll(() => ordinalOf(page), { timeout: 60000 }).toBeGreaterThan(lastLoaded);
+    const crossed = await ordinalOf(page);
+    assert(visibleOrdinals.has(crossed), 'crossing an unloaded index page must land on a suggestion');
+    await expect(statusText(page)).toContainText('Suggested cursor on frame ' + crossed, { timeout: 60000 });
+
+    // 3c. The last suggestion ends forward navigation and its marker still maps to the source pixel.
+    const lastSuggestion = visible[visible.length - 1].ordinal;
     await jump(page, visible[visible.length - 2].ordinal);
     await expect(page.locator('[data-frame-next]')).toBeEnabled();
     await page.locator('[data-frame-next]').click();
     await expect.poll(() => ordinalOf(page)).toBe(lastSuggestion);
-    await expect(statusText(page)).toContainText('Suggested cursor on frame ' + lastSuggestion);
+    await expect(statusText(page)).toContainText('Suggested cursor on frame ' + lastSuggestion, { timeout: 60000 });
     await expect(page.locator('[data-frame-next]')).toBeDisabled();
     await expect(suggestionMarkers(page)).toHaveCount(1);
     const lastObservation = visible[visible.length - 1];
     const lastMap = await markerAgainstImage(page, lastObservation);
     assert(lastMap.dx <= 2 && lastMap.dy <= 2, JSON.stringify(lastMap));
-    await jump(page, visible[1].ordinal);
-    await page.locator('[data-frame-prev]').click();
-    await expect.poll(() => ordinalOf(page)).toBe(firstSuggestion);
-    await expect(page.locator('[data-frame-prev]')).toBeDisabled();
-    checks.push('suggestion toggle plus Next/Previous follow VISIBLE ordinals and disable at the ends');
+    checks.push(`index page boundary crossed ${lastLoaded} → ${crossed}; the last suggestion ${lastSuggestion} ends navigation`);
 
     // 4. A frame without a usable suggestion draws no marker and says so; Next suggestion recovers.
-    const visibleOrdinals = new Set(visible.map(item => item.ordinal));
     const ambiguousOrdinals = new Set(
       observations.filter(item => item.visibility !== 'VISIBLE').map(item => Number(item.frameOrdinal)));
     const unsampled = 573;
@@ -154,11 +189,11 @@ async function allObservations(request, apiBase, sourceId, analysisId) {
     await expect.poll(() => ordinalOf(page)).toBeGreaterThan(probe);
     const recovered = await ordinalOf(page);
     assert(visibleOrdinals.has(recovered), 'Next suggestion must land on a VISIBLE suggestion');
-    await expect(statusText(page)).toContainText('Suggested cursor on frame ' + recovered);
+    await expect(statusText(page)).toContainText('Suggested cursor on frame ' + recovered, { timeout: 60000 });
     checks.push(`frame ${probe} shows no suggestion marker and Next suggestion recovers to ${recovered}`);
 
-    // 5. With suggestions off the buttons step exactly one frame, including across a rendered
-    //    index page boundary; with suggestions on the same boundary keeps the selected row current.
+    // 5. With suggestions off the buttons step exactly one frame across the rendered row window,
+    //    and with suggestions on the selected suggestion keeps its row current.
     await predictions.uncheck();
     await expect(statusText(page)).toHaveText('Automatic suggestions hidden.');
     await jump(page, 100);
@@ -181,7 +216,7 @@ async function allObservations(request, apiBase, sourceId, analysisId) {
     await page.locator('[data-frame-next]').click();
     await expect.poll(() => ordinalOf(page)).toBeGreaterThan(boundarySuggestion.ordinal);
     await expect(page.locator('[data-frame-rows] tr[aria-current="true"]')).toHaveCount(1);
-    checks.push('suggestions off step one frame across the index page boundary; suggestions on keep the row current');
+    checks.push('suggestions off step one frame across the rendered page boundary; suggestions on keep the row current');
 
     // 6. Marker geometry survives a viewport change and still maps onto the source coordinates.
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -205,8 +240,10 @@ async function allObservations(request, apiBase, sourceId, analysisId) {
 
     // 7. Switching to another source while a preview request is in flight never shows A's marker.
     const clip = path.join(evidence, 'switch-target.mp4');
+    const encoders = execFileSync('ffmpeg', ['-hide_banner', '-encoders'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+    const encoder = encoders.includes('libx264') ? 'libx264' : 'libopenh264';
     execFileSync('ffmpeg', ['-v', 'error', '-nostdin', '-y', '-f', 'lavfi', '-i',
-      'testsrc2=size=160x96:rate=30:duration=2', '-c:v', 'libx264', clip]);
+      'testsrc2=size=160x96:rate=30:duration=2', '-c:v', encoder, clip]);
     const nonce = (await (await context.request.get(apiBase + '/write-nonce')).json()).nonce;
     const upload = await context.request.post(apiBase + '/imports/upload', {
       headers: { 'X-Mouse-Video-Nonce': nonce, 'X-Mouse-Video-Request-Id': crypto.randomUUID() },
@@ -262,7 +299,10 @@ async function allObservations(request, apiBase, sourceId, analysisId) {
     await page.locator('[data-video-refresh]').click();
     await page.getByRole('button', { name: 'Inspect source ' + sourceId, exact: true }).click();
     await expect(page.locator('[data-video-analysis-status]')).toContainText('Automatic track ready', { timeout: 90000 });
-    const correctionOrdinal = visible[visible.length - 5].ordinal;
+    // A fresh inspect loads only the first index page, so the correction uses a suggestion that
+    // is already inside it rather than forcing the remaining pages.
+    const correctionObservation = visible.find(item => item.ordinal > 100 && item.ordinal < 400) || visible[1];
+    const correctionOrdinal = correctionObservation.ordinal;
     await jump(page, correctionOrdinal);
     const image = page.locator('[data-preview-image]');
     await expect(image).toBeVisible({ timeout: 60000 });
