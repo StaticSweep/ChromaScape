@@ -217,3 +217,20 @@ If 2.7 fails, keep the recording untouched, record the failure, and ask before r
 - 8090: restart from the clean candidate classpath, or restore the backed-up `GraphSchemaValidator.class` and remove the overlay classes.
 - Client: `C:\Dev\IdeaProjects\verification\private\sc274-full-capture-20261031\windows-handoff-config.pre-3817133f.20261101T213808Z.json`.
 - Shortcut: the story-text narrowing is reversible by restoring the previous description (save it before editing).
+
+---
+
+## 8. Execution log — 3 November 2026, after P5
+
+| Step | Result |
+|---|---|
+| Docker | Engine reachable (28.3.3) after starting Docker Desktop; containers were `Exited (255)` from the earlier Docker restart |
+| P0.1 / rule 11 | `sc274-full-capture-postgres-20261031` healthy on 15474, `sc274-registry-postgres-20261020` up, `sc274-registry-mule-20261020` healthy on 8182 (restarted once after its DB was still starting). `sc274-registry-windows-catalog-20261031` **exits 127** and must be recreated by `deploy-catalog-bridge.py` against the live executor |
+| 1.1 | Live log filtered into `redeploy\runtime-8090\application.out.20261103-2127-evidence.log` (479,820 lines); the 517 MB live log is untouched |
+| 1.2 / 5.4 | 8090 stopped (PID 43424) and restarted on the **clean candidate jar** (`6622a23d`, PID 233944) via `redeploy\start-8090-candidate-20261103.ps1`; started in 20 s, no `15474` errors, `/debugger` 200, `/api/replay/capabilities` 200, `/api/debug/sessions` 200. The class overlay is retired |
+| 1.3 | Supervisor started (`supervisor-7.out.log`); lease `9a60481e-cc17-42dd-8033-e2b322bf65aa`, executor `f24979d6-4802-45a8-bcac-c9d2196c1f29`, deadline `2026-11-03T23:28:09Z`, `AWAITING_USER_LOGIN`, `catalogState=READY`, `schemaBundleState=AVAILABLE`, `recorderReady=true`; client PID 229980 |
+| P4-B.2/3 | SC-274 description now carries the narrowed section (original text retained); follow-up **SC-2273** created and linked (SC-274 relates, SC-2201 and SC-1498 block) |
+| D3 | The last pending SC-274 outbox record was replayed as note `note_1793741389129_fc38f89c` and moved to `ChromaScape\docs\builderflow\felix-sync\synced\sc-274\`; zero SC-274 records remain pending. No Felix task was created |
+| D4 | Branch pushed and **PR #108** opened against `main` (`https://github.com/ikiddoi/ChromaScape/pull/108`); not merged |
+
+Still owner-gated: P2.1 (manual login), then 2.2–2.7.
