@@ -24,6 +24,9 @@ public final class MouseVideoPublicErrors {
           Map.entry(
               MouseVideoException.CODE_MEDIA_LIMIT, "The media exceeds a configured import limit"),
           Map.entry(
+              MouseVideoException.CODE_QUOTA_EXCEEDED,
+              "The job exceeded its configured storage limit; no output was published"),
+          Map.entry(
               MouseVideoException.CODE_CHECKSUM_MISMATCH,
               "The media failed integrity verification"),
           Map.entry(

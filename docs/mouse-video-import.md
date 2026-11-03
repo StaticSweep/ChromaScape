@@ -288,9 +288,11 @@ increment passes its safety gates.
 ## Persistence
 
 Additive migrations create `mouse_video_sources`, `mouse_video_jobs`, `mouse_video_job_events`,
-`mouse_video_analyses`, `mouse_video_artifact_refs` and `mouse_video_review_revisions` (V42), plus
+`mouse_video_analyses`, `mouse_video_artifact_refs` and `mouse_video_review_revisions` (V80), plus
 owner budgets, intake reservations, export snapshots, job row versioning, original qualification and
-export-specific artifact references (V43). V42 is never rewritten. Media bytes live in a
+export-specific artifact references (V81). V80 is never rewritten. Later additive migrations add
+analysis/preview scheduling (V83), identity hardening (V84), review provenance (V85), the review
+coordinate plane (V86) and the bounded sample/tracking job stages (V87). Media bytes live in a
 content-addressed filesystem byte store; SQL rows register verified publication. Capability flags
 are constrained `false` in SQL.
 

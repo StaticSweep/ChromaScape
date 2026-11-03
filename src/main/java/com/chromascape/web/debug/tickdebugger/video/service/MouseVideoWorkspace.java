@@ -201,6 +201,17 @@ public final class MouseVideoWorkspace implements AutoCloseable {
           org.slf4j.LoggerFactory.getLogger(MouseVideoWorkspace.class)
               .warn("Closed video workspace image retained for sweep: {}", image);
         }
+        try {
+          // The unmounted mountpoint is an empty directory; leaving it behind would accumulate one
+          // inode per execution forever. A non-empty directory is preserved as evidence.
+          Files.deleteIfExists(path);
+        } catch (java.nio.file.DirectoryNotEmptyException unexpectedBytes) {
+          org.slf4j.LoggerFactory.getLogger(MouseVideoWorkspace.class)
+              .warn("Closed video workspace directory retained because it is not empty: {}", path);
+        } catch (IOException retained) {
+          org.slf4j.LoggerFactory.getLogger(MouseVideoWorkspace.class)
+              .warn("Closed video workspace directory retained for sweep: {}", path);
+        }
       } catch (InterruptedException failure) {
         interrupted = true;
         throw new MouseVideoException(

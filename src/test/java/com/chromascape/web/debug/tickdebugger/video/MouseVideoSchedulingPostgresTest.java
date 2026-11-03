@@ -109,7 +109,10 @@ class MouseVideoSchedulingPostgresTest {
   @Test
   void concurrentDistinctAnalysesCannotExceedTheOwnerAdmissionLimit() throws Exception {
     String owner = "owner-admission-" + UUID.randomUUID();
-    UUID sourceId = newSource(owner);
+    // One source per contender: analysis identity is (source, config), and the server pins a single
+    // cursor-template pack, so distinct sources are what make these four requests distinct work.
+    List<UUID> sources =
+        java.util.stream.IntStream.range(0, 4).mapToObj(index -> newSource(owner)).toList();
     int contenders = 4;
     var pool = Executors.newFixedThreadPool(contenders);
     CountDownLatch start = new CountDownLatch(1);
@@ -124,10 +127,10 @@ class MouseVideoSchedulingPostgresTest {
                 outcomes.add(
                     scheduling.scheduleAnalysis(
                         owner,
-                        sourceId,
+                        sources.get(index),
                         UUID.randomUUID().toString(),
                         "visual/v1",
-                        "pack-" + index));
+                        null));
               } catch (RuntimeException failure) {
                 outcomes.add(failure);
               } catch (InterruptedException interrupted) {
@@ -168,7 +171,8 @@ class MouseVideoSchedulingPostgresTest {
   @Test
   void barrierAfterTheCountCannotOverAdmitDistinctAnalyses() throws Exception {
     String owner = "owner-barrier-" + UUID.randomUUID();
-    UUID sourceId = newSource(owner);
+    List<UUID> sources =
+        java.util.stream.IntStream.range(0, 4).mapToObj(index -> newSource(owner)).toList();
     int contenders = 4;
     MouseVideoJobRepository realJobs = context.getBean(MouseVideoJobRepository.class);
     CyclicBarrier afterCount = new CyclicBarrier(contenders);
@@ -212,10 +216,10 @@ class MouseVideoSchedulingPostgresTest {
                 outcomes.add(
                     gated.scheduleAnalysis(
                         owner,
-                        sourceId,
+                        sources.get(index),
                         UUID.randomUUID().toString(),
                         "visual/v1",
-                        "barrier-pack-" + index));
+                        null));
               } catch (RuntimeException failure) {
                 outcomes.add(failure);
               }
@@ -261,10 +265,13 @@ class MouseVideoSchedulingPostgresTest {
         .isInstanceOf(MouseVideoException.class)
         .extracting(error -> ((MouseVideoException) error).getCode())
         .isEqualTo(MouseVideoException.CODE_QUOTA_EXCEEDED);
+    // A distinct source is distinct work; the same source would coalesce onto the scheduled
+    // analysis and legitimately bypass admission.
+    UUID saturated = newSource(owner);
     assertThatThrownBy(
             () ->
                 scheduling.scheduleAnalysis(
-                    owner, sourceId, UUID.randomUUID().toString(), "visual/v1", "other-pack"))
+                    owner, saturated, UUID.randomUUID().toString(), "visual/v1", null))
         .isInstanceOf(MouseVideoException.class)
         .extracting(error -> ((MouseVideoException) error).getCode())
         .isEqualTo(MouseVideoException.CODE_QUOTA_EXCEEDED);
@@ -429,7 +436,7 @@ class MouseVideoSchedulingPostgresTest {
     String owner = "owner-alias-" + UUID.randomUUID();
     UUID sourceId = newSource(owner);
     MouseVideoSchedulingService.Receipt first =
-        scheduling.scheduleAnalysis(owner, sourceId, "req-a", "visual/v1", "pack-x");
+        scheduling.scheduleAnalysis(owner, sourceId, "req-a", "visual/v1", null);
     // Complete the analysis directly, then coalesce a second request identifier onto it.
     new TransactionTemplate(context.getBean(PlatformTransactionManager.class))
         .executeWithoutResult(
@@ -441,15 +448,24 @@ class MouseVideoSchedulingPostgresTest {
               analyses.save(analysis);
             });
     MouseVideoSchedulingService.Receipt coalesced =
-        scheduling.scheduleAnalysis(owner, sourceId, "req-b", "visual/v1", "pack-x");
+        scheduling.scheduleAnalysis(owner, sourceId, "req-b", "visual/v1", null);
     assertThat(coalesced.state()).isEqualTo("READY");
     assertThat(coalesced.analysisId()).isEqualTo(first.analysisId());
 
+    // A reused request identifier with a changed target is still a conflict, never a silent alias:
+    // the server pins one cursor-template pack, so a distinct source is the reachable body change.
+    UUID otherSource = newSource(owner);
     assertThatThrownBy(
-            () -> scheduling.scheduleAnalysis(owner, sourceId, "req-b", "visual/v1", "pack-y"))
+            () -> scheduling.scheduleAnalysis(owner, otherSource, "req-b", "visual/v1", null))
         .isInstanceOf(MouseVideoException.class)
         .extracting(error -> ((MouseVideoException) error).getCode())
         .isEqualTo(MouseVideoException.CODE_CONFLICT);
+    // A pack the server does not serve is refused before any analysis identity is frozen.
+    assertThatThrownBy(
+            () -> scheduling.scheduleAnalysis(owner, sourceId, "req-c", "visual/v1", "pack-y"))
+        .isInstanceOf(MouseVideoException.class)
+        .extracting(error -> ((MouseVideoException) error).getCode())
+        .isEqualTo(MouseVideoException.CODE_INVALID_REQUEST);
   }
 
   @Test
@@ -571,7 +587,7 @@ class MouseVideoSchedulingPostgresTest {
       UUID sourceId = newSource(owner);
       var receipt =
           scheduling.scheduleAnalysis(
-              owner, sourceId, UUID.randomUUID().toString(), "visual/v1", "synthetic-gc");
+              owner, sourceId, UUID.randomUUID().toString(), "visual/v1", null);
       var analysis =
           context
               .getBean(MouseVideoAnalysisRepository.class)

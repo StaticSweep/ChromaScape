@@ -58,7 +58,12 @@ class MouseVideoWorkspaceTest {
       workspace.close();
       workspace.close();
     }
-    assertThat(MouseVideoWorkspace.isBoundedMount(path, 16L * 1024 * 1024)).isFalse();
+    // A confirmed close releases both the image and the empty mountpoint, so the execution identity
+    // is free again; existing output is what must refuse reuse.
+    assertThat(Files.exists(path)).isFalse();
+    assertThat(Files.exists(root.resolve("work-volumes/bounded.ext2"))).isFalse();
+    Files.createDirectories(root.resolve("jobs/bounded"));
+    Files.writeString(root.resolve("jobs/bounded/leftover"), "unpublished");
     assertThatThrownBy(() -> MouseVideoWorkspace.open(properties(), "bounded"))
         .isInstanceOf(IOException.class);
   }
@@ -90,6 +95,19 @@ class MouseVideoWorkspaceTest {
       assertThat(child.exitValue()).isZero();
       assertThat(Files.readString(workspace.path().resolve("result"))).isEqualTo("ok\n");
     }
+  }
+
+  @Test
+  void closingAConfirmedExecutionRemovesItsImageAndEmptyMountpoint() throws Exception {
+    assumeTrue(MouseVideoWorkspace.toolsAvailable());
+    MouseVideoProperties properties = properties();
+    Path workspace;
+    try (MouseVideoWorkspace execution = MouseVideoWorkspace.open(properties, "released")) {
+      workspace = execution.path();
+      assertThat(Files.isDirectory(workspace)).isTrue();
+    }
+    assertThat(Files.exists(workspace)).isFalse();
+    assertThat(Files.exists(root.resolve("work-volumes/released.ext2"))).isFalse();
   }
 
   @Test

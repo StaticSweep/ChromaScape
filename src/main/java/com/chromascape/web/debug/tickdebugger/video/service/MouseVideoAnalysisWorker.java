@@ -195,8 +195,10 @@ public class MouseVideoAnalysisWorker {
       throw new MouseVideoException(
           MouseVideoException.CODE_DECODER_FAILED, "No source frames are available for analysis");
     }
-    extractSamples(cancellation, media, frames, step);
+    // Reported before extraction so the long decode phase is visibly "extracting samples" instead
+    // of an apparently stalled ANALYSIS progress.
     progress.report(MouseVideoJob.STAGE_ANALYSIS_SAMPLES, 40);
+    extractSamples(cancellation, media, frames, step);
     Path template = frozenTemplate(analysis, workspace);
     progress.report(MouseVideoJob.STAGE_ANALYSIS_TRACKING, 45);
     MouseVideoVisualAnalyzer.Result result =
