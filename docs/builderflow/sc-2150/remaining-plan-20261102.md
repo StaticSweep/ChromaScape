@@ -134,6 +134,10 @@ The original W10 frozen template files remain separate and unchanged.
 
 ### R1.3 Complete the interaction checks
 
+**Executed 2026-11-03:** the real-browser interaction receipt is in
+[verification evidence R2](verification-evidence-r2-20261103.md), section “R1.3 assisted UI
+interaction receipt”.
+
 - Generate automatically without an annotation attestation or manual review session.
 - Repeat the same action after completion: reuse the equivalent completed analysis.
 - Display loading, failed, cancelled, no-template and uncertain outcomes clearly.
@@ -191,6 +195,10 @@ outcomes, with cancellation/restart cleanup evidence and no safety-boundary regr
 
 ## R3 — Restore 8090 and deploy the packaged candidate on Fedora
 
+**Executed 2026-11-03:** the durable `ChromaScape-runtime-sc2150` checkout now serves 8090 through
+the tracked launcher, and the deployed write smoke passes before and after an owned restart; see
+[r3 8090 restore](r3-8090-restore-20261102.md).
+
 **Owner:** agent. **Maps to:** W13/W14; AC1, AC7–13.
 
 Use `docs/CHROMASCAPE_RESTART_RUNBOOK.md` as the canonical lifecycle reference.
@@ -231,6 +239,9 @@ intact; the deployed behavior matches the PR and documented configuration.
 
 ## R4 — Complete the real native recording/trace round trip (W12)
 
+**Status 2026-11-03:** open — no owner login window in this round, so no native receipt is claimed;
+see [r4 native status](r4-native-status-20261103.md).
+
 **Owner:** owner for login/setup; agent for execution and verification.
 **Source:** `w12-native-session-runbook-20261031.md`.
 
@@ -268,6 +279,10 @@ intact; the deployed behavior matches the PR and documented configuration.
 for that native case; it does not alone qualify arbitrary third-party footage.
 
 ## R5 — Resolve and complete the accuracy acceptance route (W9/W10)
+
+**Decided 2026-11-03:** Route A (assisted-first) approved by the story owner; see the
+[acceptance amendment](acceptance-amendment-assisted-first-20261102.md) for the approval record,
+the receipts AC4/AC9 cite and the named owners of the deferred items.
 
 **Owner:** owner for scope decision; agent for protocol, tooling and evaluation.
 
@@ -316,6 +331,9 @@ explicitly deferred, or an independent frozen evaluation with its actual verdict
 current 592 suggestions and 44 retained manual labels do not meet this exit by themselves.
 
 ## R6 — Finish the bounded YouTube product route (W11 / D3)
+
+**Status 2026-11-03:** deferred by the owner; `youtubeEnabled=false`, nothing installed or run; see
+[r6 YouTube status](r6-youtube-status-20261103.md).
 
 **Owner:** agent after the outstanding concrete D3 decisions.
 **Source:** `fa13-youtube-acquisition-proposal.md`.
