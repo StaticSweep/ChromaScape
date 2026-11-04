@@ -28,3 +28,18 @@ environmental failures plus 10 Docker-unavailable failures. Detail:
 - The last pending SC-274 outbox record is replayed (note `note_1793741389129_fc38f89c`) and moved to
   `synced/sc-274`; none remain pending.
 - Rows unchanged: the Capture and Output rows still need the genuine recording.
+
+### 2026-11-04 — P3.3 and P3.4 recorded; operational gaps closed
+
+- **P3.4 world mapping → NAMED BLOCKER.** The capture records the live world number; the compiler
+  preserves it verbatim with region identity and a pinned collision revision; no live-to-simulator
+  mapping exists in ChromaScape. Causal equivalence depends on SC-276 and is tracked by SC-2273.
+  Detail: `world-number-mapping-20261104.md`.
+- **P3.3 output completeness → structural, not yet observable.** No manifest can exist while the v2
+  compiler requires the causal capability, and `recording_af17d0dc` carries 0 typed actions. Each
+  Output element is mapped to the code that produces it, with its blocker. Detail:
+  `output-completeness-20261104.md`.
+- Operational gaps closed (see plan §9): detached supervisor launcher, stale-claim recovery for the
+  registry (sweeper disabled), orphan-client port recovery, catalog-bridge `--replace` with an
+  expired-lease guard (verified end to end), state-write fallback, and container restart policy.
+- Lease `008c80eb…` / executor `fc5c52f8…` is live until `2026-11-04T04:39:11Z`, awaiting manual login.
