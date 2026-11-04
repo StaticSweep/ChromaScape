@@ -234,3 +234,22 @@ If 2.7 fails, keep the recording untouched, record the failure, and ask before r
 | D4 | Branch pushed and **PR #108** opened against `main` (`https://github.com/ikiddoi/ChromaScape/pull/108`); not merged |
 
 Still owner-gated: P2.1 (manual login), then 2.2–2.7.
+
+---
+
+## 9. Gaps closed on 4 November 2026
+
+Each of these was a way the next attempt could fail before the user reached the capture.
+
+| Gap | Cause found | Fix |
+|---|---|---|
+| Supervisor died silently on 3 Nov, leaving the account unclaimable | It was started as a child of a shell job that was killed at its 120 s limit; `SIGKILL` skips the `finally` release | `verification/sc274-sc276-continuation-20261102/start-supervisor-detached.ps1` creates the process through `Win32_Process.Create` (outside the shell's tree), refuses to start a second supervisor, and writes a timestamped log plus `supervisor-current.pid`. Verified: the supervisor survived the launching job and the client came up |
+| A killed supervisor left a `claimed` assignment that blocked every new claim | The mule's assignment sweeper is **disabled** in this container (`MULE_ASSIGNMENT_SWEEPER_ENABLED`, `/health` reports `sweeper_enabled:false`), and the release API answers `410 LEASE_EXPIRED` for an expired lease, so the partial unique index on active assignments keeps the account blocked | Recovery, once: `update launcher_assignments set status='released', last_reason_code='SUPERVISOR_TERMINATED_OUTSIDE_SHUTDOWN', updated_at=now() where assignment_id='…' and status='claimed' and lease_expires_at < now()` in `sc274-registry-postgres-20261020`. The next claim then succeeded. This is a registry-configuration gap, not an SC-274 code change |
+| Orphaned client held 8180, so the relaunch refused to start a second runtime | A supervisor that dies leaves its client running | Stop the orphan (`stop the `micro6`/RuneLite java PID from `live-handoff-state.json` `sourcePid` and its `cmd` parent) before relaunching; the supervisor already fails closed and releases its claim instead of stealing the port |
+| `sc274-registry-windows-catalog-20261031` exited 127 and could not be restarted | It joins the registry's network namespace (`--network container:<mule>`), so a mule restart destroys it; the deploy script had no replace path | `deploy-catalog-bridge.py` gained `--replace` (removes only a container carrying the `sc274.owner=windows-capture-catalog-bridge` label) and refuses to create a bridge for an expired lease (`--verify-existing` still works). Verified end to end on lease `008c80eb…`: `/health` and `/api/v1/catalog?mode=full` both 200 inside the registry namespace, executor `fc5c52f8…`, artifact `sha256:0a26e022…`; report in `capture/catalog-bridge-verification.json`. The binary hash now comes from the image instead of a path that had moved |
+| A failed state write dropped the phase update | `save()` returned on any temp-file error, including the one observed as `ENOSPC` with 366 GB free (a 0-byte `.tmp` remains) | `hold-windows-assignment.cjs` now writes in place when the temp write fails, and only then reports a deferred write. Fallback exercised with an unwritable temp path |
+| SC-274 containers did not come back after a Docker restart | No restart policy | `docker update --restart unless-stopped` on the capture PostgreSQL, registry PostgreSQL and mule; verified with `docker inspect` |
+
+Runtime after these fixes: lease `008c80eb-fa22-41a1-b9e9-6f158ceb3a4a`, executor
+`fc5c52f8-1703-4070-94c3-158c83d7ac5e`, deadline `2026-11-04T04:39:11Z`, `AWAITING_USER_LOGIN`,
+catalog `READY`, schema bundle `AVAILABLE`, recorder ready.
