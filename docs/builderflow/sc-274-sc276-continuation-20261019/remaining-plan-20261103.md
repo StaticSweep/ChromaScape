@@ -253,3 +253,30 @@ Each of these was a way the next attempt could fail before the user reached the 
 Runtime after these fixes: lease `008c80eb-fa22-41a1-b9e9-6f158ceb3a4a`, executor
 `fc5c52f8-1703-4070-94c3-158c83d7ac5e`, deadline `2026-11-04T04:39:11Z`, `AWAITING_USER_LOGIN`,
 catalog `READY`, schema bundle `AVAILABLE`, recorder ready.
+
+### 6 November 2026 — the host clock blocks the lease
+
+The supervisor refuses to claim with `Registry clock outside existing five-second safety limit`.
+Measured, not guessed:
+
+| Clock | UTC | Offset vs NTP |
+|---|---|---|
+| Windows host | `00:15:16` | **−7.1 s** (two NTP queries and two HTTPS `Date` headers agree) |
+| `sc274-registry-mule-20261020` (container VM) | `00:15:23` | ≈ 0 |
+
+`w32time` is **stopped** and starting it needs elevation this session does not have
+(`net start w32time` → Access denied; `Start-Process -Verb RunAs` → InvalidOperationException).
+The five-second guard is a lease-fencing safety limit and is not weakened here.
+
+Fix (owner, one action): Settings → Time & language → Date & time → **Sync now**, or an elevated
+`net start w32time; w32tm /resync /force`. Then the lease path is:
+
+1. `powershell -File verification\sc274-sc276-continuation-20261102\start-supervisor-detached.ps1`
+2. wait for `AWAITING_USER_LOGIN` with `catalogState=READY`, `recorderReady=true`
+3. `python -I capture\deploy-catalog-bridge.py --replace` (bridge for the new executor)
+4. owner logs in, then `prepare-capture-context.py`, then `start-context-bound-human-fishing.py`
+
+Also verified this run: `wsl --shutdown` + Docker restart brought all 26 containers back (23
+`leeuwbot`/`chromascape` plus the SC-274 ones) because of the new restart policy; the catalog bridge
+did not come back and is recreated in step 3; 8090 (PID 233944, clean candidate jar) stayed up
+throughout and still answers `200` on `/api/replay/capabilities`.
