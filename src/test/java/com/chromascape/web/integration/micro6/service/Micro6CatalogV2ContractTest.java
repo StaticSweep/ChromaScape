@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.chromascape.web.integration.micro6.service.Micro6CatalogV2Contract.CatalogState;
 import com.chromascape.web.integration.micro6.service.Micro6CatalogV2Contract.ValidationResult;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.List;
@@ -317,5 +318,50 @@ class Micro6CatalogV2ContractTest {
     ValidationResult result = Micro6CatalogV2Contract.validateLightweight(payload);
     assertThat(result.valid()).isFalse();
     assertThat(result.reasons()).contains("catalog_valid_false_for_ready");
+  }
+
+  /** Real rev-242 producer output: its attested bundle hash carries each task's schema state. */
+  @Test
+  void canonicalModelProducerBundleIsRecomputedWithSchemaState() throws Exception {
+    JsonNode live = canonicalModelFixture();
+
+    var verdict = Micro6CatalogV2Contract.validateFull(live);
+
+    assertThat(verdict.valid()).as("%s", verdict.reasons()).isTrue();
+    assertThat(verdict.schemaBundleHash()).isEqualTo(live.path("schema_bundle_hash").asText());
+  }
+
+  @Test
+  void canonicalModelBundleStillRefusesAnAlteredAttestation() throws Exception {
+    com.fasterxml.jackson.databind.node.ObjectNode live =
+        (com.fasterxml.jackson.databind.node.ObjectNode) canonicalModelFixture();
+    live.put("schema_bundle_hash", "sha256:" + "0".repeat(64));
+
+    var verdict = Micro6CatalogV2Contract.validateFull(live);
+
+    assertThat(verdict.valid()).isFalse();
+    assertThat(verdict.reasons()).contains("schema_bundle_hash_mismatch");
+  }
+
+  @Test
+  void canonicalModelBundleBindsSchemaState() throws Exception {
+    JsonNode live = canonicalModelFixture();
+    String catalogHash = live.path("catalog_hash").asText();
+    com.fasterxml.jackson.databind.node.ObjectNode changed = live.deepCopy();
+    ((com.fasterxml.jackson.databind.node.ObjectNode) changed.path("tasks").get(0))
+        .put("settings_schema_state", "NOT_APPLICABLE");
+
+    assertThat(Micro6CanonicalHash.schemaBundleHash(live, catalogHash))
+        .isEqualTo(live.path("schema_bundle_hash").asText());
+    assertThat(Micro6CanonicalHash.schemaBundleHash(changed, catalogHash))
+        .isNotEqualTo(live.path("schema_bundle_hash").asText());
+  }
+
+  private static JsonNode canonicalModelFixture() throws java.io.IOException {
+    try (var stream =
+        Micro6CatalogV2ContractTest.class.getResourceAsStream(
+            "/micro6-fixtures/catalog-full-canonical-model-rev242.json")) {
+      return new com.fasterxml.jackson.databind.ObjectMapper().readTree(stream);
+    }
   }
 }
