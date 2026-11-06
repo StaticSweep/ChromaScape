@@ -1,0 +1,46 @@
+{
+  "project": "C:\\Dev\\IdeaProjects\\ChromaScape",
+  "host": "native Fedora",
+  "java": "Temurin 17.0.20.1+1",
+  "gradle_executable": "./gradlew",
+  "docker_api_process_environment": {
+    "JAVA_TOOL_OPTIONS": "-Dapi.version=1.44"
+  },
+  "baseline_args": [
+    "--no-daemon",
+    "test",
+    "-Psc967VectorsPath=../contracts/sc967/ed25519-vectors.json",
+    "--tests",
+    "com.chromascape.web.debug.tickdebugger.video.*",
+    "--tests",
+    "com.chromascape.web.debug.tickdebugger.video.service.*",
+    "--tests",
+    "com.chromascape.web.debug.tickdebugger.video.controller.*",
+    "--tests",
+    "com.chromascape.web.MouseResearchPageTest",
+    "--rerun-tasks"
+  ],
+  "final_probe_args": [
+    "--no-daemon",
+    "test",
+    "-Psc967VectorsPath=../contracts/sc967/ed25519-vectors.json",
+    "--tests",
+    "*MouseVideoIndependentReviewProbeTest.retainedRequestContextAcceptsWorkerSettlementBeforeSecondLock",
+    "--tests",
+    "*MouseVideoIndependentReviewProbeTest.controllerCancellationAcceptsWorkerSettlementWithRetainedRequestContext",
+    "--tests",
+    "*MouseVideoIndependentReviewProbeTest.metadataFilesystemReadFailureRemainsAnInfrastructureFailure",
+    "--tests",
+    "*MouseVideoIndependentReviewProbeTest.existingPersistedFailureDoesNotExposeItsPrivatePath"
+  ],
+  "style_args": [
+    "--no-daemon",
+    "spotlessJavaCheck",
+    "checkstyleMain"
+  ],
+  "other_commands": [
+    "node --test src/test/js/mouse-video.test.js src/test/js/mouse-recording.test.js",
+    "npm test",
+    "python3 -m unittest discover -s src/test/python -p test_mouse_video_probe.py -v"
+  ]
+}

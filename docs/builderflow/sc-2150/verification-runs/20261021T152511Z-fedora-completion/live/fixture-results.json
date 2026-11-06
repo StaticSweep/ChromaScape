@@ -1,0 +1,54 @@
+[
+  {
+    "fixture": "cfr.mp4",
+    "sourceId": "dd0ad359-4024-4c80-860c-e4c6ad745bd6",
+    "analysisId": "6eb2ebfd-099b-4676-a238-283503156220",
+    "previewId": "d647faba-abd6-4fee-abab-2f3b62a4a516",
+    "frames": 60,
+    "size": [
+      160,
+      96
+    ],
+    "originalSha256": "a6ee40032970a1c2c904769b0e475034a035506754c4c91898f6b970a4898143",
+    "previewSha256": "7eea0bd423100f2be99669a480ce462c315fb8af67f1a8c6eba36b95982bef94"
+  },
+  {
+    "fixture": "vfr.mp4",
+    "sourceId": "842a528a-ead6-4339-b97f-30b53ac45369",
+    "analysisId": "1081a1b6-f7a4-4a55-b481-df185d9af10f",
+    "previewId": "10414060-e03b-4f3e-95fc-756fc77d9039",
+    "frames": 72,
+    "size": [
+      160,
+      96
+    ],
+    "originalSha256": "7f9fab1416dcdc0c847ecd32c4259221e4c8d2252bbcb2c9cd46748cd2b1ab80",
+    "previewSha256": "a86ba18b398dffd5df20cf89282dd24d2503f6b6759aecbab482147fd5ccb37d"
+  },
+  {
+    "fixture": "rotated.mp4",
+    "sourceId": "5fe73f8d-fdaf-4265-a766-e948d0815637",
+    "analysisId": "f16477a1-472e-48cb-a2c7-bef2a0bb60ce",
+    "previewId": "39ac05ca-b602-4802-9418-1bab755dc2d5",
+    "frames": 60,
+    "size": [
+      160,
+      96
+    ],
+    "originalSha256": "a6ee40032970a1c2c904769b0e475034a035506754c4c91898f6b970a4898143",
+    "previewSha256": "7eea0bd423100f2be99669a480ce462c315fb8af67f1a8c6eba36b95982bef94"
+  },
+  {
+    "fixture": "cropped.mp4",
+    "sourceId": "e6f273af-6521-471c-83f3-f4fa4c1e63c9",
+    "analysisId": "614c6da2-726e-4b64-b367-6d4c36aefdaa",
+    "previewId": "fbf4e104-801b-41a8-a259-9fd9f9940756",
+    "frames": 60,
+    "size": [
+      112,
+      64
+    ],
+    "originalSha256": "cba05f1c43b0b4881c63b69facd0629f856091e9e704b9a53075203fb2f9cb17",
+    "previewSha256": "d626aac94a0e5925b3445514c68663936f2b5960758c967710bccad51691e645"
+  }
+]

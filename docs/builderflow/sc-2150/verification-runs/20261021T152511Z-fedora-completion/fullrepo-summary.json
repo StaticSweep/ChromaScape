@@ -1,0 +1,443 @@
+{
+  "counts": [
+    2854,
+    72,
+    15
+  ],
+  "newFailingCases": [],
+  "removedFailingCases": [],
+  "failures": [
+    {
+      "class": "com.chromascape.web.aiplayer.routine.source.SourceManifestConcurrentPersistenceIntegrationTest",
+      "name": "twoThreadsRacingTheSameIdentityConvergeOnOneImmutableRow()",
+      "message": "java.lang.IllegalStateException: Failed to load ApplicationContext for [WebMergedContextConfiguration@1b6087be testClass = com.chromascape.web.aiplayer.routine.source.SourceManifestConcurrentPersistenceIntegrationTest, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@0, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.test.context.support.DynamicPropertiesContextCustomizer@1ca1ac9d, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "SourceManifestConcurrentPersistenceIntegrationTest twoThreadsRacingTheSameIdentityConvergeOnOneImmutableRow()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.source.SourceManifestConcurrentPersistenceIntegrationTest",
+      "name": "sameManifestHashWithDifferentBytesIsRejectedAtTheDatabase()",
+      "message": "java.lang.IllegalStateException: ApplicationContext failure threshold (1) exceeded: skipping repeated attempt to load context for [WebMergedContextConfiguration@1b6087be testClass = com.chromascape.web.aiplayer.routine.source.SourceManifestConcurrentPersistenceIntegrationTest, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@0, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.test.context.support.DynamicPropertiesContextCustomizer@1ca1ac9d, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "SourceManifestConcurrentPersistenceIntegrationTest sameManifestHashWithDifferentBytesIsRejectedAtTheDatabase()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.source.SourceManifestConcurrentPersistenceIntegrationTest",
+      "name": "immutableTriggerRejectsAnyMutationOfAPersistedReference()",
+      "message": "java.lang.IllegalStateException: ApplicationContext failure threshold (1) exceeded: skipping repeated attempt to load context for [WebMergedContextConfiguration@1b6087be testClass = com.chromascape.web.aiplayer.routine.source.SourceManifestConcurrentPersistenceIntegrationTest, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@0, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.test.context.support.DynamicPropertiesContextCustomizer@1ca1ac9d, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "SourceManifestConcurrentPersistenceIntegrationTest immutableTriggerRejectsAnyMutationOfAPersistedReference()"
+    },
+    {
+      "class": "com.chromascape.web.gameplay.authority.HumanGameplayAuthorityServiceTest",
+      "name": "bindsOneUseAuthorityToTheExactEnvelopeAndScope()",
+      "message": "org.opentest4j.AssertionFailedError: \nexpected: \"sha256:9999999999999999999999999999999999999999999999999999999999999999\"\n but was: \"sha256:4035c57bebec8d0b1dfe17ee1729e04b802604a73ec094743262afa0d618f541\"",
+      "key": "HumanGameplayAuthorityServiceTest bindsOneUseAuthorityToTheExactEnvelopeAndScope()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.source.SourceFetchTransactionSuspensionTest",
+      "name": "fetchForRunRunsUpstreamOutsideAnyDatabaseTransaction()",
+      "message": "java.lang.IllegalStateException: Failed to load ApplicationContext for [WebMergedContextConfiguration@7ede0b7d testClass = com.chromascape.web.aiplayer.routine.source.SourceFetchTransactionSuspensionTest, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@0, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.test.context.support.DynamicPropertiesContextCustomizer@3ec1acbb, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "SourceFetchTransactionSuspensionTest fetchForRunRunsUpstreamOutsideAnyDatabaseTransaction()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.source.SourceContractSchemaEqualityTest",
+      "name": "canonicalSchemaIsByteIdenticalAcrossRepositories()",
+      "message": "org.opentest4j.AssertionFailedError: Micro6 canonical schema is missing at C:\\Dev\\IdeaProjects\\micro6/runelite-client/src/main/resources/micro6-contracts/task-source-manifest-v1.schema.json; SC-810 requires both repositories to share one byte-identical task-source-manifest/v1 contract ==> expected: <true> but was: <false>",
+      "key": "SourceContractSchemaEqualityTest canonicalSchemaIsByteIdenticalAcrossRepositories()"
+    },
+    {
+      "class": "com.chromascape.web.gameplay.bootstrap.Sc1498FlywaySchemaTest",
+      "name": "v35TablesExistWithSafetyAndImmutabilityGuards()",
+      "message": "org.opentest4j.AssertionFailedError: \nexpected: 1\n but was: 4",
+      "key": "Sc1498FlywaySchemaTest v35TablesExistWithSafetyAndImmutabilityGuards()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT",
+      "name": "aDocumentLargerThanAnyVarcharBoundRoundTrips()",
+      "message": "java.lang.IllegalStateException: Failed to load ApplicationContext for [WebMergedContextConfiguration@21606d95 testClass = com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@0, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "RoutineAssistantGenerationContextIT aDocumentLargerThanAnyVarcharBoundRoundTrips()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT",
+      "name": "resolvesTheRunsPublishedGraphFromOffRequestThread()",
+      "message": "java.lang.IllegalStateException: ApplicationContext failure threshold (1) exceeded: skipping repeated attempt to load context for [WebMergedContextConfiguration@21606d95 testClass = com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@0, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "RoutineAssistantGenerationContextIT resolvesTheRunsPublishedGraphFromOffRequestThread()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT",
+      "name": "theColumnHoldsTheJsonSoSqlOverItWorks()",
+      "message": "java.lang.IllegalStateException: ApplicationContext failure threshold (1) exceeded: skipping repeated attempt to load context for [WebMergedContextConfiguration@21606d95 testClass = com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@0, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "RoutineAssistantGenerationContextIT theColumnHoldsTheJsonSoSqlOverItWorks()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT",
+      "name": "jsonColumnsAreReadableOutsideATransaction()",
+      "message": "java.lang.IllegalStateException: ApplicationContext failure threshold (1) exceeded: skipping repeated attempt to load context for [WebMergedContextConfiguration@21606d95 testClass = com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@0, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "RoutineAssistantGenerationContextIT jsonColumnsAreReadableOutsideATransaction()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.prototype.FishingShadowDecisionServiceTest",
+      "name": "run discovery survives a newly opened run before its first tick",
+      "message": "com.chromascape.web.aiplayer.prototype.PrototypeApiException: Failed to read shadow run file",
+      "key": "FishingShadowDecisionServiceTest run discovery survives a newly opened run before its first tick"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.prototype.FishingShadowDecisionServiceTest",
+      "name": "the first in-memory decision supplies firstTick and firstObservedAt",
+      "message": "com.chromascape.web.aiplayer.prototype.PrototypeApiException: Failed to read shadow run file",
+      "key": "FishingShadowDecisionServiceTest the first in-memory decision supplies firstTick and firstObservedAt"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.prototype.FishingShadowDecisionServiceTest",
+      "name": "run summaries with nullable timestamps serialize cleanly through the controller mapper",
+      "message": "com.chromascape.web.aiplayer.prototype.PrototypeApiException: Failed to read shadow run file",
+      "key": "FishingShadowDecisionServiceTest run summaries with nullable timestamps serialize cleanly through the controller mapper"
+    },
+    {
+      "class": "com.chromascape.web.gameplay.bootstrap.BootstrapApprovalStorePostgresTest",
+      "name": "conflictingReuseIsStableConflictAndBindIsSingleUse()",
+      "message": "java.lang.AssertionError: \nExpecting actual throwable to be an instance of:\n  com.chromascape.web.gameplay.bootstrap.BootstrapApprovalStore.BootstrapApprovalException\nbut was:\n  org.springframework.dao.InvalidDataAccessApiUsageException: Approval identity was reused with different scope\n\tat org.springframework.orm.jpa.EntityManagerFactoryUtils.convertJpaAccessExceptionIfPossible(EntityManagerFactoryUtils.java:368)\n\tat org.springframework.orm.jpa.vendor.HibernateJpaDialect.translateExceptionIfPossible(HibernateJpaDialect.java:246)\n\tat org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.translateExceptionIfPossible(AbstractEntityManagerFactoryBean.java:560)\n\t...(105 remaining lines not displayed - this can be changed with Assertions.setMaxStackTraceElementsDisplayed)",
+      "key": "BootstrapApprovalStorePostgresTest conflictingReuseIsStableConflictAndBindIsSingleUse()"
+    },
+    {
+      "class": "com.chromascape.web.gameplay.orchestration.BootstrapGameplayOrchestratorTest",
+      "name": "fakeAccountBuilderCoversTerminalAndUncertainPathsWithAtomicEvidence()",
+      "message": "com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation: $.budgets: required property 'maxActions' not found; $.budgets: required property 'maxAttempts' not found; $.budgets: required property 'maxElapsedMs' not found",
+      "key": "BootstrapGameplayOrchestratorTest fakeAccountBuilderCoversTerminalAndUncertainPathsWithAtomicEvidence()"
+    },
+    {
+      "class": "com.chromascape.web.gameplay.orchestration.BootstrapGameplayOrchestratorTest",
+      "name": "identicalRequestReconcilesAndConflictingIdempotencyFailsBeforeDispatch()",
+      "message": "com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation: $.budgets: required property 'maxActions' not found; $.budgets: required property 'maxAttempts' not found; $.budgets: required property 'maxElapsedMs' not found",
+      "key": "BootstrapGameplayOrchestratorTest identicalRequestReconcilesAndConflictingIdempotencyFailsBeforeDispatch()"
+    },
+    {
+      "class": "com.chromascape.web.gameplay.orchestration.BootstrapGameplayOrchestratorTest",
+      "name": "staleObservationFailsBeforeAccountBuilderReservation()",
+      "message": "com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation: $.budgets: required property 'maxActions' not found; $.budgets: required property 'maxAttempts' not found; $.budgets: required property 'maxElapsedMs' not found",
+      "key": "BootstrapGameplayOrchestratorTest staleObservationFailsBeforeAccountBuilderReservation()"
+    },
+    {
+      "class": "com.chromascape.web.gameplay.provider.runtime.GameplayProviderRuntimeTest",
+      "name": "identicalRetryInvokesProviderOnceAndPublishesOnlyPersistedDecision()",
+      "message": "org.opentest4j.AssertionFailedError: expected: <DECIDED> but was: <INVALID_OUTPUT>",
+      "key": "GameplayProviderRuntimeTest identicalRetryInvokesProviderOnceAndPublishesOnlyPersistedDecision()"
+    },
+    {
+      "class": "com.chromascape.web.simulator.SimulatorVerifyServiceIntegrationTest$JobLifecycleBehavioralTests",
+      "name": "Should return 404 for non-existent job",
+      "message": "java.lang.IllegalStateException: ApplicationContext failure threshold (1) exceeded: skipping repeated attempt to load context for [WebMergedContextConfiguration@20ac287d testClass = com.chromascape.web.simulator.SimulatorVerifyServiceIntegrationTest, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\", \"openrune-legacy\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@21dc7d6f, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, [ImportsContextCustomizer@a932a9d key = [org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration, org.springframework.boot.test.autoconfigure.jdbc.TestDatabaseAutoConfiguration]], org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.test.context.support.DynamicPropertiesContextCustomizer@f8df902d, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "SimulatorVerifyServiceIntegrationTest$JobLifecycleBehavioralTests Should return 404 for non-existent job"
+    },
+    {
+      "class": "com.chromascape.web.simulator.SimulatorVerifyServiceIntegrationTest$JobLifecycleBehavioralTests",
+      "name": "Should transition job from QUEUED to RUNNING to terminal status",
+      "message": "java.lang.IllegalStateException: ApplicationContext failure threshold (1) exceeded: skipping repeated attempt to load context for [WebMergedContextConfiguration@20ac287d testClass = com.chromascape.web.simulator.SimulatorVerifyServiceIntegrationTest, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\", \"openrune-legacy\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@21dc7d6f, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, [ImportsContextCustomizer@a932a9d key = [org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration, org.springframework.boot.test.autoconfigure.jdbc.TestDatabaseAutoConfiguration]], org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.test.context.support.DynamicPropertiesContextCustomizer@f8df902d, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "SimulatorVerifyServiceIntegrationTest$JobLifecycleBehavioralTests Should transition job from QUEUED to RUNNING to terminal status"
+    },
+    {
+      "class": "com.chromascape.web.simulator.SimulatorVerifyServiceIntegrationTest$JobLifecycleBehavioralTests",
+      "name": "Should create job with QUEUED status via REST API",
+      "message": "java.lang.IllegalStateException: ApplicationContext failure threshold (1) exceeded: skipping repeated attempt to load context for [WebMergedContextConfiguration@20ac287d testClass = com.chromascape.web.simulator.SimulatorVerifyServiceIntegrationTest, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\", \"openrune-legacy\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@21dc7d6f, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, [ImportsContextCustomizer@a932a9d key = [org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration, org.springframework.boot.test.autoconfigure.jdbc.TestDatabaseAutoConfiguration]], org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.test.context.support.DynamicPropertiesContextCustomizer@f8df902d, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "SimulatorVerifyServiceIntegrationTest$JobLifecycleBehavioralTests Should create job with QUEUED status via REST API"
+    },
+    {
+      "class": "com.chromascape.web.simulator.SimulatorVerifyServiceIntegrationTest$JobLifecycleBehavioralTests",
+      "name": "Should reach terminal FAILED status with reportAvailable when exitCode=2",
+      "message": "java.lang.IllegalStateException: ApplicationContext failure threshold (1) exceeded: skipping repeated attempt to load context for [WebMergedContextConfiguration@20ac287d testClass = com.chromascape.web.simulator.SimulatorVerifyServiceIntegrationTest, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\", \"openrune-legacy\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@21dc7d6f, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, [ImportsContextCustomizer@a932a9d key = [org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration, org.springframework.boot.test.autoconfigure.jdbc.TestDatabaseAutoConfiguration]], org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.test.context.support.DynamicPropertiesContextCustomizer@f8df902d, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "SimulatorVerifyServiceIntegrationTest$JobLifecycleBehavioralTests Should reach terminal FAILED status with reportAvailable when exitCode=2"
+    },
+    {
+      "class": "com.chromascape.web.debug.startup.CdiStartupRegressionTest",
+      "name": "repairIncidentServiceReceivesIntendedDependencies()",
+      "message": "java.lang.IllegalStateException: Failed to load ApplicationContext for [WebMergedContextConfiguration@65d61470 testClass = com.chromascape.web.debug.startup.CdiStartupRegressionTest, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@0, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@91ef08ac, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "CdiStartupRegressionTest repairIncidentServiceReceivesIntendedDependencies()"
+    },
+    {
+      "class": "com.chromascape.web.debug.startup.CdiStartupRegressionTest",
+      "name": "contextCreatesExactlyOneSourceDebuggerReadServiceWithAllCollaborators()",
+      "message": "java.lang.IllegalStateException: ApplicationContext failure threshold (1) exceeded: skipping repeated attempt to load context for [WebMergedContextConfiguration@65d61470 testClass = com.chromascape.web.debug.startup.CdiStartupRegressionTest, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@0, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@91ef08ac, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "CdiStartupRegressionTest contextCreatesExactlyOneSourceDebuggerReadServiceWithAllCollaborators()"
+    },
+    {
+      "class": "com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationRestartTest",
+      "name": "committedEvidenceSurvivesContextRestartAndRecoveryNeverRedispatches()",
+      "message": "org.opentest4j.AssertionFailedError: \nexpected: \"33\"\n but was: \"46\"",
+      "key": "AccountBuilderOrchestrationRestartTest committedEvidenceSurvivesContextRestartAndRecoveryNeverRedispatches()"
+    },
+    {
+      "class": "com.chromascape.web.gameplay.contract.GameplayContractConformanceTest",
+      "name": "claudeAndCodexUseTheSameClosedDownstreamShape()",
+      "message": "com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation: $: null found, object expected",
+      "key": "GameplayContractConformanceTest claudeAndCodexUseTheSameClosedDownstreamShape()"
+    },
+    {
+      "class": "com.chromascape.web.gameplay.contract.GameplayContractConformanceTest",
+      "name": "securitySensitiveObjectsRejectUnknownOrUnsupportedFields()",
+      "message": "java.lang.ClassCastException: class com.fasterxml.jackson.databind.node.MissingNode cannot be cast to class com.fasterxml.jackson.databind.node.ObjectNode (com.fasterxml.jackson.databind.node.MissingNode and com.fasterxml.jackson.databind.node.ObjectNode are in unnamed module of loader 'app')",
+      "key": "GameplayContractConformanceTest securitySensitiveObjectsRejectUnknownOrUnsupportedFields()"
+    },
+    {
+      "class": "com.chromascape.web.gameplay.contract.GameplayContractConformanceTest",
+      "name": "canonicalResourcesHaveFrozenByteDigests()",
+      "message": "org.opentest4j.AssertionFailedError: \nexpected: \"c55ad78af5b6367803bc7098e0ef0a03e03d8efff6465bd4eae7829aa743c19c\"\n but was: \"ff9ad17f984d013fa9b851f1181815656c87c7d629fef18c8fe40755d4f97c9a\"",
+      "key": "GameplayContractConformanceTest canonicalResourcesHaveFrozenByteDigests()"
+    },
+    {
+      "class": "com.chromascape.web.gameplay.contract.GameplayContractConformanceTest",
+      "name": "canonicalFixturesValidateAndPinDigests()",
+      "message": "com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation: $: null found, object expected",
+      "key": "GameplayContractConformanceTest canonicalFixturesValidateAndPinDigests()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.service.CandidateExecutionClosureV1Test",
+      "name": "closureBuiltForAnotherCandidateIsRejected()",
+      "message": "java.nio.file.NoSuchFileException: /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/contracts/sc967/execution-closure-vectors.json",
+      "key": "CandidateExecutionClosureV1Test closureBuiltForAnotherCandidateIsRejected()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.service.CandidateExecutionClosureV1Test",
+      "name": "committedClosureVectorVerifiesAndIsReproducedByTheProducer()",
+      "message": "java.nio.file.NoSuchFileException: /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/contracts/sc967/execution-closure-vectors.json",
+      "key": "CandidateExecutionClosureV1Test committedClosureVectorVerifiesAndIsReproducedByTheProducer()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.service.CandidateExecutionClosureV1Test",
+      "name": "dependencyJarWithUnapprovedModuleInfoIsRejected()",
+      "message": "java.nio.file.NoSuchFileException: /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/contracts/sc967/execution-closure-vectors.json",
+      "key": "CandidateExecutionClosureV1Test dependencyJarWithUnapprovedModuleInfoIsRejected()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.service.CandidateExecutionClosureV1Test",
+      "name": "missingOrTamperedClosureJarIsRejected()",
+      "message": "java.nio.file.NoSuchFileException: /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/contracts/sc967/execution-closure-vectors.json",
+      "key": "CandidateExecutionClosureV1Test missingOrTamperedClosureJarIsRejected()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.service.CandidateExecutionClosureV1Test",
+      "name": "unapprovedCoreBytesAreNeverSigned()",
+      "message": "java.nio.file.NoSuchFileException: /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/contracts/sc967/execution-closure-vectors.json",
+      "key": "CandidateExecutionClosureV1Test unapprovedCoreBytesAreNeverSigned()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.service.CandidateExecutionClosureV1Test",
+      "name": "dependencyJarRepackedFromTheSignedFatJarIsAccepted()",
+      "message": "java.nio.file.NoSuchFileException: /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/contracts/sc967/execution-closure-vectors.json",
+      "key": "CandidateExecutionClosureV1Test dependencyJarRepackedFromTheSignedFatJarIsAccepted()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.service.CandidateExecutionClosureV1Test",
+      "name": "tamperedClosureOrWrongKeyIsRejected()",
+      "message": "java.nio.file.NoSuchFileException: /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/contracts/sc967/execution-closure-vectors.json",
+      "key": "CandidateExecutionClosureV1Test tamperedClosureOrWrongKeyIsRejected()"
+    },
+    {
+      "class": "com.chromascape.web.simulator.SimulatorVerifyServiceIntegrationTest$ReportRetrievalBehavioralTests",
+      "name": "Should return synthetic failure report when verifier cannot start",
+      "message": "java.lang.IllegalStateException: Failed to load ApplicationContext for [WebMergedContextConfiguration@20ac287d testClass = com.chromascape.web.simulator.SimulatorVerifyServiceIntegrationTest, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\", \"openrune-legacy\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@21dc7d6f, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, [ImportsContextCustomizer@a932a9d key = [org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration, org.springframework.boot.test.autoconfigure.jdbc.TestDatabaseAutoConfiguration]], org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.test.context.support.DynamicPropertiesContextCustomizer@f8df902d, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "SimulatorVerifyServiceIntegrationTest$ReportRetrievalBehavioralTests Should return synthetic failure report when verifier cannot start"
+    },
+    {
+      "class": "com.chromascape.web.simulator.SimulatorVerifyServiceIntegrationTest$ReportRetrievalBehavioralTests",
+      "name": "Should include reportAvailable field in status response",
+      "message": "java.lang.IllegalStateException: ApplicationContext failure threshold (1) exceeded: skipping repeated attempt to load context for [WebMergedContextConfiguration@20ac287d testClass = com.chromascape.web.simulator.SimulatorVerifyServiceIntegrationTest, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\", \"openrune-legacy\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@21dc7d6f, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, [ImportsContextCustomizer@a932a9d key = [org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration, org.springframework.boot.test.autoconfigure.jdbc.TestDatabaseAutoConfiguration]], org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.test.context.support.DynamicPropertiesContextCustomizer@f8df902d, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "SimulatorVerifyServiceIntegrationTest$ReportRetrievalBehavioralTests Should include reportAvailable field in status response"
+    },
+    {
+      "class": "com.chromascape.web.simulator.SimulatorVerifyServiceIntegrationTest$BridgeReachabilityBehavioralTests",
+      "name": "Should accept various bridge URL formats",
+      "message": "java.lang.IllegalStateException: ApplicationContext failure threshold (1) exceeded: skipping repeated attempt to load context for [WebMergedContextConfiguration@20ac287d testClass = com.chromascape.web.simulator.SimulatorVerifyServiceIntegrationTest, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\", \"openrune-legacy\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@21dc7d6f, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, [ImportsContextCustomizer@a932a9d key = [org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration, org.springframework.boot.test.autoconfigure.jdbc.TestDatabaseAutoConfiguration]], org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.test.context.support.DynamicPropertiesContextCustomizer@f8df902d, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "SimulatorVerifyServiceIntegrationTest$BridgeReachabilityBehavioralTests Should accept various bridge URL formats"
+    },
+    {
+      "class": "com.chromascape.web.simulator.SimulatorVerifyServiceIntegrationTest$BridgeReachabilityBehavioralTests",
+      "name": "Should return false for unreachable bridge endpoint",
+      "message": "java.lang.IllegalStateException: ApplicationContext failure threshold (1) exceeded: skipping repeated attempt to load context for [WebMergedContextConfiguration@20ac287d testClass = com.chromascape.web.simulator.SimulatorVerifyServiceIntegrationTest, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\", \"openrune-legacy\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@21dc7d6f, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, [ImportsContextCustomizer@a932a9d key = [org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration, org.springframework.boot.test.autoconfigure.jdbc.TestDatabaseAutoConfiguration]], org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.test.context.support.DynamicPropertiesContextCustomizer@f8df902d, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "SimulatorVerifyServiceIntegrationTest$BridgeReachabilityBehavioralTests Should return false for unreachable bridge endpoint"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.source.SourceRunOrchestrationIntegrationTest",
+      "name": "fetchFailurePersistsNothing()",
+      "message": "java.lang.IllegalStateException: Failed to load ApplicationContext for [WebMergedContextConfiguration@47399ad0 testClass = com.chromascape.web.aiplayer.routine.source.SourceRunOrchestrationIntegrationTest, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@0, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.test.context.support.DynamicPropertiesContextCustomizer@4ce3d7e0, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "SourceRunOrchestrationIntegrationTest fetchFailurePersistsNothing()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.source.SourceRunOrchestrationIntegrationTest",
+      "name": "captureCompletionRollsBackSourceRunAndCaptureWritesBeforeRecordingUncertain()",
+      "message": "java.lang.IllegalStateException: ApplicationContext failure threshold (1) exceeded: skipping repeated attempt to load context for [WebMergedContextConfiguration@47399ad0 testClass = com.chromascape.web.aiplayer.routine.source.SourceRunOrchestrationIntegrationTest, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@0, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.test.context.support.DynamicPropertiesContextCustomizer@4ce3d7e0, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "SourceRunOrchestrationIntegrationTest captureCompletionRollsBackSourceRunAndCaptureWritesBeforeRecordingUncertain()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.source.SourceRunOrchestrationIntegrationTest",
+      "name": "manifestRunBindingAndStageCommitTogether()",
+      "message": "java.lang.IllegalStateException: ApplicationContext failure threshold (1) exceeded: skipping repeated attempt to load context for [WebMergedContextConfiguration@47399ad0 testClass = com.chromascape.web.aiplayer.routine.source.SourceRunOrchestrationIntegrationTest, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@0, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.test.context.support.DynamicPropertiesContextCustomizer@4ce3d7e0, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "SourceRunOrchestrationIntegrationTest manifestRunBindingAndStageCommitTogether()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.source.SourceRunOrchestrationIntegrationTest",
+      "name": "bindingConflictRollsBackRunAndManifest()",
+      "message": "java.lang.IllegalStateException: ApplicationContext failure threshold (1) exceeded: skipping repeated attempt to load context for [WebMergedContextConfiguration@47399ad0 testClass = com.chromascape.web.aiplayer.routine.source.SourceRunOrchestrationIntegrationTest, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@0, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.test.context.support.DynamicPropertiesContextCustomizer@4ce3d7e0, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "SourceRunOrchestrationIntegrationTest bindingConflictRollsBackRunAndManifest()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.source.SourceRunOrchestrationIntegrationTest",
+      "name": "retriesAreIdempotent()",
+      "message": "java.lang.IllegalStateException: ApplicationContext failure threshold (1) exceeded: skipping repeated attempt to load context for [WebMergedContextConfiguration@47399ad0 testClass = com.chromascape.web.aiplayer.routine.source.SourceRunOrchestrationIntegrationTest, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@0, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.test.context.support.DynamicPropertiesContextCustomizer@4ce3d7e0, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "SourceRunOrchestrationIntegrationTest retriesAreIdempotent()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.source.SourceRunOrchestrationIntegrationTest",
+      "name": "runInsertFailureLeavesNoManifest()",
+      "message": "java.lang.IllegalStateException: ApplicationContext failure threshold (1) exceeded: skipping repeated attempt to load context for [WebMergedContextConfiguration@47399ad0 testClass = com.chromascape.web.aiplayer.routine.source.SourceRunOrchestrationIntegrationTest, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@0, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.test.context.support.DynamicPropertiesContextCustomizer@4ce3d7e0, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "SourceRunOrchestrationIntegrationTest runInsertFailureLeavesNoManifest()"
+    },
+    {
+      "class": "com.chromascape.web.simulator.SimulatorVerifyServiceIntegrationTest$JobCancellationBehavioralTests",
+      "name": "Should cancel running job via REST API",
+      "message": "java.lang.IllegalStateException: ApplicationContext failure threshold (1) exceeded: skipping repeated attempt to load context for [WebMergedContextConfiguration@20ac287d testClass = com.chromascape.web.simulator.SimulatorVerifyServiceIntegrationTest, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\", \"openrune-legacy\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@21dc7d6f, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, [ImportsContextCustomizer@a932a9d key = [org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration, org.springframework.boot.test.autoconfigure.jdbc.TestDatabaseAutoConfiguration]], org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.test.context.support.DynamicPropertiesContextCustomizer@f8df902d, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "SimulatorVerifyServiceIntegrationTest$JobCancellationBehavioralTests Should cancel running job via REST API"
+    },
+    {
+      "class": "com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogServiceTest",
+      "name": "schemaOnlyChangeInvalidatesFullCache()",
+      "message": "org.opentest4j.AssertionFailedError: \nexpected: \"READY\"\n but was: \"UNAVAILABLE\"",
+      "key": "Micro6ExecutorCatalogServiceTest schemaOnlyChangeInvalidatesFullCache()"
+    },
+    {
+      "class": "com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizerTest",
+      "name": "normalizesClaudeAndCodexGoldenProposalsToEquivalentDecisions()",
+      "message": "com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeException: Provider output was not one valid structured result",
+      "key": "ProviderOutputNormalizerTest normalizesClaudeAndCodexGoldenProposalsToEquivalentDecisions()"
+    },
+    {
+      "class": "com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizerTest",
+      "name": "rejectsProseMultipleDecisionsAndUnsupportedActions()",
+      "message": "java.lang.ClassCastException: class com.fasterxml.jackson.databind.node.MissingNode cannot be cast to class com.fasterxml.jackson.databind.node.ObjectNode (com.fasterxml.jackson.databind.node.MissingNode and com.fasterxml.jackson.databind.node.ObjectNode are in unnamed module of loader 'app')",
+      "key": "ProviderOutputNormalizerTest rejectsProseMultipleDecisionsAndUnsupportedActions()"
+    },
+    {
+      "class": "com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizerTest",
+      "name": "rejectsEvidenceOutsidePinnedInput()",
+      "message": "java.lang.ClassCastException: class com.fasterxml.jackson.databind.node.MissingNode cannot be cast to class com.fasterxml.jackson.databind.node.ArrayNode (com.fasterxml.jackson.databind.node.MissingNode and com.fasterxml.jackson.databind.node.ArrayNode are in unnamed module of loader 'app')",
+      "key": "ProviderOutputNormalizerTest rejectsEvidenceOutsidePinnedInput()"
+    },
+    {
+      "class": "com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizerTest",
+      "name": "extractsOneClaudeTerminalResultFromBoundedTransportEvents()",
+      "message": "com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeException: Provider output was not one valid structured result",
+      "key": "ProviderOutputNormalizerTest extractsOneClaudeTerminalResultFromBoundedTransportEvents()"
+    },
+    {
+      "class": "com.chromascape.web.gameplay.provider.runtime.ProviderOutputNormalizerTest",
+      "name": "acceptsOnlyThePinnedAbstainAction()",
+      "message": "com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeException: Provider output was not one valid structured result",
+      "key": "ProviderOutputNormalizerTest acceptsOnlyThePinnedAbstainAction()"
+    },
+    {
+      "class": "com.chromascape.web.gameplay.orchestration.accountbuilder.Sc1431FlywaySchemaTest",
+      "name": "flywayCreatesAllNormalizedTablesAndGuards()",
+      "message": "org.postgresql.util.PSQLException: FATAL: database \"chromascape_test\" does not exist",
+      "key": "Sc1431FlywaySchemaTest flywayCreatesAllNormalizedTablesAndGuards()"
+    },
+    {
+      "class": "com.chromascape.web.gameplay.orchestration.accountbuilder.Sc1431FlywaySchemaTest",
+      "name": "executionError",
+      "message": "org.postgresql.util.PSQLException: FATAL: database \"chromascape_test\" does not exist",
+      "key": "Sc1431FlywaySchemaTest executionError"
+    },
+    {
+      "class": "com.chromascape.web.gameplay.bootstrap.GameplayBootstrapControllerHttpTest",
+      "name": "initializationError",
+      "message": "java.lang.IllegalStateException: Found multiple @SpringBootConfiguration annotated classes [Generic bean: class=com.chromascape.web.gameplay.bootstrap.BootstrapApprovalStorePostgresTest$TestApplication; scope=; abstract=false; lazyInit=null; autowireMode=0; dependencyCheck=0; autowireCandidate=true; primary=false; fallback=false; factoryBeanName=null; factoryMethodName=null; initMethodNames=null; destroyMethodNames=null; defined in file [/tmp/sc2150-fedora-completion/build/classes/java/test/com/chromascape/web/gameplay/bootstrap/BootstrapApprovalStorePostgresTest$TestApplication.class], Generic bean: class=com.chromascape.web.gameplay.bootstrap.BootstrapRecordingCoordinatorTest$TestApplication; scope=; abstract=false; lazyInit=null; autowireMode=0; dependencyCheck=0; autowireCandidate=true; primary=false; fallback=false; factoryBeanName=null; factoryMethodName=null; initMethodNames=null; destroyMethodNames=null; defined in file [/tmp/sc2150-fedora-completion/build/classes/java/test/com/chromascape/web/gameplay/bootstrap/BootstrapRecordingCoordinatorTest$TestApplication.class], Generic bean: class=com.chromascape.web.gameplay.bootstrap.BootstrapRestartRecoveryTest$TestApplication; scope=; abstract=false; lazyInit=null; autowireMode=0; dependencyCheck=0; autowireCandidate=true; primary=false; fallback=false; factoryBeanName=null; factoryMethodName=null; initMethodNames=null; destroyMethodNames=null; defined in file [/tmp/sc2150-fedora-completion/build/classes/java/test/com/chromascape/web/gameplay/bootstrap/BootstrapRestartRecoveryTest$TestApplication.class], Generic bean: class=com.chromascape.web.gameplay.bootstrap.Sc1498FlywaySchemaTest$TestApplication; scope=; abstract=false; lazyInit=null; autowireMode=0; dependencyCheck=0; autowireCandidate=true; primary=false; fallback=false; factoryBeanName=null; factoryMethodName=null; initMethodNames=null; destroyMethodNames=null; defined in file [/tmp/sc2150-fedora-completion/build/classes/java/test/com/chromascape/web/gameplay/bootstrap/Sc1498FlywaySchemaTest$TestApplication.class]]",
+      "key": "GameplayBootstrapControllerHttpTest initializationError"
+    },
+    {
+      "class": "com.chromascape.ChromaScapeApplicationTests",
+      "name": "contextLoadsAndUsesCurrentRepositoryMigrations()",
+      "message": "java.lang.IllegalStateException: Failed to load ApplicationContext for [WebMergedContextConfiguration@1aaf73b7 testClass = com.chromascape.ChromaScapeApplicationTests, locations = [], classes = [com.chromascape.web.ChromaScapeApplication], contextInitializerClasses = [], activeProfiles = [\"test\"], propertySourceDescriptors = [], propertySourceProperties = [\"org.springframework.boot.test.context.SpringBootTestContextBootstrapper=true\", \"server.port=0\"], contextCustomizers = [org.springframework.boot.test.autoconfigure.OnFailureConditionReportContextCustomizerFactory$OnFailureConditionReportContextCustomizer@58740366, org.springframework.boot.test.autoconfigure.actuate.observability.ObservabilityContextCustomizerFactory$DisableObservabilityContextCustomizer@1f, org.springframework.boot.test.autoconfigure.properties.PropertyMappingContextCustomizer@21dc7d6f, org.springframework.boot.test.autoconfigure.web.servlet.WebDriverContextCustomizer@352ed70d, [ImportsContextCustomizer@731d0d5c key = [org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration, org.springframework.boot.test.autoconfigure.jdbc.TestDatabaseAutoConfiguration]], org.springframework.boot.test.context.filter.ExcludeFilterContextCustomizer@4aa21f9d, org.springframework.boot.test.json.DuplicateJsonObjectContextCustomizerFactory$DuplicateJsonObjectContextCustomizer@3e67f5f2, org.springframework.boot.test.mock.mockito.MockitoContextCustomizer@0, org.springframework.boot.test.web.client.TestRestTemplateContextCustomizer@348ad293, org.springframework.boot.test.web.reactor.netty.DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory$DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer@1886991b, org.springframework.test.context.support.DynamicPropertiesContextCustomizer@25b07be4, org.springframework.boot.test.context.SpringBootTestAnnotation@831c9a04], resourceBasePath = \"src/main/webapp\", contextLoader = org.springframework.boot.test.context.SpringBootContextLoader, parent = null]",
+      "key": "ChromaScapeApplicationTests contextLoadsAndUsesCurrentRepositoryMigrations()"
+    },
+    {
+      "class": "com.chromascape.web.integration.micro6.service.Micro6CatalogEndToEndIntegrationTest",
+      "name": "full catalog 202 GENERATING then 200 READY with typed schema and matching hashes",
+      "message": "org.opentest4j.AssertionFailedError: \nexpected: \"sha256:02ed8c49a6d73f9d3daa3e4502c03c8a439320eee495f48b6a4300e8756b8d2c\"\n but was: \"sha256:af7fecabf0e171e02f9d996c0f25453af34987b8d217ed737cdc18c29b46f851\"",
+      "key": "Micro6CatalogEndToEndIntegrationTest full catalog 202 GENERATING then 200 READY with typed schema and matching hashes"
+    },
+    {
+      "class": "com.chromascape.web.integration.micro6.service.Micro6CatalogEndToEndIntegrationTest",
+      "name": "lightweight 200 exposes canonical Fishing tasks and the FISH_TRAINING alias",
+      "message": "org.opentest4j.AssertionFailedError: \nexpected: \"READY\"\n but was: \"UNAVAILABLE\"",
+      "key": "Micro6CatalogEndToEndIntegrationTest lightweight 200 exposes canonical Fishing tasks and the FISH_TRAINING alias"
+    },
+    {
+      "class": "com.chromascape.web.integration.micro6.service.Micro6CatalogEndToEndIntegrationTest",
+      "name": "assembled bootstrap: NOT_AVAILABLE -> GENERATING -> AVAILABLE with cache invalidation",
+      "message": "org.opentest4j.AssertionFailedError: \nexpected: \"READY\"\n but was: \"UNAVAILABLE\"",
+      "key": "Micro6CatalogEndToEndIntegrationTest assembled bootstrap: NOT_AVAILABLE -> GENERATING -> AVAILABLE with cache invalidation"
+    },
+    {
+      "class": "com.chromascape.web.integration.micro6.service.Micro6CatalogEndToEndIntegrationTest",
+      "name": "reconnect with a different executor identity uses an independent cache",
+      "message": "org.opentest4j.AssertionFailedError: \nexpected: \"READY\"\n but was: \"UNAVAILABLE\"",
+      "key": "Micro6CatalogEndToEndIntegrationTest reconnect with a different executor identity uses an independent cache"
+    },
+    {
+      "class": "com.chromascape.web.integration.micro6.service.Micro6CatalogEndToEndIntegrationTest",
+      "name": "hashes remain stable across requests and match the Micro6 golden values",
+      "message": "org.opentest4j.AssertionFailedError: \nexpected: \"sha256:02ed8c49a6d73f9d3daa3e4502c03c8a439320eee495f48b6a4300e8756b8d2c\"\n but was: \"\"",
+      "key": "Micro6CatalogEndToEndIntegrationTest hashes remain stable across requests and match the Micro6 golden values"
+    },
+    {
+      "class": "com.chromascape.web.integration.micro6.service.Micro6CatalogEndToEndIntegrationTest",
+      "name": "executor disconnect yields STALE with last-known-good; reconnect recovers",
+      "message": "org.opentest4j.AssertionFailedError: \nexpected: \"READY\"\n but was: \"UNAVAILABLE\"",
+      "key": "Micro6CatalogEndToEndIntegrationTest executor disconnect yields STALE with last-known-good; reconnect recovers"
+    },
+    {
+      "class": "com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest",
+      "name": "headerAndPayloadCatalogStateDisagreementIsIdentityConflict()",
+      "message": "org.opentest4j.AssertionFailedError: \nexpected: \"IDENTITY_CONFLICT\"\n but was: \"IDENTITY_UNVERIFIED\"",
+      "key": "Micro6CatalogReconciliationTest headerAndPayloadCatalogStateDisagreementIsIdentityConflict()"
+    },
+    {
+      "class": "com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest",
+      "name": "generatingRuntimeAcceptsCompletedCatalogOnlyWhenRuntimeAfterConfirms()",
+      "message": "org.opentest4j.AssertionFailedError: \nexpected: \"READY\"\n but was: \"UNAVAILABLE\"",
+      "key": "Micro6CatalogReconciliationTest generatingRuntimeAcceptsCompletedCatalogOnlyWhenRuntimeAfterConfirms()"
+    },
+    {
+      "class": "com.chromascape.web.integration.micro6.service.Micro6CatalogReconciliationTest",
+      "name": "payloadBundleWithRuntimeNotAvailableIsIdentityConflict()",
+      "message": "org.opentest4j.AssertionFailedError: \nexpected: \"IDENTITY_CONFLICT\"\n but was: \"IDENTITY_UNVERIFIED\"",
+      "key": "Micro6CatalogReconciliationTest payloadBundleWithRuntimeNotAvailableIsIdentityConflict()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest",
+      "name": "rejectsUnsignedV1EvenWhenItsCanonicalHashIsValid()",
+      "message": "org.opentest4j.AssertionFailedError: expected: <SOURCE_SIGNATURE_INVALID> but was: <SOURCE_MANIFEST_INVALID>",
+      "key": "TaskSourceManifestVerifierTest rejectsUnsignedV1EvenWhenItsCanonicalHashIsValid()"
+    },
+    {
+      "class": "com.chromascape.web.gameplay.bootstrap.BootstrapRecordingCoordinatorTest",
+      "name": "startIsIdempotentAndFinalizeIsWriteOnce()",
+      "message": "jakarta.persistence.TransactionRequiredException: Executing an update/delete query",
+      "key": "BootstrapRecordingCoordinatorTest startIsIdempotentAndFinalizeIsWriteOnce()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.service.Sc967FlywaySchemaTest",
+      "name": "v5UpgradeBackfillsUnfinishedCaptureOperationsWithUniqueCorrelations()",
+      "message": "org.postgresql.util.PSQLException: FATAL: database \"chromascape_test\" does not exist",
+      "key": "Sc967FlywaySchemaTest v5UpgradeBackfillsUnfinishedCaptureOperationsWithUniqueCorrelations()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.service.Sc967FlywaySchemaTest",
+      "name": "flywayAloneCreatesValidSc967Schema()",
+      "message": "org.postgresql.util.PSQLException: FATAL: database \"chromascape_test\" does not exist",
+      "key": "Sc967FlywaySchemaTest flywayAloneCreatesValidSc967Schema()"
+    },
+    {
+      "class": "com.chromascape.web.aiplayer.routine.service.Sc967FlywaySchemaTest",
+      "name": "executionError",
+      "message": "org.postgresql.util.PSQLException: FATAL: database \"chromascape_test\" does not exist",
+      "key": "Sc967FlywaySchemaTest executionError"
+    }
+  ]
+}

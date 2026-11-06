@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<checkstyle version="10.26.1">
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/capability/XrspsStartupValidatorCapabilityContractTest.java">
+<error line="48" severity="warning" message="Line is longer than 100 characters (found 116)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="76" column="8" severity="warning" message="Abbreviation in name &apos;eachMissingTopLevelFieldIsNamedAsAProblem&apos; must contain no more than &apos;1&apos; consecutive capital letters." source="com.puppycrawl.tools.checkstyle.checks.naming.AbbreviationAsWordInNameCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/capability/XrspsStartupValidatorTest.java">
+<error line="48" severity="warning" message="Line is longer than 100 characters (found 104)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="57" severity="warning" message="Line is longer than 100 characters (found 111)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="58" severity="warning" message="Line is longer than 100 characters (found 112)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="62" severity="warning" message="Line is longer than 100 characters (found 124)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/viewer/ReplayViewerServiceTest.java">
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/conversion/ReplayActionConversionServiceTest.java">
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/manifest/ScenarioManifestV2CompilerTest.java">
+<error line="102" column="5" severity="warning" message="Distance between variable &apos;compiler&apos; declaration and its first usage is 12, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/integration/ReplayPostgresIntegrationTest.java">
+<error line="199" column="8" severity="warning" message="Abbreviation in name &apos;remainingDeadlineIsAPositiveBigintForAFreshRun&apos; must contain no more than &apos;1&apos; consecutive capital letters." source="com.puppycrawl.tools.checkstyle.checks.naming.AbbreviationAsWordInNameCheck"/>
+<error line="442" column="8" severity="warning" message="Abbreviation in name &apos;recoverySurvivesAGenuineReportFailureThenReconciliationRepairsOnce&apos; must contain no more than &apos;1&apos; consecutive capital letters." source="com.puppycrawl.tools.checkstyle.checks.naming.AbbreviationAsWordInNameCheck"/>
+<error line="578" column="8" severity="warning" message="Abbreviation in name &apos;reconcilerRepairsAMissingReportExactlyOnce&apos; must contain no more than &apos;1&apos; consecutive capital letters." source="com.puppycrawl.tools.checkstyle.checks.naming.AbbreviationAsWordInNameCheck"/>
+<error line="931" severity="warning" message="Line is longer than 100 characters (found 101)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/integration/ReplayMigrationIntegrationTest.java">
+<error line="226" column="8" severity="warning" message="Abbreviation in name &apos;v30AppliesOnAV20UpgradedDatabase&apos; must contain no more than &apos;1&apos; consecutive capital letters." source="com.puppycrawl.tools.checkstyle.checks.naming.AbbreviationAsWordInNameCheck"/>
+<error line="278" severity="warning" message="Line is longer than 100 characters (found 102)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="281" severity="warning" message="Line is longer than 100 characters (found 102)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="293" severity="warning" message="Line is longer than 100 characters (found 101)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="325" severity="warning" message="Line is longer than 100 characters (found 101)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="341" severity="warning" message="Line is longer than 100 characters (found 106)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/kernel/XrspsBoundedLineReaderTest.java">
+<error line="72" column="17" severity="warning" message="Abbreviation in name &apos;oneByteAtATime&apos; must contain no more than &apos;1&apos; consecutive capital letters." source="com.puppycrawl.tools.checkstyle.checks.naming.AbbreviationAsWordInNameCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/kernel/XrspsProcessLaunchDiagnosticsTest.java">
+<error line="66" column="5" severity="warning" message="Distance between variable &apos;gradle&apos; declaration and its first usage is 4, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="205" severity="warning" message="Line is longer than 100 characters (found 129)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="227" severity="warning" message="Line is longer than 100 characters (found 120)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="228" severity="warning" message="Line is longer than 100 characters (found 168)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/kernel/XrspsDisposeHandshakeTest.java">
+<error line="72" severity="warning" message="Line is longer than 100 characters (found 115)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="103" column="8" severity="warning" message="Method name &apos;aChildIgnoringDisposeIsEscalatedWithinTheShutdownDeadline&apos; must match pattern &apos;^[a-z][a-z0-9][a-zA-Z0-9]*$&apos;." source="com.puppycrawl.tools.checkstyle.checks.naming.MethodNameCheck"/>
+<error line="126" severity="warning" message="Line is longer than 100 characters (found 109)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="209" column="26" severity="warning" message="Unicode escape(s) usage should be avoided." source="com.puppycrawl.tools.checkstyle.checks.AvoidEscapedUnicodeCharactersCheck"/>
+<error line="258" severity="warning" message="Line is longer than 100 characters (found 113)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="260" severity="warning" message="Line is longer than 100 characters (found 115)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="463" severity="warning" message="Line is longer than 100 characters (found 116)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="525" column="8" severity="warning" message="Abbreviation in name &apos;oversizedStdoutLineIsAProtocolViolationThatTerminatesTheTree&apos; must contain no more than &apos;1&apos; consecutive capital letters." source="com.puppycrawl.tools.checkstyle.checks.naming.AbbreviationAsWordInNameCheck"/>
+<error line="531" column="5" severity="warning" message="Distance between variable &apos;startedAt&apos; declaration and its first usage is 5, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="559" column="8" severity="warning" message="Abbreviation in name &apos;closeHandlesAProcessThatAlreadyExited&apos; must contain no more than &apos;1&apos; consecutive capital letters." source="com.puppycrawl.tools.checkstyle.checks.naming.AbbreviationAsWordInNameCheck"/>
+<error line="564" column="5" severity="warning" message="Distance between variable &apos;startedAt&apos; declaration and its first usage is 6, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="647" column="5" severity="warning" message="Distance between variable &apos;startedAt&apos; declaration and its first usage is 8, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/kernel/KernelProtocolCodecTest.java">
+<error line="49" severity="warning" message="Line is longer than 100 characters (found 120)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="115" severity="warning" message="Line is longer than 100 characters (found 107)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="152" severity="warning" message="Line is longer than 100 characters (found 101)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="161" severity="warning" message="Line is longer than 100 characters (found 102)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/kernel/XrspsKernelProcessConcurrencyTest.java">
+<error line="51" severity="warning" message="Line is longer than 100 characters (found 101)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/compiler/ScenarioCompilerDeterminismTest.java">
+<error line="38" severity="warning" message="Line is longer than 100 characters (found 118)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/compiler/ScenarioCompilerEvidenceHashingTest.java">
+<error line="162" column="5" severity="warning" message="Distance between variable &apos;baseline&apos; declaration and its first usage is 7, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/compiler/ScenarioCompilerJsonbRoundTripTest.java">
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/security/LocalReplayPrincipalFilterTest.java">
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/support/HostPortWaitStrategy.java">
+<error line="27" column="3" severity="warning" message="Missing a Javadoc comment." source="com.puppycrawl.tools.checkstyle.checks.javadoc.MissingJavadocMethodCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/curation/ReplayCurationActionReplacementTest.java">
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/api/CreateReplayRunRequestValidationTest.java">
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/projection/CanonicalProjectionServiceTest.java">
+<error line="24" severity="warning" message="Line is longer than 100 characters (found 104)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="26" severity="warning" message="Line is longer than 100 characters (found 110)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="27" severity="warning" message="Line is longer than 100 characters (found 106)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="40" severity="warning" message="Line is longer than 100 characters (found 117)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="41" severity="warning" message="Line is longer than 100 characters (found 108)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="61" severity="warning" message="Line is longer than 100 characters (found 117)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="62" severity="warning" message="Line is longer than 100 characters (found 108)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/certification/ReplayCertificationTest.java">
+<error line="197" severity="warning" message="Line is longer than 100 characters (found 102)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="271" severity="warning" message="Line is longer than 100 characters (found 102)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="570" column="5" severity="warning" message="Distance between variable &apos;sessionId&apos; declaration and its first usage is 5, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/certification/ReplayStressCertificationTest.java">
+<error line="192" severity="warning" message="Line is longer than 100 characters (found 101)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="340" column="5" severity="warning" message="Distance between variable &apos;processCountBefore&apos; declaration and its first usage is 5, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="342" column="5" severity="warning" message="Distance between variable &apos;startedAtNanos&apos; declaration and its first usage is 14, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="423" severity="warning" message="Line is longer than 100 characters (found 109)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="430" severity="warning" message="Line is longer than 100 characters (found 123)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="736" column="5" severity="warning" message="Distance between variable &apos;report&apos; declaration and its first usage is 4, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="873" column="5" severity="warning" message="Distance between variable &apos;before&apos; declaration and its first usage is 8, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="984" column="7" severity="warning" message="Distance between variable &apos;finalizedReferenceCount&apos; declaration and its first usage is 4, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="1143" column="7" severity="warning" message="Distance between variable &apos;report&apos; declaration and its first usage is 4, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="1146" column="7" severity="warning" message="Distance between variable &apos;leaseReleased&apos; declaration and its first usage is 6, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="1148" column="7" severity="warning" message="Distance between variable &apos;stagingReferencesEmpty&apos; declaration and its first usage is 7, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="1150" column="7" severity="warning" message="Distance between variable &apos;finalizedReferenceCount&apos; declaration and its first usage is 9, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="1151" column="7" severity="warning" message="Distance between variable &apos;finalizedReferencesValid&apos; declaration and its first usage is 8, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="1278" column="5" severity="warning" message="Distance between variable &apos;processCountBefore&apos; declaration and its first usage is 9, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="1451" column="5" severity="warning" message="Distance between variable &apos;processCountBefore&apos; declaration and its first usage is 8, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="1469" column="5" severity="warning" message="Distance between variable &apos;finalizedReferenceCount&apos; declaration and its first usage is 15, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="1521" column="5" severity="warning" message="Distance between variable &apos;reports&apos; declaration and its first usage is 5, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="1522" column="5" severity="warning" message="Distance between variable &apos;uniqueConflict&apos; declaration and its first usage is 5, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="1562" severity="warning" message="Line is longer than 100 characters (found 110)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="1564" severity="warning" message="Line is longer than 100 characters (found 112)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="1565" severity="warning" message="Line is longer than 100 characters (found 110)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="1566" severity="warning" message="Line is longer than 100 characters (found 111)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="1568" severity="warning" message="Line is longer than 100 characters (found 118)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="1569" severity="warning" message="Line is longer than 100 characters (found 115)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="1570" severity="warning" message="Line is longer than 100 characters (found 110)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="1571" severity="warning" message="Line is longer than 100 characters (found 118)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="1700" column="7" severity="warning" message="Distance between variable &apos;runA&apos; declaration and its first usage is 6, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="1701" column="7" severity="warning" message="Distance between variable &apos;runB&apos; declaration and its first usage is 7, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="2098" severity="warning" message="Line is longer than 100 characters (found 154)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="2099" severity="warning" message="Line is longer than 100 characters (found 130)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="2108" severity="warning" message="Line is longer than 100 characters (found 387)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="2109" severity="warning" message="Line is longer than 100 characters (found 291)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="2238" severity="warning" message="Line is longer than 100 characters (found 125)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="2257" severity="warning" message="Line is longer than 100 characters (found 127)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="2305" severity="warning" message="Line is longer than 100 characters (found 112)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="2329" severity="warning" message="Line is longer than 100 characters (found 255)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="2372" severity="warning" message="Line is longer than 100 characters (found 110)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="2376" severity="warning" message="Line is longer than 100 characters (found 285)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="2380" severity="warning" message="Line is longer than 100 characters (found 151)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="2384" severity="warning" message="Line is longer than 100 characters (found 126)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="2394" severity="warning" message="Line is longer than 100 characters (found 120)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="2414" severity="warning" message="Line is longer than 100 characters (found 210)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="2591" severity="warning" message="Line is longer than 100 characters (found 182)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="2847" severity="warning" message="Line is longer than 100 characters (found 484)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="2853" severity="warning" message="Line is longer than 100 characters (found 484)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="2854" severity="warning" message="Line is longer than 100 characters (found 126)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="2855" severity="warning" message="Line is longer than 100 characters (found 174)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/catalog/ReplayPreflightFidelityTest.java">
+<error line="115" severity="warning" message="Line is longer than 100 characters (found 124)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="313" column="8" severity="warning" message="Abbreviation in name &apos;wrongCurationVersionIsABlockNotASilentSubstitute&apos; must contain no more than &apos;1&apos; consecutive capital letters." source="com.puppycrawl.tools.checkstyle.checks.naming.AbbreviationAsWordInNameCheck"/>
+<error line="450" severity="warning" message="Line is longer than 100 characters (found 121)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="451" severity="warning" message="Line is longer than 100 characters (found 129)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="515" severity="warning" message="Line is longer than 100 characters (found 129)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/catalog/ReplayEvidenceValidatorTest.java">
+<error line="52" column="8" severity="warning" message="Abbreviation in name &apos;missingSnapshotAtTheActionTickIsAViolation&apos; must contain no more than &apos;1&apos; consecutive capital letters." source="com.puppycrawl.tools.checkstyle.checks.naming.AbbreviationAsWordInNameCheck"/>
+<error line="57" severity="warning" message="Line is longer than 100 characters (found 123)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="73" severity="warning" message="Line is longer than 100 characters (found 123)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="87" severity="warning" message="Line is longer than 100 characters (found 117)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="88" severity="warning" message="Line is longer than 100 characters (found 125)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="104" severity="warning" message="Line is longer than 100 characters (found 123)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="120" severity="warning" message="Line is longer than 100 characters (found 121)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="135" column="8" severity="warning" message="Abbreviation in name &apos;waitUntilTickRequiresOnlyASnapshotAtItsTick&apos; must contain no more than &apos;1&apos; consecutive capital letters." source="com.puppycrawl.tools.checkstyle.checks.naming.AbbreviationAsWordInNameCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/worker/ReplayWorkerBranchRestoreTest.java">
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/worker/ReplayWorkerLifecycleTest.java">
+<error line="104" column="5" severity="warning" message="Distance between variable &apos;runs&apos; declaration and its first usage is 7, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/worker/ReplayLeaseHeartbeatTest.java">
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/worker/ReplayRecoveryReportTransactionTest.java">
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/worker/DiagnosticReplayWorkerFactory.java">
+<error line="29" column="3" severity="warning" message="Missing a Javadoc comment." source="com.puppycrawl.tools.checkstyle.checks.javadoc.MissingJavadocMethodCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/worker/ReplayWorkerPersistenceServiceTest.java">
+<error line="129" column="15" severity="warning" message="Distance between variable &apos;phase&apos; declaration and its first usage is 4, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="162" column="15" severity="warning" message="Distance between variable &apos;dbNow&apos; declaration and its first usage is 4, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="624" column="35" severity="warning" message="Distance between variable &apos;reservation&apos; declaration and its first usage is 4, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="667" column="35" severity="warning" message="Distance between variable &apos;failedReservation&apos; declaration and its first usage is 4, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="684" column="8" severity="warning" message="Abbreviation in name &apos;receiptThatMissesAStagedReferenceIsRejected&apos; must contain no more than &apos;1&apos; consecutive capital letters." source="com.puppycrawl.tools.checkstyle.checks.naming.AbbreviationAsWordInNameCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/artifact/ReplayArtifactServiceReuseTest.java">
+<error line="126" column="5" severity="warning" message="Distance between variable &apos;modifiedBefore&apos; declaration and its first usage is 5, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="183" column="5" severity="warning" message="Distance between variable &apos;modifiedBefore&apos; declaration and its first usage is 4, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/run/ReplayV2RunServiceTest.java">
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/run/ReplayDatabaseClockTest.java">
+<error line="16" column="49" severity="warning" message="Using the &apos;.*&apos; form of import should be avoided - com.chromascape.web.replay.run.repository.*." source="com.puppycrawl.tools.checkstyle.checks.imports.AvoidStarImportCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/run/ReplayRunStatePhaseFencingTest.java">
+<error line="24" column="49" severity="warning" message="Using the &apos;.*&apos; form of import should be avoided - com.chromascape.web.replay.run.repository.*." source="com.puppycrawl.tools.checkstyle.checks.imports.AvoidStarImportCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/playback/ReplayPlaybackCursorCodecTest.java">
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/playback/ReplayPlaybackServiceTest.java">
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/playback/ReplayPlaybackCatalogRepositoryIntegrationTest.java">
+<error line="150" column="5" severity="warning" message="Distance between variable &apos;first&apos; declaration and its first usage is 5, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="167" column="5" severity="warning" message="Distance between variable &apos;pageOne&apos; declaration and its first usage is 9, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="174" column="5" severity="warning" message="Distance between variable &apos;cursorTime&apos; declaration and its first usage is 4, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="175" column="5" severity="warning" message="Distance between variable &apos;cursorId&apos; declaration and its first usage is 4, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="213" severity="warning" message="Line is longer than 100 characters (found 155)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="216" severity="warning" message="Line is longer than 100 characters (found 177)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="219" severity="warning" message="Line is longer than 100 characters (found 127)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="222" severity="warning" message="Line is longer than 100 characters (found 117)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="248" severity="warning" message="Line is longer than 100 characters (found 155)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/playback/ReplayPlaybackIndexConvergenceTest.java">
+<error line="45" severity="warning" message="Line is longer than 100 characters (found 115)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="49" severity="warning" message="Line is longer than 100 characters (found 111)." source="com.puppycrawl.tools.checkstyle.checks.sizes.LineLengthCheck"/>
+<error line="56" column="8" severity="warning" message="Abbreviation in name &apos;nonPostgresDataSourceIsAStartupNoOp&apos; must contain no more than &apos;1&apos; consecutive capital letters." source="com.puppycrawl.tools.checkstyle.checks.naming.AbbreviationAsWordInNameCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/playback/LegacySimulatorProfileContractTest.java">
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/playback/ReplayPlaybackFrameCursorCodecTest.java">
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/playback/ReplayPlaybackContractSerializationTest.java">
+<error line="161" column="5" severity="warning" message="Distance between variable &apos;catalog&apos; declaration and its first usage is 19, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/playback/ReplayPlaybackParityIntegrationTest.java">
+<error line="144" column="5" severity="warning" message="Distance between variable &apos;action&apos; declaration and its first usage is 14, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="147" column="5" severity="warning" message="Distance between variable &apos;dialogue&apos; declaration and its first usage is 14, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+<error line="155" column="5" severity="warning" message="Distance between variable &apos;varbit&apos; declaration and its first usage is 15, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/playback/ReplayPlaybackControllerTest.java">
+<error line="50" column="5" severity="warning" message="Distance between variable &apos;frames&apos; declaration and its first usage is 4, but allowed 3.  Consider making that variable final if you still need to store its value in advance (before method calls that might have side effects on the original value)." source="com.puppycrawl.tools.checkstyle.checks.coding.VariableDeclarationUsageDistanceCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/report/ReplayReportServiceTest.java">
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/replay/report/ReplayReportContractTest.java">
+<error line="145" column="8" severity="warning" message="Abbreviation in name &apos;preCapabilityInfrastructureFailureCarriesARealAttemptAndNoInventedIdentity&apos; must contain no more than &apos;1&apos; consecutive capital letters." source="com.puppycrawl.tools.checkstyle.checks.naming.AbbreviationAsWordInNameCheck"/>
+</file>
+<file name="/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/java/com/chromascape/web/debug/tickdebugger/controller/TickReplayControllerTest.java">
+<error line="3" column="47" severity="warning" message="Using the &apos;.*&apos; form of import should be avoided - org.junit.jupiter.api.Assertions.*." source="com.puppycrawl.tools.checkstyle.checks.imports.AvoidStarImportCheck"/>
+<error line="4" column="34" severity="warning" message="Using the &apos;.*&apos; form of import should be avoided - org.mockito.Mockito.*." source="com.puppycrawl.tools.checkstyle.checks.imports.AvoidStarImportCheck"/>
+<error line="168" column="8" severity="warning" message="Abbreviation in name &apos;flatXZPayload_displaysCorrectPositionInSummary&apos; must contain no more than &apos;1&apos; consecutive capital letters." source="com.puppycrawl.tools.checkstyle.checks.naming.AbbreviationAsWordInNameCheck"/>
+<error line="208" column="8" severity="warning" message="Abbreviation in name &apos;worldXWorldYPayload_displaysCorrectPositionInSummary&apos; must contain no more than &apos;1&apos; consecutive capital letters." source="com.puppycrawl.tools.checkstyle.checks.naming.AbbreviationAsWordInNameCheck"/>
+</file>
+</checkstyle>

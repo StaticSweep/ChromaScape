@@ -1,0 +1,944 @@
+{
+  "schema": "sc2150-fa12-score/v1",
+  "split": "dev",
+  "gates": {
+    "median_px": 4.0,
+    "p95_px": 12.0,
+    "recall": 0.9,
+    "absent_false_rate": 0.01,
+    "cut_f1": 0.9
+  },
+  "gate_results": {
+    "median_px": true,
+    "p95_px": true,
+    "recall": true,
+    "absent_false_rate": false,
+    "cut_f1": true
+  },
+  "all_gates_pass": false,
+  "gate_scope": "supported clips (geometry_resolvable)",
+  "supported_clips": [
+    "dev--f9f78ab0--login-moving",
+    "dev--fa5228cb--compressed-300k",
+    "dev--fa5228cb--cut",
+    "dev--fa5228cb--login-moving",
+    "dev--fa5228cb--native-4m",
+    "dev--fa5228cb--overlay",
+    "dev--fa5228cb--resized-0.7x",
+    "dev--fa5228cb--vfr-drop"
+  ],
+  "unsupported_clips": [
+    "dev--fa5228cb--capture-1.5x"
+  ],
+  "overall": {
+    "visible_frames": 3205,
+    "absent_frames": 363,
+    "detected_visible": 3037,
+    "recall": 0.947581903276131,
+    "median_px": 0.0,
+    "p95_px": 1.3739227319865641,
+    "within_12px_rate": 0.9472698907956318,
+    "absent_false_detections": 34,
+    "absent_false_rate": 0.09366391184573003
+  },
+  "overall_all_clips_including_unsupported": {
+    "visible_frames": 3569,
+    "absent_frames": 478,
+    "detected_visible": 3037,
+    "recall": 0.8509386382740264,
+    "median_px": 0.0,
+    "p95_px": 1.3739227319865641,
+    "within_12px_rate": 0.8506584477444662,
+    "absent_false_detections": 34,
+    "absent_false_rate": 0.07112970711297072
+  },
+  "confidence_intervals_95_clip_bootstrap": {
+    "median_px": [
+      0.0,
+      0.0
+    ],
+    "p95_px": [
+      0.0,
+      1.7280027550998514
+    ],
+    "recall": [
+      0.8896034118681501,
+      1.0
+    ],
+    "absent_false_rate": [
+      0.00253148574351106,
+      0.20499453323097666
+    ]
+  },
+  "cuts": {
+    "tp": 2,
+    "fp": 0,
+    "fn": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0
+  },
+  "covered_minutes": 2.396,
+  "unmatched_samples": 0,
+  "by_variant": {
+    "capture-1.5x": {
+      "visible_frames": 364,
+      "absent_frames": 115,
+      "detected_visible": 0,
+      "recall": 0.0,
+      "median_px": null,
+      "p95_px": null,
+      "within_12px_rate": 0.0,
+      "absent_false_detections": 0,
+      "absent_false_rate": 0.0
+    },
+    "compressed-300k": {
+      "visible_frames": 345,
+      "absent_frames": 86,
+      "detected_visible": 345,
+      "recall": 1.0,
+      "median_px": 0.0,
+      "p95_px": 0.0,
+      "within_12px_rate": 1.0,
+      "absent_false_detections": 22,
+      "absent_false_rate": 0.2558139534883721
+    },
+    "cut": {
+      "visible_frames": 400,
+      "absent_frames": 59,
+      "detected_visible": 355,
+      "recall": 0.8875,
+      "median_px": 0.0,
+      "p95_px": 0.0,
+      "within_12px_rate": 0.8875,
+      "absent_false_detections": 0,
+      "absent_false_rate": 0.0
+    },
+    "login-moving": {
+      "visible_frames": 844,
+      "absent_frames": 106,
+      "detected_visible": 844,
+      "recall": 1.0,
+      "median_px": 0.0,
+      "p95_px": 0.0,
+      "within_12px_rate": 1.0,
+      "absent_false_detections": 0,
+      "absent_false_rate": 0.0
+    },
+    "native-4m": {
+      "visible_frames": 479,
+      "absent_frames": 0,
+      "detected_visible": 450,
+      "recall": 0.9394572025052192,
+      "median_px": 0.0,
+      "p95_px": 0.0,
+      "within_12px_rate": 0.9394572025052192,
+      "absent_false_detections": 0,
+      "absent_false_rate": null
+    },
+    "overlay": {
+      "visible_frames": 404,
+      "absent_frames": 76,
+      "detected_visible": 404,
+      "recall": 1.0,
+      "median_px": 0.0,
+      "p95_px": 0.0,
+      "within_12px_rate": 1.0,
+      "absent_false_detections": 1,
+      "absent_false_rate": 0.013157894736842105
+    },
+    "resized-0.7x": {
+      "visible_frames": 437,
+      "absent_frames": 36,
+      "detected_visible": 343,
+      "recall": 0.7848970251716247,
+      "median_px": 1.2209177518303695,
+      "p95_px": 2.1938669693689654,
+      "within_12px_rate": 0.782608695652174,
+      "absent_false_detections": 11,
+      "absent_false_rate": 0.3055555555555556
+    },
+    "vfr-drop": {
+      "visible_frames": 296,
+      "absent_frames": 0,
+      "detected_visible": 296,
+      "recall": 1.0,
+      "median_px": 0.0,
+      "p95_px": 0.0,
+      "within_12px_rate": 1.0,
+      "absent_false_detections": 0,
+      "absent_false_rate": null
+    }
+  },
+  "by_template": {
+    "arrow": {
+      "visible_frames": 1320,
+      "absent_frames": 112,
+      "detected_visible": 1197,
+      "recall": 0.9068181818181819,
+      "median_px": 0.0,
+      "p95_px": 1.6932053269935645,
+      "within_12px_rate": 0.906060606060606,
+      "absent_false_detections": 12,
+      "absent_false_rate": 0.10714285714285714
+    },
+    "dragon-dagger": {
+      "visible_frames": 764,
+      "absent_frames": 174,
+      "detected_visible": 355,
+      "recall": 0.46465968586387435,
+      "median_px": 0.0,
+      "p95_px": 0.0,
+      "within_12px_rate": 0.46465968586387435,
+      "absent_false_detections": 0,
+      "absent_false_rate": 0.0
+    },
+    "rs3-gold": {
+      "visible_frames": 1485,
+      "absent_frames": 192,
+      "detected_visible": 1485,
+      "recall": 1.0,
+      "median_px": 0.0,
+      "p95_px": 0.0,
+      "within_12px_rate": 1.0,
+      "absent_false_detections": 22,
+      "absent_false_rate": 0.11458333333333333
+    }
+  },
+  "by_source": {
+    "f9f78ab0": {
+      "visible_frames": 421,
+      "absent_frames": 58,
+      "detected_visible": 421,
+      "recall": 1.0,
+      "median_px": 0.0,
+      "p95_px": 0.0,
+      "within_12px_rate": 1.0,
+      "absent_false_detections": 0,
+      "absent_false_rate": 0.0
+    },
+    "fa5228cb": {
+      "visible_frames": 3148,
+      "absent_frames": 420,
+      "detected_visible": 2616,
+      "recall": 0.8310038119440915,
+      "median_px": 0.0,
+      "p95_px": 1.4111588041425025,
+      "within_12px_rate": 0.8306861499364676,
+      "absent_false_detections": 34,
+      "absent_false_rate": 0.08095238095238096
+    }
+  },
+  "by_state": {
+    "ABSENT": {
+      "visible_frames": 0,
+      "absent_frames": 474,
+      "detected_visible": 0,
+      "recall": null,
+      "median_px": null,
+      "p95_px": null,
+      "within_12px_rate": null,
+      "absent_false_detections": 33,
+      "absent_false_rate": 0.06962025316455696
+    },
+    "HOTSPOT_OCCLUDED": {
+      "visible_frames": 1,
+      "absent_frames": 0,
+      "detected_visible": 1,
+      "recall": 1.0,
+      "median_px": 0.0,
+      "p95_px": 0.0,
+      "within_12px_rate": 1.0,
+      "absent_false_detections": 0,
+      "absent_false_rate": null
+    },
+    "OCCLUDED": {
+      "visible_frames": 0,
+      "absent_frames": 4,
+      "detected_visible": 0,
+      "recall": null,
+      "median_px": null,
+      "p95_px": null,
+      "within_12px_rate": null,
+      "absent_false_detections": 1,
+      "absent_false_rate": 0.25
+    },
+    "PARTIAL_DONT_CARE": {
+      "visible_frames": 0,
+      "absent_frames": 0,
+      "detected_visible": 0,
+      "recall": null,
+      "median_px": null,
+      "p95_px": null,
+      "within_12px_rate": null,
+      "absent_false_detections": 0,
+      "absent_false_rate": null
+    },
+    "UNDER_TRANSLUCENT_OVERLAY": {
+      "visible_frames": 97,
+      "absent_frames": 0,
+      "detected_visible": 97,
+      "recall": 1.0,
+      "median_px": 0.0,
+      "p95_px": 0.0,
+      "within_12px_rate": 1.0,
+      "absent_false_detections": 0,
+      "absent_false_rate": null
+    },
+    "VISIBLE": {
+      "visible_frames": 3285,
+      "absent_frames": 0,
+      "detected_visible": 2763,
+      "recall": 0.8410958904109589,
+      "median_px": 0.0,
+      "p95_px": 1.3739227319865641,
+      "within_12px_rate": 0.8407914764079147,
+      "absent_false_detections": 0,
+      "absent_false_rate": null
+    },
+    "VISIBLE_CLIPPED": {
+      "visible_frames": 186,
+      "absent_frames": 0,
+      "detected_visible": 176,
+      "recall": 0.946236559139785,
+      "median_px": 0.0,
+      "p95_px": 0.0,
+      "within_12px_rate": 0.946236559139785,
+      "absent_false_detections": 0,
+      "absent_false_rate": null
+    }
+  },
+  "determinism": [],
+  "clips": [
+    {
+      "clip_id": "dev--f9f78ab0--login-moving",
+      "source_id": "f9f78ab0",
+      "variant": "login-moving",
+      "template": "rs3-gold",
+      "output_size": [
+        764,
+        502
+      ],
+      "step": 1,
+      "sampled_frames": 479,
+      "unmatched_samples": 0,
+      "cuts": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "analyze_millis": 95595,
+      "geometry_resolvable": true,
+      "cursor_calibration": {
+        "method": "cursor-template/v2",
+        "calibrationSamples": 24,
+        "calibrated": true,
+        "tooSmallToResolve": false,
+        "sourceScale": 1.0,
+        "confidentByScale": [
+          0,
+          0,
+          24,
+          17,
+          16,
+          16,
+          0,
+          0,
+          0
+        ],
+        "meanScoreByScale": [
+          null,
+          null,
+          0.8504,
+          0.9033,
+          0.9849,
+          0.8795,
+          null,
+          null,
+          null
+        ],
+        "fisherZByScale": [
+          0.0,
+          0.0,
+          126.4601,
+          135.4676,
+          266.133,
+          189.2928,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "observations_sha256": "5383c38f2c0c89288d26246c55b0235a0dd8727892a56e8cae1da768c73299b4",
+      "visible_frames": 421,
+      "absent_frames": 58,
+      "detected_visible": 421,
+      "recall": 1.0,
+      "median_px": 0.0,
+      "p95_px": 0.0,
+      "within_12px_rate": 1.0,
+      "absent_false_detections": 0,
+      "absent_false_rate": 0.0
+    },
+    {
+      "clip_id": "dev--fa5228cb--capture-1.5x",
+      "source_id": "fa5228cb",
+      "variant": "capture-1.5x",
+      "template": "dragon-dagger",
+      "output_size": [
+        1146,
+        752
+      ],
+      "step": 1,
+      "sampled_frames": 479,
+      "unmatched_samples": 0,
+      "cuts": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "analyze_millis": 25006,
+      "geometry_resolvable": false,
+      "cursor_calibration": {
+        "method": "cursor-template/v2",
+        "calibrationSamples": 24,
+        "calibrated": false,
+        "tooSmallToResolve": true,
+        "sourceScale": null,
+        "confidentByScale": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          18,
+          3,
+          0,
+          0
+        ],
+        "meanScoreByScale": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          0.8566,
+          0.811,
+          null,
+          null
+        ],
+        "fisherZByScale": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          89.9143,
+          18.5887,
+          0.0,
+          0.0
+        ]
+      },
+      "observations_sha256": "3b404d10b874a2b18cca08db32a96e2a89c15d2ef5f378245a146c720b1f8716",
+      "visible_frames": 364,
+      "absent_frames": 115,
+      "detected_visible": 0,
+      "recall": 0.0,
+      "median_px": null,
+      "p95_px": null,
+      "within_12px_rate": 0.0,
+      "absent_false_detections": 0,
+      "absent_false_rate": 0.0
+    },
+    {
+      "clip_id": "dev--fa5228cb--compressed-300k",
+      "source_id": "fa5228cb",
+      "variant": "compressed-300k",
+      "template": "rs3-gold",
+      "output_size": [
+        764,
+        502
+      ],
+      "step": 1,
+      "sampled_frames": 479,
+      "unmatched_samples": 0,
+      "cuts": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "analyze_millis": 114106,
+      "geometry_resolvable": true,
+      "cursor_calibration": {
+        "method": "cursor-template/v2",
+        "calibrationSamples": 24,
+        "calibrated": true,
+        "tooSmallToResolve": false,
+        "sourceScale": 1.0,
+        "confidentByScale": [
+          0,
+          0,
+          23,
+          18,
+          15,
+          11,
+          0,
+          0,
+          0
+        ],
+        "meanScoreByScale": [
+          null,
+          null,
+          0.8561,
+          0.8971,
+          0.9805,
+          0.8743,
+          null,
+          null,
+          null
+        ],
+        "fisherZByScale": [
+          0.0,
+          0.0,
+          129.5944,
+          145.199,
+          238.517,
+          128.2188,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "observations_sha256": "acb022e6a23d0b8c3ccede4d35b50dc5305d4bb98f14d9321e3e095769babd96",
+      "visible_frames": 345,
+      "absent_frames": 86,
+      "detected_visible": 345,
+      "recall": 1.0,
+      "median_px": 0.0,
+      "p95_px": 0.0,
+      "within_12px_rate": 1.0,
+      "absent_false_detections": 22,
+      "absent_false_rate": 0.2558139534883721
+    },
+    {
+      "clip_id": "dev--fa5228cb--cut",
+      "source_id": "fa5228cb",
+      "variant": "cut",
+      "template": "dragon-dagger",
+      "output_size": [
+        764,
+        502
+      ],
+      "step": 1,
+      "sampled_frames": 478,
+      "unmatched_samples": 0,
+      "cuts": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 0
+      },
+      "analyze_millis": 102439,
+      "geometry_resolvable": true,
+      "cursor_calibration": {
+        "method": "cursor-template/v2",
+        "calibrationSamples": 24,
+        "calibrated": true,
+        "tooSmallToResolve": false,
+        "sourceScale": 1.0,
+        "confidentByScale": [
+          0,
+          0,
+          0,
+          19,
+          19,
+          1,
+          0,
+          0,
+          0
+        ],
+        "meanScoreByScale": [
+          null,
+          null,
+          null,
+          0.8953,
+          0.9288,
+          0.8132,
+          null,
+          null,
+          null
+        ],
+        "fisherZByScale": [
+          0.0,
+          0.0,
+          0.0,
+          130.5083,
+          210.634,
+          8.2731,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "observations_sha256": "6caed6b82f9f63ad94d4a92a8ae52a46ec25e38e1f8e01aa6c9d3a93a006e8e9",
+      "visible_frames": 400,
+      "absent_frames": 59,
+      "detected_visible": 355,
+      "recall": 0.8875,
+      "median_px": 0.0,
+      "p95_px": 0.0,
+      "within_12px_rate": 0.8875,
+      "absent_false_detections": 0,
+      "absent_false_rate": 0.0
+    },
+    {
+      "clip_id": "dev--fa5228cb--login-moving",
+      "source_id": "fa5228cb",
+      "variant": "login-moving",
+      "template": "rs3-gold",
+      "output_size": [
+        764,
+        502
+      ],
+      "step": 1,
+      "sampled_frames": 480,
+      "unmatched_samples": 0,
+      "cuts": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "analyze_millis": 94480,
+      "geometry_resolvable": true,
+      "cursor_calibration": {
+        "method": "cursor-template/v2",
+        "calibrationSamples": 24,
+        "calibrated": true,
+        "tooSmallToResolve": false,
+        "sourceScale": 1.0,
+        "confidentByScale": [
+          0,
+          0,
+          22,
+          22,
+          21,
+          21,
+          1,
+          0,
+          0
+        ],
+        "meanScoreByScale": [
+          null,
+          null,
+          0.855,
+          0.9181,
+          0.9827,
+          0.8676,
+          0.8376,
+          null,
+          null
+        ],
+        "fisherZByScale": [
+          0.0,
+          0.0,
+          119.4185,
+          186.9901,
+          348.1406,
+          239.2827,
+          12.3696,
+          0.0,
+          0.0
+        ]
+      },
+      "observations_sha256": "66df843f5d37aa094a245b589d6952d7f499d2e166827808d16b9597234d5b3e",
+      "visible_frames": 423,
+      "absent_frames": 48,
+      "detected_visible": 423,
+      "recall": 1.0,
+      "median_px": 0.0,
+      "p95_px": 0.0,
+      "within_12px_rate": 1.0,
+      "absent_false_detections": 0,
+      "absent_false_rate": 0.0
+    },
+    {
+      "clip_id": "dev--fa5228cb--native-4m",
+      "source_id": "fa5228cb",
+      "variant": "native-4m",
+      "template": "arrow",
+      "output_size": [
+        764,
+        502
+      ],
+      "step": 1,
+      "sampled_frames": 479,
+      "unmatched_samples": 0,
+      "cuts": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "analyze_millis": 76580,
+      "geometry_resolvable": true,
+      "cursor_calibration": {
+        "method": "cursor-template/v2",
+        "calibrationSamples": 24,
+        "calibrated": true,
+        "tooSmallToResolve": false,
+        "sourceScale": 1.0,
+        "confidentByScale": [
+          0,
+          0,
+          0,
+          22,
+          22,
+          21,
+          7,
+          2,
+          0
+        ],
+        "meanScoreByScale": [
+          null,
+          null,
+          null,
+          0.9465,
+          0.9652,
+          0.8832,
+          0.8384,
+          0.8304,
+          null
+        ],
+        "fisherZByScale": [
+          0.0,
+          0.0,
+          0.0,
+          168.1391,
+          265.0716,
+          198.8329,
+          70.123,
+          24.0614,
+          0.0
+        ]
+      },
+      "observations_sha256": "3eb43788b9d12129e7696c86f10d8d82ea175d0451cfeb5430f162018889d45e",
+      "visible_frames": 479,
+      "absent_frames": 0,
+      "detected_visible": 450,
+      "recall": 0.9394572025052192,
+      "median_px": 0.0,
+      "p95_px": 0.0,
+      "within_12px_rate": 0.9394572025052192,
+      "absent_false_detections": 0,
+      "absent_false_rate": null
+    },
+    {
+      "clip_id": "dev--fa5228cb--overlay",
+      "source_id": "fa5228cb",
+      "variant": "overlay",
+      "template": "arrow",
+      "output_size": [
+        764,
+        502
+      ],
+      "step": 1,
+      "sampled_frames": 480,
+      "unmatched_samples": 0,
+      "cuts": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "analyze_millis": 59727,
+      "geometry_resolvable": true,
+      "cursor_calibration": {
+        "method": "cursor-template/v2",
+        "calibrationSamples": 24,
+        "calibrated": true,
+        "tooSmallToResolve": false,
+        "sourceScale": 1.0,
+        "confidentByScale": [
+          0,
+          0,
+          0,
+          21,
+          21,
+          15,
+          0,
+          0,
+          0
+        ],
+        "meanScoreByScale": [
+          null,
+          null,
+          null,
+          0.9382,
+          0.9673,
+          0.8876,
+          null,
+          null,
+          null
+        ],
+        "fisherZByScale": [
+          0.0,
+          0.0,
+          0.0,
+          152.2047,
+          241.5852,
+          147.1703,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "observations_sha256": "4433e75dc02ecc12292c8378de1dc9debce5ae1dcd7e9d9e9a55e7bf3073156e",
+      "visible_frames": 404,
+      "absent_frames": 76,
+      "detected_visible": 404,
+      "recall": 1.0,
+      "median_px": 0.0,
+      "p95_px": 0.0,
+      "within_12px_rate": 1.0,
+      "absent_false_detections": 1,
+      "absent_false_rate": 0.013157894736842105
+    },
+    {
+      "clip_id": "dev--fa5228cb--resized-0.7x",
+      "source_id": "fa5228cb",
+      "variant": "resized-0.7x",
+      "template": "arrow",
+      "output_size": [
+        534,
+        350
+      ],
+      "step": 1,
+      "sampled_frames": 479,
+      "unmatched_samples": 0,
+      "cuts": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "analyze_millis": 119400,
+      "geometry_resolvable": true,
+      "cursor_calibration": {
+        "method": "cursor-template/v2",
+        "calibrationSamples": 24,
+        "calibrated": true,
+        "tooSmallToResolve": false,
+        "sourceScale": 0.707,
+        "confidentByScale": [
+          0,
+          24,
+          24,
+          20,
+          8,
+          3,
+          0,
+          0,
+          0
+        ],
+        "meanScoreByScale": [
+          null,
+          0.9581,
+          0.9333,
+          0.86,
+          0.8128,
+          0.8441,
+          null,
+          null,
+          null
+        ],
+        "fisherZByScale": [
+          0.0,
+          199.5507,
+          231.3991,
+          177.5438,
+          76.0169,
+          37.986,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "observations_sha256": "e9fb7e5dace49244e1e6515a78d42f0517d1f4becf78f5e15eef3e48d29c18f5",
+      "visible_frames": 437,
+      "absent_frames": 36,
+      "detected_visible": 343,
+      "recall": 0.7848970251716247,
+      "median_px": 1.2209177518303695,
+      "p95_px": 2.1938669693689654,
+      "within_12px_rate": 0.782608695652174,
+      "absent_false_detections": 11,
+      "absent_false_rate": 0.3055555555555556
+    },
+    {
+      "clip_id": "dev--fa5228cb--vfr-drop",
+      "source_id": "fa5228cb",
+      "variant": "vfr-drop",
+      "template": "rs3-gold",
+      "output_size": [
+        764,
+        502
+      ],
+      "step": 1,
+      "sampled_frames": 311,
+      "unmatched_samples": 0,
+      "cuts": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "analyze_millis": 78456,
+      "geometry_resolvable": true,
+      "cursor_calibration": {
+        "method": "cursor-template/v2",
+        "calibrationSamples": 24,
+        "calibrated": true,
+        "tooSmallToResolve": false,
+        "sourceScale": 1.0,
+        "confidentByScale": [
+          0,
+          0,
+          24,
+          22,
+          21,
+          17,
+          0,
+          0,
+          0
+        ],
+        "meanScoreByScale": [
+          null,
+          null,
+          0.8559,
+          0.9058,
+          0.9756,
+          0.8652,
+          null,
+          null,
+          null
+        ],
+        "fisherZByScale": [
+          0.0,
+          0.0,
+          131.3171,
+          182.4009,
+          338.0047,
+          191.4228,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "observations_sha256": "2fc4511dbde94b50babf28de887ee7eec673243271c66b019e3b9a56d8e4275b",
+      "visible_frames": 296,
+      "absent_frames": 0,
+      "detected_visible": 296,
+      "recall": 1.0,
+      "median_px": 0.0,
+      "p95_px": 0.0,
+      "within_12px_rate": 1.0,
+      "absent_false_detections": 0,
+      "absent_false_rate": null
+    }
+  ]
+}

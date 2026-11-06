@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "project": "C:\\Dev\\IdeaProjects\\ChromaScape",
+  "shortcut_story_id": 2150,
+  "felix_task_id": "task_1792382767281_cd8dbu69",
+  "felix_task_status": "in_progress",
+  "spec_state": "draft",
+  "scope": "planning-only; no application implementation or software test run in this turn",
+  "authoritative_note_id": "note_1792968401062_022f7432",
+  "canonical_plan": "C:\\Dev\\IdeaProjects\\ChromaScape\\docs\\builderflow\\sc-2150\\full-remaining-implementation-plan-20261025.md",
+  "artifact_readbacks": [
+    {
+      "id": "note_1792968401062_022f7432",
+      "title": "SC-2150 Full Remaining Implementation Plan — 2026-10-25",
+      "exactContent": true,
+      "chars": 57081,
+      "taskLinked": true
+    },
+    {
+      "id": "note_1792968401093_747e4568",
+      "title": "SC-2150 Remaining Architecture — 2026-10-25",
+      "exactContent": true,
+      "chars": 9473,
+      "taskLinked": true
+    },
+    {
+      "id": "note_1792968401292_c85525c7",
+      "title": "SC-2150 Remaining ERD — 2026-10-25",
+      "exactContent": true,
+      "chars": 5055,
+      "taskLinked": true
+    },
+    {
+      "id": "note_1792968401312_e678caee",
+      "title": "SC-2150 Remaining API Contract — 2026-10-25",
+      "exactContent": true,
+      "chars": 5252,
+      "taskLinked": true
+    },
+    {
+      "id": "note_1792968401351_c3e617c0",
+      "title": "SC-2150 Remaining Observability — 2026-10-25",
+      "exactContent": true,
+      "chars": 2544,
+      "taskLinked": true
+    },
+    {
+      "id": "note_1792968401371_60d082c8",
+      "title": "SC-2150 Remaining Security Decision Record — 2026-10-25",
+      "exactContent": true,
+      "chars": 6854,
+      "taskLinked": true
+    },
+    {
+      "id": "note_1792968401399_89eca939",
+      "title": "SC-2150 Remaining UX Mockup — 2026-10-25",
+      "chars": 11097,
+      "taskLinked": true,
+      "normalizedExcalidrawEqual": true
+    }
+  ],
+  "implementation_items": 28,
+  "acceptance_items": 18,
+  "test_items": 22,
+  "scope_items": 2,
+  "new_items_checked": 0,
+  "validation": {
+    "is_valid": true,
+    "missing": [],
+    "status": "in_progress",
+    "transitions": {
+      "current": "in_progress",
+      "available": [
+        {
+          "to": "in_review",
+          "label": "Submit for review",
+          "blocked": true,
+          "blocking_reasons": [
+            "Requires validation bundles: implementation_complete"
+          ],
+          "required_bundles": [
+            "implementation_complete"
+          ]
+        },
+        {
+          "to": "blocked",
+          "label": "Block delivery",
+          "blocked": false,
+          "blocking_reasons": []
+        },
+        {
+          "to": "cancelled",
+          "label": "Cancel delivery",
+          "blocked": false,
+          "blocking_reasons": []
+        }
+      ]
+    }
+  },
+  "offline_replay": {
+    "record_id": "20261023T023553Z-sc2150-fa12-corpus-and-converter",
+    "note_id": "note_1792967733554_873cfce3",
+    "synced_record": "C:\\Dev\\IdeaProjects\\ChromaScape\\docs\\builderflow\\felix-sync\\synced\\sc-2150\\20261023T023553Z--sc-2150--create_note--fa12-real-footage-corpus-and-label-converter.md",
+    "reconciled_items": [
+      "RFI1",
+      "RFI2",
+      "RFI3",
+      "RFT2"
+    ]
+  },
+  "shortcut": {
+    "state_id": 500000008,
+    "result": "unchanged; no transition/comment/marker intended or performed"
+  },
+  "checks_run": [
+    "checklist ID/count validation",
+    "balanced Markdown fences",
+    "Excalidraw JSON/IDs and normalized Felix round-trip",
+    "OpenAPI YAML excerpt parse",
+    "Felix task/note read-backs",
+    "Felix workflow structural validation"
+  ],
+  "software_tests_run": []
+}

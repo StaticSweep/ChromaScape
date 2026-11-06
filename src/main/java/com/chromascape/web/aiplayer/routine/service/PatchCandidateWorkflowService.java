@@ -16,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,109 +52,71 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  */
 @Service
 public class PatchCandidateWorkflowService {
+  /**
+   * Canonical hash of {@code src/test/resources/sc967/sc572-seeded-failure-v1.json}. The seeded
+   * failure manifest carries the failure code and the resolved source symbol, so renaming either
+   * requires regenerating this value with the fixture.
+   */
   private static final String SEEDED_FAIL =
-      "sha256:b201629e712be24815e43551a5185a2b45fe3a0b77b2aca8f2a51dd250917956";
+      "sha256:10f1e4d0f27c18472ff4193317eeaf8a1aa42751e4cefe0060b156e92cba5a3e";
+
+  private static final String SEEDED_FAILURE_CODE = "BLANK_FISH_ALIAS_ACCEPTED";
+  private static final String SOURCE_SYMBOL =
+      "FishingTaskDefinitionNormalizer#normalize(String, Map)";
   private static final String SOURCE_FILE =
-      "runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java";
+      "runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizer.java";
   private static final String TEST_FILE =
-      "runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTaskTest.java";
-  private static final String EXCEPTION_FILE =
-      "runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/UnsupportedFishTypeException.java";
+      "runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizerTest.java";
   private static final String SCHEMA_V2 = "certified-candidate/v2";
   private static final java.time.Duration LEASE_DURATION = java.time.Duration.ofMinutes(15);
   private static final List<String> BUILD_GATES =
       List.of(
-          ":client:compileJava", ":client:sc967CandidateCheckstyleMain",
-          ":client:sc967CandidateCheckstyleTest", ":client:sc967CandidateTest",
-          ":client:shadowJar", ":client:generateRuntimeSbom");
+          ":client:compileJava",
+          ":client:sc967CandidateCheckstyleMain",
+          ":client:sc967CandidateCheckstyleTest",
+          ":client:sc967CandidateTest",
+          ":client:shadowJar",
+          ":client:generateRuntimeSbom",
+          ":client:sc2106ExecutionClosureInputs");
   private static final String PATCH =
       """
-      diff --git a/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java
-      --- a/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java
-      +++ b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java
-      @@ -93,8 +93,11 @@ public class FishingExecutionTask extends AccountBuilderTask implements Configur
-      !     }
-      !\u0020
-      !     private Fish getFishType(String fishName) {
-      +        if (fishName == null || fishName.isBlank()) {
-      +            throw new UnsupportedFishTypeException(fishName);
-      +        }
-      !         // Convert fish name to Fish enum - simple mapping
-      -        switch (fishName.toLowerCase()) {
-      +        switch (fishName.trim().toLowerCase()) {
-      !             case "shrimp":
-      !             case "raw shrimp":
-      !                 return Fish.SHRIMP;
-      @@ -120,8 +123,7 @@ public class FishingExecutionTask extends AccountBuilderTask implements Configur
-      !             case "raw shark":
-      !                 return Fish.SHARK;
-      !             default:
-      -                System.out.println("[FishingExecutionTask] Warning: Unknown fish name '" + fishName + "', defaulting to SHRIMP");
-      -                return Fish.SHRIMP;
-      +                throw new UnsupportedFishTypeException(fishName);
-      !         }
-      !     }
-      !\u0020
-      diff --git a/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/UnsupportedFishTypeException.java b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/UnsupportedFishTypeException.java
-      new file mode 100644
-      --- /dev/null
-      +++ b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/UnsupportedFishTypeException.java
-      @@ -0,0 +1,12 @@
-      +package net.runelite.client.plugins.microbot.accountbuilder.builderPlanStep.fishing;
-      +
-      +/**
-      + * Raised when a Fishing plan names a null, blank, or unsupported fish.
-      + */
-      +public final class UnsupportedFishTypeException extends IllegalArgumentException
-      +{
-      +	public UnsupportedFishTypeException(String fishName)
-      +	{
-      +		super("Unsupported fish type: " + fishName);
-      +	}
-      +}
-      diff --git a/runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTaskTest.java b/runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTaskTest.java
-      new file mode 100644
-      --- /dev/null
-      +++ b/runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTaskTest.java
-      @@ -0,0 +1,38 @@
-      +package net.runelite.client.plugins.microbot.accountbuilder.builderPlanStep.fishing;
-      +
-      +import net.runelite.api.coords.WorldPoint;
-      +import org.junit.Test;
-      +
-      +public class FishingExecutionTaskTest
-      +{
-      +	@Test(expected = UnsupportedFishTypeException.class)
-      +	public void nullFishIsRejected()
-      +	{
-      +		new FishingExecutionTask(step(null));
-      +	}
-      +
-      +	@Test(expected = UnsupportedFishTypeException.class)
-      +	public void blankFishIsRejected()
-      +	{
-      +		new FishingExecutionTask(step("  "));
-      +	}
-      +
-      +	@Test(expected = UnsupportedFishTypeException.class)
-      +	public void unknownFishIsRejected()
-      +	{
-      +		new FishingExecutionTask(step("not-a-fish"));
-      +	}
-      +
+      diff --git a/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizer.java b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizer.java
+      index 4fd9a0d83c..5dc6e2af46 100644
+      --- a/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizer.java
+      +++ b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizer.java
+      @@ -180,6 +180,14 @@ public final class FishingTaskDefinitionNormalizer
+      !
+      ! 		String targetFish = text(s, "targetFish");
+      ! 		String fishType = text(s, "fishType");
+      +		if (s.get("targetFish") != null && targetFish == null)
+      +		{
+      +			return Result.error(FishingCoreCode.INVALID_SETTING, "targetFish must not be blank", "targetFish");
+      +		}
+      +		if (s.get("fishType") != null && fishType == null)
+      +		{
+      +			return Result.error(FishingCoreCode.INVALID_SETTING, "fishType must not be blank", "fishType");
+      +		}
+      ! 		String fish;
+      ! 		if (isExplicitFish(targetFish))
+      ! 		{
+      diff --git a/runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizerTest.java b/runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizerTest.java
+      index 622c04f0e3..1602e198c5 100644
+      --- a/runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizerTest.java
+      +++ b/runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/sharedcore/fishing/FishingTaskDefinitionNormalizerTest.java
+      @@ -137,6 +137,13 @@ class FishingTaskDefinitionNormalizerTest
+      ! 			FishingTaskDefinitionNormalizer.normalize("WOODCUTTING_TRAINING", initialCaseSettings()), "taskKey");
+      ! 	}
+      !
       +	@Test
-      +	public void canonicalFishRemainsSupported()
+      +	void blankFishAliasesAreInvalidRatherThanMissing()
       +	{
-      +		new FishingExecutionTask(step("Shrimp"));
-      +		new FishingExecutionTask(step("raw shrimp"));
+      +		assertRejected(FishingCoreCode.INVALID_SETTING, normalize(with("targetFish", "  ")), "targetFish");
+      +		assertRejected(FishingCoreCode.INVALID_SETTING, normalize(with("fishType", "")), "fishType");
       +	}
       +
-      +	private static FishingPlanStep step(String fish)
-      +	{
-      +		return new FishingPlanStep(1, 2, fish, 1, 10.0, 10, 1,
-      +			new WorldPoint(3087, 3228, 0));
-      +	}
-      +}
+      ! 	@Test
+      ! 	void malformedValuesAreInvalid()
+      ! 	{
       """
           .replace("\n!", "\n");
 
@@ -247,6 +210,12 @@ public class PatchCandidateWorkflowService {
         new CertifiedCandidateV2Validator());
   }
 
+  private void requireCurrentCandidate(PatchCandidateRun entity) {
+    identities.requireOperation(
+        mapper.convertValue(read(entity.getIdentityJson()), CurrentSliceIdentity.class),
+        "candidate");
+  }
+
   private String stagingRoot() {
     return candidateProperties == null ? "" : candidateProperties.getStagingRoot();
   }
@@ -268,19 +237,23 @@ public class PatchCandidateWorkflowService {
     }
     if (operator == null || operator.getToken() == null || operator.getToken().isBlank()) {
       throw new IllegalStateException(
-          "ai-routine.operator.token (AI_ROUTINE_OPERATOR_TOKEN) is required when candidate builds are enabled");
+          "ai-routine.operator.token (AI_ROUTINE_OPERATOR_TOKEN) is required when candidate builds"
+              + " are enabled");
     }
     if (operator.getId() == null || operator.getId().isBlank()) {
       throw new IllegalStateException(
-          "ai-routine.operator.id (AI_ROUTINE_OPERATOR_ID) is required when candidate builds are enabled");
+          "ai-routine.operator.id (AI_ROUTINE_OPERATOR_ID) is required when candidate builds are"
+              + " enabled");
     }
     if (signingKeyPath == null || signingKeyPath.isBlank()) {
       throw new IllegalStateException(
-          "leeuwbot.signing.private-key-path (CANDIDATE_SIGNING_PRIVATE_KEY_PATH) is required when candidate builds are enabled");
+          "leeuwbot.signing.private-key-path (CANDIDATE_SIGNING_PRIVATE_KEY_PATH) is required when"
+              + " candidate builds are enabled");
     }
     if (signingKeyId == null || signingKeyId.isBlank()) {
       throw new IllegalStateException(
-          "leeuwbot.signing.key-id (CANDIDATE_SIGNING_KEY_ID) is required when candidate builds are enabled");
+          "leeuwbot.signing.key-id (CANDIDATE_SIGNING_KEY_ID) is required when candidate builds are"
+              + " enabled");
     }
     try {
       new CandidateSigner(signingKeyId, Path.of(signingKeyPath));
@@ -290,15 +263,18 @@ public class PatchCandidateWorkflowService {
     }
     if (registry == null || registry.baseUrl() == null || registry.baseUrl().isBlank()) {
       throw new IllegalStateException(
-          "leeuwbot.candidate-registry.base-url (LEEUWBOT_CANDIDATE_REGISTRY_URL) is required when candidate builds are enabled");
+          "leeuwbot.candidate-registry.base-url (LEEUWBOT_CANDIDATE_REGISTRY_URL) is required when"
+              + " candidate builds are enabled");
     }
     if (registry.token() == null || registry.token().isBlank()) {
       throw new IllegalStateException(
-          "leeuwbot.candidate-registry.token (STATIC_API_TOKEN) is required when candidate builds are enabled");
+          "leeuwbot.candidate-registry.token (STATIC_API_TOKEN) is required when candidate builds"
+              + " are enabled");
     }
     if (stagingRoot().isBlank()) {
       throw new IllegalStateException(
-          "sc967.candidate.staging-root (SC967_CANDIDATE_STAGING_ROOT) is required when candidate builds are enabled");
+          "sc967.candidate.staging-root (SC967_CANDIDATE_STAGING_ROOT) is required when candidate"
+              + " builds are enabled");
     }
     try {
       Files.createDirectories(Path.of(stagingRoot()).toAbsolutePath().normalize());
@@ -308,7 +284,8 @@ public class PatchCandidateWorkflowService {
     }
     if (expectedArtifactName == null || expectedArtifactName.isBlank()) {
       throw new IllegalStateException(
-          "micro6.expected-artifact-name (MICRO6_EXPECTED_ARTIFACT_NAME) is required when candidate builds are enabled");
+          "micro6.expected-artifact-name (MICRO6_EXPECTED_ARTIFACT_NAME) is required when candidate"
+              + " builds are enabled");
     }
   }
 
@@ -317,7 +294,8 @@ public class PatchCandidateWorkflowService {
       throw error(
           HttpStatus.FORBIDDEN,
           "CANDIDATE_BUILDS_DISABLED",
-          "candidate builds are disabled (sc967.candidate.builds-enabled=false); nothing can be queued or executed");
+          "candidate builds are disabled (sc967.candidate.builds-enabled=false); nothing can be"
+              + " queued or executed");
     }
   }
 
@@ -330,7 +308,7 @@ public class PatchCandidateWorkflowService {
           "FAILURE_FIXTURE_MISMATCH",
           "only the canonical seeded SC-572 FAIL manifest is eligible");
     }
-    if (!"UNSUPPORTED_FISH_DEFAULTED".equals(String.valueOf(request.get("failure_code")))) {
+    if (!SEEDED_FAILURE_CODE.equals(String.valueOf(request.get("failure_code")))) {
       throw error(
           HttpStatus.UNPROCESSABLE_ENTITY,
           "FAILURE_CODE_MISMATCH",
@@ -346,6 +324,8 @@ public class PatchCandidateWorkflowService {
     try {
       candidateIdentity =
           identities.validate(mapper.convertValue(identityValue, CurrentSliceIdentity.class));
+    } catch (com.chromascape.web.aiplayer.contract.CurrentSliceContractException e) {
+      throw e;
     } catch (RuntimeException e) {
       throw error(HttpStatus.UNPROCESSABLE_ENTITY, "CANDIDATE_IDENTITY_INVALID", e.getMessage());
     }
@@ -362,12 +342,13 @@ public class PatchCandidateWorkflowService {
           "CANDIDATE_IDENTITY_INCOMPLETE",
           "identity through graph and model is required before proposal creation");
     }
+    identities.requireOperation(candidateIdentity, "candidate");
     Micro6SourceManifestClient.SourceBinding resolved =
         source.resolve(
             new Micro6SourceManifestClient.SourceRequest(
                 "FISHING_TRAINING",
-                "net.runelite.client.plugins.microbot.accountbuilder.builderPlanStep.fishing.FishingExecutionTask",
-                "FishingExecutionTask#getFishType(String)",
+                "net.runelite.client.plugins.microbot.accountbuilder.sharedcore.fishing.FishingTaskDefinitionNormalizer",
+                SOURCE_SYMBOL,
                 Micro6SourceManifestClient.expectedIdentity(candidateIdentity)));
     if (!resolved.signatureVerified()
         || !SourceManifestContract.isGitObjectId(resolved.commitId())
@@ -376,7 +357,8 @@ public class PatchCandidateWorkflowService {
       throw error(
           HttpStatus.UNPROCESSABLE_ENTITY,
           "SOURCE_PROVENANCE_UNVERIFIED",
-          "only a signed source manifest with exact commit, tree, and artifact identity may enter the patch loop");
+          "only a signed source manifest with exact commit, tree, and artifact identity may enter"
+              + " the patch loop");
     }
     if (!resolved.clientBuildId().equals(candidateIdentity.client().clientBuildId())) {
       throw error(
@@ -385,7 +367,7 @@ public class PatchCandidateWorkflowService {
           "candidate identity client build differs from the authoritative source manifest");
     }
     candidateIdentity = withCandidateSource(candidateIdentity, resolved);
-    identities.validate(candidateIdentity);
+    identities.requireOperation(candidateIdentity, "candidate");
     String requestedBase = text(request, "base_commit");
     if (requestedBase != null && !requestedBase.equals(resolved.commitId())) {
       throw error(
@@ -401,30 +383,7 @@ public class PatchCandidateWorkflowService {
           "verified Micro6 source commit is required");
     }
 
-    Map<String, Object> binding = new LinkedHashMap<>();
-    binding.put("schema", "seeded-failure-source-binding/v1");
-    binding.put("derivation", "SEEDED_FIXTURE");
-    binding.put("failure_manifest_hash", SEEDED_FAIL);
-    binding.put("failure_code", "UNSUPPORTED_FISH_DEFAULTED");
-    binding.put("task_key", "FISHING_TRAINING");
-    binding.put("source_snapshot_id", resolved.sourceSnapshotId());
-    binding.put("source_manifest_hash", resolved.sourceManifestHash());
-    binding.put("file_id", resolved.fileId());
-    binding.put("relative_path", resolved.relativePath());
-    binding.put("clone_relative_path", resolved.cloneRelativePath());
-    binding.put("content_hash", resolved.contentHash());
-    binding.put("manifest_json", parse(resolved.manifestJson()));
-    binding.put("pinned_files", resolved.pinnedFiles());
-    binding.put("symbol", "FishingExecutionTask#getFishType(String)");
-    binding.put("start_line", resolved.startLine());
-    binding.put("end_line", resolved.endLine());
-    binding.put("preimage_hash", resolved.preimageHash());
-    binding.put("repository_id", resolved.repositoryId());
-    binding.put("commit_id", resolved.commitId());
-    binding.put("tree_id", resolved.treeId());
-    binding.put("build_id", resolved.clientBuildId());
-    binding.put("artifact_digest", resolved.artifactDigest());
-    binding.put("signature_verified", resolved.signatureVerified());
+    Map<String, Object> binding = seededFailureBinding(resolved, parse(resolved.manifestJson()));
 
     ObjectNode content = mapper.createObjectNode();
     content.put("schema", "patch-proposal/v1");
@@ -456,6 +415,39 @@ public class PatchCandidateWorkflowService {
     entity.setState("PATCH_PROPOSED");
     repository.save(entity);
     return response(entity);
+  }
+
+  /**
+   * Builds the seeded failure binding from the resolved source. The symbol and failure code are the
+   * resolved values, never a stale copy of the pre-normalizer code path.
+   */
+  static Map<String, Object> seededFailureBinding(
+      Micro6SourceManifestClient.SourceBinding resolved, JsonNode manifestJson) {
+    Map<String, Object> binding = new LinkedHashMap<>();
+    binding.put("schema", "seeded-failure-source-binding/v1");
+    binding.put("derivation", "SEEDED_FIXTURE");
+    binding.put("failure_manifest_hash", SEEDED_FAIL);
+    binding.put("failure_code", SEEDED_FAILURE_CODE);
+    binding.put("task_key", "FISHING_TRAINING");
+    binding.put("source_snapshot_id", resolved.sourceSnapshotId());
+    binding.put("source_manifest_hash", resolved.sourceManifestHash());
+    binding.put("file_id", resolved.fileId());
+    binding.put("relative_path", resolved.relativePath());
+    binding.put("clone_relative_path", resolved.cloneRelativePath());
+    binding.put("content_hash", resolved.contentHash());
+    binding.put("manifest_json", manifestJson);
+    binding.put("pinned_files", resolved.pinnedFiles());
+    binding.put("symbol", SOURCE_SYMBOL);
+    binding.put("start_line", resolved.startLine());
+    binding.put("end_line", resolved.endLine());
+    binding.put("preimage_hash", resolved.preimageHash());
+    binding.put("repository_id", resolved.repositoryId());
+    binding.put("commit_id", resolved.commitId());
+    binding.put("tree_id", resolved.treeId());
+    binding.put("build_id", resolved.clientBuildId());
+    binding.put("artifact_digest", resolved.artifactDigest());
+    binding.put("signature_verified", resolved.signatureVerified());
+    return binding;
   }
 
   /** Binds candidate provenance to the authoritative patch source without changing prior groups. */
@@ -495,6 +487,7 @@ public class PatchCandidateWorkflowService {
   @Transactional
   public Map<String, Object> approve(String id, String operatorId) {
     PatchCandidateRun entity = lockedProposal(id);
+    requireCurrentCandidate(entity);
     if (operatorId == null || operatorId.isBlank())
       throw error(
           HttpStatus.UNPROCESSABLE_ENTITY,
@@ -542,6 +535,7 @@ public class PatchCandidateWorkflowService {
   public Map<String, Object> enqueueBuild(String id) {
     requireBuildsEnabled();
     PatchCandidateRun entity = lockedProposal(id);
+    requireCurrentCandidate(entity);
     if (!"APPROVED".equals(entity.getState()))
       throw error(
           HttpStatus.CONFLICT, "PATCH_NOT_APPROVED", "explicit operator approval is required");
@@ -576,6 +570,9 @@ public class PatchCandidateWorkflowService {
     if (!buildsEnabled()) {
       return;
     }
+    PatchCandidateRun pending = repository.findByProposalId(id).orElse(null);
+    if (pending == null) return;
+    requireCurrentCandidate(pending);
     String attemptId = dispatcher.claim(id, Instant.now().plus(LEASE_DURATION));
     if (attemptId == null) {
       return;
@@ -588,12 +585,13 @@ public class PatchCandidateWorkflowService {
         dispatcher.persistFailure(id, attemptId, "PROPOSAL_NOT_FOUND");
         return;
       }
+      requireCurrentCandidate(entity);
       IsolatedPatchWorker.BuildRequest request =
           new IsolatedPatchWorker.BuildRequest(
               Path.of(micro6Root),
               entity.getBaseCommit(),
               entity.getPatchText(),
-              Set.of(SOURCE_FILE, EXCEPTION_FILE, TEST_FILE),
+              Set.of(SOURCE_FILE, TEST_FILE),
               List.of(),
               entity.getSourceSnapshotId(),
               entity.getSourceRelativePath(),
@@ -653,6 +651,45 @@ public class PatchCandidateWorkflowService {
   }
 
   /**
+   * An approved, {@code REGISTERED} candidate whose persisted bundle was just re-verified byte for
+   * byte, signature and execution closure included (SC-2106 R9.1). Every other state is refused: a
+   * built, registering or uncertain candidate never executes.
+   */
+  public RegisteredCandidate registeredCandidate(String id) {
+    PatchCandidateRun entity = proposal(id);
+    if (!"REGISTERED".equals(entity.getState())) {
+      throw error(
+          HttpStatus.CONFLICT,
+          "CANDIDATE_NOT_REGISTERED",
+          "only a registered candidate can execute; state is " + entity.getState());
+    }
+    if (entity.getApprovalHash() == null || entity.getApproverId() == null) {
+      throw error(HttpStatus.CONFLICT, "PATCH_NOT_APPROVED", "candidate has no recorded approval");
+    }
+    requireCurrentCandidate(entity);
+    Path bundle;
+    try {
+      bundle = revalidatePersistedBundle(entity);
+    } catch (IOException e) {
+      throw error(HttpStatus.CONFLICT, "CANDIDATE_BUNDLE_INVALID", String.valueOf(e.getMessage()));
+    }
+    Map<String, Object> manifest = read(entity.getCandidateManifestJson());
+    return new RegisteredCandidate(
+        entity.getProposalId(),
+        entity.getCandidateId(),
+        bundle,
+        String.valueOf(manifest.get("jar_name")),
+        String.valueOf(manifest.get("sbom_name")));
+  }
+
+  /**
+   * A verified registered bundle: {@code manifest.json}, {@code certification.json}, the signed JAR
+   * and SBOM, {@code execution-closure.json} and every closure JAR, all under {@code bundle}.
+   */
+  public record RegisteredCandidate(
+      String proposalId, String candidateId, Path bundle, String jarName, String sbomName) {}
+
+  /**
    * Reconciles an uncertain registration. Lookup first; accept only after exact canonical manifest
    * comparison, candidate id/hash match, certified state, and download SHA-256 verification.
    * Re-post only on a confirmed registry 404 using the exact persisted bundle.
@@ -681,6 +718,7 @@ public class PatchCandidateWorkflowService {
     if (entity == null) {
       return Map.of("control_allowed", false);
     }
+    requireCurrentCandidate(entity);
     PatchCandidateRegistrationDispatcher.RegistrationClaim claim = claimRegistration(id);
     if (registrationDispatcher != null && claim == null) {
       return response(repository.findByProposalId(id).orElse(entity));
@@ -697,6 +735,7 @@ public class PatchCandidateWorkflowService {
     CandidateRegistryClient.RegistryManifestResponse lookup = null;
     CandidateRegistryClient.ArtifactDownload downloaded = null;
     try {
+      requireCurrentCandidate(entity);
       Path bundle = revalidatePersistedBundle(entity);
       lookup = registry.lookupEvidence(entity.getCandidateId(), entity.getManifestFileHash());
       Map<String, Object> localManifest = read(entity.getCandidateManifestJson());
@@ -773,6 +812,7 @@ public class PatchCandidateWorkflowService {
     if (entity == null) {
       return Map.of("control_allowed", false);
     }
+    requireCurrentCandidate(entity);
     PatchCandidateRegistrationDispatcher.RegistrationClaim claim = claimRegistration(id);
     if (registrationDispatcher != null && claim == null) {
       return response(repository.findByProposalId(id).orElse(entity));
@@ -787,13 +827,15 @@ public class PatchCandidateWorkflowService {
     CandidateRegistryClient.RegistryManifestResponse lookup = null;
     CandidateRegistryClient.ArtifactDownload downloaded = null;
     try {
+      requireCurrentCandidate(entity);
       Path bundle = revalidatePersistedBundle(entity);
       Map<String, Object> manifest = read(entity.getCandidateManifestJson());
       Path manifestPath = bundle.resolve("manifest.json");
       Path jar = bundle.resolve(String.valueOf(manifest.get("jar_name")));
       Path sbom = bundle.resolve(String.valueOf(manifest.get("sbom_name")));
       Path cert = bundle.resolve("certification.json");
-      registration = registry.registerEvidence(manifestPath, jar, sbom, cert);
+      registration =
+          registry.registerEvidence(manifestPath, jar, sbom, cert, closureUpload(bundle));
       verifyRegistryReadback(
           Files.readAllBytes(manifestPath),
           manifest,
@@ -813,6 +855,7 @@ public class PatchCandidateWorkflowService {
       if (!downloaded.sha256().equals(String.valueOf(manifest.get("jar_sha256")))) {
         throw new IllegalStateException("REGISTRY_ARTIFACT_HASH_MISMATCH");
       }
+      verifyClosureReadback(registry, bundle, entity.getCandidateId(), registration);
       return transitionClaimed(
           entity,
           claim,
@@ -947,6 +990,7 @@ public class PatchCandidateWorkflowService {
     if (entity == null || !"BUILT".equals(entity.getState())) {
       return;
     }
+    requireCurrentCandidate(entity);
     if (signingKeyPath == null
         || signingKeyPath.isBlank()
         || signingKeyId == null
@@ -963,6 +1007,13 @@ public class PatchCandidateWorkflowService {
         || build.sbomBytes() == null
         || build.certificationBytes() == null) {
       transition(entity, "FAILED", Map.of("failure_code", "CERTIFICATION_ARTIFACT_MISSING"));
+      return;
+    }
+    if (build.closureInputsBytes() == null
+        || build.closureInputsName() == null
+        || build.closureArtifacts() == null
+        || build.closureArtifacts().isEmpty()) {
+      transition(entity, "FAILED", Map.of("failure_code", "EXECUTION_CLOSURE_INPUTS_MISSING"));
       return;
     }
     try {
@@ -1013,12 +1064,27 @@ public class PatchCandidateWorkflowService {
       byte[] manifestBytes = write(manifest).getBytes(java.nio.charset.StandardCharsets.UTF_8);
       candidateValidator.validate(
           manifestBytes, build.certificationBytes(), build.jarBytes(), build.sbomBytes());
+      JsonNode signedManifest = mapper.valueToTree(manifest);
+      CandidateExecutionClosureV1.Inputs closureInputs = closureInputs(build);
+      byte[] closureBytes =
+          CandidateExecutionClosureV1.build(
+              signedManifest, build.jarBytes(), closureInputs, signer);
+      CandidateExecutionClosureV1.validate(
+          closureBytes,
+          signedManifest,
+          build.jarBytes(),
+          closureInputs.runner().bytes(),
+          closureInputs.core().bytes(),
+          closureInputs.dependencies().stream()
+              .map(CandidateExecutionClosureV1.ArtifactBytes::bytes)
+              .toList(),
+          candidateValidator.configuredPublicKey());
       Path finalBundle = root.resolve(candidateId);
       if (Files.exists(finalBundle)) {
         // Reuse only an identical bundle; never overwrite a persisted candidate.
-        verifyBundleContents(finalBundle, build, manifestBytes, candidateId);
+        verifyBundleContents(finalBundle, build, manifestBytes, closureBytes, candidateId);
       } else {
-        finalBundle = stageBundle(root, build, manifestBytes, candidateId);
+        finalBundle = stageBundle(root, build, manifestBytes, closureBytes, candidateId);
       }
       // Registration fingerprint binds the canonical manifest and every artifact evidence field.
       ObjectNode fingerprint = mapper.createObjectNode();
@@ -1028,6 +1094,8 @@ public class PatchCandidateWorkflowService {
       fingerprint.put("sbom_sha256", sbomSha);
       fingerprint.put("sbom_size", (long) build.sbomBytes().length);
       fingerprint.put("certification_document_hash", certificationSha);
+      fingerprint.put("execution_closure_sha256", hash(closureBytes));
+      fingerprint.put("execution_closure_size", (long) closureBytes.length);
       String requestHash = CanonicalJsonHasher.hash(fingerprint, null);
       CurrentSliceIdentity frozen =
           mapper.convertValue(read(entity.getIdentityJson()), CurrentSliceIdentity.class);
@@ -1081,10 +1149,160 @@ public class PatchCandidateWorkflowService {
   }
 
   /**
+   * Maps the build's closure inputs document and JAR bytes onto the producer contract. Every JAR
+   * named by the document must exist exactly once in the collected build output.
+   */
+  static CandidateExecutionClosureV1.Inputs closureInputs(IsolatedPatchWorker.BuildResult build)
+      throws IOException {
+    JsonNode inputs;
+    try {
+      inputs = Sc967CanonicalJson.parse(build.closureInputsBytes());
+    } catch (IllegalArgumentException invalid) {
+      throw new IOException("EXECUTION_CLOSURE_INPUTS_INVALID", invalid);
+    }
+    if (!"sc2106-execution-closure-inputs/v1".equals(requiredText(inputs, "schema"))) {
+      throw new IOException("EXECUTION_CLOSURE_INPUTS_INVALID");
+    }
+    Map<String, byte[]> artifacts = new LinkedHashMap<>();
+    for (IsolatedPatchWorker.ClosureArtifact artifact : build.closureArtifacts()) {
+      if (artifacts.put(artifact.name(), artifact.bytes()) != null) {
+        throw new IOException("EXECUTION_CLOSURE_JAR_AMBIGUOUS:" + artifact.name());
+      }
+    }
+    String runnerName = requiredText(inputs, "runnerJarName");
+    String coreName = requiredText(inputs, "coreJarName");
+    byte[] runner = artifacts.get(runnerName);
+    byte[] core = artifacts.get(coreName);
+    if (runner == null || core == null) {
+      throw new IOException("EXECUTION_CLOSURE_JAR_MISSING");
+    }
+    List<CandidateExecutionClosureV1.ArtifactBytes> dependencies = new ArrayList<>();
+    for (JsonNode dependency : inputs.path("dependencyJarNames")) {
+      if (!dependency.isTextual()) throw new IOException("EXECUTION_CLOSURE_INPUTS_INVALID");
+      String name = dependency.asText();
+      byte[] bytes = artifacts.get(name);
+      if (bytes == null) throw new IOException("EXECUTION_CLOSURE_JAR_MISSING:" + name);
+      dependencies.add(new CandidateExecutionClosureV1.ArtifactBytes(name, bytes));
+    }
+    if (dependencies.isEmpty()) throw new IOException("EXECUTION_CLOSURE_DEPENDENCIES_INCOMPLETE");
+    return new CandidateExecutionClosureV1.Inputs(
+        requiredText(inputs, "taskCoreEntry"),
+        requiredText(inputs, "runnerVersion"),
+        requiredText(inputs, "adapterVersion"),
+        requiredText(inputs, "protocolVersion"),
+        new CandidateExecutionClosureV1.ArtifactBytes(runnerName, runner),
+        requiredText(inputs, "entrypoint"),
+        requiredText(inputs, "coreId"),
+        requiredText(inputs, "coreVersion"),
+        requiredText(inputs, "coreSourceDigest"),
+        new CandidateExecutionClosureV1.ArtifactBytes(coreName, core),
+        requiredText(inputs, "coreEntryClass"),
+        dependencies);
+  }
+
+  /** Re-runs the consumer's exact closure rules against persisted bytes before registry I/O. */
+  private void validateExecutionClosure(
+      byte[] closureBytes, byte[] manifestBytes, byte[] jarBytes, Map<String, byte[]> artifacts)
+      throws IOException {
+    JsonNode closure = Sc967CanonicalJson.parse(closureBytes);
+    String runnerName = requiredText(closure.path("package"), "name");
+    String coreName = requiredText(closure.path("core"), "name");
+    byte[] runner = artifacts.get(runnerName);
+    byte[] core = artifacts.get(coreName);
+    if (runner == null || core == null) throw new IOException("EXECUTION_CLOSURE_JAR_MISSING");
+    List<byte[]> dependencies = new ArrayList<>();
+    for (JsonNode dependency : closure.path("dependencies")) {
+      String name = requiredText(dependency, "name");
+      byte[] bytes = artifacts.get(name);
+      if (bytes == null) throw new IOException("EXECUTION_CLOSURE_JAR_MISSING:" + name);
+      dependencies.add(bytes);
+    }
+    CandidateExecutionClosureV1.validate(
+        closureBytes,
+        Sc967CanonicalJson.parse(manifestBytes),
+        jarBytes,
+        runner,
+        core,
+        dependencies,
+        candidateValidator.configuredPublicKey());
+  }
+
+  private static byte[] readClosureArtifact(Path bundle, String name) throws IOException {
+    if (!name.matches("[A-Za-z0-9._-]+\\.jar")) {
+      throw new IOException("EXECUTION_CLOSURE_JAR_NAME_INVALID");
+    }
+    Path path = bundle.resolve(name);
+    if (!Files.isRegularFile(path) || Files.isSymbolicLink(path)) {
+      throw new IOException("CANDIDATE_STAGING_MISSING");
+    }
+    return Files.readAllBytes(path);
+  }
+
+  /**
+   * The persisted closure document and the JAR files it names, for registry upload. Names come from
+   * the document the producer just validated, and each must be a plain regular file of the bundle.
+   */
+  static CandidateRegistryClient.ClosureUpload closureUpload(Path bundle) throws IOException {
+    Path document = bundle.resolve("execution-closure.json");
+    JsonNode closure = Sc967CanonicalJson.parse(Files.readAllBytes(document));
+    List<String> names = new ArrayList<>();
+    names.add(requiredText(closure.path("package"), "name"));
+    names.add(requiredText(closure.path("core"), "name"));
+    for (JsonNode dependency : closure.path("dependencies")) {
+      names.add(requiredText(dependency, "name"));
+    }
+    List<Path> jars = new ArrayList<>();
+    for (String name : names) {
+      readClosureArtifact(bundle, name);
+      jars.add(bundle.resolve(name));
+    }
+    return new CandidateRegistryClient.ClosureUpload(document, jars);
+  }
+
+  /**
+   * Reads the registered closure back and requires every byte to equal the persisted bundle: the
+   * registry's advertised digest, the closure document, and each closure JAR.
+   */
+  static void verifyClosureReadback(
+      CandidateRegistryClient registry,
+      Path bundle,
+      String candidateId,
+      CandidateRegistryClient.RegistryManifestResponse registration)
+      throws Exception {
+    CandidateRegistryClient.ClosureUpload upload = closureUpload(bundle);
+    byte[] persisted = Files.readAllBytes(upload.document());
+    if (!CandidateRegistryClient.hash(persisted).equals(registration.closureHash())) {
+      throw new IllegalStateException("REGISTRY_CLOSURE_HASH_MISMATCH");
+    }
+    CandidateRegistryClient.ArtifactDownload document = registry.downloadClosure(candidateId);
+    if (!java.util.Arrays.equals(persisted, document.bytes())) {
+      throw new IllegalStateException("REGISTRY_CLOSURE_READBACK_MISMATCH");
+    }
+    for (Path jar : upload.jars()) {
+      byte[] served = registry.downloadClosureJar(candidateId, jar.getFileName().toString());
+      if (!java.util.Arrays.equals(Files.readAllBytes(jar), served)) {
+        throw new IllegalStateException("REGISTRY_CLOSURE_READBACK_MISMATCH:" + jar.getFileName());
+      }
+    }
+  }
+
+  private static String requiredText(JsonNode node, String field) throws IOException {
+    JsonNode value = node == null ? null : node.get(field);
+    if (value == null || !value.isTextual() || value.textValue().isBlank()) {
+      throw new IOException("EXECUTION_CLOSURE_INVALID:" + field);
+    }
+    return value.textValue();
+  }
+
+  /**
    * Writes the complete bundle into a private temp directory and atomically renames it into place.
    */
   private Path stageBundle(
-      Path root, IsolatedPatchWorker.BuildResult build, byte[] manifestBytes, String candidateId)
+      Path root,
+      IsolatedPatchWorker.BuildResult build,
+      byte[] manifestBytes,
+      byte[] closureBytes,
+      String candidateId)
       throws IOException {
     Path tmp = Files.createDirectories(root.resolve(".tmp").resolve(UUID.randomUUID().toString()));
     try {
@@ -1092,8 +1310,12 @@ public class PatchCandidateWorkflowService {
       writeNew(tmp.resolve(build.sbomName()), build.sbomBytes());
       writeNew(tmp.resolve("certification.json"), build.certificationBytes());
       writeNew(tmp.resolve("manifest.json"), manifestBytes);
+      writeNew(tmp.resolve("execution-closure.json"), closureBytes);
+      for (IsolatedPatchWorker.ClosureArtifact artifact : build.closureArtifacts()) {
+        writeNew(tmp.resolve(artifact.name()), artifact.bytes());
+      }
       // Re-read and verify every staged byte before the rename.
-      verifyBundleContents(tmp, build, manifestBytes, candidateId);
+      verifyBundleContents(tmp, build, manifestBytes, closureBytes, candidateId);
       Path target = root.resolve(candidateId);
       try {
         Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE);
@@ -1123,7 +1345,11 @@ public class PatchCandidateWorkflowService {
    * Verifies every persisted bundle byte against the built evidence and the exact manifest bytes.
    */
   private void verifyBundleContents(
-      Path bundle, IsolatedPatchWorker.BuildResult build, byte[] manifestBytes, String candidateId)
+      Path bundle,
+      IsolatedPatchWorker.BuildResult build,
+      byte[] manifestBytes,
+      byte[] closureBytes,
+      String candidateId)
       throws IOException {
     boolean finalBundle = bundle.getFileName().toString().equals(candidateId);
     boolean privateTemporaryBundle =
@@ -1139,7 +1365,12 @@ public class PatchCandidateWorkflowService {
     Path sbom = bundle.resolve(build.sbomName());
     Path cert = bundle.resolve("certification.json");
     Path manifestPath = bundle.resolve("manifest.json");
-    for (Path path : List.of(jar, sbom, cert, manifestPath)) {
+    Path closurePath = bundle.resolve("execution-closure.json");
+    List<Path> required = new ArrayList<>(List.of(jar, sbom, cert, manifestPath, closurePath));
+    for (IsolatedPatchWorker.ClosureArtifact artifact : build.closureArtifacts()) {
+      required.add(bundle.resolve(artifact.name()));
+    }
+    for (Path path : required) {
       if (!Files.isRegularFile(path)) throw new IOException("CANDIDATE_STAGING_MISSING");
       if (Files.isSymbolicLink(path)) throw new IOException("STAGING_PATH_INVALID");
     }
@@ -1147,14 +1378,26 @@ public class PatchCandidateWorkflowService {
     byte[] sbomBytes = Files.readAllBytes(sbom);
     byte[] certificationBytes = Files.readAllBytes(cert);
     byte[] persistedManifestBytes = Files.readAllBytes(manifestPath);
+    byte[] persistedClosureBytes = Files.readAllBytes(closurePath);
     if (!java.util.Arrays.equals(jarBytes, build.jarBytes())
         || !java.util.Arrays.equals(sbomBytes, build.sbomBytes())
         || !java.util.Arrays.equals(certificationBytes, build.certificationBytes())
-        || !java.util.Arrays.equals(persistedManifestBytes, manifestBytes)) {
+        || !java.util.Arrays.equals(persistedManifestBytes, manifestBytes)
+        || !java.util.Arrays.equals(persistedClosureBytes, closureBytes)) {
       throw new IOException("STAGING_BUNDLE_CONFLICT");
+    }
+    Map<String, byte[]> closureArtifacts = new LinkedHashMap<>();
+    for (IsolatedPatchWorker.ClosureArtifact artifact : build.closureArtifacts()) {
+      byte[] persisted = Files.readAllBytes(bundle.resolve(artifact.name()));
+      if (!java.util.Arrays.equals(persisted, artifact.bytes())) {
+        throw new IOException("STAGING_BUNDLE_CONFLICT");
+      }
+      closureArtifacts.put(artifact.name(), persisted);
     }
     try {
       candidateValidator.validate(persistedManifestBytes, certificationBytes, jarBytes, sbomBytes);
+      validateExecutionClosure(
+          persistedClosureBytes, persistedManifestBytes, jarBytes, closureArtifacts);
     } catch (IllegalArgumentException e) {
       throw new IOException(e.getMessage(), e);
     }
@@ -1186,7 +1429,8 @@ public class PatchCandidateWorkflowService {
     Path sbom = bundle.resolve(String.valueOf(manifest.get("sbom_name")));
     Path cert = bundle.resolve("certification.json");
     Path manifestPath = bundle.resolve("manifest.json");
-    for (Path path : List.of(jar, sbom, cert, manifestPath)) {
+    Path closurePath = bundle.resolve("execution-closure.json");
+    for (Path path : List.of(jar, sbom, cert, manifestPath, closurePath)) {
       if (!Files.isRegularFile(path) || Files.isSymbolicLink(path))
         throw new IOException("CANDIDATE_STAGING_MISSING");
     }
@@ -1194,6 +1438,7 @@ public class PatchCandidateWorkflowService {
     byte[] jarBytes = Files.readAllBytes(jar);
     byte[] sbomBytes = Files.readAllBytes(sbom);
     byte[] certificationBytes = Files.readAllBytes(cert);
+    byte[] closureBytes = Files.readAllBytes(closurePath);
     if (!entity.getManifestFileHash().equals(hash(manifestBytes))
         || !entity.getJarSha256().equals(hash(jarBytes))
         || !entity.getSbomSha256().equals(hash(sbomBytes))
@@ -1202,6 +1447,19 @@ public class PatchCandidateWorkflowService {
     }
     try {
       candidateValidator.validate(manifestBytes, certificationBytes, jarBytes, sbomBytes);
+      JsonNode closure = Sc967CanonicalJson.parse(closureBytes);
+      Map<String, byte[]> artifacts = new LinkedHashMap<>();
+      artifacts.put(
+          requiredText(closure.path("package"), "name"),
+          readClosureArtifact(bundle, requiredText(closure.path("package"), "name")));
+      artifacts.put(
+          requiredText(closure.path("core"), "name"),
+          readClosureArtifact(bundle, requiredText(closure.path("core"), "name")));
+      for (JsonNode dependency : closure.path("dependencies")) {
+        String name = requiredText(dependency, "name");
+        artifacts.put(name, readClosureArtifact(bundle, name));
+      }
+      validateExecutionClosure(closureBytes, manifestBytes, jarBytes, artifacts);
     } catch (IllegalArgumentException e) {
       throw new IOException(e.getMessage(), e);
     }
@@ -1217,6 +1475,7 @@ public class PatchCandidateWorkflowService {
     if (entity == null || !"REGISTERING".equals(entity.getState())) {
       return;
     }
+    requireCurrentCandidate(entity);
     PatchCandidateRegistrationDispatcher.RegistrationClaim claim = claimRegistration(id);
     if (registrationDispatcher != null && claim == null) {
       return;
@@ -1236,13 +1495,15 @@ public class PatchCandidateWorkflowService {
     CandidateRegistryClient.RegistryManifestResponse lookup = null;
     CandidateRegistryClient.ArtifactDownload downloaded = null;
     try {
+      requireCurrentCandidate(entity);
       Path bundle = revalidatePersistedBundle(entity);
       Map<String, Object> manifest = read(entity.getCandidateManifestJson());
       Path manifestPath = bundle.resolve("manifest.json");
       Path jar = bundle.resolve(String.valueOf(manifest.get("jar_name")));
       Path sbom = bundle.resolve(String.valueOf(manifest.get("sbom_name")));
       Path cert = bundle.resolve("certification.json");
-      registration = registry.registerEvidence(manifestPath, jar, sbom, cert);
+      registration =
+          registry.registerEvidence(manifestPath, jar, sbom, cert, closureUpload(bundle));
       verifyRegistryReadback(
           Files.readAllBytes(manifestPath),
           manifest,
@@ -1262,6 +1523,7 @@ public class PatchCandidateWorkflowService {
       if (!downloaded.sha256().equals(String.valueOf(manifest.get("jar_sha256")))) {
         throw new IllegalStateException("REGISTRY_ARTIFACT_HASH_MISMATCH");
       }
+      verifyClosureReadback(registry, bundle, entity.getCandidateId(), registration);
       transitionClaimed(
           entity,
           claim,

@@ -1,0 +1,214 @@
+path,status,proposed_owner,preserved_at
+.env.example,tracked-modified,UNASSIGNED,needs owner
+.gitignore,tracked-modified,UNASSIGNED,needs owner
+build.gradle.kts,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+docs/mouse-video-import.md,tracked-modified,SC-2150 video,codex/sc2150-v7-tracker or composite
+package.json,tracked-modified,UNASSIGNED,needs owner
+scripts/sc663-inspect-backend.py,untracked,SC-663,codex/sc-663-review-20261016
+scripts/sc663_verify_release.py,untracked,SC-663/SC-967 contract cluster,needs branch
+scripts/sc968/Acceptance.Runtime.ps1,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/ServePages.java,tracked-modified,UNASSIGNED,needs owner
+src/main/java/com/chromascape/web/aiplayer/AiPlayerController.java,tracked-modified,SC-663,codex/sc-663-review-20261016
+src/main/java/com/chromascape/web/aiplayer/ImitationDatasetBuilderService.java,tracked-modified,SC-663,codex/sc-663-review-20261016
+src/main/java/com/chromascape/web/aiplayer/contract/CurrentArtifactIdentity.java,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/contract/CurrentBackendRuntime.java,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/contract/CurrentClientArtifacts.java,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/contract/CurrentContractController.java,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/contract/CurrentContractExceptionHandler.java,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/contract/CurrentContractGate.java,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/contract/CurrentSliceFailureCode.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/contract/CurrentSliceIdentity.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/contract/CurrentSliceIdentityValidator.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/contract/CurrentWireContract.java,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/contract/StrictFalseBooleanDeserializer.java,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/prototype/AiPlayerPrototypeController.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/prototype/FishingDatasetBuilderService.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/prototype/FishingModel.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/prototype/FishingReplayService.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/prototype/FishingShadowDecisionService.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/routine/controller/RoutineController.java,tracked-modified,SC-663/SC-967 contract cluster,needs branch
+src/main/java/com/chromascape/web/aiplayer/routine/controller/RoutineEditorDraftController.java,untracked,SC-663/SC-967 contract cluster,needs branch
+src/main/java/com/chromascape/web/aiplayer/routine/entity/RoutineEditorDraft.java,untracked,SC-663/SC-967 contract cluster,needs branch
+src/main/java/com/chromascape/web/aiplayer/routine/repository/CurrentSliceRunRepository.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/routine/repository/RoutineEditorDraftRepository.java,untracked,SC-663/SC-967 contract cluster,needs branch
+src/main/java/com/chromascape/web/aiplayer/routine/service/BehaviorGraphService.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/routine/service/CandidateExecutionClosureV1.java,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/routine/service/CaptureOperationDispatcher.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/routine/service/CertifiedCandidateV2Validator.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/routine/service/CurrentSliceRunService.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/routine/service/IsolatedPatchWorker.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/routine/service/PatchCandidateWorkflowService.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/routine/service/RoutineCaptureIngestionService.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/routine/service/RoutineCurationService.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/routine/service/RoutineEditorDraftService.java,untracked,SC-663/SC-967 contract cluster,needs branch
+src/main/java/com/chromascape/web/aiplayer/routine/service/RoutineReplayShadowService.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/aiplayer/routine/service/RoutineShadowService.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/java/com/chromascape/web/config/WebSocketConfig.java,tracked-modified,UNASSIGNED,needs owner
+src/main/java/com/chromascape/web/debug/accountprofile/AccountProfileRegistry.java,untracked,UNASSIGNED,needs owner
+src/main/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalRunStateMutationService.java,tracked-modified,Builder Goal / patch loop,needs owner (SC-1173?)
+src/main/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalRunnerService.java,tracked-modified,Builder Goal / patch loop,needs owner (SC-1173?)
+src/main/java/com/chromascape/web/debug/buildergoal/service/Micro6OnlineClientRegistryService.java,tracked-modified,Builder Goal / patch loop,needs owner (SC-1173?)
+src/main/java/com/chromascape/web/debug/buildergoal/service/Micro6TargetRelaunchService.java,tracked-modified,SC-663,codex/sc-663-review-20261016
+src/main/java/com/chromascape/web/debug/patchloop/service/ScriptExecutionService.java,tracked-modified,Builder Goal / patch loop,needs owner (SC-1173?)
+src/main/java/com/chromascape/web/debug/tickdebugger/controller/MouseCampaignController.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/java/com/chromascape/web/debug/tickdebugger/controller/MouseDatasetController.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/java/com/chromascape/web/debug/tickdebugger/controller/MouseRecordingController.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/java/com/chromascape/web/debug/tickdebugger/controller/MouseRecordingInspectionController.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/java/com/chromascape/web/debug/tickdebugger/controller/MouseResearchController.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/java/com/chromascape/web/debug/tickdebugger/controller/MouseTaskRecordingController.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/java/com/chromascape/web/debug/tickdebugger/controller/MouseTrainingController.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/java/com/chromascape/web/debug/tickdebugger/dto/SessionStartResponse.java,tracked-modified,SC-1991 session/screen sync,needs branch
+src/main/java/com/chromascape/web/debug/tickdebugger/entity/TickLogRepository.java,tracked-modified,SC-1991 session/screen sync,needs branch
+src/main/java/com/chromascape/web/debug/tickdebugger/service/MouseActionContext.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/java/com/chromascape/web/debug/tickdebugger/service/MouseAutomaticLabels.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/java/com/chromascape/web/debug/tickdebugger/service/MouseCampaignDatasetService.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/java/com/chromascape/web/debug/tickdebugger/service/MouseCampaignLease.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/java/com/chromascape/web/debug/tickdebugger/service/MouseCampaignService.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/java/com/chromascape/web/debug/tickdebugger/service/MouseCampaignStore.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/java/com/chromascape/web/debug/tickdebugger/service/MouseCaptureSummary.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/java/com/chromascape/web/debug/tickdebugger/service/MouseMovementAnalysis.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/java/com/chromascape/web/debug/tickdebugger/service/MouseRecordingEvidence.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/java/com/chromascape/web/debug/tickdebugger/service/MouseRecordingInspectionService.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/java/com/chromascape/web/debug/tickdebugger/service/MouseResearchService.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/java/com/chromascape/web/debug/tickdebugger/service/MouseResearchWorker.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/java/com/chromascape/web/debug/tickdebugger/service/MouseTaskRecordingService.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/java/com/chromascape/web/debug/tickdebugger/service/TickBatchCanonicalChecksumService.java,untracked,UNASSIGNED,needs owner
+src/main/java/com/chromascape/web/debug/tickdebugger/service/TickStreamIngestionService.java,tracked-modified,SC-1991 session/screen sync,needs branch
+src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoCursorTracker.java,tracked-modified,SC-2150 video,codex/sc2150-v7-tracker or composite
+src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoJsonStream.java,tracked-modified,SC-2150 video,codex/sc2150-v7-tracker or composite
+src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoObservationsService.java,tracked-modified,SC-2150 video,codex/sc2150-v7-tracker or composite
+src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoVisualAnalyzer.java,tracked-modified,SC-2150 video,codex/sc2150-v7-tracker or composite
+src/main/java/com/chromascape/web/debug/tickdebugger/websocket/TickStreamWebSocketHandler.java,tracked-modified,SC-1991 session/screen sync,needs branch
+src/main/java/com/chromascape/web/integration/micro6/service/Micro6CanonicalHash.java,tracked-modified,SC-663,codex/sc-663-review-20261016
+src/main/java/com/chromascape/web/replay/security/LocalReplayPrincipalConfig.java,tracked-modified,SC-1991 session/screen sync,needs branch
+src/main/java/com/chromascape/web/replay/session/XrspsRecordedActionRunner.java,tracked-modified,SC-1991 plan,codex/sc-1991-plan-amendment-20261024
+src/main/java/com/chromascape/web/replay/session/XrspsSession.java,tracked-modified,SC-1991 session/screen sync,needs branch
+src/main/java/com/chromascape/web/replay/session/XrspsSessionExecutionService.java,tracked-modified,SC-1991 session/screen sync,needs branch
+src/main/java/com/chromascape/web/replay/session/XrspsSessionStore.java,tracked-modified,SC-1991 plan,codex/sc-1991-plan-amendment-20261024
+src/main/java/com/chromascape/web/replay/session/XrspsSessionsController.java,tracked-modified,SC-1991 session/screen sync,needs branch
+src/main/java/com/chromascape/web/viewport/LatestFrameSender.java,untracked,viewport/screen sync,needs owner
+src/main/java/com/chromascape/web/viewport/Micro6ScreenWebSocketHandler.java,untracked,viewport/screen sync,needs owner
+src/main/java/com/chromascape/web/viewport/ViewportController.java,tracked-modified,viewport/screen sync,needs owner
+src/main/java/com/chromascape/web/viewport/ViewportWebSocketHandler.java,tracked-modified,viewport/screen sync,needs owner
+src/main/java/com/chromascape/web/viewport/config/ViewportStreamConfig.java,tracked-modified,viewport/screen sync,needs owner
+src/main/java/com/chromascape/web/viewport/service/UnifiedFrameCaptureService.java,tracked-modified,viewport/screen sync,needs owner
+src/main/resources/contracts/candidate-execution-closure-v1.schema.json,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/resources/contracts/seeded-failure-source-binding-v1.schema.json,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/main/resources/db/migration/V41__routine_editor_drafts.sql,untracked,UNASSIGNED,needs owner
+src/main/resources/mouse-research/worker.py,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/resources/static/css/ai-routine.css,tracked-modified,SC-663/SC-967 contract cluster,needs branch
+src/main/resources/static/js/account-task-planner.js,tracked-modified,SC-663/SC-967 contract cluster,needs branch
+src/main/resources/static/js/ai-routine-state.js,tracked-modified,SC-663/SC-967 contract cluster,needs branch
+src/main/resources/static/js/ai-routine.js,tracked-modified,SC-663/SC-967 contract cluster,needs branch
+src/main/resources/static/js/ai-workbench-state.js,untracked,UNASSIGNED,needs owner
+src/main/resources/static/js/ai-workbench.js,untracked,UNASSIGNED,needs owner
+src/main/resources/static/js/debugger.js,tracked-modified,UNASSIGNED,needs owner
+src/main/resources/static/js/micro6-viewport.js,untracked,viewport/screen sync,needs owner
+src/main/resources/static/js/mouse-campaign.js,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/resources/static/js/mouse-comparison.js,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/resources/static/js/mouse-recording.js,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/resources/static/js/mouse-research.js,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/resources/static/js/mouse-task-recording.js,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/resources/static/js/viewport.js,tracked-modified,viewport/screen sync,needs owner
+src/main/resources/templates/debugger.html,tracked-modified,UNASSIGNED,needs owner
+src/main/resources/templates/mouse-comparison.html,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/resources/templates/mouse-recording.html,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/main/resources/templates/mouse-research.html,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/browser/fixtures/replay.webm,untracked,UNASSIGNED,needs owner
+src/test/browser/micro6-viewport.spec.cjs,untracked,viewport/screen sync,needs owner
+src/test/browser/mouse-campaign-smoke.cjs,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/browser/mouse-recording-inspection.spec.cjs,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/browser/server.cjs,untracked,UNASSIGNED,needs owner
+src/test/browser/workbench.spec.cjs,untracked,UNASSIGNED,needs owner
+src/test/browser/workbench.spec.cjs-snapshots/state-empty-linux.png,untracked,UNASSIGNED,needs owner
+src/test/browser/workbench.spec.cjs-snapshots/state-error-linux.png,untracked,UNASSIGNED,needs owner
+src/test/browser/workbench.spec.cjs-snapshots/state-invalid-linux.png,untracked,UNASSIGNED,needs owner
+src/test/browser/workbench.spec.cjs-snapshots/state-loading-linux.png,untracked,UNASSIGNED,needs owner
+src/test/browser/workbench.spec.cjs-snapshots/workbench-1280-linux.png,untracked,UNASSIGNED,needs owner
+src/test/browser/workbench.spec.cjs-snapshots/workbench-1440-linux.png,untracked,UNASSIGNED,needs owner
+src/test/browser/workbench.spec.cjs-snapshots/workbench-1920-linux.png,untracked,UNASSIGNED,needs owner
+src/test/java/com/chromascape/web/MouseResearchPageTest.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/java/com/chromascape/web/aiplayer/ImitationDatasetBuilderServiceTest.java,tracked-modified,SC-663,codex/sc-663-review-20261016
+src/test/java/com/chromascape/web/aiplayer/contract/CanonicalJsonHasherTest.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/test/java/com/chromascape/web/aiplayer/contract/CurrentBackendRuntimeTest.java,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/test/java/com/chromascape/web/aiplayer/contract/CurrentClientArtifactsTest.java,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/test/java/com/chromascape/web/aiplayer/contract/CurrentContractBoundaryRefusalTest.java,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/test/java/com/chromascape/web/aiplayer/contract/CurrentContractGateTest.java,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/test/java/com/chromascape/web/aiplayer/contract/CurrentContractPackagedFactoryTest.java,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/test/java/com/chromascape/web/aiplayer/contract/CurrentContractProducerRoundTripTest.java,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/test/java/com/chromascape/web/aiplayer/contract/CurrentContractReleaseManifestTest.java,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/test/java/com/chromascape/web/aiplayer/contract/CurrentPrototypeContractTest.java,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/test/java/com/chromascape/web/aiplayer/contract/CurrentRecordingBindingTest.java,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/test/java/com/chromascape/web/aiplayer/routine/controller/RoutineEditorDraftControllerTest.java,untracked,SC-663/SC-967 contract cluster,needs branch
+src/test/java/com/chromascape/web/aiplayer/routine/dto/RoutineApiDtosWireFormatTest.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/test/java/com/chromascape/web/aiplayer/routine/service/CandidateExecutionClosureV1Test.java,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/test/java/com/chromascape/web/aiplayer/routine/service/PatchCandidateManifestV2Test.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/test/java/com/chromascape/web/aiplayer/routine/service/PatchCandidateWorkflowServiceTest.java,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/test/java/com/chromascape/web/aiplayer/routine/service/RoutineEditorDraftPersistenceTest.java,untracked,SC-663/SC-967 contract cluster,needs branch
+src/test/java/com/chromascape/web/aiplayer/routine/service/RoutineEditorDraftServiceTest.java,untracked,SC-663/SC-967 contract cluster,needs branch
+src/test/java/com/chromascape/web/aiplayer/routine/service/WorkbenchContextDiscoveryTest.java,untracked,SC-663/SC-967 contract cluster,needs branch
+src/test/java/com/chromascape/web/debug/accountprofile/AccountProfileRegistryTest.java,untracked,UNASSIGNED,needs owner
+src/test/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalRunnerServiceTest.java,tracked-modified,Builder Goal / patch loop,needs owner (SC-1173?)
+src/test/java/com/chromascape/web/debug/buildergoal/service/LauncherContractAdjudicationTest.java,untracked,SC-663,codex/sc-663-review-20261016
+src/test/java/com/chromascape/web/debug/buildergoal/service/Micro6TargetRelaunchServiceTest.java,tracked-modified,SC-663,codex/sc-663-review-20261016
+src/test/java/com/chromascape/web/debug/patchloop/service/ScriptExecutionServiceTest.java,tracked-modified,Builder Goal / patch loop,needs owner (SC-1173?)
+src/test/java/com/chromascape/web/debug/tickdebugger/controller/MouseDatasetControllerTest.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/java/com/chromascape/web/debug/tickdebugger/controller/MouseRecordingControllerTest.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/java/com/chromascape/web/debug/tickdebugger/controller/MouseRecordingInspectionControllerTest.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/java/com/chromascape/web/debug/tickdebugger/controller/MouseResearchControllerTest.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/java/com/chromascape/web/debug/tickdebugger/controller/MouseTrainingControllerTest.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/java/com/chromascape/web/debug/tickdebugger/service/MouseActionContextTest.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/java/com/chromascape/web/debug/tickdebugger/service/MouseAutomaticLabelsTest.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/java/com/chromascape/web/debug/tickdebugger/service/MouseCampaignDatasetServiceTest.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/java/com/chromascape/web/debug/tickdebugger/service/MouseCampaignServiceTest.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/java/com/chromascape/web/debug/tickdebugger/service/MouseCaptureSummaryTest.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/java/com/chromascape/web/debug/tickdebugger/service/MouseMovementAnalysisTest.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/java/com/chromascape/web/debug/tickdebugger/service/MouseRecordingEvidenceTest.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/java/com/chromascape/web/debug/tickdebugger/service/MouseRecordingInspectionServiceTest.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/java/com/chromascape/web/debug/tickdebugger/service/MouseResearchServiceTest.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/java/com/chromascape/web/debug/tickdebugger/service/MouseResearchWorkerTest.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/java/com/chromascape/web/debug/tickdebugger/service/MouseTaskRecordingServiceTest.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/java/com/chromascape/web/debug/tickdebugger/service/MouseTrainingExecutionTest.java,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoCursorTrackerTest.java,tracked-modified,SC-2150 video,codex/sc2150-v7-tracker or composite
+src/test/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoFrameIndexServiceTest.java,tracked-modified,SC-2150 video,codex/sc2150-v7-tracker or composite
+src/test/java/com/chromascape/web/debug/tickdebugger/websocket/TickStreamWebSocketHandlerTest.java,tracked-modified,SC-1991 session/screen sync,needs branch
+src/test/java/com/chromascape/web/integration/micro6/service/Micro6CanonicalHashTest.java,tracked-modified,SC-663,codex/sc-663-review-20261016
+src/test/java/com/chromascape/web/integration/micro6/service/Micro6CatalogV2ContractTest.java,tracked-modified,SC-663,codex/sc-663-review-20261016
+src/test/java/com/chromascape/web/integration/micro6/service/TestMicro6Catalog.java,tracked-modified,SC-663,codex/sc-663-review-20261016
+src/test/java/com/chromascape/web/replay/manifest/ScenarioManifestV2CompilerTest.java,tracked-modified,UNASSIGNED,needs owner
+src/test/java/com/chromascape/web/replay/security/LocalReplayPrincipalFilterTest.java,tracked-modified,SC-1991 session/screen sync,needs branch
+src/test/java/com/chromascape/web/replay/session/XrspsRecordedActionRunnerTest.java,tracked-modified,SC-1991 plan,codex/sc-1991-plan-amendment-20261024
+src/test/java/com/chromascape/web/replay/session/XrspsSessionExecutionServiceTest.java,tracked-modified,SC-1991 plan,codex/sc-1991-plan-amendment-20261024
+src/test/java/com/chromascape/web/replay/session/XrspsSessionsControllerTest.java,tracked-modified,SC-1991 plan,codex/sc-1991-plan-amendment-20261024
+src/test/java/com/chromascape/web/viewport/Micro6ScreenWebSocketHandlerTest.java,untracked,viewport/screen sync,needs owner
+src/test/java/com/chromascape/web/viewport/ViewportWebSocketHandlerTest.java,tracked-modified,viewport/screen sync,needs owner
+src/test/js/account-task-planner.test.js,tracked-modified,SC-663/SC-967 contract cluster,needs branch
+src/test/js/ai-routine-state.test.js,tracked-modified,SC-663,codex/sc-663-review-20261016
+src/test/js/ai-routine-stream.test.js,untracked,SC-663/SC-967 contract cluster,needs branch
+src/test/js/ai-workbench-state.test.js,untracked,UNASSIGNED,needs owner
+src/test/js/debugger-workspace.test.js,tracked-modified,UNASSIGNED,needs owner
+src/test/js/micro6-viewport.test.js,untracked,viewport/screen sync,needs owner
+src/test/js/mouse-campaign.test.js,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/js/mouse-comparison.test.js,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/js/mouse-recording.test.js,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/js/mouse-research.test.js,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/js/mouse-task-recording.test.js,untracked,mouse research dashboard,needs owner (SC-304/SC-2150)
+src/test/js/sc663-contract-display.test.js,untracked,SC-663,codex/sc-663-review-20261016
+src/test/python/test_mouse_campaign_worker.py,untracked,UNASSIGNED,needs owner
+src/test/python/test_mouse_quality_worker.py,untracked,UNASSIGNED,needs owner
+src/test/python/test_mouse_research_worker.py,untracked,UNASSIGNED,needs owner
+src/test/python/test_sc2150_explain_cursor_track.py,untracked,UNASSIGNED,needs owner
+src/test/python/test_sc663_verify_release.py,untracked,SC-663/SC-967 contract cluster,needs branch
+src/test/resources/micro6-fixtures/catalog-full-error.json,tracked-modified,SC-663,codex/sc-663-review-20261016
+src/test/resources/micro6-fixtures/catalog-full-not-applicable.json,tracked-modified,SC-663,codex/sc-663-review-20261016
+src/test/resources/micro6-fixtures/catalog-full-ready.json,tracked-modified,SC-663,codex/sc-663-review-20261016
+src/test/resources/micro6-fixtures/catalog-lightweight.json,tracked-modified,SC-663,codex/sc-663-review-20261016
+src/test/resources/micro6-fixtures/fixtures-manifest.sha256,tracked-modified,SC-663,codex/sc-663-review-20261016
+src/test/resources/micro6-fixtures/health-available.json,tracked-modified,SC-663,codex/sc-663-review-20261016
+src/test/resources/micro6-fixtures/health-bootstrap.json,tracked-modified,SC-663,codex/sc-663-review-20261016
+src/test/resources/micro6-fixtures/health-generating.json,tracked-modified,SC-663,codex/sc-663-review-20261016
+src/test/resources/sc663/current-manifest.json,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/test/resources/sc663/micro6-identity.json,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/test/resources/sc663/runelite-identity.json,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/test/resources/sc967/fishing-seeded-fail-source-v1.json,tracked-modified,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer
+src/test/resources/sc967/sc572-seeded-failure-v1.json,untracked,SC-2106/SC-663 contract cluster,codex/sc-967-sc2106-producer

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.service.CandidateExecutionClosureV1Test" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-10-26T15:06:17.556Z" hostname="fedora" time="1.829">
+  <properties/>
+  <testcase name="closureBuiltForAnotherCandidateIsRejected()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionClosureV1Test" time="1.57"/>
+  <testcase name="committedClosureVectorVerifiesAndIsReproducedByTheProducer()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionClosureV1Test" time="0.174"/>
+  <testcase name="dependencyJarWithUnapprovedModuleInfoIsRejected()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionClosureV1Test" time="0.024"/>
+  <testcase name="missingOrTamperedClosureJarIsRejected()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionClosureV1Test" time="0.016"/>
+  <testcase name="unapprovedCoreBytesAreNeverSigned()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionClosureV1Test" time="0.012"/>
+  <testcase name="dependencyJarRepackedFromTheSignedFatJarIsAccepted()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionClosureV1Test" time="0.016"/>
+  <testcase name="tamperedClosureOrWrongKeyIsRejected()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionClosureV1Test" time="0.008"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

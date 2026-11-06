@@ -1,0 +1,50 @@
+[
+  {
+    "source": "2e64e2fc",
+    "variant": "native",
+    "clip": "dev--2e64e2fc--native",
+    "skipped": null
+  },
+  {
+    "source": "3133de8d",
+    "variant": "hidpi-2.0",
+    "clip": "dev--3133de8d--hidpi-2.0",
+    "skipped": null
+  },
+  {
+    "source": "4c4898c5",
+    "variant": "hidpi-2.0-resized-0.7x",
+    "clip": "dev--4c4898c5--hidpi-2.0-resized-0.7x",
+    "skipped": null
+  },
+  {
+    "source": "6a594507",
+    "variant": "hidpi-1.5-cut",
+    "clip": null,
+    "skipped": "no screened segment for cut piece"
+  },
+  {
+    "source": "87a88065",
+    "variant": "native",
+    "clip": "dev--87a88065--native",
+    "skipped": null
+  },
+  {
+    "source": "931d13fc",
+    "variant": "hidpi-2.0",
+    "clip": "dev--931d13fc--hidpi-2.0",
+    "skipped": null
+  },
+  {
+    "source": "f16b6dd7",
+    "variant": "hidpi-2.0-resized-0.7x",
+    "clip": "dev--f16b6dd7--hidpi-2.0-resized-0.7x",
+    "skipped": null
+  },
+  {
+    "source": "f9f78ab0",
+    "variant": "hidpi-1.5-cut",
+    "clip": "dev--f9f78ab0--hidpi-1.5-cut",
+    "skipped": null
+  }
+]

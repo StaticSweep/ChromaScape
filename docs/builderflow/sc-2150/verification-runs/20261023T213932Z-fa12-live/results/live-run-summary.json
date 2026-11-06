@@ -1,0 +1,417 @@
+{
+ "schema": "sc2150-fa12-live-summary/v1",
+ "template": "arrow",
+ "split": "dev",
+ "capabilities_sha256": "8cec03b1749b79cb703f15c12ecb471d444b8e8ca120e2323a0d295579f8935d",
+ "full_live_run_sha256": "436a20571d15c676c8a5529ad9c3d192c34b9edf39514c85b89ddb903279c4ab",
+ "http_records": 5552,
+ "http_non_2xx": 0,
+ "clips": [
+  {
+   "clip_id": "dev--11e2eec3--hidpi-1.5-overlay",
+   "source_id": "4a2b8842-25bd-41ac-acab-689c1af0b1f5",
+   "analysis_id": "71b05e44-e57a-4d58-aa51-2588ef87695d",
+   "wall_seconds": 108.21,
+   "media_sha256": "6119fa57b2d62c54be195aec0f934562883c0cca3b90cfdf6303185282900014",
+   "parity": {
+    "frames": 298,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--11e2eec3--hidpi-1.5",
+   "source_id": "3dff66dd-7eba-45ba-bab0-ea916cf1751e",
+   "analysis_id": "eb5a7488-c49d-42c2-b89f-dde8dc2b7f76",
+   "wall_seconds": 114.21,
+   "media_sha256": "93c075064361eda64bb885afa64f7f8235a41c34015b37c39188ec5bb83f470b",
+   "parity": {
+    "frames": 299,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--11e2eec3--hidpi-2.0-resized-0.7x",
+   "source_id": "e1b9247d-0462-4495-af69-7596d5ff2c93",
+   "analysis_id": "889d7c66-b1c3-48e7-993f-6875bc5fbcec",
+   "wall_seconds": 109.53,
+   "media_sha256": "d469822eb8bea58861ea5e2b46da9415aab2423a9bd192f3c6b56216003aba48",
+   "parity": {
+    "frames": 300,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--2e64e2fc--hidpi-1.5-overlay",
+   "source_id": "398a47b0-466e-45a7-8af3-f837f0f830be",
+   "analysis_id": "ce170526-ba00-4e62-958f-329fcfb3e412",
+   "wall_seconds": 128.02,
+   "media_sha256": "e29e71f8148f9bb5fae1653886e495dd2c9516fc400e76f2e88cd0deeb639f18",
+   "parity": {
+    "frames": 298,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--2e64e2fc--hidpi-1.5",
+   "source_id": "1586d8dc-e35e-4f49-a67f-1b877458e7e8",
+   "analysis_id": "0150bc01-20a2-4147-a38a-1b17099c8aed",
+   "wall_seconds": 170.87,
+   "media_sha256": "43dad451ec2b049e6e684a4912e50985fbe24ea4dad5994b0106bc2b9661729d",
+   "parity": {
+    "frames": 296,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--2e64e2fc--hidpi-2.0-resized-0.7x",
+   "source_id": "56a94ed8-7b1f-46dc-aad2-f5f9bd5a6a67",
+   "analysis_id": "d2d96eca-e887-4e15-959c-ecbb9550fc0c",
+   "wall_seconds": 138.45,
+   "media_sha256": "271214078a3a84189202e1244c61dca4b5f38f0950fc41c2b002f2d957f54768",
+   "parity": {
+    "frames": 298,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--3133de8d--hidpi-1.5-compressed-300k",
+   "source_id": "e68f2cce-3df6-4365-a12f-251324143921",
+   "analysis_id": "8adc536c-383d-48ca-81ef-102df4dfe7a1",
+   "wall_seconds": 98.09,
+   "media_sha256": "d7d4813c509ee4d9b3fdb0837b4a7417070fd5197be89e9532e485cf9e5a77aa",
+   "parity": {
+    "frames": 298,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--3133de8d--hidpi-1.5-cut",
+   "source_id": "9ea59555-f7ea-405e-97f3-5cc1a55c2e7f",
+   "analysis_id": "6cedf1f2-19b1-477d-a5ec-8d43c2d4ecf2",
+   "wall_seconds": 100.95,
+   "media_sha256": "d2caf04e47b411b24dd0f693abff51a22dbcb4aab4189b2efe8a447908dbf060",
+   "parity": {
+    "frames": 295,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--3133de8d--native",
+   "source_id": "1db4136c-4a30-41b4-9f27-407fcec3ac77",
+   "analysis_id": "8afcd2a0-bdd1-4e15-8edd-bf12bc676d13",
+   "wall_seconds": 54.57,
+   "media_sha256": "037a40b935f4615e90bf85f8b6975a2fc45bcef0cbf3ca0d3a9e5716582e3675",
+   "parity": {
+    "frames": 298,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--4c4898c5--hidpi-1.5-vfr-drop",
+   "source_id": "e59de03c-1838-4a15-ac40-a1956826af40",
+   "analysis_id": "593e629e-0969-4329-b5b9-fc3982aeb8d5",
+   "wall_seconds": 62.74,
+   "media_sha256": "b041d59b073fffe841e1645064299b0ca871c2e6ccae039126541d506ec3365d",
+   "parity": {
+    "frames": 195,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--4c4898c5--hidpi-2.0",
+   "source_id": "6bec22af-2c56-4007-b983-0a547209cd39",
+   "analysis_id": "e44fba64-74f0-4524-8914-af98435ce649",
+   "wall_seconds": 87.64,
+   "media_sha256": "cc9a06b2b7970e195e4c5f7457d9dd9ac93e792abdb95078d0b572846502d967",
+   "parity": {
+    "frames": 300,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--6a594507--hidpi-1.5-vfr-drop",
+   "source_id": "588a7edd-639e-460b-816c-475e1ec787f3",
+   "analysis_id": "07f207e1-49c0-485b-a0af-c32eedfd71f2",
+   "wall_seconds": 63.27,
+   "media_sha256": "45fe52dc8ca5fa3638de7f283f2a9a85023f5dcf40506aeeaa897275a8818f18",
+   "parity": {
+    "frames": 195,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--6a594507--hidpi-2.0",
+   "source_id": "22d59d22-a7f3-4aa9-af5e-044651a6651f",
+   "analysis_id": "2e242722-6ecc-4711-a43d-0eb67362baf6",
+   "wall_seconds": 105.63,
+   "media_sha256": "7183808c9683d8caefb9e75d949f02ff7ddb224b7c278db8ac71d23b5cc70e01",
+   "parity": {
+    "frames": 300,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--78cde7ca--hidpi-1.5-compressed-300k",
+   "source_id": "0e23ae86-d4fe-4e60-8416-5ade72ab5e56",
+   "analysis_id": "ee892ac6-6de6-492f-96ef-30df4c93b96b",
+   "wall_seconds": 71.55,
+   "media_sha256": "3db62183fa1e5b9b20fd23f1da3a29e4ffc875e816b526d5d05720a7a0e43357",
+   "parity": {
+    "frames": 300,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--78cde7ca--hidpi-1.5-cut",
+   "source_id": "bf0592c4-eb7a-4aaf-b6eb-353da8d9fed6",
+   "analysis_id": "e48e3219-26ca-4768-88fd-f7da6d4ba4de",
+   "wall_seconds": 83.01,
+   "media_sha256": "f771f62a62aa5c3e67627cdb9709a53c01d7fd49a9a5e5c9b6e3b1c32c4b02b4",
+   "parity": {
+    "frames": 298,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--78cde7ca--native",
+   "source_id": "a156fd85-128d-4026-b29b-61b0c0c9f5a1",
+   "analysis_id": "da4e5f7b-9f2e-464b-a3ca-1fa8a54f3826",
+   "wall_seconds": 72.25,
+   "media_sha256": "5fcd51fd8c71e78884a0de67945d365b08648031a3afe54ce53a487ebe870774",
+   "parity": {
+    "frames": 300,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--87a88065--hidpi-1.5-overlay",
+   "source_id": "6fb059a6-a768-42f2-90be-56185b14b42c",
+   "analysis_id": "8c5f9360-c8f5-4b21-9917-9d87e81f1a38",
+   "wall_seconds": 78.06,
+   "media_sha256": "a9a8fb9b06f3fd7222a2daa23a48ec346720b811dbba10e17e03752863b9cb89",
+   "parity": {
+    "frames": 299,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--87a88065--hidpi-1.5",
+   "source_id": "39f4da2c-5848-4b9a-a6c3-7fdf376ffc82",
+   "analysis_id": "c7817b55-3663-4601-b294-0a8bfd43d520",
+   "wall_seconds": 82.22,
+   "media_sha256": "c5236d95338b722e2f9cc9359cf410da1a5c54a9400361f33d9b79524ae1b0c2",
+   "parity": {
+    "frames": 299,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--87a88065--hidpi-2.0-resized-0.7x",
+   "source_id": "6dfd30fa-53e3-4058-b8be-a45fbec4ab9e",
+   "analysis_id": "50fc0494-e919-491a-8799-667f2b6fe099",
+   "wall_seconds": 152.82,
+   "media_sha256": "7a498c4c03157dc1eb8338352382c44782fada09ad272ced363a6e15123ed6d0",
+   "parity": {
+    "frames": 299,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--931d13fc--hidpi-1.5-vfr-drop",
+   "source_id": "182f53a5-0811-4dfa-9675-7d164de97384",
+   "analysis_id": "6f3b2963-32a8-4097-a6ef-59bb6ba38a14",
+   "wall_seconds": 69.9,
+   "media_sha256": "10978b01f8379c9cec43e9695b2ec835b71e55fe29d4f334f41c4d81360aa2b5",
+   "parity": {
+    "frames": 193,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--931d13fc--hidpi-2.0",
+   "source_id": "90d2ca67-6510-4267-8047-172a3cbe4212",
+   "analysis_id": "a13f3806-0616-4076-b77a-aec920696a6b",
+   "wall_seconds": 123.7,
+   "media_sha256": "344b47f52e139784c8eadea5c13edffce7a0310236dd3bd1f0681e5bdf74604c",
+   "parity": {
+    "frames": 299,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--f16b6dd7--hidpi-1.5-compressed-300k",
+   "source_id": "b344444f-9bb5-4039-b573-af341179d4ac",
+   "analysis_id": "e254939b-ecce-459b-9c34-5d17372d33a1",
+   "wall_seconds": 112.93,
+   "media_sha256": "5aa262024aaf8491fe112b76bdb33fce9a9e49da6a276fe4be47e3c88843f5b0",
+   "parity": {
+    "frames": 298,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--f16b6dd7--hidpi-1.5-cut",
+   "source_id": "eb319510-6f9f-4802-a9d5-7ea7ed7ca043",
+   "analysis_id": "07547d52-0d04-4ef9-a5df-3deea2bf0471",
+   "wall_seconds": 124.95,
+   "media_sha256": "0abbbc49cfe9ffb64782c4b35a210c2281619bae6e04f820c0f3eb7d9dc6ba0b",
+   "parity": {
+    "frames": 297,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--f16b6dd7--native",
+   "source_id": "10acc734-a96a-4fae-816c-43782a1ccf0e",
+   "analysis_id": "2c563e9b-854b-4c1e-a787-7a471b09285d",
+   "wall_seconds": 104.33,
+   "media_sha256": "3adc6222d8675c1253c1a009703c325176067fa25d6b038392195a0fe2218dc5",
+   "parity": {
+    "frames": 299,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--f9f78ab0--hidpi-1.5-compressed-300k",
+   "source_id": "a1fa16ed-9770-44fc-90f6-49cf4243e04a",
+   "analysis_id": "0110007f-8649-49a2-a4f3-fd82e87b8180",
+   "wall_seconds": 74.86,
+   "media_sha256": "d13d3904bd0a8261a2229cf9ed734a811b64d0dc9115d6a49c457994358efb4e",
+   "parity": {
+    "frames": 300,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--f9f78ab0--hidpi-1.5-cut",
+   "source_id": "72db0928-c72e-49be-8117-b017ccf8b901",
+   "analysis_id": "57cf9010-ec3a-413a-bfe4-3cdf97be0fcc",
+   "wall_seconds": 80.9,
+   "media_sha256": "87bd38f33ff4240b3801c1bd6906a5530ea2abd0114aa539dff96bcccf3d1f64",
+   "parity": {
+    "frames": 298,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--f9f78ab0--native",
+   "source_id": "3d6eb21b-1cad-4ae6-a7c7-bbb67f9ebade",
+   "analysis_id": "fd7b112a-3cfe-4370-9482-a46a81eb49a8",
+   "wall_seconds": 72.59,
+   "media_sha256": "469d8f38ef264c5562b34ee0562064192943db946b4afdd3e4c157479525c49a",
+   "parity": {
+    "frames": 300,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--fa5228cb--hidpi-1.5-vfr-drop",
+   "source_id": "6b7d6c6d-7313-48eb-9b4f-56de65311cf9",
+   "analysis_id": "997315b5-eaea-4c5c-ad5d-439b22708f5f",
+   "wall_seconds": 54.31,
+   "media_sha256": "ad9ade3671fb01b90a70a650664fcfca92ed6504331cf16432d4c9e08bbd29a8",
+   "parity": {
+    "frames": 195,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  },
+  {
+   "clip_id": "dev--fa5228cb--hidpi-2.0",
+   "source_id": "5ab9d081-bc29-4b04-8d2e-57f3f230e261",
+   "analysis_id": "aab4cee6-c73b-43a6-b26a-d7e6589d3771",
+   "wall_seconds": 84.72,
+   "media_sha256": "1f7179f9819428043d98bf08498902cee9c93d3deab4f30f856727a58f972e8f",
+   "parity": {
+    "frames": 299,
+    "mismatched_frames": 0,
+    "first_mismatches": [],
+    "missing_frames": 0,
+    "cuts_equal": true
+   }
+  }
+ ]
+}

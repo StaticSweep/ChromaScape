@@ -1,0 +1,19 @@
+{
+  "project": "C:\\Dev\\IdeaProjects\\ChromaScape",
+  "java": "Temurin 17.0.20.1+1",
+  "processEnvironment": {
+    "JAVA_TOOL_OPTIONS": "-Dapi.version=1.44"
+  },
+  "baselineSelector": "com.chromascape.web.debug.tickdebugger.video.*",
+  "testExecution": "test --rerun",
+  "isolatedBuildAndProjectCache": true,
+  "initialProbeSelectors": [
+    "MouseVideoSchedulingIndependentReviewTest.sandboxCannotOverwriteAnotherJobsOriginal",
+    "MouseVideoSchedulingIndependentReviewTest.racedRequestMustNotReturnAnotherBodyOrSource",
+    "MouseVideoSchedulingIndependentReviewTest.changingTemplateBytesMustChangeAnalysisIdentity",
+    "MouseVideoPreviewIndependentReviewTest.cancellingQueuedPreviewSettlesItsPublicPreviewState"
+  ],
+  "additionalProbeSelector": "MouseVideoPreviewIndependentReviewTest.admissionRemainsBoundedAcrossConcurrentDistinctAnalyses",
+  "jsCommand": "node --test src/test/js/mouse-video.test.js",
+  "probeHarnessNote": "Only the external PostgreSQL probe clone migrates through V45. The original service-race fixture remains unchanged at V43, and its failures are retained."
+}

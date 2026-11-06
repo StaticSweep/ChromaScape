@@ -52,6 +52,14 @@ public class ReplayV2Controller {
         runService.preflight(recordingId, conversionMode, curationId, requirePrincipal(principal)));
   }
 
+  /** SC-2106 R3.4: the recording's start alone, for a recording-derived candidate run. */
+  @GetMapping("/recordings/{recordingId}/start-manifest")
+  public ResponseEntity<com.fasterxml.jackson.databind.node.ObjectNode> startManifest(
+      @PathVariable String recordingId, Principal principal) {
+    requirePrincipal(principal);
+    return ResponseEntity.ok(runService.startManifest(recordingId));
+  }
+
   @PostMapping("/recordings/{recordingId}/xrsps-runs")
   public ResponseEntity<XrspsRunResponse> create(
       @PathVariable String recordingId,

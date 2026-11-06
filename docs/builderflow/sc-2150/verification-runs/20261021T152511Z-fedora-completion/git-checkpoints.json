@@ -1,0 +1,16 @@
+{
+  "baselineRef": "refs/codex/sc-2150/20261021T152511Z-baseline",
+  "baselineCommit": "c93cb88fb563730dcbd7375552782a991de60d3f",
+  "files": 104,
+  "partialTree": true,
+  "headUnchanged": "5a7c30f8369806be6d6a400fd1fd59a45a32b5ec",
+  "layoutBaselineRef": "refs/codex/sc-2150/20261021T152511Z-layout-baseline",
+  "layoutBaselineCommit": "f5f71939782e7af5fa4879c4234933ddb2d88d13",
+  "layoutBaselineFiles": 107,
+  "envBaselineReconstructedByRemovingExactOwnFourLines": true,
+  "verifiedRef": "refs/codex/sc-2150/20261021T152511Z-verified",
+  "verifiedCommit": "05b68edb19eba4732a8fe017e4cf5086e20d8011",
+  "verifiedFiles": 150,
+  "verifiedMissingBaselinePaths": [],
+  "verifiedSelection": "baseline paths at current content + SC-2150 video package/migrations V42-V46/mouse-video assets/tests/gitignored scripts/sc2150/top-level docs"
+}

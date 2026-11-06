@@ -1,0 +1,20 @@
+{
+  "schema": "sc2150-gate-decisions/v1",
+  "recorded": "2026-11-01",
+  "source": "docs/builderflow/sc-2150/remaining-plan-20261031.md (Owner decisions recorded 2026-10-31)",
+  "decisions": [
+    {
+      "id": "D-RECALL",
+      "decided_at": "2026-10-31",
+      "decided_by": "owner",
+      "statement": "Visible-recall gate is 95 %, not 99 %. Every other gate is unchanged: median <= 4 px, p95 <= 12 px, absent-span false detections <= 1 %, cut F1 >= 0.90. A failed gate stays failed.",
+      "gates": {
+        "median_px": 4.0,
+        "p95_px": 12.0,
+        "recall": 0.95,
+        "absent_false_rate": 0.01,
+        "cut_f1": 0.9
+      }
+    }
+  ]
+}

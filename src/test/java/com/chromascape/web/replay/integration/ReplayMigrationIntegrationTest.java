@@ -68,7 +68,7 @@ class ReplayMigrationIntegrationTest {
       "V26__replay_v2_request_identity.sql",
       "V63__sc275_causal_restore_bindings.sql",
       "V64__sc275_causal_projection_samples.sql",
-      "V71__sc276_native_outcome_artifacts.sql",
+      "V88__sc276_native_outcome_artifacts.sql",
       "V72__sc276_committed_source_cursor.sql"
     };
     for (String script : scripts) {

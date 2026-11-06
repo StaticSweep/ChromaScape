@@ -8,11 +8,11 @@
     "schema": {"const": "seeded-failure-source-binding/v1"},
     "derivation": {"const": "SEEDED_FIXTURE"},
     "failure_manifest_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "failure_code": {"const": "UNSUPPORTED_FISH_DEFAULTED"},
+    "failure_code": {"const": "BLANK_FISH_ALIAS_ACCEPTED"},
     "task_key": {"const": "FISHING_TRAINING"},
     "source_snapshot_id": {"type": "string", "pattern": "^srcsnap_[0-9a-f]{24}$"},
     "file_id": {"type": "string", "pattern": "^file_[0-9a-f]{16}$"},
-    "symbol": {"const": "FishingExecutionTask#getFishType(String)"},
+    "symbol": {"const": "FishingTaskDefinitionNormalizer#normalize(String, Map)"},
     "start_line": {"type": "integer", "minimum": 1},
     "end_line": {"type": "integer", "minimum": 1},
     "preimage_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}

@@ -47,7 +47,9 @@ public final class ImmutableArtifactStore {
     PREREQUISITE_GRAPH,
     DATASET_SPLIT,
     KNOWLEDGE_EVALUATION,
-    KNOWLEDGE_SNAPSHOT
+    KNOWLEDGE_SNAPSHOT,
+    /** One immutable SC-1916 attempt journal segment (SC-2106 R5.1). */
+    ATTEMPT_JOURNAL_SEGMENT
   }
 
   public record Manifest(

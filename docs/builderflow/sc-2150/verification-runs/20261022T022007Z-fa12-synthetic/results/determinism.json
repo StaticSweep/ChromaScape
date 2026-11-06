@@ -1,0 +1,6 @@
+{
+  "schema": "sc2150-fa12-determinism/v1",
+  "dev_preformat_vs_postformat_identical": "9/9",
+  "heldout_run1_vs_run2_identical": "16/16",
+  "post_heldout_refactor_identical": true
+}

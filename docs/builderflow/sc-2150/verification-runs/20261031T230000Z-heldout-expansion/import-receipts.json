@@ -1,0 +1,100 @@
+{
+  "schema": "sc2150-yt-import/v1",
+  "createdAt": "2026-10-31T22:49:02Z",
+  "baseUrl": "http://127.0.0.1:18191",
+  "manifest": "build/sc2150-yt/manifest-heldout2.json",
+  "runDir": "docs/builderflow/sc-2150/verification-runs/20261031T230000Z-heldout-expansion",
+  "items": [
+    {
+      "videoId": "NTe3PTTBhuU",
+      "section": 1,
+      "file": "NTe3PTTBhuU--s1.mp4",
+      "sha256": "b3a226568aaa0fb67261414c3fcea157a1bf7ce0df05fa468db2e95ad7b7e34d",
+      "sourceId": "df1833ad-3fec-474c-a372-9ac2a5aeae39",
+      "jobId": "de60ff01-3a90-474e-bcd5-d60614fac63b",
+      "status": "SUCCEEDED",
+      "httpStatus": 202
+    },
+    {
+      "videoId": "NTe3PTTBhuU",
+      "section": 2,
+      "file": "NTe3PTTBhuU--s2.mp4",
+      "sha256": "b036e345bf7e69b1a871b003366c114331985690855827f9bcfc9280f26ac38b",
+      "sourceId": "212ea84d-c511-42b5-a6c0-86935a99d244",
+      "jobId": "6a81857a-3754-4626-a21a-34f7e3f39adf",
+      "status": "SUCCEEDED",
+      "httpStatus": 202
+    },
+    {
+      "videoId": "NTe3PTTBhuU",
+      "section": 3,
+      "file": "NTe3PTTBhuU--s3.mp4",
+      "sha256": "546137b6cdcdf152abc57b4a615fa5e59edc996326d537f206e52ff57ababa17",
+      "sourceId": "d906c41b-766e-4fa0-9a30-001e2ca14bb7",
+      "jobId": "faa6930c-0fff-4b54-bf76-9aaa35b18361",
+      "status": "SUCCEEDED",
+      "httpStatus": 202
+    },
+    {
+      "videoId": "lM4EJ4UuSZ8",
+      "section": 1,
+      "file": "lM4EJ4UuSZ8--s1.mp4",
+      "sha256": "580874e93fc32989feca8f2d375d58a1a85e547890439b2fac97c1806a1fa867",
+      "sourceId": "33a6c509-dfb7-40db-97af-4dbea1f6c71a",
+      "jobId": "06607920-1a18-40f1-ae74-77936f309696",
+      "status": "SUCCEEDED",
+      "httpStatus": 202
+    },
+    {
+      "videoId": "lM4EJ4UuSZ8",
+      "section": 2,
+      "file": "lM4EJ4UuSZ8--s2.mp4",
+      "sha256": "5a8e862cfeb27cf4f0032824f54fbb055164be7db1bec48e52f8934a453f8002",
+      "sourceId": "18c23ef6-5082-4e7c-9a1f-d116cc64c525",
+      "jobId": "b9158ac8-4944-4345-b8ad-7ca2ab6f25d7",
+      "status": "SUCCEEDED",
+      "httpStatus": 202
+    },
+    {
+      "videoId": "lM4EJ4UuSZ8",
+      "section": 3,
+      "file": "lM4EJ4UuSZ8--s3.mp4",
+      "sha256": "e5afef4ddcec68be7bd2dcb762bbd91abe60d7c5fce7d89d6d7c10c9d2a69fb6",
+      "sourceId": "60eacfac-85f6-44c9-9b3d-514913b0dc8b",
+      "jobId": "76f635d6-3414-4151-8850-a86fbb0062ca",
+      "status": "SUCCEEDED",
+      "httpStatus": 202
+    },
+    {
+      "videoId": "qJXe6GUepmk",
+      "section": 1,
+      "file": "qJXe6GUepmk--s1.webm",
+      "sha256": "09fab9566ddc3c491aa63d8f745458d95c82844eb1ae9f52d61363af138b3e90",
+      "sourceId": "3c49171d-3088-4e63-8fe4-cc2bdeb63ba1",
+      "jobId": "5a13b14b-75e2-4674-8e11-fd0b870543f7",
+      "status": "SUCCEEDED",
+      "httpStatus": 202
+    },
+    {
+      "videoId": "qJXe6GUepmk",
+      "section": 2,
+      "file": "qJXe6GUepmk--s2.webm",
+      "sha256": "531888bbd3dda87efeba46a32fa8cc626bcd67994e90a9e98bbc12f1b86e5de7",
+      "sourceId": "0c9c405a-af8a-4dc7-aa16-1b9884bb534e",
+      "jobId": "6186f9ef-8499-40a6-91a8-18ccb33d2ec8",
+      "status": "SUCCEEDED",
+      "httpStatus": 202
+    },
+    {
+      "videoId": "qJXe6GUepmk",
+      "section": 3,
+      "file": "qJXe6GUepmk--s3.webm",
+      "sha256": "ea52820f3007f7efb710b79db6dd70a8199681ccadc5196fdb816b41f03a3d51",
+      "sourceId": "1feaae2a-1e12-4597-ac35-17144be4a0d8",
+      "jobId": "3732d5a8-035c-4f4b-8376-3be79c6f9a90",
+      "status": "SUCCEEDED",
+      "httpStatus": 202
+    }
+  ],
+  "skipped": []
+}

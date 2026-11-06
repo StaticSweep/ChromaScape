@@ -1,0 +1,212 @@
+{
+  "items": [
+    {
+      "id": "d4bebf6a-a0fc-4aa4-a603-7c39e6d65ac0",
+      "sourceId": "58d65069-2552-4fc1-ad46-e800b7649383",
+      "analysisId": "1fbad528-1219-4a05-80b9-ccb7967088dd",
+      "predecessorId": null,
+      "supersededBy": "7812a47a-b868-4ba5-9c42-0d937fa6673f",
+      "actor": "sc2150-fedora-a",
+      "reason": "Concurrent source-use review",
+      "expectedBaseRevision": 0,
+      "sourceUse": "TRAINING_DENIED",
+      "state": "SUPERSEDED",
+      "contract": "corrections/v1",
+      "corrections": [],
+      "createdAt": "2026-10-21T15:59:15.824506Z"
+    },
+    {
+      "id": "7812a47a-b868-4ba5-9c42-0d937fa6673f",
+      "sourceId": "58d65069-2552-4fc1-ad46-e800b7649383",
+      "analysisId": "1fbad528-1219-4a05-80b9-ccb7967088dd",
+      "predecessorId": "d4bebf6a-a0fc-4aa4-a603-7c39e6d65ac0",
+      "supersededBy": "893b472d-4d25-4b9d-89fd-357c2553c754",
+      "actor": "sc2150-fedora-a",
+      "reason": "Synthetic browser visible point with conflict recovery",
+      "expectedBaseRevision": 1,
+      "sourceUse": "TRAINING_REQUESTED",
+      "state": "SUPERSEDED",
+      "contract": "corrections/v1",
+      "corrections": [
+        {
+          "x": 40,
+          "y": 48,
+          "kind": "CURSOR_VISIBILITY",
+          "confidence": 1,
+          "visibility": "VISIBLE",
+          "frameOrdinal": 0
+        }
+      ],
+      "createdAt": "2026-10-21T15:59:16.308332Z"
+    },
+    {
+      "id": "893b472d-4d25-4b9d-89fd-357c2553c754",
+      "sourceId": "58d65069-2552-4fc1-ad46-e800b7649383",
+      "analysisId": "1fbad528-1219-4a05-80b9-ccb7967088dd",
+      "predecessorId": "7812a47a-b868-4ba5-9c42-0d937fa6673f",
+      "supersededBy": "239ab45d-e558-4f50-9a3a-ead2bb201e01",
+      "actor": "sc2150-fedora-a",
+      "reason": "Synthetic browser region",
+      "expectedBaseRevision": 2,
+      "sourceUse": "TRAINING_REQUESTED",
+      "state": "SUPERSEDED",
+      "contract": "corrections/v1",
+      "corrections": [
+        {
+          "x": 16,
+          "y": 19,
+          "kind": "TARGET_REGION",
+          "width": 96,
+          "height": 58,
+          "confidence": 1,
+          "frameOrdinal": 0
+        }
+      ],
+      "createdAt": "2026-10-21T15:59:17.311658Z"
+    },
+    {
+      "id": "239ab45d-e558-4f50-9a3a-ead2bb201e01",
+      "sourceId": "58d65069-2552-4fc1-ad46-e800b7649383",
+      "analysisId": "1fbad528-1219-4a05-80b9-ccb7967088dd",
+      "predecessorId": "893b472d-4d25-4b9d-89fd-357c2553c754",
+      "supersededBy": "7448e3ef-051e-472e-81e1-203861ed1be8",
+      "actor": "sc2150-fedora-a",
+      "reason": "Concurrent source-use review",
+      "expectedBaseRevision": 3,
+      "sourceUse": "TRAINING_DENIED",
+      "state": "SUPERSEDED",
+      "contract": "corrections/v1",
+      "corrections": [],
+      "createdAt": "2026-10-21T16:01:36.163546Z"
+    },
+    {
+      "id": "7448e3ef-051e-472e-81e1-203861ed1be8",
+      "sourceId": "58d65069-2552-4fc1-ad46-e800b7649383",
+      "analysisId": "1fbad528-1219-4a05-80b9-ccb7967088dd",
+      "predecessorId": "239ab45d-e558-4f50-9a3a-ead2bb201e01",
+      "supersededBy": "627409be-09c4-4b68-8aee-b6ddcb06a9a1",
+      "actor": "sc2150-fedora-a",
+      "reason": "Synthetic browser visible point with conflict recovery",
+      "expectedBaseRevision": 4,
+      "sourceUse": "TRAINING_REQUESTED",
+      "state": "SUPERSEDED",
+      "contract": "corrections/v1",
+      "corrections": [
+        {
+          "x": 40,
+          "y": 48,
+          "kind": "CURSOR_VISIBILITY",
+          "confidence": 1,
+          "visibility": "VISIBLE",
+          "frameOrdinal": 0
+        }
+      ],
+      "createdAt": "2026-10-21T16:01:36.571553Z"
+    },
+    {
+      "id": "627409be-09c4-4b68-8aee-b6ddcb06a9a1",
+      "sourceId": "58d65069-2552-4fc1-ad46-e800b7649383",
+      "analysisId": "1fbad528-1219-4a05-80b9-ccb7967088dd",
+      "predecessorId": "7448e3ef-051e-472e-81e1-203861ed1be8",
+      "supersededBy": "73e0ca3a-68c8-43a0-80e1-a2d8e7d96c9c",
+      "actor": "sc2150-fedora-a",
+      "reason": "Synthetic browser region",
+      "expectedBaseRevision": 5,
+      "sourceUse": "TRAINING_REQUESTED",
+      "state": "SUPERSEDED",
+      "contract": "corrections/v1",
+      "corrections": [
+        {
+          "x": 16,
+          "y": 19,
+          "kind": "TARGET_REGION",
+          "width": 96,
+          "height": 58,
+          "confidence": 1,
+          "frameOrdinal": 0
+        }
+      ],
+      "createdAt": "2026-10-21T16:01:37.439122Z"
+    },
+    {
+      "id": "73e0ca3a-68c8-43a0-80e1-a2d8e7d96c9c",
+      "sourceId": "58d65069-2552-4fc1-ad46-e800b7649383",
+      "analysisId": "1fbad528-1219-4a05-80b9-ccb7967088dd",
+      "predecessorId": "627409be-09c4-4b68-8aee-b6ddcb06a9a1",
+      "supersededBy": "f27a52ab-9f8b-4219-bf2b-b39980bbe637",
+      "actor": "sc2150-fedora-a",
+      "reason": "Concurrent source-use review",
+      "expectedBaseRevision": 6,
+      "sourceUse": "TRAINING_DENIED",
+      "state": "SUPERSEDED",
+      "contract": "corrections/v1",
+      "corrections": [],
+      "createdAt": "2026-10-21T16:19:52.093806Z"
+    },
+    {
+      "id": "f27a52ab-9f8b-4219-bf2b-b39980bbe637",
+      "sourceId": "58d65069-2552-4fc1-ad46-e800b7649383",
+      "analysisId": "1fbad528-1219-4a05-80b9-ccb7967088dd",
+      "predecessorId": "73e0ca3a-68c8-43a0-80e1-a2d8e7d96c9c",
+      "supersededBy": "f25e2ca4-8b28-415e-be15-dd937502cf59",
+      "actor": "sc2150-fedora-a",
+      "reason": "Synthetic browser visible point with conflict recovery",
+      "expectedBaseRevision": 7,
+      "sourceUse": "TRAINING_REQUESTED",
+      "state": "SUPERSEDED",
+      "contract": "corrections/v1",
+      "corrections": [
+        {
+          "x": 40,
+          "y": 48,
+          "kind": "CURSOR_VISIBILITY",
+          "confidence": 1,
+          "visibility": "VISIBLE",
+          "frameOrdinal": 0
+        }
+      ],
+      "createdAt": "2026-10-21T16:19:52.668982Z"
+    },
+    {
+      "id": "f25e2ca4-8b28-415e-be15-dd937502cf59",
+      "sourceId": "58d65069-2552-4fc1-ad46-e800b7649383",
+      "analysisId": "1fbad528-1219-4a05-80b9-ccb7967088dd",
+      "predecessorId": "f27a52ab-9f8b-4219-bf2b-b39980bbe637",
+      "supersededBy": "c720fd9e-4962-454f-8ecd-ed677a285ca0",
+      "actor": "sc2150-fedora-a",
+      "reason": "Synthetic browser region",
+      "expectedBaseRevision": 8,
+      "sourceUse": "TRAINING_REQUESTED",
+      "state": "SUPERSEDED",
+      "contract": "corrections/v1",
+      "corrections": [
+        {
+          "x": 16,
+          "y": 19,
+          "kind": "TARGET_REGION",
+          "width": 96,
+          "height": 58,
+          "confidence": 1,
+          "frameOrdinal": 0
+        }
+      ],
+      "createdAt": "2026-10-21T16:19:55.436172Z"
+    },
+    {
+      "id": "c720fd9e-4962-454f-8ecd-ed677a285ca0",
+      "sourceId": "58d65069-2552-4fc1-ad46-e800b7649383",
+      "analysisId": "1fbad528-1219-4a05-80b9-ccb7967088dd",
+      "predecessorId": "f25e2ca4-8b28-415e-be15-dd937502cf59",
+      "supersededBy": null,
+      "actor": "sc2150-fedora-a",
+      "reason": "Synthetic successor after pinned export",
+      "expectedBaseRevision": 9,
+      "sourceUse": "INSPECTION_ONLY",
+      "state": "REVIEWED",
+      "contract": "corrections/v1",
+      "corrections": [],
+      "createdAt": "2026-10-21T16:19:57.298679Z"
+    }
+  ],
+  "contract": "corrections/v1"
+}

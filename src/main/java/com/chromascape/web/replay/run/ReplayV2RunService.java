@@ -169,6 +169,23 @@ public class ReplayV2RunService {
     return new Creation(toResponse(run), true);
   }
 
+  /**
+   * SC-2106 R3.4: the recording's start alone, as a deterministic ScenarioManifest/v2 document for
+   * causal candidate execution. No recorded action is carried.
+   */
+  @Transactional(readOnly = true)
+  public com.fasterxml.jackson.databind.node.ObjectNode startManifest(String recordingId) {
+    if (!properties.isEnabled()) {
+      throw new ReplayException(
+          ReplayErrorCode.XRSPS_CAPABILITY_UNAVAILABLE,
+          HttpStatus.SERVICE_UNAVAILABLE,
+          true,
+          "xRSPS replay is disabled",
+          "Enable REPLAY_ENABLED only for a reviewed replay deployment");
+    }
+    return compiler.compileStart(recordingId);
+  }
+
   @Transactional(readOnly = true)
   public XrspsRunResponse get(UUID runId, String ownerId) {
     return toResponse(runService.getOwnedEntity(runId, ownerId));

@@ -439,7 +439,7 @@ class Sc274CompilerTransactionIntegrationTest {
                   dispatcher.addMapping("/");
                   new LocalReplayPrincipalConfig()
                       .localReplayPrincipalFilterRegistration(
-                          new LocalReplayPrincipalFilter(environment))
+                          new LocalReplayPrincipalFilter(environment, false))
                       .onStartup(servletContext);
                 });
         server.start();

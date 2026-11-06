@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.service.CandidateExecutionV2ContractTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-10-26T15:06:21.717Z" hostname="fedora" time="0.115">
+  <properties/>
+  <testcase name="workflowStatesAreNeverResultStatuses()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionV2ContractTest" time="0.033"/>
+  <testcase name="loadedBytesOtherThanTheRequestedOnesAreInvalid()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionV2ContractTest" time="0.008"/>
+  <testcase name="theConsumersOkResultPassesAndIsCertifiable()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionV2ContractTest" time="0.003"/>
+  <testcase name="anOkResultMustCarryCompleteEvidence()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionV2ContractTest" time="0.014"/>
+  <testcase name="theBuilderRefusesAnIncompleteOrUnsafeRequest()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionV2ContractTest" time="0.007"/>
+  <testcase name="aDevelopmentWorkerPassesButIsNotCertifiable()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionV2ContractTest" time="0.003"/>
+  <testcase name="theBuilderReproducesTheConsumersCanonicalRequestAndDigest()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionV2ContractTest" time="0.002"/>
+  <testcase name="aResultForAnotherRequestIsInvalid()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionV2ContractTest" time="0.006"/>
+  <testcase name="theConsumersResultCanonicalizesIdentically()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionV2ContractTest" time="0.002"/>
+  <testcase name="aTamperedResultFailsItsOwnDigest()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionV2ContractTest" time="0.003"/>
+  <testcase name="aBlockedResultIsBlockedNotPassed()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionV2ContractTest" time="0.005"/>
+  <testcase name="budgetsBeyondTheRequestAreInvalid()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionV2ContractTest" time="0.008"/>
+  <testcase name="uncertainNeverBecomesPass()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionV2ContractTest" time="0.007"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

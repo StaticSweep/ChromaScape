@@ -1,0 +1,84 @@
+[
+  {
+    "fixture": "cfr.mp4",
+    "sourceId": "fe4b7f1b-278a-4ac3-93c9-b44266499b16",
+    "analysisId": "31a08a7a-70f8-4ad5-aa9e-a389b9516e7b",
+    "previewId": "92aa7fdd-f6f1-450e-b24c-17d95048895f",
+    "frames": 60,
+    "size": [
+      160,
+      96
+    ],
+    "originalSha256": "a6ee40032970a1c2c904769b0e475034a035506754c4c91898f6b970a4898143",
+    "previewSha256": "7eea0bd423100f2be99669a480ce462c315fb8af67f1a8c6eba36b95982bef94",
+    "reconciliationJobIds": [
+      "9d55c9d3-4f0f-4aa5-af3c-de2e396d7ad7",
+      "d2f56dcc-2959-4050-a813-c8f91d36c904"
+    ]
+  },
+  {
+    "fixture": "vfr.mp4",
+    "sourceId": "463c3a3c-667b-455e-be9f-b25b5a159fc7",
+    "analysisId": "3a6732b2-6d2a-44aa-997b-dcffed733300",
+    "previewId": "0d148f4d-59f1-44db-aa2c-c2c7ecfcdb30",
+    "frames": 72,
+    "size": [
+      160,
+      96
+    ],
+    "originalSha256": "7f9fab1416dcdc0c847ecd32c4259221e4c8d2252bbcb2c9cd46748cd2b1ab80",
+    "previewSha256": "a86ba18b398dffd5df20cf89282dd24d2503f6b6759aecbab482147fd5ccb37d"
+  },
+  {
+    "fixture": "rotated.mp4",
+    "sourceId": "fb65ce65-02f1-4cee-8c16-363c693d1b6a",
+    "analysisId": "1a85422e-1395-44c2-a11b-300920427c2c",
+    "previewId": "981b9429-f43a-421f-b082-47e993fcc8cc",
+    "frames": 60,
+    "size": [
+      96,
+      160
+    ],
+    "originalSha256": "e2d35afb60d9403cf5650f70040f240adc8930aef03363ac9c903c53daad23e6",
+    "previewSha256": "48a40f4bae5e2e734b88e007ca4b44542a1287bed3ba214e270285f5a860d2ad"
+  },
+  {
+    "fixture": "cropped.mp4",
+    "sourceId": "6ccf1e37-a447-4612-bb0d-a5314417497d",
+    "analysisId": "fd160681-3981-42a5-b299-e822d33dc622",
+    "previewId": "17a29315-fd3d-4be0-a2ed-d5836dd938cf",
+    "frames": 60,
+    "size": [
+      112,
+      64
+    ],
+    "originalSha256": "cba05f1c43b0b4881c63b69facd0629f856091e9e704b9a53075203fb2f9cb17",
+    "previewSha256": "d626aac94a0e5925b3445514c68663936f2b5960758c967710bccad51691e645"
+  },
+  {
+    "fixture": "bitstream-crop.mp4",
+    "sourceId": "5bec0b8f-7db6-4472-bfdf-221ea83e916d",
+    "analysisId": "7644818a-0b2c-4d1c-8750-6a25c69f8b85",
+    "previewId": "7792fb5f-6741-419b-bbef-faf65e5245e1",
+    "frames": 60,
+    "size": [
+      112,
+      64
+    ],
+    "originalSha256": "15b5e88aa8098d99711e49ded8f910bbd08f72622f9967322b3d6681e8b90b2d",
+    "previewSha256": "5f2324a75fb96fe23315d6ce858a85e4e95288a89e23ce5913eb87332358d9f9"
+  },
+  {
+    "fixture": "burst-vfr.mp4",
+    "sourceId": "3c7ec278-1926-4a34-80a2-ba6cc2ace16e",
+    "analysisId": "64a44e6b-a3ac-42ce-a707-c8698ebfa46f",
+    "previewId": "3e16bef5-1b67-4a68-8be9-343ff793daab",
+    "frames": 63,
+    "size": [
+      160,
+      96
+    ],
+    "originalSha256": "1fdb9ca36271ff5951c7ee99c6b4b0ce56b7d90270c18ec0682719f9ab371586",
+    "previewSha256": "5e74e76b38f264d5a57c14abb15142a8c8a7cea0ae270ae2ede66fb4f36a4413"
+  }
+]

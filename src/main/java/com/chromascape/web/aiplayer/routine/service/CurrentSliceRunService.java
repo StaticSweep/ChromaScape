@@ -32,8 +32,15 @@ public class CurrentSliceRunService {
     this.stabilization = stabilization;
   }
 
+  public void requireOperation(CurrentSliceIdentity identity, String operation) {
+    validator.requireOperation(identity, operation);
+  }
+
   @Transactional
   public Map<String, Object> createRunelite(CurrentSliceIdentity identity) {
+    // Validate before enriching: replacing control_allowed with false must never conceal a
+    // forbidden claim or an incompatible client advertisement.
+    validator.validate(identity);
     if (identity == null
         || identity.client() == null
         || !"RUNELITE_CAPTURE".equals(identity.client().clientKind()))
@@ -66,6 +73,7 @@ public class CurrentSliceRunService {
     validator.validate(identity);
     boolean micro6 =
         identity.client() != null && "MICRO6_MANAGED".equals(identity.client().clientKind());
+    if (micro6) validator.requireOperation(identity, "managedExecution");
     if (micro6 && (attemptId == null || attemptId.isBlank())) {
       throw error(
           HttpStatus.UNPROCESSABLE_ENTITY,
@@ -144,6 +152,7 @@ public class CurrentSliceRunService {
             .findWithLockByRunId(runId)
             .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "NOT_FOUND", "run not found"));
     CurrentSliceIdentity persisted = read(entity.getIdentityJson());
+    validator.validate(enriched);
     try {
       persisted.requireSameIdentity(enriched);
     } catch (RuntimeException e) {
@@ -171,6 +180,7 @@ public class CurrentSliceRunService {
     try {
       CurrentSliceIdentity persisted = read(entity.getIdentityJson());
       persisted.requireSameIdentity(enriched);
+      validator.validate(enriched);
       entity.setIdentityJson(write(enriched));
       entity.setStage(stage);
       repository.save(entity);
@@ -223,6 +233,7 @@ public class CurrentSliceRunService {
             persisted.model(),
             persisted.candidate(),
             false);
+    validator.validate(enriched);
     entity.setIdentityJson(write(enriched));
     entity.setStage(stage);
     return repository.save(entity);
@@ -266,6 +277,7 @@ public class CurrentSliceRunService {
             persisted.model(),
             persisted.candidate(),
             false);
+    validator.validate(enriched);
     entity.setIdentityJson(write(enriched));
     entity.setStage(stage);
     return repository.save(entity);
@@ -278,6 +290,23 @@ public class CurrentSliceRunService {
             .findByRunId(runId)
             .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "NOT_FOUND", "run not found"));
     return response(entity, read(entity.getIdentityJson()));
+  }
+
+  @Transactional(readOnly = true)
+  public Map<String, Object> workbenchContexts() {
+    var contexts =
+        repository.findTop100ByOrderByCreatedAtDesc().stream()
+            .map(entity -> response(entity, read(entity.getIdentityJson())))
+            .toList();
+    return Map.of(
+        "schema",
+        "workbench-contexts/v1",
+        "runs",
+        contexts,
+        "limit",
+        100,
+        "control_allowed",
+        false);
   }
 
   private Map<String, Object> response(CurrentSliceRun entity, CurrentSliceIdentity identity) {
@@ -308,6 +337,8 @@ public class CurrentSliceRunService {
   private CurrentSliceIdentity read(String json) {
     try {
       return validator.validate(mapper.readValue(json, CurrentSliceIdentity.class));
+    } catch (com.chromascape.web.aiplayer.contract.CurrentSliceContractException e) {
+      throw e;
     } catch (Exception e) {
       throw error(
           HttpStatus.INTERNAL_SERVER_ERROR, "IDENTITY_MISMATCH", "persisted identity is invalid");

@@ -1,0 +1,28 @@
+{
+  "queuedBeforeCrash": {
+    "status": "QUEUED",
+    "generation": 1,
+    "leaseOwner": null
+  },
+  "queuedAfterRestart": {
+    "status": "SUCCEEDED",
+    "generation": 2,
+    "leaseOwner": null
+  },
+  "activeDecoderBeforeCrash": [
+    "3414760 3406083 systemd-run --user --scope --quiet --collect --expand-environment=no --unit=chromascape-video-9c16fbc74aef47faa6a700da8d0274d6 --property=MemoryMax=2147483648 --property=CPUQuota=200% --property=TasksMax=64 -- bwrap --die-with-parent --unshare-all --new-session --proc /proc --dev /dev --size 67108864 --tmpfs /tmp --ro-bind /usr /usr --ro-bind /lib /lib --ro-bind /lib64 /lib64 --ro-bind /bin /bin --ro-bind /sbin /sbin --ro-bind /etc/ld.so.cache /etc/ld.so.cache --dir /tmp --dir /tmp/sc2150-fedora-completion --dir /tmp/sc2150-fedora-completion/media --dir /tmp/sc2150-fedora-completion/media/jobs --dir /tmp/sc2150-fedora-completion/media/jobs/d0cfedb3-6e0a-4d22-9f6f-4eec1d554621-2 --bind /tmp/sc2150-fedora-completion/media/jobs/d0cfedb3-6e0a-4d22-9f6f-4eec1d554621-2 /tmp/sc2150-fedora-completion/media/jobs/d0cfedb3-6e0a-4d22-9f6f-4eec1d554621-2 --dir /tmp/sc2150-fedora-completion/media/bytes --dir /tmp/sc2150-fedora-completion/media/bytes/3c --ro-bind /tmp/sc2150-fedora-completion/media/bytes/3c/3c47a1e1047b7d68d4fc33853b80ae49dbda648cd942c2f9304724b873177b57 /tmp/sc2150-fedora-completion/media/bytes/3c/3c47a1e1047b7d68d4fc33853b80ae49dbda648cd942c2f9304724b873177b57 --remount-ro / --remount-ro /dev --chdir /tmp/sc2150-fedora-completion/media/jobs/d0cfedb3-6e0a-4d22-9f6f-4eec1d554621-2 --clearenv --setenv PATH /usr/bin:/bin --setenv HOME /tmp/sc2150-fedora-completion/media/jobs/d0cfedb3-6e0a-4d22-9f6f-4eec1d554621-2 --setenv TMPDIR /tmp --setenv LANG C.UTF-8 -- ffmpeg -hide_banner -loglevel error -nostdin -y -threads 2 -filter_threads 1 -i /tmp/sc2150-fedora-completion/media/bytes/3c/3c47a1e1047b7d68d4fc33853b80ae49dbda648cd942c2f9304724b873177b57 -map 0:v:0 -vf select='not(mod(n\\,1))',scale='min(iw,480)':-2:flags=area,format=gray -vsync 0 -frames:v 3600 /tmp/sc2150-fedora-completion/media/jobs/d0cfedb3-6e0a-4d22-9f6f-4eec1d554621-2/visual/%06d.png"
+  ],
+  "activeClaimBeforeCrash": {
+    "status": "RUNNING",
+    "generation": 2,
+    "leaseOwner": "mouse-video-scheduled-f1e4eb50-bbce-4cd1-bb63-ad9012ca3ffa-3406083"
+  },
+  "activeClaimAfterExpiry": {
+    "status": "NEEDS_RECONCILIATION",
+    "generation": 3,
+    "leaseOwner": null
+  },
+  "originalFixtureChecksum": "a6ee40032970a1c2c904769b0e475034a035506754c4c91898f6b970a4898143",
+  "noPartialAnalysisArtifacts": true,
+  "oldExportUnchanged": true
+}

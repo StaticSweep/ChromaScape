@@ -1,0 +1,158 @@
+{
+ "schema": "sc2150-yt-split/v1",
+ "createdAt": "2026-10-23T04:45:00Z",
+ "rule": "channels are assigned before any label exists; a channel never appears on both sides",
+ "assignmentBasis": "channel identity and content type only; no footage labels were inspected",
+ "sources": {
+  "l7dv8lbS87E": {
+   "split": "dev",
+   "kind": "longplay",
+   "channel": "Sleepy Longplays",
+   "url": "https://www.youtube.com/watch?v=l7dv8lbS87E",
+   "sections": {
+    "full": [
+     1,
+     2,
+     3
+    ],
+    "cutOnly": []
+   }
+  },
+  "U1uiLTv6quo": {
+   "split": "dev",
+   "kind": "longplay",
+   "channel": "shaa rin",
+   "url": "https://www.youtube.com/watch?v=U1uiLTv6quo",
+   "sections": {
+    "full": [
+     1,
+     2,
+     3
+    ],
+    "cutOnly": []
+   }
+  },
+  "33MkV_p4jvs": {
+   "split": "dev",
+   "kind": "longplay",
+   "channel": "Langsamt",
+   "url": "https://www.youtube.com/watch?v=33MkV_p4jvs",
+   "sections": {
+    "full": [
+     1,
+     2,
+     3
+    ],
+    "cutOnly": []
+   }
+  },
+  "trm4e1ON4HM": {
+   "split": "dev",
+   "kind": "edited-guide",
+   "channel": "EVScape",
+   "url": "https://www.youtube.com/watch?v=trm4e1ON4HM",
+   "sections": {
+    "full": [
+     1,
+     3
+    ],
+    "cutOnly": [
+     2
+    ]
+   }
+  },
+  "OqSngAyh1rY": {
+   "split": "heldout",
+   "kind": "longplay",
+   "channel": "Blizzard0199",
+   "url": "https://www.youtube.com/watch?v=OqSngAyh1rY",
+   "sections": {
+    "full": [
+     1,
+     2,
+     3
+    ],
+    "cutOnly": []
+   }
+  },
+  "xckk8Rft2lc": {
+   "split": "heldout",
+   "kind": "longplay",
+   "channel": "Kelzayeee",
+   "url": "https://www.youtube.com/watch?v=xckk8Rft2lc",
+   "sections": {
+    "full": [
+     1,
+     2,
+     3
+    ],
+    "cutOnly": []
+   }
+  },
+  "SNc0I1V0GXw": {
+   "split": "heldout",
+   "kind": "longplay",
+   "channel": "420slayerxpdrop",
+   "url": "https://www.youtube.com/watch?v=SNc0I1V0GXw",
+   "sections": {
+    "full": [
+     1,
+     2,
+     3
+    ],
+    "cutOnly": []
+   }
+  },
+  "9YFTgB78bDY": {
+   "split": "heldout",
+   "kind": "edited-guide",
+   "channel": "Theoatrix OSRS",
+   "url": "https://www.youtube.com/watch?v=9YFTgB78bDY",
+   "sections": {
+    "full": [],
+    "cutOnly": [
+     1,
+     2,
+     3
+    ]
+   }
+  }
+ },
+ "summary": {
+  "dev": {
+   "channels": 4,
+   "videos": [
+    "l7dv8lbS87E",
+    "U1uiLTv6quo",
+    "33MkV_p4jvs",
+    "trm4e1ON4HM"
+   ],
+   "fullSections": 11,
+   "cutOnlySections": 1,
+   "videosWithFullSections": 4
+  },
+  "heldout": {
+   "channels": 4,
+   "videos": [
+    "OqSngAyh1rY",
+    "xckk8Rft2lc",
+    "SNc0I1V0GXw",
+    "9YFTgB78bDY"
+   ],
+   "fullSections": 9,
+   "cutOnlySections": 3,
+   "videosWithFullSections": 3
+  }
+ },
+ "shortfall": {
+  "planTarget": "about 6,000 visible held-out labels over at least 6 videos",
+  "heldOutEstimate": "9 full sections x 600 labels at 10 Hz = 5,400 labels before the visible/absent split, over 3 videos",
+  "reason": "the held-out edited guide (9YFTgB78bDY) screens as b-roll and title cards, so it can only carry cut labels; the held-out side has 4 channels but only 3 with a playable client view",
+  "options": [
+   "take five sections instead of three from each held-out longplay (15 sections, about 9,000 labels, still 3 videos)",
+   "move one longplay channel from dev to held-out (4 held-out videos, less dev tuning data, and the split would no longer be 4/4)",
+   "accept the smaller held-out set and report the wider clip-bootstrap CI"
+  ],
+  "decision": null
+ }
+}

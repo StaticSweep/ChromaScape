@@ -1,0 +1,7 @@
+test_missing_file_is_reported (test_mouse_video_probe.MouseVideoProbeTest.test_missing_file_is_reported) ... ok
+test_probes_valid_clip (test_mouse_video_probe.MouseVideoProbeTest.test_probes_valid_clip) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 1.350s
+
+OK

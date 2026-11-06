@@ -1,0 +1,343 @@
+{
+  "counts": [
+    266,
+    0,
+    0,
+    0
+  ],
+  "suites": [
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.MouseVideoYouTubeTest",
+      "counts": [
+        2,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoWorkspaceTest",
+      "counts": [
+        4,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.MouseVideoRequestIdentityTest",
+      "counts": [
+        4,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.MouseVideoServicePostgresRaceTest",
+      "counts": [
+        9,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoRequestGuardTest",
+      "counts": [
+        5,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoVisualAnalyzerTest",
+      "counts": [
+        2,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoJobServiceTest",
+      "counts": [
+        26,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoImportServiceTest",
+      "counts": [
+        10,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoProcessRunnerTest",
+      "counts": [
+        9,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.store.MouseVideoByteStoreTest",
+      "counts": [
+        5,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoCatalogServiceTest",
+      "counts": [
+        11,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoDerivativeWorkerTest",
+      "counts": [
+        22,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.MouseVideoSchedulingPostgresTest",
+      "counts": [
+        15,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoSchedulingServiceTest",
+      "counts": [
+        9,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.MouseVideoMigrationTest",
+      "counts": [
+        5,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoPreviewWorkerTest",
+      "counts": [
+        2,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.MouseVideoMediaRangeTest",
+      "counts": [
+        3,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoFrameIndexServiceTest",
+      "counts": [
+        13,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoExportServiceTest",
+      "counts": [
+        2,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoWorkerRegistryTest",
+      "counts": [
+        2,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.MouseVideoMultipartReaderTest",
+      "counts": [
+        9,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoCrashContainmentTest",
+      "counts": [
+        1,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoWriteNonceServiceTest",
+      "counts": [
+        3,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoReviewServiceTest",
+      "counts": [
+        15,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoResourceLimitsTest",
+      "counts": [
+        3,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.MouseVideoPostgresConcurrencyTest",
+      "counts": [
+        2,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoAnalysisIdentityTest",
+      "counts": [
+        7,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoRestrictedLauncherTest",
+      "counts": [
+        5,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.controller.MouseVideoControllerHttpTest",
+      "counts": [
+        18,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.MouseVideoConfigurationTest",
+      "counts": [
+        1,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoYouTubeAcquirerTest",
+      "counts": [
+        2,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.MouseVideoCorrectionContractTest",
+      "counts": [
+        17,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoSampleStrideTest",
+      "counts": [
+        6,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoAccessTest",
+      "counts": [
+        3,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoLeaseHeartbeatTest",
+      "counts": [
+        6,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoPreviewServiceTest",
+      "counts": [
+        4,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "com.chromascape.web.debug.tickdebugger.video.service.MouseVideoOrphanSweeperTest",
+      "counts": [
+        4,
+        0,
+        0,
+        0
+      ]
+    }
+  ]
+}

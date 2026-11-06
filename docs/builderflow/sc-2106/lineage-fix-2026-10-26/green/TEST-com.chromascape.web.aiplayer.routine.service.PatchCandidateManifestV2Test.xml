@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.service.PatchCandidateManifestV2Test" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-26T15:06:23.730Z" hostname="fedora" time="0.255">
+  <properties/>
+  <testcase name="committedPositiveVectorHashMatchesDedicatedHasher()" classname="com.chromascape.web.aiplayer.routine.service.PatchCandidateManifestV2Test" time="0.007"/>
+  <testcase name="committedNegativeVectorsAreRejectedBySchemaOrHash()" classname="com.chromascape.web.aiplayer.routine.service.PatchCandidateManifestV2Test" time="0.176"/>
+  <testcase name="signedProjectionRejectsExplicitlyUnverifiedSource()" classname="com.chromascape.web.aiplayer.routine.service.PatchCandidateManifestV2Test" time="0.016"/>
+  <testcase name="committedPositiveVectorsAreSelfConsistent()" classname="com.chromascape.web.aiplayer.routine.service.PatchCandidateManifestV2Test" time="0.012"/>
+  <testcase name="committedPositiveVectorsPassFullProductionValidation()" classname="com.chromascape.web.aiplayer.routine.service.PatchCandidateManifestV2Test" time="0.036"/>
+  <testcase name="sharedCanonicalizationVectorsUseProductionPath()" classname="com.chromascape.web.aiplayer.routine.service.PatchCandidateManifestV2Test" time="0.003"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

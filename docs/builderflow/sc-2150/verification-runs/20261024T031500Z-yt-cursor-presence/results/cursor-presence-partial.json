@@ -1,0 +1,113 @@
+{
+ "schema": "sc2150-yt-cursor-presence/v1",
+ "template": "arrow",
+ "sections": [
+  {
+   "videoId": "33MkV_p4jvs",
+   "section": 1,
+   "channel": "Langsamt",
+   "split": "dev",
+   "verdict": "full",
+   "fps": 60.0,
+   "importStatus": "SUCCEEDED",
+   "analysisStatus": "SUCCEEDED",
+   "samples": 1280,
+   "visibility": {
+    "AMBIGUOUS": 1196,
+    "VISIBLE": 84
+   },
+   "sceneCuts": 3,
+   "visibleFraction": 0.066,
+   "wallSeconds": 479.9
+  },
+  {
+   "videoId": "33MkV_p4jvs",
+   "section": 2,
+   "channel": "Langsamt",
+   "split": "dev",
+   "verdict": "full",
+   "fps": 60.0,
+   "importStatus": "SUCCEEDED",
+   "analysisStatus": "SUCCEEDED",
+   "samples": 1280,
+   "visibility": {
+    "AMBIGUOUS": 1280
+   },
+   "sceneCuts": 1,
+   "visibleFraction": 0.0,
+   "wallSeconds": 193.8
+  },
+  {
+   "videoId": "33MkV_p4jvs",
+   "section": 3,
+   "channel": "Langsamt",
+   "split": "dev",
+   "verdict": "full",
+   "fps": 60.0,
+   "importStatus": "SUCCEEDED",
+   "analysisStatus": "SUCCEEDED",
+   "samples": 1280,
+   "visibility": {
+    "AMBIGUOUS": 794,
+    "VISIBLE": 486
+   },
+   "sceneCuts": 2,
+   "visibleFraction": 0.38,
+   "wallSeconds": 426.4
+  },
+  {
+   "videoId": "9YFTgB78bDY",
+   "section": 1,
+   "channel": "Theoatrix OSRS",
+   "split": "heldout",
+   "verdict": "cut_only",
+   "fps": 29.97,
+   "importStatus": "SUCCEEDED",
+   "analysisStatus": "SUCCEEDED",
+   "samples": 899,
+   "visibility": {
+    "VISIBLE": 286,
+    "AMBIGUOUS": 613
+   },
+   "sceneCuts": 7,
+   "visibleFraction": 0.318,
+   "wallSeconds": 262.2
+  },
+  {
+   "videoId": "9YFTgB78bDY",
+   "section": 2,
+   "channel": "Theoatrix OSRS",
+   "split": "heldout",
+   "verdict": "cut_only",
+   "fps": 29.971,
+   "importStatus": "SUCCEEDED",
+   "analysisStatus": "SUCCEEDED",
+   "samples": 899,
+   "visibility": {
+    "AMBIGUOUS": 459,
+    "VISIBLE": 440
+   },
+   "sceneCuts": 5,
+   "visibleFraction": 0.489,
+   "wallSeconds": 197.8
+  },
+  {
+   "videoId": "9YFTgB78bDY",
+   "section": 3,
+   "channel": "Theoatrix OSRS",
+   "split": "heldout",
+   "verdict": "cut_only",
+   "fps": 29.97,
+   "importStatus": "SUCCEEDED",
+   "analysisStatus": "SUCCEEDED",
+   "samples": 900,
+   "visibility": {
+    "AMBIGUOUS": 521,
+    "VISIBLE": 379
+   },
+   "sceneCuts": 6,
+   "visibleFraction": 0.421,
+   "wallSeconds": 250.8
+  }
+ ]
+}

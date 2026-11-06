@@ -58,6 +58,24 @@ public class ScenarioManifestV2Compiler {
   static final String COMPILER_VERSION = "2.4.0";
   static final String FIXED_CLOCK_ORIGIN = "2020-01-01T00:00:00.000Z";
   static final int MANIFEST_VERSION = 2;
+
+  /** The world fields a start-only Fishing manifest carries. */
+  static final Set<String> START_WORLD_FIELDS =
+      Set.of("worldId", "collisionRevision", "player", "npcs");
+
+  /**
+   * The player fields the xRSPS kernel loads from a start; a start-only manifest carries no others.
+   */
+  static final Set<String> START_PLAYER_FIELDS =
+      Set.of(
+          "position",
+          "skills",
+          "inventory",
+          "equipment",
+          "animation",
+          "orientation",
+          "interaction");
+
   private static final int COMPILER_SCHEMA_VERSION = 2;
   private static final Set<String> SUPPORTED_FISHING_OPTIONS =
       Set.of("net", "bait", "lure", "cage", "harpoon");
@@ -237,13 +255,15 @@ public class ScenarioManifestV2Compiler {
       ReplayNpcPinValidator.Violation violation = npcPinViolations.get(0);
       throw ReplayException.invalid(violation.code(), violation.message());
     }
+    RecordedStart recordedStart = RecordedStart.of(session, capability);
     ObjectNode initialState =
         buildInitialState(
             snapshots.get(0),
             conversion,
             authoritativeNpcPins,
             published,
-            pinnedCollisionRevision(capability));
+            pinnedCollisionRevision(capability),
+            recordedStart);
     NativeBankStateContract.validateInitialState(initialState);
     NativeNpcBindingContract.validateSourceSnapshots(
         initialState, snapshots, conversion, sourceAudit);
@@ -296,7 +316,8 @@ public class ScenarioManifestV2Compiler {
             recordingChecksum,
             sessionChecksum,
             initialState,
-            expectations);
+            expectations,
+            recordedStart);
     ArrayNode sourceGaps = (ArrayNode) manifestDocument.path("conversion").path("gaps");
     for (JsonNode binding : worldEvidence.path("requiredNativeBindings")) {
       sourceGaps
@@ -385,6 +406,169 @@ public class ScenarioManifestV2Compiler {
     return new Compilation(entity, conversion, capability, unsupported);
   }
 
+  /**
+   * SC-2106 R3.4: compiles a recording's <b>start</b> alone, for causal candidate execution. The
+   * candidate makes its own decisions, so no recorded action is converted or carried (the manifest
+   * cannot leak future source actions). The initial state is read from the first contiguous
+   * snapshot, and the manifest carries {@code recorded-start/v1} evidence the xRSPS worker
+   * qualifies field by field before any world exists. Nothing is persisted: the document is
+   * deterministic and content-addressed by its checksum.
+   */
+  public ObjectNode compileStart(String recordingId) {
+    if (recordingId == null || recordingId.isBlank()) {
+      throw ReplayException.badRequest(ReplayErrorCode.VALIDATION_ERROR, "recordingId is required");
+    }
+    ReplayRecordingResolver.ResolvedRecording resolved = resolver.resolve(recordingId);
+    DebugSession session = resolved.debugSession();
+    if (session == null || session.getSessionId() == null || session.getSessionId().isBlank()) {
+      throw ReplayException.invalid(
+          ReplayErrorCode.DEBUG_SESSION_NOT_FOUND,
+          "No debug session is linked to recording " + recordingId);
+    }
+    if (session.getEndTime() == null) {
+      throw ReplayException.invalid(
+          ReplayErrorCode.DEBUG_SESSION_NOT_FINALIZED,
+          "The debug session must be finalized before its start is compiled");
+    }
+    CapabilityManifest capability = capabilityService.getManifest();
+    requireSimulationCapability(capability);
+    if (!capabilityService.isAuthoritativeCertifiable()) {
+      throw new ReplayException(
+          ReplayErrorCode.XRSPS_VERSION_INCOMPATIBLE,
+          org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+          false,
+          "A recorded start requires an authoritative certifiable xRSPS worker",
+          "Use a worker advertising fidelity=XRSPS_AUTHORITATIVE and certifiable=true");
+    }
+    RecordedStart recordedStart = RecordedStart.of(session, capability);
+    if (recordedStart.worldId() == null) {
+      throw ReplayException.invalid(
+          ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
+          "The recording's session bound no world; record again with a client that reports it");
+    }
+    long startTick =
+        snapshotRepository
+            .findMinTickBySessionId(session.getSessionId())
+            .orElseThrow(
+                () ->
+                    ReplayException.invalid(
+                        ReplayErrorCode.NO_TICK_SNAPSHOTS,
+                        "No tick snapshots exist for the debug session"));
+    long endTick =
+        snapshotRepository.findMaxTickBySessionId(session.getSessionId()).orElse(startTick);
+    List<TickSnapshot> start =
+        snapshotRepository.findBySessionIdAndTickBetweenOrderByTick(
+            session.getSessionId(), startTick, startTick);
+    if (start.size() != 1) {
+      throw ReplayException.invalid(
+          ReplayErrorCode.NO_TICK_SNAPSHOTS, "The recording has no single start-tick snapshot");
+    }
+    ObjectNode initialState = buildInitialState(start.get(0), null, true, recordedStart);
+    // The worker models only these player fields and refuses a start claiming any other (hp,
+    // prayer, run energy...). They are named below as unmodelled rather than silently dropped.
+    ObjectNode player = (ObjectNode) initialState.path("player");
+    List<String> unmodelled = new ArrayList<>();
+    player
+        .fieldNames()
+        .forEachRemaining(
+            field -> {
+              if (!START_PLAYER_FIELDS.contains(field)) {
+                unmodelled.add(field);
+              }
+            });
+    unmodelled.sort(Comparator.naturalOrder());
+    player.remove(unmodelled);
+    // Likewise for the world: a Fishing start models the world, collision model, player and spots.
+    // Recorded objects, ground items, widgets and the rest are named, not carried in a recorder
+    // shape the worker would have to reinterpret.
+    List<String> unmodelledWorld = new ArrayList<>();
+    initialState
+        .fieldNames()
+        .forEachRemaining(
+            field -> {
+              if (!START_WORLD_FIELDS.contains(field)) {
+                unmodelledWorld.add(field);
+              }
+            });
+    unmodelledWorld.sort(Comparator.naturalOrder());
+    initialState.remove(unmodelledWorld);
+
+    ObjectNode basis = objectMapper.createObjectNode();
+    basis.put("recordingId", recordingId);
+    basis.put("debugSessionId", session.getSessionId());
+    basis.set("startSnapshot", snapshotNode(start.get(0)));
+    String recordingChecksum =
+        projectionService.sha256Hex(projectionService.canonicalJsonBytes(basis));
+    String startOnly = "start-only/v1:" + recordingChecksum;
+
+    ObjectNode doc = objectMapper.createObjectNode();
+    doc.put("manifestVersion", MANIFEST_VERSION);
+    doc.put(
+        "manifestId",
+        UUID.nameUUIDFromBytes(
+                ("scenario-manifest/v2:"
+                        + startOnly
+                        + ":"
+                        + capability.xrsps().adapterVersion()
+                        + ":"
+                        + capability.xrsps().buildCommit()
+                        + ":"
+                        + capability.xrsps().cacheRevision()
+                        + ":"
+                        + capability.xrsps().contentRevision())
+                    .getBytes(StandardCharsets.UTF_8))
+            .toString());
+    ObjectNode recording = doc.putObject("recording");
+    recording.put("recordingId", recordingId);
+    recording.put("recordingChecksum", recordingChecksum);
+    recording.put("debugSessionId", session.getSessionId());
+    recording.put("debugSessionChecksum", sessionChecksum(session));
+    recording.put("startTick", startTick);
+    recording.put("endTick", endTick);
+    // A start is not curated: it names no curation rather than inventing one.
+    ObjectNode curation = doc.putObject("curation");
+    curation.put("curationId", "none:start-only");
+    curation.put("version", 0);
+    curation.put(
+        "checksum",
+        projectionService.sha256Hex(
+            projectionService.canonicalJsonBytes(
+                objectMapper.createObjectNode().put("startOnly", startOnly))));
+    ObjectNode compiler = doc.putObject("compiler");
+    compiler.put("version", COMPILER_VERSION);
+    compiler.put("schemaVersion", COMPILER_SCHEMA_VERSION);
+    ObjectNode runtime = doc.putObject("runtime");
+    runtime.put("xrspsAdapterVersion", capability.xrsps().adapterVersion());
+    runtime.put("xrspsBuildCommit", capability.xrsps().buildCommit());
+    runtime.put("cacheRevision", capability.xrsps().cacheRevision());
+    runtime.put("contentRevision", capability.xrsps().contentRevision());
+    ObjectNode determinism = doc.putObject("determinism");
+    determinism.put(
+        "seed",
+        recordingChecksum.substring(
+            CanonicalProjectionService.HASH_PREFIX.length(),
+            CanonicalProjectionService.HASH_PREFIX.length() + 16));
+    determinism.put("clockOrigin", FIXED_CLOCK_ORIGIN);
+    determinism.put("tickDurationMs", 600);
+    determinism.put("idNamespace", "replay-v2");
+    doc.set("initialState", initialState);
+    doc.putArray("actions");
+    doc.putArray("expectations");
+    doc.putObject("tolerances");
+    ObjectNode conversion = doc.putObject("conversion");
+    conversion.put("mode", "START_ONLY");
+    ArrayNode unmodelledFields = conversion.putArray("unmodelledPlayerFields");
+    unmodelled.forEach(unmodelledFields::add);
+    ArrayNode unmodelledWorldFields = conversion.putArray("unmodelledWorldFields");
+    unmodelledWorld.forEach(unmodelledWorldFields::add);
+    conversion.set("recordedStart", recordedStartEvidence(recordingId, startTick, recordedStart));
+    doc.put("fidelity", capability.fidelity().name());
+    doc.put("fidelityRequirement", "XRSPS_AUTHORITATIVE");
+    doc.put("controlAllowed", false);
+    doc.put("manifestChecksum", manifestChecksum(doc));
+    return doc;
+  }
+
   private void requireSimulationCapability(CapabilityManifest capability) {
     if (capability == null
         || capability.modes() == null
@@ -433,7 +617,8 @@ public class ScenarioManifestV2Compiler {
       String recordingChecksum,
       String sessionChecksum,
       ObjectNode initialState,
-      ObjectNode expectations) {
+      ObjectNode expectations,
+      RecordedStart recordedStart) {
     ObjectNode doc = objectMapper.createObjectNode();
     doc.put("manifestVersion", MANIFEST_VERSION);
     // Filled by the caller after the checksum basis is canonicalized.
@@ -538,6 +723,11 @@ public class ScenarioManifestV2Compiler {
       if (approximation.sourceSnapshotId() != null) {
         entry.put("sourceSnapshotId", approximation.sourceSnapshotId());
       }
+    }
+    if (recordedStart.worldId() != null) {
+      conversionNode.set(
+          "recordedStart",
+          recordedStartEvidence(recordingId, conversion.startTick(), recordedStart));
     }
     doc.put("fidelity", capability.fidelity().name());
     doc.put("fidelityRequirement", conversion.quality().name());
@@ -898,12 +1088,81 @@ public class ScenarioManifestV2Compiler {
       ReplayNpcPinValidator.Violation violation = npcPinViolations.get(0);
       throw ReplayException.invalid(violation.code(), violation.message());
     }
-    return buildInitialState(first, conversion, authoritativeNpcPins);
+    return buildInitialState(first, conversion, authoritativeNpcPins, RecordedStart.NONE);
+  }
+
+  /** Test seam: the initial state of a session that bound {@code recordedStart}. */
+  ObjectNode buildInitialState(
+      TickSnapshot first, ReplayActionConversionResult conversion, RecordedStart recordedStart) {
+    boolean authoritativeNpcPins =
+        conversion != null
+            && conversion.quality()
+                == com.chromascape.web.replay.conversion.ConversionQuality.CERTIFIED;
+    return buildInitialState(first, conversion, authoritativeNpcPins, recordedStart);
+  }
+
+  /**
+   * SC-2106 R3.4: what a session bound at start for a recording-derived start. The recorder reports
+   * the world once in its capture identity (a tick frame does not carry it), and the collision
+   * model is the pinned worker's, never the recording's: the xRSPS kernel applies no collision map.
+   * Either fills its field only when the start frame has none.
+   *
+   * @param worldId the world the session started on, or null when it bound none
+   * @param gameRevision the client's game revision, or null
+   * @param collisionModel {@code xrsps-collision/none@<adapterVersion>} of the pinned worker
+   */
+  record RecordedStart(Integer worldId, Integer gameRevision, String collisionModel) {
+    static final RecordedStart NONE = new RecordedStart(null, null, null);
+
+    static RecordedStart of(DebugSession session, CapabilityManifest capability) {
+      JsonNode client =
+          session.getCaptureIdentity() == null ? null : session.getCaptureIdentity().path("client");
+      Integer worldId =
+          client != null && client.path("worldId").canConvertToInt()
+              ? client.get("worldId").asInt()
+              : null;
+      Integer gameRevision =
+          client != null && client.path("gameRevision").canConvertToInt()
+              ? client.get("gameRevision").asInt()
+              : null;
+      return new RecordedStart(
+          worldId, gameRevision, "xrsps-collision/none@" + capability.xrsps().adapterVersion());
+    }
+  }
+
+  /**
+   * The {@code recorded-start/v1} evidence the xRSPS worker qualifies before any world exists.
+   * Every initial-state field is read from the first contiguous snapshot, the start tick.
+   */
+  ObjectNode recordedStartEvidence(
+      String recordingId, long startTick, RecordedStart recordedStart) {
+    ObjectNode evidence = objectMapper.createObjectNode();
+    evidence.put("schema", "recorded-start/v1");
+    evidence.put("recordingId", recordingId);
+    evidence.put("startTick", startTick);
+    ObjectNode sourceTicks = evidence.putObject("sourceTicks");
+    for (String path :
+        List.of(
+            "player.position",
+            "player.inventory",
+            "player.equipment",
+            "player.skills.fishing",
+            "npcs")) {
+      sourceTicks.put(path, startTick);
+    }
+    ObjectNode capture = evidence.putObject("captureIdentity");
+    capture.put("worldId", recordedStart.worldId());
+    if (recordedStart.gameRevision() == null) {
+      capture.putNull("gameRevision");
+    } else {
+      capture.put("gameRevision", recordedStart.gameRevision());
+    }
+    return evidence;
   }
 
   private ObjectNode buildInitialState(
       TickSnapshot first, ReplayActionConversionResult conversion, boolean authoritativeNpcPins) {
-    return buildInitialState(first, conversion, authoritativeNpcPins, null);
+    return buildInitialState(first, conversion, authoritativeNpcPins, RecordedStart.NONE);
   }
 
   private ObjectNode buildInitialState(
@@ -911,7 +1170,16 @@ public class ScenarioManifestV2Compiler {
       ReplayActionConversionResult conversion,
       boolean authoritativeNpcPins,
       PublishedCurationSnapshot published) {
-    return buildInitialState(first, conversion, authoritativeNpcPins, published, null);
+    return buildInitialState(
+        first, conversion, authoritativeNpcPins, published, null, RecordedStart.NONE);
+  }
+
+  private ObjectNode buildInitialState(
+      TickSnapshot first,
+      ReplayActionConversionResult conversion,
+      boolean authoritativeNpcPins,
+      RecordedStart recordedStart) {
+    return buildInitialState(first, conversion, authoritativeNpcPins, null, null, recordedStart);
   }
 
   ObjectNode buildInitialState(
@@ -920,6 +1188,22 @@ public class ScenarioManifestV2Compiler {
       boolean authoritativeNpcPins,
       PublishedCurationSnapshot published,
       String pinnedCollisionRevision) {
+    return buildInitialState(
+        first,
+        conversion,
+        authoritativeNpcPins,
+        published,
+        pinnedCollisionRevision,
+        RecordedStart.NONE);
+  }
+
+  private ObjectNode buildInitialState(
+      TickSnapshot first,
+      ReplayActionConversionResult conversion,
+      boolean authoritativeNpcPins,
+      PublishedCurationSnapshot published,
+      String pinnedCollisionRevision,
+      RecordedStart recordedStart) {
     // Project into detached inert JSON before applying authorized fixtures. The captured row,
     // its checksum, and all execution-tick evidence remain untouched. Validate the resulting
     // input, not an incomplete captured base and not an unchecked post-validation patch.
@@ -932,6 +1216,9 @@ public class ScenarioManifestV2Compiler {
     }
     ObjectNode state = input.deepCopy();
     JsonNode worldId = input.get("worldId");
+    if ((worldId == null || worldId.isNull()) && recordedStart.worldId() != null) {
+      worldId = objectMapper.getNodeFactory().numberNode(recordedStart.worldId());
+    }
     if (worldId == null
         || !worldId.isIntegralNumber()
         || !worldId.canConvertToInt()
@@ -976,7 +1263,12 @@ public class ScenarioManifestV2Compiler {
               + first.getTick()
               + " does not match the pinned simulator content revision");
     }
-    String collision = capturedCollision != null ? capturedCollision : pinnedCollisionRevision;
+    String collision =
+        capturedCollision != null
+            ? capturedCollision
+            : pinnedCollisionRevision != null
+                ? pinnedCollisionRevision
+                : recordedStart.collisionModel();
     if (collision == null) {
       throw ReplayException.invalid(
           ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
@@ -996,7 +1288,9 @@ public class ScenarioManifestV2Compiler {
     player.set("position", normalizedPosition(position));
 
     JsonNode skills = playerState.path("skills");
-    if (skills.isObject()) player.set("skills", skills.deepCopy());
+    if (skills.isObject()) {
+      player.set("skills", normalizedSkills(skills));
+    }
     player.set("inventory", normalizeSlots(playerState.get("inventory"), "inventory"));
     player.set("equipment", normalizeSlots(playerState.get("equipment"), "equipment"));
     state.set("player", player);
@@ -1008,116 +1302,120 @@ public class ScenarioManifestV2Compiler {
           "Initial world must contain a typed NPC list (which may be empty)");
     }
     ArrayNode normalizedNpcs = state.putArray("npcs");
-    Set<String> referencedNpcIds = referencedNpcIds(conversion);
-    Map<String, Set<String>> spotTypeCandidates = spotTypeCandidates(conversion);
-    Map<String, Set<String>> actionOptions = actionOptions(conversion);
-    Map<String, List<JsonNode>> npcsByStableId = new HashMap<>();
     List<JsonNode> npcEntries = new ArrayList<>();
-    for (JsonNode npc : npcs) {
-      if (npc == null
-          || !npc.isObject()
-          || isBlank(npc.path("stableId").asText(null))
-          || positionNode(npc) == null) {
-        throw ReplayException.invalid(
-            ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
-            "Initial NPC world state lacks stableId or position");
+    if (conversion == null) {
+      // SC-2106 R3.4 start-only: no converted actions exist, so the world's NPCs are the recorded
+      // Fishing spots, kept exactly as captured (type, size, name, the client's menu actions).
+      npcEntries.addAll(recordedStartSpots(npcs));
+    } else {
+      Set<String> referencedNpcIds = referencedNpcIds(conversion);
+      Map<String, Set<String>> spotTypeCandidates = spotTypeCandidates(conversion);
+      Map<String, Set<String>> actionOptions = actionOptions(conversion);
+      Map<String, List<JsonNode>> npcsByStableId = new HashMap<>();
+      for (JsonNode npc : npcs) {
+        if (npc == null
+            || !npc.isObject()
+            || isBlank(npc.path("stableId").asText(null))
+            || positionNode(npc) == null) {
+          throw ReplayException.invalid(
+              ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
+              "Initial NPC world state lacks stableId or position");
+        }
+        npcsByStableId
+            .computeIfAbsent(npc.path("stableId").asText(), ignored -> new ArrayList<>())
+            .add(npc);
       }
-      npcsByStableId
-          .computeIfAbsent(npc.path("stableId").asText(), ignored -> new ArrayList<>())
-          .add(npc);
-    }
-    // Future targets are resolved against their execution-tick evidence separately. Never insert
-    // those later observations into this initial snapshot. Native-loading requirements stay gaps.
-    if (conversion != null) {
+      // Future targets are resolved against their execution-tick evidence separately. Never insert
+      // those later observations into this initial snapshot. Native-loading requirements stay gaps.
       for (ConvertedReplayAction converted : conversion.actions()) {
         String id = textValue(converted.action().getTarget(), "stableId");
         if (converted.action().getTick() > first.getTick() && !npcsByStableId.containsKey(id)) {
           referencedNpcIds.remove(id);
         }
       }
-    }
-    validateNpcActions(npcsByStableId, conversion);
-    for (String stableId : referencedNpcIds) {
-      List<JsonNode> matches = npcsByStableId.getOrDefault(stableId, List.of());
-      if (matches.isEmpty()) {
-        throw ReplayException.invalid(
-            ReplayErrorCode.ACTION_TARGET_UNRESOLVED,
-            "Initial NPC target " + stableId + " is not present in the recorded world");
+      validateNpcActions(npcsByStableId, conversion);
+      for (String stableId : referencedNpcIds) {
+        List<JsonNode> matches = npcsByStableId.getOrDefault(stableId, List.of());
+        if (matches.isEmpty()) {
+          throw ReplayException.invalid(
+              ReplayErrorCode.ACTION_TARGET_UNRESOLVED,
+              "Initial NPC target " + stableId + " is not present in the recorded world");
+        }
+        if (matches.size() > 1) {
+          throw ReplayException.invalid(
+              ReplayErrorCode.ACTION_TARGET_UNRESOLVED,
+              "Initial NPC target " + stableId + " is ambiguous in the recorded world");
+        }
+        Set<String> candidates = spotTypeCandidates.getOrDefault(stableId, Set.of());
+        if (!candidates.isEmpty() && candidates.size() != 1) {
+          throw ReplayException.invalid(
+              ReplayErrorCode.ACTION_AMBIGUOUS,
+              "NPC target " + stableId + " has no single supported fishing option");
+        }
       }
-      if (matches.size() > 1) {
-        throw ReplayException.invalid(
-            ReplayErrorCode.ACTION_TARGET_UNRESOLVED,
-            "Initial NPC target " + stableId + " is ambiguous in the recorded world");
-      }
-      Set<String> candidates = spotTypeCandidates.getOrDefault(stableId, Set.of());
-      if (!candidates.isEmpty() && candidates.size() != 1) {
-        throw ReplayException.invalid(
-            ReplayErrorCode.ACTION_AMBIGUOUS,
-            "NPC target " + stableId + " has no single supported fishing option");
-      }
-    }
-    for (JsonNode npc : npcs) {
-      String stableId = npc.path("stableId").asText();
-      boolean referenced = referencedNpcIds.contains(stableId);
-      String recordedSpotType = npc.path("spotType").asText(null);
-      boolean recordedSpotTypePresent = !isBlank(recordedSpotType);
-      if (!referenced && (!isSupportedFishingOption(recordedSpotType) || authoritativeNpcPins)) {
-        // The capture may contain nearby NPCs that are not fishing spots. They are not part of
-        // the v1 kernel world unless a semantic action resolves them as a target.
-        continue;
-      }
-      String spotType = recordedSpotType;
-      Set<String> candidates = spotTypeCandidates.getOrDefault(stableId, Set.of());
-      if (referenced) {
-        Set<String> options = actionOptions.getOrDefault(stableId, Set.of());
-        boolean hasFishingAction = !candidates.isEmpty();
-        boolean hasGenericAction =
-            options.stream().anyMatch(option -> !isSupportedFishingOption(option));
-        if (recordedSpotTypePresent
-            && !isSupportedFishingOption(recordedSpotType)
-            && !hasGenericAction) {
+      for (JsonNode npc : npcs) {
+        String stableId = npc.path("stableId").asText();
+        boolean referenced = referencedNpcIds.contains(stableId);
+        String recordedSpotType = npc.path("spotType").asText(null);
+        boolean recordedSpotTypePresent = !isBlank(recordedSpotType);
+        if (!referenced && (!isSupportedFishingOption(recordedSpotType) || authoritativeNpcPins)) {
+          // The capture may contain nearby NPCs that are not fishing spots. They are not part of
+          // the v1 kernel world unless a semantic action resolves them as a target.
+          continue;
+        }
+        String spotType = recordedSpotType;
+        Set<String> candidates = spotTypeCandidates.getOrDefault(stableId, Set.of());
+        if (referenced) {
+          Set<String> options = actionOptions.getOrDefault(stableId, Set.of());
+          boolean hasFishingAction = !candidates.isEmpty();
+          boolean hasGenericAction =
+              options.stream().anyMatch(option -> !isSupportedFishingOption(option));
+          if (recordedSpotTypePresent
+              && !isSupportedFishingOption(recordedSpotType)
+              && !hasGenericAction) {
+            throw ReplayException.invalid(
+                ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
+                "Referenced NPC " + stableId + " has unsupported spotType " + recordedSpotType);
+          }
+          if (hasFishingAction) {
+            String inferred = candidates.iterator().next();
+            if (isSupportedFishingOption(recordedSpotType) && !recordedSpotType.equals(inferred)) {
+              throw ReplayException.invalid(
+                  ReplayErrorCode.ACTION_UNSUPPORTED,
+                  "NPC target "
+                      + stableId
+                      + " records spotType "
+                      + recordedSpotType
+                      + " but the action selects "
+                      + inferred);
+            }
+            spotType = inferred;
+          } else if (hasGenericAction) {
+            // A generic NPC is valid when its recorded server menu contains the selected option.
+            // Keep it explicitly generic so the worker cannot reinterpret it as a Fishing spot.
+            spotType = "generic";
+          }
+        }
+        ObjectNode normalized = npc.deepCopy();
+        normalized.set("position", normalizedPosition(positionNode(npc)));
+        if (!isSupportedFishingOption(spotType) && !"generic".equals(spotType)) {
           throw ReplayException.invalid(
               ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
-              "Referenced NPC " + stableId + " has unsupported spotType " + recordedSpotType);
+              "Initial NPC " + stableId + " lacks a supported fishing spotType or generic action");
         }
-        if (hasFishingAction) {
-          String inferred = candidates.iterator().next();
-          if (isSupportedFishingOption(recordedSpotType) && !recordedSpotType.equals(inferred)) {
-            throw ReplayException.invalid(
-                ReplayErrorCode.ACTION_UNSUPPORTED,
-                "NPC target "
-                    + stableId
-                    + " records spotType "
-                    + recordedSpotType
-                    + " but the action selects "
-                    + inferred);
+        normalized.put("spotType", spotType);
+        if (authoritativeNpcPins) {
+          // The pin validator has already checked these fields. Keep them in the manifest exactly
+          // as captured; the xRSPS loader must never reconstruct them from spotType or array order.
+          normalized.put("npcId", npc.path("npcId").asInt());
+          normalized.put("npcTypeId", npc.path("npcTypeId").asInt());
+          normalized.put("size", npc.path("size").asInt());
+          if (!isBlank(npc.path("spotId").asText(null))) {
+            normalized.put("spotId", npc.path("spotId").asText().trim());
           }
-          spotType = inferred;
-        } else if (hasGenericAction) {
-          // A generic NPC is valid when its recorded server menu contains the selected option.
-          // Keep it explicitly generic so the worker cannot reinterpret it as a Fishing spot.
-          spotType = "generic";
         }
+        npcEntries.add(normalized);
       }
-      ObjectNode normalized = npc.deepCopy();
-      normalized.set("position", normalizedPosition(positionNode(npc)));
-      if (!isSupportedFishingOption(spotType) && !"generic".equals(spotType)) {
-        throw ReplayException.invalid(
-            ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
-            "Initial NPC " + stableId + " lacks a supported fishing spotType or generic action");
-      }
-      normalized.put("spotType", spotType);
-      if (authoritativeNpcPins) {
-        // The pin validator has already checked these fields. Keep them in the manifest exactly
-        // as captured; the xRSPS loader must never reconstruct them from spotType or array order.
-        normalized.put("npcId", npc.path("npcId").asInt());
-        normalized.put("npcTypeId", npc.path("npcTypeId").asInt());
-        normalized.put("size", npc.path("size").asInt());
-        if (!isBlank(npc.path("spotId").asText(null))) {
-          normalized.put("spotId", npc.path("spotId").asText().trim());
-        }
-      }
-      npcEntries.add(normalized);
     }
     npcEntries.sort(Comparator.comparing(npc -> npc.path("stableId").asText()));
     Set<String> stableIds = new HashSet<>();
@@ -1319,6 +1617,61 @@ public class ScenarioManifestV2Compiler {
 
   private boolean isSupportedFishingOption(String spotType) {
     return spotType != null && SUPPORTED_FISHING_OPTIONS.contains(spotType);
+  }
+
+  /**
+   * The worker reads {@code skills.<name>.level/xp}; the recorder captures {@code
+   * skills.<NAME>.real/xp/boosted}. Renames only: the recorded real level becomes {@code level},
+   * every value is kept as captured, and a skill already in worker form passes through unchanged.
+   */
+  private ObjectNode normalizedSkills(JsonNode skills) {
+    ObjectNode normalized = objectMapper.createObjectNode();
+    skills
+        .fields()
+        .forEachRemaining(
+            entry -> {
+              JsonNode value = entry.getValue();
+              String name = entry.getKey().toLowerCase(java.util.Locale.ROOT);
+              if (!value.isObject() || value.has("level") || !value.has("real")) {
+                normalized.set(name, value.deepCopy());
+                return;
+              }
+              ObjectNode skill = normalized.putObject(name);
+              skill.set("level", value.get("real").deepCopy());
+              if (value.has("xp")) {
+                skill.set("xp", value.get("xp").deepCopy());
+              }
+              if (value.has("boosted")) {
+                skill.set("boosted", value.get("boosted").deepCopy());
+              }
+            });
+    return normalized;
+  }
+
+  /**
+   * The recorded Fishing spots of a start tick. Nothing is inferred: a spot without its cache type
+   * or footprint is refused, and the spot id stays absent unless the recorder captured one (the
+   * pinned xRSPS profile derives it, R3.4).
+   */
+  private List<JsonNode> recordedStartSpots(JsonNode npcs) {
+    List<JsonNode> spots = new ArrayList<>();
+    for (JsonNode npc : npcs) {
+      if (!npc.isObject() || !npc.path("fishingSpot").asBoolean(false)) {
+        continue;
+      }
+      if (isBlank(npc.path("stableId").asText(null))
+          || positionNode(npc) == null
+          || !npc.path("npcTypeId").canConvertToInt()
+          || !npc.path("size").canConvertToInt()) {
+        throw ReplayException.invalid(
+            ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
+            "Recorded Fishing spot lacks its stable id, position, cache type or size");
+      }
+      ObjectNode normalized = npc.deepCopy();
+      normalized.set("position", normalizedPosition(positionNode(npc)));
+      spots.add(normalized);
+    }
+    return spots;
   }
 
   private ArrayNode normalizeSlots(JsonNode raw, String name) {

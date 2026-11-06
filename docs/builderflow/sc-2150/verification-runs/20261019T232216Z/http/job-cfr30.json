@@ -1,0 +1,1 @@
+{"id":"855dc32b-6795-4213-86d1-78ef1cf59583","sourceId":"fc95f97e-132d-4bbc-872f-478537d5b567","kind":"IMPORT","stage":"PROBE","status":"FAILED","progress":25,"attempt":1,"generation":2,"cancellationRevision":0,"errorCode":"UNSUPPORTED_MEDIA","errorMessage":"The uploaded container/codec is not an allowed inline media type","cleanupReason":null}

@@ -1,0 +1,122 @@
+[
+  {
+    "path": "/sources/58d65069-2552-4fc1-ad46-e800b7649383",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/sources/58d65069-2552-4fc1-ad46-e800b7649383",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/sources/58d65069-2552-4fc1-ad46-e800b7649383/media/ORIGINAL",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/sources/58d65069-2552-4fc1-ad46-e800b7649383/media/ORIGINAL",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/sources/58d65069-2552-4fc1-ad46-e800b7649383/media/PROXY?analysisId=1fbad528-1219-4a05-80b9-ccb7967088dd",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/sources/58d65069-2552-4fc1-ad46-e800b7649383/media/PROXY?analysisId=1fbad528-1219-4a05-80b9-ccb7967088dd",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/sources/58d65069-2552-4fc1-ad46-e800b7649383/analyses/1fbad528-1219-4a05-80b9-ccb7967088dd/frame-index",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/sources/58d65069-2552-4fc1-ad46-e800b7649383/analyses/1fbad528-1219-4a05-80b9-ccb7967088dd/frame-index",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/sources/58d65069-2552-4fc1-ad46-e800b7649383/analyses/1fbad528-1219-4a05-80b9-ccb7967088dd/observations",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/sources/58d65069-2552-4fc1-ad46-e800b7649383/analyses/1fbad528-1219-4a05-80b9-ccb7967088dd/observations",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/frame-previews/6d2a2bb7-5f7c-4b41-aab4-bf40ebbf85f4",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/frame-previews/6d2a2bb7-5f7c-4b41-aab4-bf40ebbf85f4",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/frame-previews/6d2a2bb7-5f7c-4b41-aab4-bf40ebbf85f4/media",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/frame-previews/6d2a2bb7-5f7c-4b41-aab4-bf40ebbf85f4/media",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/sources/58d65069-2552-4fc1-ad46-e800b7649383/reviews",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/sources/58d65069-2552-4fc1-ad46-e800b7649383/reviews",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/sources/58d65069-2552-4fc1-ad46-e800b7649383/exports",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/sources/58d65069-2552-4fc1-ad46-e800b7649383/exports",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/jobs/a39534fc-f625-42a3-ad27-f17ef6c20668",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/jobs/a39534fc-f625-42a3-ad27-f17ef6c20668",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/reviews/d4bebf6a-a0fc-4aa4-a603-7c39e6d65ac0?sourceId=58d65069-2552-4fc1-ad46-e800b7649383",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/reviews/d4bebf6a-a0fc-4aa4-a603-7c39e6d65ac0?sourceId=58d65069-2552-4fc1-ad46-e800b7649383",
+    "port": 18192,
+    "status": 401
+  },
+  {
+    "path": "/exports/4d98bb35-3fd6-412d-b7e8-bdd70035ba12",
+    "port": 18191,
+    "status": 404
+  },
+  {
+    "path": "/exports/4d98bb35-3fd6-412d-b7e8-bdd70035ba12",
+    "port": 18192,
+    "status": 401
+  }
+]

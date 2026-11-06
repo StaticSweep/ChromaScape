@@ -1,0 +1,56 @@
+[
+  {
+    "source": "11e2eec3",
+    "variant": "hidpi-1.5-vfr-drop",
+    "clip": "dev--11e2eec3--hidpi-1.5-vfr-drop",
+    "skipped": null
+  },
+  {
+    "source": "2e64e2fc",
+    "variant": "hidpi-1.5-overlay",
+    "clip": "dev--2e64e2fc--hidpi-1.5-overlay",
+    "skipped": null
+  },
+  {
+    "source": "4c4898c5",
+    "variant": "hidpi-1.5",
+    "clip": "dev--4c4898c5--hidpi-1.5",
+    "skipped": null
+  },
+  {
+    "source": "6a594507",
+    "variant": "hidpi-1.5-compressed-300k",
+    "clip": "dev--6a594507--hidpi-1.5-compressed-300k",
+    "skipped": null
+  },
+  {
+    "source": "78cde7ca",
+    "variant": "hidpi-1.5-vfr-drop",
+    "clip": "dev--78cde7ca--hidpi-1.5-vfr-drop",
+    "skipped": null
+  },
+  {
+    "source": "87a88065",
+    "variant": "hidpi-1.5-overlay",
+    "clip": "dev--87a88065--hidpi-1.5-overlay",
+    "skipped": null
+  },
+  {
+    "source": "f16b6dd7",
+    "variant": "hidpi-1.5",
+    "clip": "dev--f16b6dd7--hidpi-1.5",
+    "skipped": null
+  },
+  {
+    "source": "f9f78ab0",
+    "variant": "hidpi-1.5-compressed-300k",
+    "clip": "dev--f9f78ab0--hidpi-1.5-compressed-300k",
+    "skipped": null
+  },
+  {
+    "source": "fa5228cb",
+    "variant": "hidpi-1.5-vfr-drop",
+    "clip": "dev--fa5228cb--hidpi-1.5-vfr-drop",
+    "skipped": null
+  }
+]

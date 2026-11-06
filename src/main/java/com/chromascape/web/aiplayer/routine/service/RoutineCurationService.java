@@ -25,7 +25,7 @@ public class RoutineCurationService {
   @Transactional
   public java.util.Map<String, Object> put(
       String recordingId, RoutineApiDtos.CurationRequest request) {
-    captures.recording(recordingId);
+    captures.requireRecordingOperation(recordingId, "semanticLearning");
     try {
       RoutineCuration entity =
           repository.findByRecordingId(recordingId).orElseGet(RoutineCuration::new);

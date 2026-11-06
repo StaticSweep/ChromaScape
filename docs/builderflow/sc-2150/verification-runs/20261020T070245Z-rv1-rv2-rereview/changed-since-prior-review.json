@@ -1,0 +1,8 @@
+[
+  "src/main/java/com/chromascape/web/debug/tickdebugger/video/MouseVideoMultipartReader.java",
+  "src/main/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoJobService.java",
+  "src/test/java/com/chromascape/web/debug/tickdebugger/video/MouseVideoMultipartReaderTest.java",
+  "src/test/java/com/chromascape/web/debug/tickdebugger/video/controller/MouseVideoControllerHttpTest.java",
+  "src/test/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoCatalogServiceTest.java",
+  "src/test/java/com/chromascape/web/debug/tickdebugger/video/service/MouseVideoJobServiceTest.java"
+]

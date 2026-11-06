@@ -1,0 +1,517 @@
+{
+ "schema": "sc2150-yt-screening/v1",
+ "createdAt": "2026-10-23T04:40:00Z",
+ "method": "one midpoint frame per section at 960 px, plus 4-in-60 s strips for the two edited guides; judged for a playable OSRS client view and a visible cursor",
+ "rule": "a rejected section is listed with its reason, never dropped silently",
+ "counts": {
+  "sections": 24,
+  "full": 20,
+  "cutOnly": 4
+ },
+ "sections": [
+  {
+   "videoId": "33MkV_p4jvs",
+   "channel": "Langsamt",
+   "section": 1,
+   "file": "33MkV_p4jvs--s1.webm",
+   "width": 1920,
+   "height": 1080,
+   "fps": 60.0,
+   "durationSeconds": 63.999,
+   "midpointSeconds": 32.0,
+   "evidence": {
+    "montageTile": "33MkV_p4jvs--s1-tile.png",
+    "midFrameSha256": "a21a87fb38987768b7172cf90831966d5eae8707a7a90935acecb5ec4e9470eb"
+   },
+   "osrsClientView": true,
+   "cursorObservedInSample": true,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "full",
+   "note": "playable OSRS client view, cursor visible in the sampled frame"
+  },
+  {
+   "videoId": "33MkV_p4jvs",
+   "channel": "Langsamt",
+   "section": 2,
+   "file": "33MkV_p4jvs--s2.webm",
+   "width": 1920,
+   "height": 1080,
+   "fps": 60.0,
+   "durationSeconds": 63.999,
+   "midpointSeconds": 32.0,
+   "evidence": {
+    "montageTile": "33MkV_p4jvs--s2-tile.png",
+    "midFrameSha256": "1a58d381e779348479ce14d9f2da462f3cd58ce27b73ebf10cdec762c8128f69"
+   },
+   "osrsClientView": true,
+   "cursorObservedInSample": true,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "full",
+   "note": "playable OSRS client view, cursor visible in the sampled frame"
+  },
+  {
+   "videoId": "33MkV_p4jvs",
+   "channel": "Langsamt",
+   "section": 3,
+   "file": "33MkV_p4jvs--s3.webm",
+   "width": 1920,
+   "height": 1080,
+   "fps": 60.0,
+   "durationSeconds": 63.999,
+   "midpointSeconds": 32.0,
+   "evidence": {
+    "montageTile": "33MkV_p4jvs--s3-tile.png",
+    "midFrameSha256": "151d37ac674bc41612b3523b8e8b5c00201911848b644fa05c0e6b8b8f59f5ca"
+   },
+   "osrsClientView": true,
+   "cursorObservedInSample": true,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "full",
+   "note": "playable OSRS client view, cursor visible in the sampled frame"
+  },
+  {
+   "videoId": "9YFTgB78bDY",
+   "channel": "Theoatrix OSRS",
+   "section": 1,
+   "file": "9YFTgB78bDY--s1.mp4",
+   "width": 1920,
+   "height": 1080,
+   "fps": 29.97,
+   "durationSeconds": 60.018,
+   "midpointSeconds": 30.009,
+   "evidence": {
+    "montageTile": "9YFTgB78bDY--s1-tile.png",
+    "midFrameSha256": "b7758f70bbc9e22ca549380dc2aab801d99da968b369695c22758dc4451bba05"
+   },
+   "osrsClientView": false,
+   "cursorObservedInSample": false,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "cut_only",
+   "note": "full-frame b-roll with an on-screen title card; no chatbox/minimap, no cursor"
+  },
+  {
+   "videoId": "9YFTgB78bDY",
+   "channel": "Theoatrix OSRS",
+   "section": 2,
+   "file": "9YFTgB78bDY--s2.mp4",
+   "width": 1920,
+   "height": 1080,
+   "fps": 29.971,
+   "durationSeconds": 60.023,
+   "midpointSeconds": 30.012,
+   "evidence": {
+    "montageTile": "9YFTgB78bDY--s2-tile.png",
+    "midFrameSha256": "aecd7c751bf844e61b65bdb3f2ce46ac65aad9aeeaad98dc785800db538bb0f8"
+   },
+   "osrsClientView": false,
+   "cursorObservedInSample": false,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "cut_only",
+   "note": "prayer/ranged/magic title cards over b-roll; no client view"
+  },
+  {
+   "videoId": "9YFTgB78bDY",
+   "channel": "Theoatrix OSRS",
+   "section": 3,
+   "file": "9YFTgB78bDY--s3.mp4",
+   "width": 1920,
+   "height": 1080,
+   "fps": 29.97,
+   "durationSeconds": 60.029,
+   "midpointSeconds": 30.015,
+   "evidence": {
+    "montageTile": "9YFTgB78bDY--s3-tile.png",
+    "midFrameSha256": "459fc3b9486dbc68fc44887433dac8e4ce13d3edc87865a82fb0d1067d63afff"
+   },
+   "osrsClientView": false,
+   "cursorObservedInSample": false,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "cut_only",
+   "note": "herb-run and crafting title cards; only the last frames show a client view"
+  },
+  {
+   "videoId": "OqSngAyh1rY",
+   "channel": "Blizzard0199",
+   "section": 1,
+   "file": "OqSngAyh1rY--s1.webm",
+   "width": 1920,
+   "height": 1080,
+   "fps": 60.0,
+   "durationSeconds": 62.333,
+   "midpointSeconds": 31.166,
+   "evidence": {
+    "montageTile": "OqSngAyh1rY--s1-tile.png",
+    "midFrameSha256": "1731cc331f7f84c560ca0be63db58fb992eefe816d058bd62abdc32f302f38c8"
+   },
+   "osrsClientView": true,
+   "cursorObservedInSample": true,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "full",
+   "note": "playable OSRS client view, cursor visible in the sampled frame"
+  },
+  {
+   "videoId": "OqSngAyh1rY",
+   "channel": "Blizzard0199",
+   "section": 2,
+   "file": "OqSngAyh1rY--s2.webm",
+   "width": 1920,
+   "height": 1080,
+   "fps": 60.0,
+   "durationSeconds": 62.266,
+   "midpointSeconds": 31.133,
+   "evidence": {
+    "montageTile": "OqSngAyh1rY--s2-tile.png",
+    "midFrameSha256": "b19086d654feab91fe595280e1bd6c98d8f30414de0e872098cb65c9436303f1"
+   },
+   "osrsClientView": true,
+   "cursorObservedInSample": true,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "full",
+   "note": "playable OSRS client view, cursor visible in the sampled frame"
+  },
+  {
+   "videoId": "OqSngAyh1rY",
+   "channel": "Blizzard0199",
+   "section": 3,
+   "file": "OqSngAyh1rY--s3.webm",
+   "width": 1920,
+   "height": 1080,
+   "fps": 60.0,
+   "durationSeconds": 61.199,
+   "midpointSeconds": 30.599,
+   "evidence": {
+    "montageTile": "OqSngAyh1rY--s3-tile.png",
+    "midFrameSha256": "472050e2c6046f2fae55e5dd5483e6d2dc7031c99c02ea79733b0491741f2369"
+   },
+   "osrsClientView": true,
+   "cursorObservedInSample": true,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "full",
+   "note": "playable OSRS client view, cursor visible in the sampled frame"
+  },
+  {
+   "videoId": "SNc0I1V0GXw",
+   "channel": "420slayerxpdrop",
+   "section": 1,
+   "file": "SNc0I1V0GXw--s1.mp4",
+   "width": 1280,
+   "height": 660,
+   "fps": 30.0,
+   "durationSeconds": 60.033,
+   "midpointSeconds": 30.017,
+   "evidence": {
+    "montageTile": "SNc0I1V0GXw--s1-tile.png",
+    "midFrameSha256": "bf53ba84609a81ad34fccb5ca1ccbdca8742fe6fe06cec19628492f9f3d21f8b"
+   },
+   "osrsClientView": true,
+   "cursorObservedInSample": true,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "full",
+   "note": "playable OSRS client view, cursor visible in the sampled frame"
+  },
+  {
+   "videoId": "SNc0I1V0GXw",
+   "channel": "420slayerxpdrop",
+   "section": 2,
+   "file": "SNc0I1V0GXw--s2.mp4",
+   "width": 1280,
+   "height": 660,
+   "fps": 30.0,
+   "durationSeconds": 60.033,
+   "midpointSeconds": 30.017,
+   "evidence": {
+    "montageTile": "SNc0I1V0GXw--s2-tile.png",
+    "midFrameSha256": "18f3b1b702fe997d212c7bd487e58b7871b1db0f825893e1df60af63c7ef01a2"
+   },
+   "osrsClientView": true,
+   "cursorObservedInSample": true,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "full",
+   "note": "playable OSRS client view, cursor visible in the sampled frame"
+  },
+  {
+   "videoId": "SNc0I1V0GXw",
+   "channel": "420slayerxpdrop",
+   "section": 3,
+   "file": "SNc0I1V0GXw--s3.mp4",
+   "width": 1280,
+   "height": 660,
+   "fps": 30.0,
+   "durationSeconds": 60.034,
+   "midpointSeconds": 30.017,
+   "evidence": {
+    "montageTile": "SNc0I1V0GXw--s3-tile.png",
+    "midFrameSha256": "20247b7333cddbaae0a298140664d387f50aeb80412c13279f80336d288558e5"
+   },
+   "osrsClientView": true,
+   "cursorObservedInSample": true,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "full",
+   "note": "playable OSRS client view, cursor visible in the sampled frame"
+  },
+  {
+   "videoId": "U1uiLTv6quo",
+   "channel": "shaa rin",
+   "section": 1,
+   "file": "U1uiLTv6quo--s1.mp4",
+   "width": 1920,
+   "height": 1080,
+   "fps": 60.0,
+   "durationSeconds": 60.05,
+   "midpointSeconds": 30.025,
+   "evidence": {
+    "montageTile": "U1uiLTv6quo--s1-tile.png",
+    "midFrameSha256": "c8c1e2a970ea157c3cc270dc69306c08014d40a0b5f168973094cb6726028a8e"
+   },
+   "osrsClientView": true,
+   "cursorObservedInSample": true,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "full",
+   "note": "playable OSRS client view, cursor visible in the sampled frame"
+  },
+  {
+   "videoId": "U1uiLTv6quo",
+   "channel": "shaa rin",
+   "section": 2,
+   "file": "U1uiLTv6quo--s2.mp4",
+   "width": 1920,
+   "height": 1080,
+   "fps": 60.0,
+   "durationSeconds": 60.033,
+   "midpointSeconds": 30.017,
+   "evidence": {
+    "montageTile": "U1uiLTv6quo--s2-tile.png",
+    "midFrameSha256": "002a1cc1c85e736df41e9ef1f7103666d7870475e0d4569e5689db30846955e2"
+   },
+   "osrsClientView": true,
+   "cursorObservedInSample": true,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "full",
+   "note": "playable OSRS client view, cursor visible in the sampled frame"
+  },
+  {
+   "videoId": "U1uiLTv6quo",
+   "channel": "shaa rin",
+   "section": 3,
+   "file": "U1uiLTv6quo--s3.mp4",
+   "width": 1920,
+   "height": 1080,
+   "fps": 60.0,
+   "durationSeconds": 60.016,
+   "midpointSeconds": 30.008,
+   "evidence": {
+    "montageTile": "U1uiLTv6quo--s3-tile.png",
+    "midFrameSha256": "b52b6c259ff6cbb4899dbdddf7ecc0e1e421b4bf26e69bac8ec7d7982fdbe537"
+   },
+   "osrsClientView": true,
+   "cursorObservedInSample": true,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "full",
+   "note": "playable OSRS client view, cursor visible in the sampled frame"
+  },
+  {
+   "videoId": "l7dv8lbS87E",
+   "channel": "Sleepy Longplays",
+   "section": 1,
+   "file": "l7dv8lbS87E--s1.mp4",
+   "width": 1920,
+   "height": 1046,
+   "fps": 60.0,
+   "durationSeconds": 60.0,
+   "midpointSeconds": 30.0,
+   "evidence": {
+    "montageTile": "l7dv8lbS87E--s1-tile.png",
+    "midFrameSha256": "0af4d36e13f3aaf1751d767d203a6e0c27fc5017f8c0a9e4c736f8400ca16ea6"
+   },
+   "osrsClientView": true,
+   "cursorObservedInSample": true,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "full",
+   "note": "playable OSRS client view, cursor visible in the sampled frame"
+  },
+  {
+   "videoId": "l7dv8lbS87E",
+   "channel": "Sleepy Longplays",
+   "section": 2,
+   "file": "l7dv8lbS87E--s2.mp4",
+   "width": 1920,
+   "height": 1046,
+   "fps": 60.0,
+   "durationSeconds": 60.0,
+   "midpointSeconds": 30.0,
+   "evidence": {
+    "montageTile": "l7dv8lbS87E--s2-tile.png",
+    "midFrameSha256": "552754b5af590c19a3b2acfa8dad1789be40d8d9dbdc2a798ea67579678c1dcc"
+   },
+   "osrsClientView": true,
+   "cursorObservedInSample": true,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "full",
+   "note": "playable OSRS client view, cursor visible in the sampled frame"
+  },
+  {
+   "videoId": "l7dv8lbS87E",
+   "channel": "Sleepy Longplays",
+   "section": 3,
+   "file": "l7dv8lbS87E--s3.mp4",
+   "width": 1920,
+   "height": 1046,
+   "fps": 60.0,
+   "durationSeconds": 60.0,
+   "midpointSeconds": 30.0,
+   "evidence": {
+    "montageTile": "l7dv8lbS87E--s3-tile.png",
+    "midFrameSha256": "332b4c47a3b4e284824d8fb345854dbf7c09acea1477e7635ea366505e8b99e8"
+   },
+   "osrsClientView": true,
+   "cursorObservedInSample": true,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "full",
+   "note": "playable OSRS client view, cursor visible in the sampled frame"
+  },
+  {
+   "videoId": "trm4e1ON4HM",
+   "channel": "EVScape",
+   "section": 1,
+   "file": "trm4e1ON4HM--s1.mp4",
+   "width": 1920,
+   "height": 1080,
+   "fps": 60.0,
+   "durationSeconds": 60.0,
+   "midpointSeconds": 30.0,
+   "evidence": {
+    "montageTile": "trm4e1ON4HM--s1-tile.png",
+    "midFrameSha256": "1e62b8d8c991c069c8c7a2df0da6e51c432d4fb068be4ea302a3602bee57bbd6"
+   },
+   "osrsClientView": true,
+   "cursorObservedInSample": true,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "full",
+   "note": "settings/interface screens in the client, cursor visible"
+  },
+  {
+   "videoId": "trm4e1ON4HM",
+   "channel": "EVScape",
+   "section": 2,
+   "file": "trm4e1ON4HM--s2.mp4",
+   "width": 1920,
+   "height": 1080,
+   "fps": 60.0,
+   "durationSeconds": 60.0,
+   "midpointSeconds": 30.0,
+   "evidence": {
+    "montageTile": "trm4e1ON4HM--s2-tile.png",
+    "midFrameSha256": "40114777920ab514eb804292ba9a1ed6181b054411e686f2782d017a0bd43b5d"
+   },
+   "osrsClientView": false,
+   "cursorObservedInSample": false,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "cut_only",
+   "note": "facecam plus goal title cards; no client view"
+  },
+  {
+   "videoId": "trm4e1ON4HM",
+   "channel": "EVScape",
+   "section": 3,
+   "file": "trm4e1ON4HM--s3.mp4",
+   "width": 1920,
+   "height": 1080,
+   "fps": 60.0,
+   "durationSeconds": 60.0,
+   "midpointSeconds": 30.0,
+   "evidence": {
+    "montageTile": "trm4e1ON4HM--s3-tile.png",
+    "midFrameSha256": "f51270c5d6a7e78fbe1097ba08144ecc96355976ba34bc8131a277686e3cfd68"
+   },
+   "osrsClientView": true,
+   "cursorObservedInSample": true,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "full",
+   "note": "client view with combat interfaces, cursor visible"
+  },
+  {
+   "videoId": "xckk8Rft2lc",
+   "channel": "Kelzayeee",
+   "section": 1,
+   "file": "xckk8Rft2lc--s1.mp4",
+   "width": 1920,
+   "height": 1080,
+   "fps": 24.0,
+   "durationSeconds": 60.042,
+   "midpointSeconds": 30.021,
+   "evidence": {
+    "montageTile": "xckk8Rft2lc--s1-tile.png",
+    "midFrameSha256": "999c00862db7c35a2c944ddce886607ac06dd4f2042eef878bea789eb9735722"
+   },
+   "osrsClientView": true,
+   "cursorObservedInSample": true,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "full",
+   "note": "playable OSRS client view, cursor visible in the sampled frame"
+  },
+  {
+   "videoId": "xckk8Rft2lc",
+   "channel": "Kelzayeee",
+   "section": 2,
+   "file": "xckk8Rft2lc--s2.mp4",
+   "width": 1920,
+   "height": 1080,
+   "fps": 24.0,
+   "durationSeconds": 60.083,
+   "midpointSeconds": 30.041,
+   "evidence": {
+    "montageTile": "xckk8Rft2lc--s2-tile.png",
+    "midFrameSha256": "751e2ae6ca087254c1ca975c24e671c3d2d20d444ee911d0cf60b78384af24e8"
+   },
+   "osrsClientView": true,
+   "cursorObservedInSample": true,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "full",
+   "note": "playable OSRS client view, cursor visible in the sampled frame"
+  },
+  {
+   "videoId": "xckk8Rft2lc",
+   "channel": "Kelzayeee",
+   "section": 3,
+   "file": "xckk8Rft2lc--s3.mp4",
+   "width": 1920,
+   "height": 1080,
+   "fps": 24.0,
+   "durationSeconds": 60.042,
+   "midpointSeconds": 30.021,
+   "evidence": {
+    "montageTile": "xckk8Rft2lc--s3-tile.png",
+    "midFrameSha256": "3d69dcc9a648bb13ed940541c30b08369cf4707a9554a019e6c6a0c9900421da"
+   },
+   "osrsClientView": true,
+   "cursorObservedInSample": true,
+   "cursorFraction": null,
+   "cursorFractionMethod": "not measured: needs a reviewed template, deferred to the template pass; a null is never a pass",
+   "verdict": "full",
+   "note": "playable OSRS client view, cursor visible in the sampled frame"
+  }
+ ]
+}

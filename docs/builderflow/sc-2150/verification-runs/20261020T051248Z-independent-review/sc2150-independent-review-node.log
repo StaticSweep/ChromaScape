@@ -1,0 +1,2020 @@
+
+> test
+> node --test src/test/js/*.test.js
+
+TAP version 13
+# [AccountTaskPlanner] Publish Task clicked {
+#   accountId: 'hash-1',
+#   launcherMachineUuid: null,
+#   taskKey: 'configurable_woodcutting',
+#   world: 360
+# }
+# Subtest: selectBuilderGoalMachineUuid: valid persisted local selection wins
+ok 1 - selectBuilderGoalMachineUuid: valid persisted local selection wins
+  ---
+  duration_ms: 19.558905
+  type: 'test'
+  ...
+# Subtest: selectBuilderGoalMachineUuid: stale persisted UUID is discarded
+ok 2 - selectBuilderGoalMachineUuid: stale persisted UUID is discarded
+  ---
+  duration_ms: 1.307668
+  type: 'test'
+  ...
+# Subtest: selectBuilderGoalMachineUuid: persisted remote UUID is discarded
+ok 3 - selectBuilderGoalMachineUuid: persisted remote UUID is discarded
+  ---
+  duration_ms: 0.967855
+  type: 'test'
+  ...
+# Subtest: selectBuilderGoalMachineUuid: runnable configured default wins
+ok 4 - selectBuilderGoalMachineUuid: runnable configured default wins
+  ---
+  duration_ms: 0.874783
+  type: 'test'
+  ...
+# Subtest: selectBuilderGoalMachineUuid: non-runnable configured default is ignored
+ok 5 - selectBuilderGoalMachineUuid: non-runnable configured default is ignored
+  ---
+  duration_ms: 1.55718
+  type: 'test'
+  ...
+# Subtest: selectBuilderGoalMachineUuid: exactly one runnable local machine is auto-selected with multiple machines
+ok 6 - selectBuilderGoalMachineUuid: exactly one runnable local machine is auto-selected with multiple machines
+  ---
+  duration_ms: 3.308981
+  type: 'test'
+  ...
+# Subtest: selectBuilderGoalMachineUuid: no runnable machines returns an empty string
+ok 7 - selectBuilderGoalMachineUuid: no runnable machines returns an empty string
+  ---
+  duration_ms: 0.952505
+  type: 'test'
+  ...
+# Subtest: selectBuilderGoalMachineUuid: multiple runnable machines without a valid default returns an empty string
+ok 8 - selectBuilderGoalMachineUuid: multiple runnable machines without a valid default returns an empty string
+  ---
+  duration_ms: 0.796727
+  type: 'test'
+  ...
+# Subtest: selectBuilderGoalMachineUuid: handles empty and null input lists
+ok 9 - selectBuilderGoalMachineUuid: handles empty and null input lists
+  ---
+  duration_ms: 2.005983
+  type: 'test'
+  ...
+# Subtest: selectBuilderGoalMachineUuid: persisted local machine that became non-runnable is not preserved
+ok 10 - selectBuilderGoalMachineUuid: persisted local machine that became non-runnable is not preserved
+  ---
+  duration_ms: 2.436743
+  type: 'test'
+  ...
+# Subtest: availability enables Launch and Run with the selected local machine
+ok 11 - availability enables Launch and Run with the selected local machine
+  ---
+  duration_ms: 1.533609
+  type: 'test'
+  ...
+# Subtest: availability: remote/offline selection cannot enable Launch or Run
+ok 12 - availability: remote/offline selection cannot enable Launch or Run
+  ---
+  duration_ms: 0.699058
+  type: 'test'
+  ...
+# Subtest: availability: Publish remains independent of machine availability
+ok 13 - availability: Publish remains independent of machine availability
+  ---
+  duration_ms: 0.789871
+  type: 'test'
+  ...
+# Subtest: computeBuilderGoalActionAvailability: Runnable, credentialed, Online executor, Runnable machine => all actions available
+ok 14 - computeBuilderGoalActionAvailability: Runnable, credentialed, Online executor, Runnable machine => all actions available
+  ---
+  duration_ms: 5.570081
+  type: 'test'
+  ...
+# Subtest: computeBuilderGoalActionAvailability: Runnable, credentialed, Online executor, Offline machine => Publish only
+ok 15 - computeBuilderGoalActionAvailability: Runnable, credentialed, Online executor, Offline machine => Publish only
+  ---
+  duration_ms: 0.694348
+  type: 'test'
+  ...
+# Subtest: computeBuilderGoalActionAvailability: Runnable, credentialed, Offline executor, Runnable machine => Launch and Run only
+ok 16 - computeBuilderGoalActionAvailability: Runnable, credentialed, Offline executor, Runnable machine => Launch and Run only
+  ---
+  duration_ms: 0.653967
+  type: 'test'
+  ...
+# Subtest: computeBuilderGoalActionAvailability: Runnable, no credentials, Online executor, Offline machine => Publish only
+ok 17 - computeBuilderGoalActionAvailability: Runnable, no credentials, Online executor, Offline machine => Publish only
+  ---
+  duration_ms: 0.660954
+  type: 'test'
+  ...
+# Subtest: computeBuilderGoalActionAvailability: Runnable, no credentials, Offline executor, Runnable machine => no actions
+ok 18 - computeBuilderGoalActionAvailability: Runnable, no credentials, Offline executor, Runnable machine => no actions
+  ---
+  duration_ms: 0.64424
+  type: 'test'
+  ...
+# Subtest: computeBuilderGoalActionAvailability: Disabled, Online executor, Runnable machine => no actions
+ok 19 - computeBuilderGoalActionAvailability: Disabled, Online executor, Runnable machine => no actions
+  ---
+  duration_ms: 0.625488
+  type: 'test'
+  ...
+# Subtest: computeBuilderGoalActionAvailability: Banned, Online executor, Runnable machine => no actions
+ok 20 - computeBuilderGoalActionAvailability: Banned, Online executor, Runnable machine => no actions
+  ---
+  duration_ms: 0.759926
+  type: 'test'
+  ...
+# Subtest: computeBuilderGoalActionAvailability: Runnable, credentialed, Online executor, Runnable machine, no task => Launch only
+ok 21 - computeBuilderGoalActionAvailability: Runnable, credentialed, Online executor, Runnable machine, no task => Launch only
+  ---
+  duration_ms: 0.679749
+  type: 'test'
+  ...
+# Subtest: computeBuilderGoalActionAvailability: Runnable, credentialed, Online executor, Runnable machine, invalid world => no actions
+ok 22 - computeBuilderGoalActionAvailability: Runnable, credentialed, Online executor, Runnable machine, invalid world => no actions
+  ---
+  duration_ms: 1.294933
+  type: 'test'
+  ...
+# Subtest: computeBuilderGoalActionAvailability: compatibility online=true without executorOnline => Publish available
+ok 23 - computeBuilderGoalActionAvailability: compatibility online=true without executorOnline => Publish available
+  ---
+  duration_ms: 0.672767
+  type: 'test'
+  ...
+# Subtest: computeBuilderGoalActionAvailability: executorOnline=false wins over online=true when both present
+ok 24 - computeBuilderGoalActionAvailability: executorOnline=false wins over online=true when both present
+  ---
+  duration_ms: 0.701425
+  type: 'test'
+  ...
+# Subtest: computeBuilderGoalActionAvailability: no account => no actions
+ok 25 - computeBuilderGoalActionAvailability: no account => no actions
+  ---
+  duration_ms: 0.545112
+  type: 'test'
+  ...
+# Subtest: publishBuilderGoal does not reject solely because the selected machine is null
+ok 26 - publishBuilderGoal does not reject solely because the selected machine is null
+  ---
+  duration_ms: 11.571465
+  type: 'test'
+  ...
+# Subtest: renderBuilderGoalClientStatus: executor online, no task => publish disabled and asks for a task
+ok 27 - renderBuilderGoalClientStatus: executor online, no task => publish disabled and asks for a task
+  ---
+  duration_ms: 1.679386
+  type: 'test'
+  ...
+# Subtest: renderBuilderGoalClientStatus: executor online, valid task, invalid world => publish disabled and asks for a valid world
+ok 28 - renderBuilderGoalClientStatus: executor online, valid task, invalid world => publish disabled and asks for a valid world
+  ---
+  duration_ms: 0.563442
+  type: 'test'
+  ...
+# Subtest: renderBuilderGoalClientStatus: executor online, valid task and world => publish available message
+ok 29 - renderBuilderGoalClientStatus: executor online, valid task and world => publish available message
+  ---
+  duration_ms: 0.536858
+  type: 'test'
+  ...
+# Subtest: renderBuilderGoalClientStatus: missing credentials, executor online, valid task/world => Run and Launch unavailable, Publish available
+ok 30 - renderBuilderGoalClientStatus: missing credentials, executor online, valid task/world => Run and Launch unavailable, Publish available
+  ---
+  duration_ms: 0.597454
+  type: 'test'
+  ...
+# Subtest: renderBuilderGoalClientStatus: offline launcher machine, executor online, valid task/world => Publish remains available
+ok 31 - renderBuilderGoalClientStatus: offline launcher machine, executor online, valid task/world => Publish remains available
+  ---
+  duration_ms: 0.97151
+  type: 'test'
+  ...
+# Subtest: computeBuilderGoalActionAvailability: invalid config blocks Run, Publish, and Imported
+ok 32 - computeBuilderGoalActionAvailability: invalid config blocks Run, Publish, and Imported
+  ---
+  duration_ms: 0.356543
+  type: 'test'
+  ...
+# Subtest: renderBuilderGoalClientStatus: invalid JSON settings, executor online, valid task/world => publish unavailable and invalid JSON surfaced
+ok 33 - renderBuilderGoalClientStatus: invalid JSON settings, executor online, valid task/world => publish unavailable and invalid JSON surfaced
+  ---
+  duration_ms: 0.640989
+  type: 'test'
+  ...
+# Subtest: renderBuilderGoalClientStatus: degraded catalog warning prefixes every readiness message
+ok 34 - renderBuilderGoalClientStatus: degraded catalog warning prefixes every readiness message
+  ---
+  duration_ms: 0.510796
+  type: 'test'
+  ...
+# Subtest: renderBuilderGoalClientStatus: degraded catalog warning is shown without an account
+ok 35 - renderBuilderGoalClientStatus: degraded catalog warning is shown without an account
+  ---
+  duration_ms: 0.709033
+  type: 'test'
+  ...
+# Subtest: renderBuilderGoalClientStatus: degraded catalog warning is shown for a non-runnable account
+ok 36 - renderBuilderGoalClientStatus: degraded catalog warning is shown for a non-runnable account
+  ---
+  duration_ms: 0.6484
+  type: 'test'
+  ...
+# Subtest: renderBuilderGoalClientStatus: invalid JSON wins over missing credentials and executor fallback messaging
+ok 37 - renderBuilderGoalClientStatus: invalid JSON wins over missing credentials and executor fallback messaging
+  ---
+  duration_ms: 0.63256
+  type: 'test'
+  ...
+# Subtest: handleBuilderGoalWorldInput refreshes metadata, status, and button state
+ok 38 - handleBuilderGoalWorldInput refreshes metadata, status, and button state
+  ---
+  duration_ms: 0.51321
+  type: 'test'
+  ...
+# Subtest: handleBuilderGoalConfigInput marks dirty and refreshes metadata, status, and button state
+ok 39 - handleBuilderGoalConfigInput marks dirty and refreshes metadata, status, and button state
+  ---
+  duration_ms: 0.928924
+  type: 'test'
+  ...
+# Subtest: setBuilderGoalConfigEditor renders the canonical task/settings envelope
+ok 40 - setBuilderGoalConfigEditor renders the canonical task/settings envelope
+  ---
+  duration_ms: 1.03164
+  type: 'test'
+  ...
+# Subtest: parseBuilderGoalConfigInput accepts canonical envelopes and legacy raw settings
+ok 41 - parseBuilderGoalConfigInput accepts canonical envelopes and legacy raw settings
+  ---
+  duration_ms: 1.324533
+  type: 'test'
+  ...
+# Subtest: syncBuilderGoalConfigTaskKey preserves dirty settings while changing the task
+ok 42 - syncBuilderGoalConfigTaskKey preserves dirty settings while changing the task
+  ---
+  duration_ms: 0.822392
+  type: 'test'
+  ...
+# Subtest: manual task_key input synchronizes the task selector
+ok 43 - manual task_key input synchronizes the task selector
+  ---
+  duration_ms: 1.258148
+  type: 'test'
+  ...
+# Subtest: clean task selection without a saved run loads an envelope for that task
+ok 44 - clean task selection without a saved run loads an envelope for that task
+  ---
+  duration_ms: 2.551358
+  type: 'test'
+  ...
+# Subtest: task selection is reflected in the editor before account data arrives
+ok 45 - task selection is reflected in the editor before account data arrives
+  ---
+  duration_ms: 0.79256
+  type: 'test'
+  ...
+# Subtest: late saved-config response cannot overwrite a newer task selection
+ok 46 - late saved-config response cannot overwrite a newer task selection
+  ---
+  duration_ms: 3.144802
+  type: 'test'
+  ...
+# Subtest: manual edits invalidate an in-flight saved-config prefill
+ok 47 - manual edits invalidate an in-flight saved-config prefill
+  ---
+  duration_ms: 1.237107
+  type: 'test'
+  ...
+# Subtest: refreshBuilderGoalRuns awaits all loaders before rendering and recalculating buttons
+ok 48 - refreshBuilderGoalRuns awaits all loaders before rendering and recalculating buttons
+  ---
+  duration_ms: 1.041938
+  type: 'test'
+  ...
+# Subtest: refreshBuilderGoalRuns starts all four loaders before final rendering
+ok 49 - refreshBuilderGoalRuns starts all four loaders before final rendering
+  ---
+  duration_ms: 0.767034
+  type: 'test'
+  ...
+# Subtest: refreshBuilderGoalRuns final rendering waits for delayed loaders
+ok 50 - refreshBuilderGoalRuns final rendering waits for delayed loaders
+  ---
+  duration_ms: 1.025297
+  type: 'test'
+  ...
+# Subtest: refreshBuilderGoalRuns one rejected loader does not prevent other loaders from settling
+ok 51 - refreshBuilderGoalRuns one rejected loader does not prevent other loaders from settling
+  ---
+  duration_ms: 1.647457
+  type: 'test'
+  ...
+# Subtest: refreshBuilderGoalRuns one rejected loader still produces final status and button rendering
+ok 52 - refreshBuilderGoalRuns one rejected loader still produces final status and button rendering
+  ---
+  duration_ms: 1.102139
+  type: 'test'
+  ...
+# Subtest: refreshBuilderGoalRuns multiple rejected loaders still resolve the refresh method
+ok 53 - refreshBuilderGoalRuns multiple rejected loaders still resolve the refresh method
+  ---
+  duration_ms: 1.258192
+  type: 'test'
+  ...
+# Subtest: refreshBuilderGoalRuns no unhandled rejection escapes the refresh method
+ok 54 - refreshBuilderGoalRuns no unhandled rejection escapes the refresh method
+  ---
+  duration_ms: 1.126864
+  type: 'test'
+  ...
+# Subtest: builder goal bundle version markers agree on 40
+ok 55 - builder goal bundle version markers agree on 40
+  ---
+  duration_ms: 3.233396
+  type: 'test'
+  ...
+# Subtest: formatBuilderGoalStatus returns correct labels for all statuses
+ok 56 - formatBuilderGoalStatus returns correct labels for all statuses
+  ---
+  duration_ms: 0.527964
+  type: 'test'
+  ...
+# Subtest: formatBuilderGoalStatus distinguishes pending pause and resume controls
+ok 57 - formatBuilderGoalStatus distinguishes pending pause and resume controls
+  ---
+  duration_ms: 0.488923
+  type: 'test'
+  ...
+# Subtest: formatBuilderGoalStatus returns null for unknown status
+ok 58 - formatBuilderGoalStatus returns null for unknown status
+  ---
+  duration_ms: 0.369823
+  type: 'test'
+  ...
+# Subtest: formatBuilderGoalStatus maps RUNNING to a started label
+ok 59 - formatBuilderGoalStatus maps RUNNING to a started label
+  ---
+  duration_ms: 0.364997
+  type: 'test'
+  ...
+# Subtest: formatBuilderGoalStatus distinguishes published configuration from queued work
+ok 60 - formatBuilderGoalStatus distinguishes published configuration from queued work
+  ---
+  duration_ms: 0.244327
+  type: 'test'
+  ...
+# Subtest: describeBuilderGoalExecutorPhase reports configuration running
+ok 61 - describeBuilderGoalExecutorPhase reports configuration running
+  ---
+  duration_ms: 0.468494
+  type: 'test'
+  ...
+# Subtest: describeBuilderGoalExecutorPhase reports timeout-cancelled wording
+ok 62 - describeBuilderGoalExecutorPhase reports timeout-cancelled wording
+  ---
+  duration_ms: 0.284134
+  type: 'test'
+  ...
+# Subtest: describeBuilderGoalExecutorPhase prefers structured code/phase/reason
+ok 63 - describeBuilderGoalExecutorPhase prefers structured code/phase/reason
+  ---
+  duration_ms: 0.504642
+  type: 'test'
+  ...
+# Subtest: describeStructuredExecutorFailure returns null without structured fields
+ok 64 - describeStructuredExecutorFailure returns null without structured fields
+  ---
+  duration_ms: 0.269215
+  type: 'test'
+  ...
+# Subtest: describeBuilderGoalExecutorPhase reports applied config waiting for queue
+ok 65 - describeBuilderGoalExecutorPhase reports applied config waiting for queue
+  ---
+  duration_ms: 0.237224
+  type: 'test'
+  ...
+# Subtest: describeBuilderGoalExecutorPhase surfaces executor failure reason immediately
+ok 66 - describeBuilderGoalExecutorPhase surfaces executor failure reason immediately
+  ---
+  duration_ms: 0.272342
+  type: 'test'
+  ...
+# Subtest: describeBuilderGoalExecutorPhase flags stale pre-queue executor entry
+ok 67 - describeBuilderGoalExecutorPhase flags stale pre-queue executor entry
+  ---
+  duration_ms: 0.263208
+  type: 'test'
+  ...
+# Subtest: describeBuilderGoalExecutorPhase returns null for unrelated statuses
+ok 68 - describeBuilderGoalExecutorPhase returns null for unrelated statuses
+  ---
+  duration_ms: 0.292055
+  type: 'test'
+  ...
+# Subtest: builderGoalExecutorDiagnostics includes raw executor and failure fields
+ok 69 - builderGoalExecutorDiagnostics includes raw executor and failure fields
+  ---
+  duration_ms: 0.567247
+  type: 'test'
+  ...
+# Subtest: builderGoalExecutorDiagnostics omits executor when identical to status
+ok 70 - builderGoalExecutorDiagnostics omits executor when identical to status
+  ---
+  duration_ms: 0.271974
+  type: 'test'
+  ...
+# Subtest: elapsedSinceDispatchStarted returns null when dispatch time unknown
+ok 71 - elapsedSinceDispatchStarted returns null when dispatch time unknown
+  ---
+  duration_ms: 0.549197
+  type: 'test'
+  ...
+# Subtest: elapsedSinceDispatchStarted measures from dispatch start
+ok 72 - elapsedSinceDispatchStarted measures from dispatch start
+  ---
+  duration_ms: 0.895873
+  type: 'test'
+  ...
+# Subtest: renderBuilderGoalRunFailure prefers executor failure reason
+ok 73 - renderBuilderGoalRunFailure prefers executor failure reason
+  ---
+  duration_ms: 0.79651
+  type: 'test'
+  ...
+# Subtest: formatBuilderGoalStatus returns null for null/missing run
+ok 74 - formatBuilderGoalStatus returns null for null/missing run
+  ---
+  duration_ms: 0.362937
+  type: 'test'
+  ...
+# Subtest: formatBuilderGoalStatus handles case-insensitive status input
+ok 75 - formatBuilderGoalStatus handles case-insensitive status input
+  ---
+  duration_ms: 0.314174
+  type: 'test'
+  ...
+# Subtest: isActivePublishState returns true for all active pre-start statuses
+ok 76 - isActivePublishState returns true for all active pre-start statuses
+  ---
+  duration_ms: 0.475101
+  type: 'test'
+  ...
+# Subtest: isActivePublishState returns false for terminal/completed statuses
+ok 77 - isActivePublishState returns false for terminal/completed statuses
+  ---
+  duration_ms: 0.252129
+  type: 'test'
+  ...
+# Subtest: isActivePublishState returns false for null/missing run
+ok 78 - isActivePublishState returns false for null/missing run
+  ---
+  duration_ms: 0.274926
+  type: 'test'
+  ...
+# Subtest: BUILDER_GOAL_BUNDLE_VERSION is 41
+ok 79 - BUILDER_GOAL_BUNDLE_VERSION is 41
+  ---
+  duration_ms: 0.221079
+  type: 'test'
+  ...
+# Subtest: ACTIVE_PRE_START_STATUSES includes RECONCILING and AWAITING_EXECUTOR_CONFIRMATION
+ok 80 - ACTIVE_PRE_START_STATUSES includes RECONCILING and AWAITING_EXECUTOR_CONFIRMATION
+  ---
+  duration_ms: 0.218748
+  type: 'test'
+  ...
+# Subtest: PAUSED is active but labelled Task paused without running language
+ok 81 - PAUSED is active but labelled Task paused without running language
+  ---
+  duration_ms: 0.29429
+  type: 'test'
+  ...
+# Subtest: buildCatalogTaskLabel renders PAUSED not QUEUED and preserves rank
+ok 82 - buildCatalogTaskLabel renders PAUSED not QUEUED and preserves rank
+  ---
+  duration_ms: 0.497871
+  type: 'test'
+  ...
+# Subtest: BUILDER_GOAL_STATUS_LABELS contains all required labels
+ok 83 - BUILDER_GOAL_STATUS_LABELS contains all required labels
+  ---
+  duration_ms: 0.250458
+  type: 'test'
+  ...
+# Subtest: formatBuilderGoalLaunchPhase returns labels for all phases
+ok 84 - formatBuilderGoalLaunchPhase returns labels for all phases
+  ---
+  duration_ms: 0.431333
+  type: 'test'
+  ...
+# Subtest: launch account source no longer aborts with a browser-timeout message
+ok 85 - launch account source no longer aborts with a browser-timeout message
+  ---
+  duration_ms: 2.782707
+  type: 'test'
+  ...
+# Subtest: startBuilderGoalLaunchPolling persists the operation id and starts polling
+ok 86 - startBuilderGoalLaunchPolling persists the operation id and starts polling
+  ---
+  duration_ms: 0.766113
+  type: 'test'
+  ...
+# Subtest: stopBuilderGoalLaunchPolling clears the operation id and storage
+ok 87 - stopBuilderGoalLaunchPolling clears the operation id and storage
+  ---
+  duration_ms: 0.350675
+  type: 'test'
+  ...
+# Subtest: pollBuilderGoalLaunchOperation: 404 clears the operation and explains expiry
+ok 88 - pollBuilderGoalLaunchOperation: 404 clears the operation and explains expiry
+  ---
+  duration_ms: 0.87991
+  type: 'test'
+  ...
+# [AccountTaskPlanner] Launch Account clicked { accountId: 'hash-1', launcherMachineUuid: 'machine-1', world: 360 }
+# Subtest: handleBuilderGoalLaunchOperationView: READY refreshes data and re-enables launch
+ok 89 - handleBuilderGoalLaunchOperationView: READY refreshes data and re-enables launch
+  ---
+  duration_ms: 109.477176
+  type: 'test'
+  ...
+# Subtest: handleBuilderGoalLaunchOperationView: CONFLICT renders the server-provided reason
+ok 90 - handleBuilderGoalLaunchOperationView: CONFLICT renders the server-provided reason
+  ---
+  duration_ms: 0.483016
+  type: 'test'
+  ...
+# Subtest: handleBuilderGoalLaunchOperationView: FAILED renders server reason without claiming launcher timeout
+ok 91 - handleBuilderGoalLaunchOperationView: FAILED renders server reason without claiming launcher timeout
+  ---
+  duration_ms: 0.341298
+  type: 'test'
+  ...
+# Subtest: handleBuilderGoalLaunchOperationView: build failure renders build-failed message and log path
+ok 92 - handleBuilderGoalLaunchOperationView: build failure renders build-failed message and log path
+  ---
+  duration_ms: 0.3475
+  type: 'test'
+  ...
+# Subtest: handleBuilderGoalLaunchOperationView: process-exit failure does not render the build-failed message
+ok 93 - handleBuilderGoalLaunchOperationView: process-exit failure does not render the build-failed message
+  ---
+  duration_ms: 0.321961
+  type: 'test'
+  ...
+# Subtest: handleBuilderGoalLaunchOperationView: active phase renders the real phase message
+ok 94 - handleBuilderGoalLaunchOperationView: active phase renders the real phase message
+  ---
+  duration_ms: 0.57301
+  type: 'test'
+  ...
+# Subtest: updateBuilderGoalRunButtonState keeps Launch and Run disabled while a launch operation is active
+ok 95 - updateBuilderGoalRunButtonState keeps Launch and Run disabled while a launch operation is active
+  ---
+  duration_ms: 0.806759
+  type: 'test'
+  ...
+# Subtest: updateBuilderGoalRunButtonState re-enables Launch and Run when no operation is active
+ok 96 - updateBuilderGoalRunButtonState re-enables Launch and Run when no operation is active
+  ---
+  duration_ms: 0.473314
+  type: 'test'
+  ...
+# Subtest: launchBuilderGoalAccount awaits refresh for an immediate READY response
+ok 97 - launchBuilderGoalAccount awaits refresh for an immediate READY response
+  ---
+  duration_ms: 1.98572
+  type: 'test'
+  ...
+# Subtest: Launch stays disabled while READY refresh is in flight
+ok 98 - Launch stays disabled while READY refresh is in flight
+  ---
+  duration_ms: 12.461522
+  type: 'test'
+  ...
+# Failed to refresh builder goal data after launch: Error: refresh failed
+#     at planner.loadBuilderGoalAccounts (/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/js/account-task-planner.test.js:1981:11)
+#     at AccountTaskPlanner.handleBuilderGoalLaunchOperationView (/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/main/resources/static/js/account-task-planner.js:3018:16)
+#     at TestContext.<anonymous> (/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/js/account-task-planner.test.js:1988:17)
+#     at Test.runInAsyncScope (node:async_hooks:214:14)
+#     at Test.run (node:internal/test_runner/test:1047:25)
+#     at Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+#     at Test.postRun (node:internal/test_runner/test:1173:19)
+#     at Test.run (node:internal/test_runner/test:1101:12)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [AccountTaskPlanner] Builder Goal refresh loader failed Error: accounts down
+#     at AccountTaskPlanner.loadBuilderGoalAccounts (/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/js/account-task-planner.test.js:2016:13)
+#     at AccountTaskPlanner.refreshBuilderGoalRuns (/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/main/resources/static/js/account-task-planner.js:1922:12)
+#     at TestContext.<anonymous> (/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/js/account-task-planner.test.js:2022:17)
+#     at Test.runInAsyncScope (node:async_hooks:214:14)
+#     at Test.run (node:internal/test_runner/test:1047:25)
+#     at Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+#     at Test.postRun (node:internal/test_runner/test:1173:19)
+#     at Test.run (node:internal/test_runner/test:1101:12)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# Subtest: Publish stays disabled while READY refresh is in flight
+ok 99 - Publish stays disabled while READY refresh is in flight
+  ---
+  duration_ms: 11.733282
+  type: 'test'
+  ...
+# Subtest: READY refresh success clears the refresh-required gate
+ok 100 - READY refresh success clears the refresh-required gate
+  ---
+  duration_ms: 0.782453
+  type: 'test'
+  ...
+# Subtest: READY refresh failure gates Publish behind a manual refresh
+ok 101 - READY refresh failure gates Publish behind a manual refresh
+  ---
+  duration_ms: 4.223255
+  type: 'test'
+  ...
+# Subtest: manual refresh clears the refresh-required gate
+ok 102 - manual refresh clears the refresh-required gate
+  ---
+  duration_ms: 0.686528
+  type: 'test'
+  ...
+# Subtest: manual refresh keeps the gate when a core loader fails
+ok 103 - manual refresh keeps the gate when a core loader fails
+  ---
+  duration_ms: 1.078497
+  type: 'test'
+  ...
+# Subtest: late fetch response is discarded after polling stops
+ok 104 - late fetch response is discarded after polling stops
+  ---
+  duration_ms: 0.566801
+  type: 'test'
+  ...
+# Subtest: late JSON parse result is discarded after polling stops
+ok 105 - late JSON parse result is discarded after polling stops
+  ---
+  duration_ms: 4.777492
+  type: 'test'
+  ...
+# Subtest: late fetch rejection is discarded after polling stops
+ok 106 - late fetch rejection is discarded after polling stops
+  ---
+  duration_ms: 0.693532
+  type: 'test'
+  ...
+# Subtest: a newer generation supersedes an in-flight READY refresh
+ok 107 - a newer generation supersedes an in-flight READY refresh
+  ---
+  duration_ms: 1.042293
+  type: 'test'
+  ...
+# Subtest: scheduleNextBuilderGoalLaunchPoll keeps a single timeout chain
+ok 108 - scheduleNextBuilderGoalLaunchPoll keeps a single timeout chain
+  ---
+  duration_ms: 0.772655
+  type: 'test'
+  ...
+# Subtest: backoff reaches but does not exceed 30 seconds
+ok 109 - backoff reaches but does not exceed 30 seconds
+  ---
+  duration_ms: 1.112766
+  type: 'test'
+  ...
+# Subtest: backoff resets after a successful poll
+ok 110 - backoff resets after a successful poll
+  ---
+  duration_ms: 0.685443
+  type: 'test'
+  ...
+# Subtest: FAILED restores Launch control and clears storage exactly once
+ok 111 - FAILED restores Launch control and clears storage exactly once
+  ---
+  duration_ms: 0.411746
+  type: 'test'
+  ...
+# Subtest: CONFLICT restores Launch control and renders server reason exactly once
+ok 112 - CONFLICT restores Launch control and renders server reason exactly once
+  ---
+  duration_ms: 0.361495
+  type: 'test'
+  ...
+# Subtest: constructor initializes and restores exact-run tracker state
+ok 113 - constructor initializes and restores exact-run tracker state
+  ---
+  duration_ms: 0.915576
+  type: 'test'
+  ...
+# Subtest: exact-run poll processes its first response and uses the server status URL
+ok 114 - exact-run poll processes its first response and uses the server status URL
+  ---
+  duration_ms: 1.883125
+  type: 'test'
+  ...
+# Subtest: exact-run generic FAILED state is rendered as failure, not dispatch success
+ok 115 - exact-run generic FAILED state is rendered as failure, not dispatch success
+  ---
+  duration_ms: 0.79994
+  type: 'test'
+  ...
+# Subtest: exact-run ACCEPTED/QUEUED keeps tracking and never says "started"
+ok 116 - exact-run ACCEPTED/QUEUED keeps tracking and never says "started"
+  ---
+  duration_ms: 0.627589
+  type: 'test'
+  ...
+# Subtest: exact-run RUNNING with task started displays "Task started"
+ok 117 - exact-run RUNNING with task started displays "Task started"
+  ---
+  duration_ms: 0.650178
+  type: 'test'
+  ...
+# Subtest: exact-run RUNNING without a confirmed start keeps tracking
+ok 118 - exact-run RUNNING without a confirmed start keeps tracking
+  ---
+  duration_ms: 0.596039
+  type: 'test'
+  ...
+# Subtest: exact-run PAUSED remains active, renders paused phase, and never claims running
+ok 119 - exact-run PAUSED remains active, renders paused phase, and never claims running
+  ---
+  duration_ms: 0.687237
+  type: 'test'
+  ...
+# Subtest: exact-run COMPLETED is terminal success
+ok 120 - exact-run COMPLETED is terminal success
+  ---
+  duration_ms: 0.685091
+  type: 'test'
+  ...
+# Subtest: Builder Goal structured start failures prefer safe details and retain trace metadata
+ok 121 - Builder Goal structured start failures prefer safe details and retain trace metadata
+  ---
+  duration_ms: 0.670385
+  type: 'test'
+  ...
+# Subtest: Builder Goal non-JSON failure falls back to HTTP status
+ok 122 - Builder Goal non-JSON failure falls back to HTTP status
+  ---
+  duration_ms: 0.331414
+  type: 'test'
+  ...
+# Subtest: compile recovery panel exposes safe same-screen actions without a host path
+ok 123 - compile recovery panel exposes safe same-screen actions without a host path
+  ---
+  duration_ms: 0.523525
+  type: 'test'
+  ...
+# Subtest: compile recovery renders a reviewable escaped patch plan
+ok 124 - compile recovery renders a reviewable escaped patch plan
+  ---
+  duration_ms: 0.718193
+  type: 'test'
+  ...
+# Subtest: Record this task copies the current planner config without publishing or launching
+ok 125 - Record this task copies the current planner config without publishing or launching
+  ---
+  duration_ms: 13.780778
+  type: 'test'
+  ...
+# Subtest: quest export without task metadata has empty settings
+ok 126 - quest export without task metadata has empty settings
+  ---
+  duration_ms: 0.528808
+  type: 'test'
+  ...
+# Subtest: explicit empty settings wins over nested metadata and preserves explicit unknown settings
+ok 127 - explicit empty settings wins over nested metadata and preserves explicit unknown settings
+  ---
+  duration_ms: 0.429425
+  type: 'test'
+  ...
+# Subtest: nested settings unwrap while legacy metadata excludes transport fields
+ok 128 - nested settings unwrap while legacy metadata excludes transport fields
+  ---
+  duration_ms: 0.787546
+  type: 'test'
+  ...
+# Subtest: malformed explicit settings do not fall back to another payload
+ok 129 - malformed explicit settings do not fall back to another payload
+  ---
+  duration_ms: 0.546652
+  type: 'test'
+  ...
+# Subtest: Planner Publish human starts recording inline with no catalog redirect
+ok 130 - Planner Publish human starts recording inline with no catalog redirect
+  ---
+  duration_ms: 3.478161
+  type: 'test'
+  ...
+# Subtest: Planner Publish engine starts recording inline with no catalog redirect
+ok 131 - Planner Publish engine starts recording inline with no catalog redirect
+  ---
+  duration_ms: 1.19465
+  type: 'test'
+  ...
+# Subtest: load never carries persisted tokens
+ok 132 - load never carries persisted tokens
+  ---
+  duration_ms: 5.431655
+  type: 'test'
+  ...
+# Subtest: persist drops token fields defensively
+ok 133 - persist drops token fields defensively
+  ---
+  duration_ms: 0.7845
+  type: 'test'
+  ...
+# Subtest: beginBatch persists complete payload and idempotency key, and is idempotent
+ok 134 - beginBatch persists complete payload and idempotency key, and is idempotent
+  ---
+  duration_ms: 12.209657
+  type: 'test'
+  ...
+# Subtest: acceptBatch increments the sequence only after an accepted response
+ok 135 - acceptBatch increments the sequence only after an accepted response
+  ---
+  duration_ms: 0.883272
+  type: 'test'
+  ...
+# Subtest: acceptBatch reconciles authoritative next sequences from the server
+ok 136 - acceptBatch reconciles authoritative next sequences from the server
+  ---
+  duration_ms: 0.497069
+  type: 'test'
+  ...
+# Subtest: reconcileStatus reconciles captured state from completion_status
+ok 137 - reconcileStatus reconciles captured state from completion_status
+  ---
+  duration_ms: 0.42317
+  type: 'test'
+  ...
+# Subtest: beginCapture persists the pending payload for uncertain retry
+ok 138 - beginCapture persists the pending payload for uncertain retry
+  ---
+  duration_ms: 0.714596
+  type: 'test'
+  ...
+# Subtest: beginComplete persists the full completion payload and key
+ok 139 - beginComplete persists the full completion payload and key
+  ---
+  duration_ms: 0.748057
+  type: 'test'
+  ...
+# Subtest: a completed START operation does not acknowledge a pending completion
+ok 140 - a completed START operation does not acknowledge a pending completion
+  ---
+  duration_ms: 0.982536
+  type: 'test'
+  ...
+# Subtest: bindRun resets the SSE cursor to zero when a new conversation is created
+ok 141 - bindRun resets the SSE cursor to zero when a new conversation is created
+  ---
+  duration_ms: 1.162736
+  type: 'test'
+  ...
+# Subtest: bindRun keeps the SSE cursor when the same conversation is replayed
+ok 142 - bindRun keeps the SSE cursor when the same conversation is replayed
+  ---
+  duration_ms: 0.508641
+  type: 'test'
+  ...
+# Subtest: replaced streams cannot mutate cursor/output, close the active stream or reconnect
+ok 143 - replaced streams cannot mutate cursor/output, close the active stream or reconnect
+  ---
+  duration_ms: 21.260352
+  type: 'test'
+  ...
+# Subtest: AI Training tab exposes content-neutral catalog filters
+ok 144 - AI Training tab exposes content-neutral catalog filters
+  ---
+  duration_ms: 4.997018
+  type: 'test'
+  ...
+# Subtest: prototype graph area truthfully renders Not created
+ok 145 - prototype graph area truthfully renders Not created
+  ---
+  duration_ms: 0.409399
+  type: 'test'
+  ...
+# Subtest: catalog operations are selection-based and preserve no-control flags server-side
+ok 146 - catalog operations are selection-based and preserve no-control flags server-side
+  ---
+  duration_ms: 0.750091
+  type: 'test'
+  ...
+# Subtest: catalog utilities escape evidence and label inclusive ranges
+ok 147 - catalog utilities escape evidence and label inclusive ranges
+  ---
+  duration_ms: 0.681965
+  type: 'test'
+  ...
+# Subtest: restoration never restarts playback, recording, publication or assistant actions
+ok 148 - restoration never restarts playback, recording, publication or assistant actions
+  ---
+  duration_ms: 7.313895
+  type: 'test'
+  ...
+# Subtest: current graph rejects oversized, wrong-schema and control-enabled responses
+ok 149 - current graph rejects oversized, wrong-schema and control-enabled responses
+  ---
+  duration_ms: 1.832883
+  type: 'test'
+  ...
+# Subtest: unmapped ticks never fabricate active graph evidence
+ok 150 - unmapped ticks never fabricate active graph evidence
+  ---
+  duration_ms: 0.781204
+  type: 'test'
+  ...
+# Subtest: malformed nodes, tick ranges and edges cannot reach presentation state
+ok 151 - malformed nodes, tick ranges and edges cannot reach presentation state
+  ---
+  duration_ms: 1.772042
+  type: 'test'
+  ...
+# Subtest: identical status polls preserve the existing run-card DOM
+ok 152 - identical status polls preserve the existing run-card DOM
+  ---
+  duration_ms: 4.803274
+  type: 'test'
+  ...
+# Subtest: a successful retry restores cards after a polling error
+ok 153 - a successful retry restores cards after a polling error
+  ---
+  duration_ms: 0.53281
+  type: 'test'
+  ...
+# Subtest: replacement containers receive the current cards
+ok 154 - replacement containers receive the current cards
+  ---
+  duration_ms: 0.368239
+  type: 'test'
+  ...
+# Subtest: offscreen tick groups skip layout/paint during scrolling
+ok 155 - offscreen tick groups skip layout/paint during scrolling
+  ---
+  duration_ms: 6.082272
+  type: 'test'
+  ...
+# Subtest: debugger shell does not pin the background attachment
+ok 156 - debugger shell does not pin the background attachment
+  ---
+  duration_ms: 0.487983
+  type: 'test'
+  ...
+# Subtest: logs pane contains scroll chaining and reserves gutter
+ok 157 - logs pane contains scroll chaining and reserves gutter
+  ---
+  duration_ms: 0.853927
+  type: 'test'
+  ...
+# Subtest: logs scroll listener does not block the compositor
+ok 158 - logs scroll listener does not block the compositor
+  ---
+  duration_ms: 0.665757
+  type: 'test'
+  ...
+# Subtest: auto-follow steps the pane synchronously instead of animating
+ok 159 - auto-follow steps the pane synchronously instead of animating
+  ---
+  duration_ms: 0.858469
+  type: 'test'
+  ...
+# Subtest: tick highlight touches only highlighted nodes in the logs pane
+ok 160 - tick highlight touches only highlighted nodes in the logs pane
+  ---
+  duration_ms: 0.573036
+  type: 'test'
+  ...
+# Subtest: log pruning handles the static NodeList correctly
+ok 161 - log pruning handles the static NodeList correctly
+  ---
+  duration_ms: 0.651851
+  type: 'test'
+  ...
+# Subtest: recovery raw-log mirror is capped so re-renders stay cheap
+ok 162 - recovery raw-log mirror is capped so re-renders stay cheap
+  ---
+  duration_ms: 0.438077
+  type: 'test'
+  ...
+# Subtest: a 100-log burst updates one card once and includes prior history
+ok 163 - a 100-log burst updates one card once and includes prior history
+  ---
+  duration_ms: 5.404516
+  type: 'test'
+  ...
+# Subtest: batch updates remain separate for different ticks and unticked logs
+ok 164 - batch updates remain separate for different ticks and unticked logs
+  ---
+  duration_ms: 5.062681
+  type: 'test'
+  ...
+# Subtest: filtered-only traffic still caps history without touching cards
+ok 165 - filtered-only traffic still caps history without touching cards
+  ---
+  duration_ms: 3.570691
+  type: 'test'
+  ...
+# Subtest: queued live logs cannot render after switching to replay
+ok 166 - queued live logs cannot render after switching to replay
+  ---
+  duration_ms: 2.037241
+  type: 'test'
+  ...
+# Subtest: SESSION_CREATED identity includes window/account/session/run and deduplicates exact repeats
+ok 167 - SESSION_CREATED identity includes window/account/session/run and deduplicates exact repeats
+  ---
+  duration_ms: 4.897203
+  type: 'test'
+  ...
+# Subtest: stale generations and aborted requests cannot apply
+ok 168 - stale generations and aborted requests cannot apply
+  ---
+  duration_ms: 0.536294
+  type: 'test'
+  ...
+# Subtest: recording transitions are generation-aware and notifications are once per id
+ok 169 - recording transitions are generation-aware and notifications are once per id
+  ---
+  duration_ms: 0.695734
+  type: 'test'
+  ...
+# Subtest: debugger exposes the operator workspaces in workflow order
+ok 170 - debugger exposes the operator workspaces in workflow order
+  ---
+  duration_ms: 8.568542
+  type: 'test'
+  ...
+# Subtest: debugger workspace template keeps element ids unique
+ok 171 - debugger workspace template keeps element ids unique
+  ---
+  duration_ms: 1.40135
+  type: 'test'
+  ...
+# Subtest: workspace navigation synchronizes live and replay modes
+ok 172 - workspace navigation synchronizes live and replay modes
+  ---
+  duration_ms: 0.667295
+  type: 'test'
+  ...
+# Subtest: live mode switch is idempotent and always syncs the viewport
+ok 173 - live mode switch is idempotent and always syncs the viewport
+  ---
+  duration_ms: 0.59618
+  type: 'test'
+  ...
+# Subtest: live/replay toggle stays clickable in live and replays workspaces
+ok 174 - live/replay toggle stays clickable in live and replays workspaces
+  ---
+  duration_ms: 0.904539
+  type: 'test'
+  ...
+# Subtest: recovery exit restores the previous workspace instead of always using runs
+ok 175 - recovery exit restores the previous workspace instead of always using runs
+  ---
+  duration_ms: 3.309678
+  type: 'test'
+  ...
+# Subtest: advanced systems are isolated in the developer workspace
+ok 176 - advanced systems are isolated in the developer workspace
+  ---
+  duration_ms: 0.661155
+  type: 'test'
+  ...
+# Subtest: AI Training is isolated as a first-class workspace
+ok 177 - AI Training is isolated as a first-class workspace
+  ---
+  duration_ms: 0.407203
+  type: 'test'
+  ...
+# Subtest: createEmptyShadowState returns a fresh, disconnected state
+ok 178 - createEmptyShadowState returns a fresh, disconnected state
+  ---
+  duration_ms: 7.70046
+  type: 'test'
+  ...
+# Subtest: mergeHistoryIntoState rejects decisions from a different session
+ok 179 - mergeHistoryIntoState rejects decisions from a different session
+  ---
+  duration_ms: 1.254105
+  type: 'test'
+  ...
+# Subtest: same session with different runs do not deduplicate each other
+ok 180 - same session with different runs do not deduplicate each other
+  ---
+  duration_ms: 0.885704
+  type: 'test'
+  ...
+# Subtest: a stale old-session history response can never suppress new live decisions
+ok 181 - a stale old-session history response can never suppress new live decisions
+  ---
+  duration_ms: 0.530055
+  type: 'test'
+  ...
+# Subtest: old-run high ticks cannot suppress new-run tick zero
+ok 182 - old-run high ticks cannot suppress new-run tick zero
+  ---
+  duration_ms: 0.631676
+  type: 'test'
+  ...
+# Subtest: history rejects mismatched run ids
+ok 183 - history rejects mismatched run ids
+  ---
+  duration_ms: 0.46658
+  type: 'test'
+  ...
+# Subtest: legacy history never merges into a run-keyed state
+ok 184 - legacy history never merges into a run-keyed state
+  ---
+  duration_ms: 0.700607
+  type: 'test'
+  ...
+# Subtest: mergeHistoryIntoState deduplicates by (shadowRunId, tick)
+ok 185 - mergeHistoryIntoState deduplicates by (shadowRunId, tick)
+  ---
+  duration_ms: 0.809914
+  type: 'test'
+  ...
+# Subtest: mergeHistoryIntoState keeps the newest decision as latest
+ok 186 - mergeHistoryIntoState keeps the newest decision as latest
+  ---
+  duration_ms: 1.250565
+  type: 'test'
+  ...
+# Subtest: mergeLiveDecisionIntoState rejects a decision for a non-matching session filter
+ok 187 - mergeLiveDecisionIntoState rejects a decision for a non-matching session filter
+  ---
+  duration_ms: 2.072603
+  type: 'test'
+  ...
+# Subtest: mergeLiveDecisionIntoState rejects a decision for a non-matching tracked run
+ok 188 - mergeLiveDecisionIntoState rejects a decision for a non-matching tracked run
+  ---
+  duration_ms: 0.709083
+  type: 'test'
+  ...
+# Subtest: mergeLiveDecisionIntoState rejects decisions not newer than the latest tick
+ok 189 - mergeLiveDecisionIntoState rejects decisions not newer than the latest tick
+  ---
+  duration_ms: 0.485404
+  type: 'test'
+  ...
+# Subtest: mergeLiveDecisionIntoState advances predicted and abstained counters
+ok 190 - mergeLiveDecisionIntoState advances predicted and abstained counters
+  ---
+  duration_ms: 0.495429
+  type: 'test'
+  ...
+# Subtest: mergeLiveDecisionIntoState binds the sessionId and shadowRunId on the first accepted decision
+ok 191 - mergeLiveDecisionIntoState binds the sessionId and shadowRunId on the first accepted decision
+  ---
+  duration_ms: 0.363454
+  type: 'test'
+  ...
+# Subtest: mergeLiveDecisionIntoState rejects a message with a missing session or run ID
+ok 192 - mergeLiveDecisionIntoState rejects a message with a missing session or run ID
+  ---
+  duration_ms: 0.431699
+  type: 'test'
+  ...
+# Subtest: mergeLiveDecisionIntoState rejects a wrong message type
+ok 193 - mergeLiveDecisionIntoState rejects a wrong message type
+  ---
+  duration_ms: 0.357773
+  type: 'test'
+  ...
+# Subtest: mergeLiveDecisionIntoState rejects an unknown status without bumping abstained
+ok 194 - mergeLiveDecisionIntoState rejects an unknown status without bumping abstained
+  ---
+  duration_ms: 0.353755
+  type: 'test'
+  ...
+# Subtest: tick zero is accepted as a valid tick
+ok 195 - tick zero is accepted as a valid tick
+  ---
+  duration_ms: 0.310331
+  type: 'test'
+  ...
+# Subtest: a negative or non-numeric tick is rejected
+ok 196 - a negative or non-numeric tick is rejected
+  ---
+  duration_ms: 0.382489
+  type: 'test'
+  ...
+# Subtest: duplicate live decisions do not advance counters (no revision for the caller)
+ok 197 - duplicate live decisions do not advance counters (no revision for the caller)
+  ---
+  duration_ms: 0.351568
+  type: 'test'
+  ...
+# Subtest: history never changes processed/predicted/abstained
+ok 198 - history never changes processed/predicted/abstained
+  ---
+  duration_ms: 0.413426
+  type: 'test'
+  ...
+# Subtest: status without a target session or run does not hydrate counters
+ok 199 - status without a target session or run does not hydrate counters
+  ---
+  duration_ms: 0.984832
+  type: 'test'
+  ...
+# Subtest: status without a target session or run does not raise latestTick
+ok 200 - status without a target session or run does not raise latestTick
+  ---
+  duration_ms: 0.404066
+  type: 'test'
+  ...
+# Subtest: exact status merge requires both identifiers
+ok 201 - exact status merge requires both identifiers
+  ---
+  duration_ms: 0.423798
+  type: 'test'
+  ...
+# Subtest: a backend session differing from the requested target is rejected
+ok 202 - a backend session differing from the requested target is rejected
+  ---
+  duration_ms: 0.370633
+  type: 'test'
+  ...
+# Subtest: a backend run differing from the requested target is rejected
+ok 203 - a backend run differing from the requested target is rejected
+  ---
+  duration_ms: 1.134424
+  type: 'test'
+  ...
+# Subtest: a target differing from the currently tracked session or run is rejected
+ok 204 - a target differing from the currently tracked session or run is rejected
+  ---
+  duration_ms: 0.658599
+  type: 'test'
+  ...
+# Subtest: matching target/status/state hydrates counters
+ok 205 - matching target/status/state hydrates counters
+  ---
+  duration_ms: 0.753947
+  type: 'test'
+  ...
+# Subtest: stale live revision preserves local counters while global fields still apply
+ok 206 - stale live revision preserves local counters while global fields still apply
+  ---
+  duration_ms: 0.757944
+  type: 'test'
+  ...
+# Subtest: global model fields apply despite rejected session fields
+ok 207 - global model fields apply despite rejected session fields
+  ---
+  duration_ms: 0.85051
+  type: 'test'
+  ...
+# Subtest: global persistence fields apply despite rejected session fields
+ok 208 - global persistence fields apply despite rejected session fields
+  ---
+  duration_ms: 0.790974
+  type: 'test'
+  ...
+# Subtest: persistence abandoned metric renders safely
+ok 209 - persistence abandoned metric renders safely
+  ---
+  duration_ms: 0.713452
+  type: 'test'
+  ...
+# Subtest: switching sessions and runs resets all session-scoped data
+ok 210 - switching sessions and runs resets all session-scoped data
+  ---
+  duration_ms: 0.784258
+  type: 'test'
+  ...
+# Subtest: old run history/status responses cannot affect the new run
+ok 211 - old run history/status responses cannot affect the new run
+  ---
+  duration_ms: 0.741463
+  type: 'test'
+  ...
+# Subtest: status-before-live ordering keeps counters monotonic
+ok 212 - status-before-live ordering keeps counters monotonic
+  ---
+  duration_ms: 1.089268
+  type: 'test'
+  ...
+# Subtest: live-before-status ordering (delayed status) does not roll back counters
+ok 213 - live-before-status ordering (delayed status) does not roll back counters
+  ---
+  duration_ms: 0.669292
+  type: 'test'
+  ...
+# Subtest: selectActiveRun returns null for an empty runs list
+ok 214 - selectActiveRun returns null for an empty runs list
+  ---
+  duration_ms: 0.657751
+  type: 'test'
+  ...
+# Subtest: selectActiveRun returns null when no run is marked active
+ok 215 - selectActiveRun returns null when no run is marked active
+  ---
+  duration_ms: 0.675443
+  type: 'test'
+  ...
+# Subtest: selectActiveRun returns the single explicitly active run
+ok 216 - selectActiveRun returns the single explicitly active run
+  ---
+  duration_ms: 5.907823
+  type: 'test'
+  ...
+# Subtest: selectActiveRun never selects legacy history silently
+ok 217 - selectActiveRun never selects legacy history silently
+  ---
+  duration_ms: 0.541005
+  type: 'test'
+  ...
+# Subtest: selectActiveRun tolerates a missing or malformed runs payload
+ok 218 - selectActiveRun tolerates a missing or malformed runs payload
+  ---
+  duration_ms: 0.561696
+  type: 'test'
+  ...
+# Subtest: an empty /runs response leaves the state unbound
+ok 219 - an empty /runs response leaves the state unbound
+  ---
+  duration_ms: 0.541797
+  type: 'test'
+  ...
+# Subtest: switching from session A to B clears A runs
+ok 220 - switching from session A to B clears A runs
+  ---
+  duration_ms: 0.706446
+  type: 'test'
+  ...
+# Subtest: switching runs within one session preserves the run list
+ok 221 - switching runs within one session preserves the run list
+  ---
+  duration_ms: 0.508246
+  type: 'test'
+  ...
+# Subtest: empty run discovery stores an empty current-session result
+ok 222 - empty run discovery stores an empty current-session result
+  ---
+  duration_ms: 0.684795
+  type: 'test'
+  ...
+# Subtest: late discovery for session A is ignored after switching to B
+ok 223 - late discovery for session A is ignored after switching to B
+  ---
+  duration_ms: 0.625258
+  type: 'test'
+  ...
+# Subtest: malformed run discovery cannot overwrite current state
+ok 224 - malformed run discovery cannot overwrite current state
+  ---
+  duration_ms: 0.992673
+  type: 'test'
+  ...
+# Subtest: ingest builds nodes in observed order and deduplicates repeats
+ok 225 - ingest builds nodes in observed order and deduplicates repeats
+  ---
+  duration_ms: 7.214703
+  type: 'test'
+  ...
+# Subtest: switching session, run, or client clears the graph
+ok 226 - switching session, run, or client clears the graph
+  ---
+  duration_ms: 1.669317
+  type: 'test'
+  ...
+# Subtest: node key prefers declared graph node, then symbol, then event
+ok 227 - node key prefers declared graph node, then symbol, then event
+  ---
+  duration_ms: 0.402019
+  type: 'test'
+  ...
+# Subtest: node key scopes declared nodes by graph id
+ok 228 - node key scopes declared nodes by graph id
+  ---
+  duration_ms: 0.658883
+  type: 'test'
+  ...
+# Subtest: build or snapshot change clears the graph
+ok 229 - build or snapshot change clears the graph
+  ---
+  duration_ms: 0.87249
+  type: 'test'
+  ...
+# Subtest: absent build fields do not evict an established binding
+ok 230 - absent build fields do not evict an established binding
+  ---
+  duration_ms: 0.51856
+  type: 'test'
+  ...
+# Subtest: runtime drop summaries surface in coverage status
+ok 231 - runtime drop summaries surface in coverage status
+  ---
+  duration_ms: 1.197083
+  type: 'test'
+  ...
+# Subtest: decision gates and failures attach to nodes with evidence
+ok 232 - decision gates and failures attach to nodes with evidence
+  ---
+  duration_ms: 1.201383
+  type: 'test'
+  ...
+# Subtest: history is bounded and drops are reported
+ok 233 - history is bounded and drops are reported
+  ---
+  duration_ms: 1.610036
+  type: 'test'
+  ...
+# Subtest: freeze accumulates pending count and resume resets it
+ok 234 - freeze accumulates pending count and resume resets it
+  ---
+  duration_ms: 1.921143
+  type: 'test'
+  ...
+# Subtest: recent path carries observed edges between distinct nodes
+ok 235 - recent path carries observed edges between distinct nodes
+  ---
+  duration_ms: 0.774937
+  type: 'test'
+  ...
+# Subtest: status text covers waiting, live, frozen, and partial coverage
+ok 236 - status text covers waiting, live, frozen, and partial coverage
+  ---
+  duration_ms: 0.668466
+  type: 'test'
+  ...
+# Subtest: chip classes mark latest, failure, and selection
+ok 237 - chip classes mark latest, failure, and selection
+  ---
+  duration_ms: 0.752303
+  type: 'test'
+  ...
+# Subtest: ambiguous mappings are preserved on the node
+ok 238 - ambiguous mappings are preserved on the node
+  ---
+  duration_ms: 0.517255
+  type: 'test'
+  ...
+# Subtest: freeze retains displayed nodes, evidence and path until resume
+ok 239 - freeze retains displayed nodes, evidence and path until resume
+  ---
+  duration_ms: 3.556396
+  type: 'test'
+  ...
+# Subtest: a new run clears a frozen display and resumes following
+ok 240 - a new run clears a frozen display and resumes following
+  ---
+  duration_ms: 0.669024
+  type: 'test'
+  ...
+# Subtest: drop-only and truncated batches report partial coverage even without refs
+ok 241 - drop-only and truncated batches report partial coverage even without refs
+  ---
+  duration_ms: 0.513895
+  type: 'test'
+  ...
+# Subtest: graph keys cannot collide through separator characters
+ok 242 - graph keys cannot collide through separator characters
+  ---
+  duration_ms: 0.434533
+  type: 'test'
+  ...
+# Subtest: renders only the selected session, and requires explicit control on a fresh frame
+ok 243 - renders only the selected session, and requires explicit control on a fresh frame
+  ---
+  duration_ms: 16.578185
+  type: 'test'
+  ...
+# Subtest: reconnect resets sequence and fences callbacks from old sockets
+ok 244 - reconnect resets sequence and fences callbacks from old sockets
+  ---
+  duration_ms: 3.899524
+  type: 'test'
+  ...
+# Subtest: one decode with only latest pending frame; old session completion cannot render
+ok 245 - one decode with only latest pending frame; old session completion cannot render
+  ---
+  duration_ms: 4.622037
+  type: 'test'
+  ...
+# Subtest: stream rotation fences an in-flight decode and disables control
+ok 246 - stream rotation fences an in-flight decode and disables control
+  ---
+  duration_ms: 2.489274
+  type: 'test'
+  ...
+# Subtest: maps only image content, excluding letterbox and pillarbox bars
+ok 247 - maps only image content, excluding letterbox and pillarbox bars
+  ---
+  duration_ms: 3.450499
+  type: 'test'
+  ...
+# Subtest: campaign copies settings and keeps human/style/account distinct
+ok 248 - campaign copies settings and keeps human/style/account distinct
+  ---
+  duration_ms: 7.933454
+  type: 'test'
+  ...
+# Subtest: attempt denominators retain rejected recordings and unsuccessful tasks
+ok 249 - attempt denominators retain rejected recordings and unsuccessful tasks
+  ---
+  duration_ms: 0.788708
+  type: 'test'
+  ...
+# Subtest: unsupported task and invalid repetition duration fail before submission
+ok 250 - unsupported task and invalid repetition duration fail before submission
+  ---
+  duration_ms: 1.195283
+  type: 'test'
+  ...
+# Subtest: comparison discloses unknown scope, display mismatch and distance mismatch
+ok 251 - comparison discloses unknown scope, display mismatch and distance mismatch
+  ---
+  duration_ms: 5.528111
+  type: 'test'
+  ...
+# Subtest: movement/action linking requires explicit acknowledged bot evidence and exact dispatch id
+ok 252 - movement/action linking requires explicit acknowledged bot evidence and exact dispatch id
+  ---
+  duration_ms: 4.619515
+  type: 'test'
+  ...
+# Subtest: positions require actual finite recorded coordinates; menu parameters are not pixels
+ok 253 - positions require actual finite recorded coordinates; menu parameters are not pixels
+  ---
+  duration_ms: 3.572574
+  type: 'test'
+  ...
+# Subtest: OSRS target name and world coordinates use captured typed evidence only
+ok 254 - OSRS target name and world coordinates use captured typed evidence only
+  ---
+  duration_ms: 0.872367
+  type: 'test'
+  ...
+# Subtest: inspector loads a direct recording URL, renders safe text, selects coordinates and pages actions
+ok 255 - inspector loads a direct recording URL, renders safe text, selects coordinates and pages actions
+  ---
+  duration_ms: 11.905811
+  type: 'test'
+  ...
+# Subtest: geometry requires verified versioned context and preserves compound rings
+ok 256 - geometry requires verified versioned context and preserves compound rings
+  ---
+  duration_ms: 0.9995
+  type: 'test'
+  ...
+# Subtest: coordinate projection preserves whole-canvas aspect ratio and letterboxing
+ok 257 - coordinate projection preserves whole-canvas aspect ratio and letterboxing
+  ---
+  duration_ms: 0.616847
+  type: 'test'
+  ...
+# Subtest: video timing needs captured evidence and correction cannot invent a missing anchor
+ok 258 - video timing needs captured evidence and correction cannot invent a missing anchor
+  ---
+  duration_ms: 0.581586
+  type: 'test'
+  ...
+# Subtest: path previews never bridge origins, generated movements, presses or long gaps
+ok 259 - path previews never bridge origins, generated movements, presses or long gaps
+  ---
+  duration_ms: 5.582397
+  type: 'test'
+  ...
+# Subtest: invalid coordinates break a preview rather than joining surrounding points
+ok 260 - invalid coordinates break a preview rather than joining surrounding points
+  ---
+  duration_ms: 0.730126
+  type: 'test'
+  ...
+# Subtest: server preview groups retain hidden boundaries removed by sampling
+ok 261 - server preview groups retain hidden boundaries removed by sampling
+  ---
+  duration_ms: 0.483211
+  type: 'test'
+  ...
+# Subtest: selection requires complete saved labels and blocks pending edits and exclusions
+ok 262 - selection requires complete saved labels and blocks pending edits and exclusions
+  ---
+  duration_ms: 0.956517
+  type: 'test'
+  ...
+# Subtest: metrics distinguish absent or undefined evaluation from zero observed false positives
+ok 263 - metrics distinguish absent or undefined evaluation from zero observed false positives
+  ---
+  duration_ms: 0.996306
+  type: 'test'
+  ...
+# Subtest: job UUIDs work on LAN HTTP without crypto.randomUUID
+ok 264 - job UUIDs work on LAN HTTP without crypto.randomUUID
+  ---
+  duration_ms: 0.723765
+  type: 'test'
+  ...
+# Subtest: task/skill filters are normalized and query escaped
+ok 265 - task/skill filters are normalized and query escaped
+  ---
+  duration_ms: 95.84127
+  type: 'test'
+  ...
+# Subtest: dashboard saves labels and submits selected sessions to the actual job API
+ok 266 - dashboard saves labels and submits selected sessions to the actual job API
+  ---
+  duration_ms: 25.667153
+  type: 'test'
+  ...
+# Subtest: overlays align direction and distance without changing timing or joining movements
+ok 267 - overlays align direction and distance without changing timing or joining movements
+  ---
+  duration_ms: 1.912526
+  type: 'test'
+  ...
+# Subtest: human controls persist labels at start and update context without relabeling prior events
+ok 268 - human controls persist labels at start and update context without relabeling prior events
+  ---
+  duration_ms: 11.224066
+  type: 'test'
+  ...
+# Subtest: stop retains ownership until persisted receipt and reports incomplete loss truthfully
+ok 269 - stop retains ownership until persisted receipt and reports incomplete loss truthfully
+  ---
+  duration_ms: 0.89416
+  type: 'test'
+  ...
+# Subtest: task headings use automatic run identity and saved human labels
+ok 270 - task headings use automatic run identity and saved human labels
+  ---
+  duration_ms: 0.356524
+  type: 'test'
+  ...
+# Subtest: recording evidence separates annotations, runtime ownership and unknown metadata
+ok 271 - recording evidence separates annotations, runtime ownership and unknown metadata
+  ---
+  duration_ms: 0.553297
+  type: 'test'
+  ...
+# Subtest: human goal description only maps supported planner conditions
+ok 272 - human goal description only maps supported planner conditions
+  ---
+  duration_ms: 4.936233
+  type: 'test'
+  ...
+# Subtest: manual recording imports planner envelopes and preserves quest context with empty settings
+ok 273 - manual recording imports planner envelopes and preserves quest context with empty settings
+  ---
+  duration_ms: 3.761469
+  type: 'test'
+  ...
+# Subtest: manual recording imports copied task completion settings without sharing mutable input
+ok 274 - manual recording imports copied task completion settings without sharing mutable input
+  ---
+  duration_ms: 1.852554
+  type: 'test'
+  ...
+# Subtest: planner import creates a recording draft without publishing or starting the task
+ok 275 - planner import creates a recording draft without publishing or starting the task
+  ---
+  duration_ms: 1.261657
+  type: 'test'
+  ...
+# Subtest: legacy flat planner task imports its settings without transport metadata
+ok 276 - legacy flat planner task imports its settings without transport metadata
+  ---
+  duration_ms: 0.832101
+  type: 'test'
+  ...
+# Subtest: inline planner tracker finishes in place and cleans up polling
+ok 277 - inline planner tracker finishes in place and cleans up polling
+  ---
+  duration_ms: 20.371772
+  type: 'test'
+  ...
+# Subtest: newRequestId returns a non-empty unique identifier
+ok 278 - newRequestId returns a non-empty unique identifier
+  ---
+  duration_ms: 16.295119
+  type: 'test'
+  ...
+# Subtest: formatBytes scales units
+ok 279 - formatBytes scales units
+  ---
+  duration_ms: 0.713157
+  type: 'test'
+  ...
+# Subtest: formatLimits renders bounded limits
+ok 280 - formatLimits renders bounded limits
+  ---
+  duration_ms: 0.795195
+  type: 'test'
+  ...
+# Subtest: player proxy is pinned to the selected completed analysis
+ok 281 - player proxy is pinned to the selected completed analysis
+  ---
+  duration_ms: 0.604837
+  type: 'test'
+  ...
+# Subtest: describeSource never claims native ticks
+ok 282 - describeSource never claims native ticks
+  ---
+  duration_ms: 0.699224
+  type: 'test'
+  ...
+# Subtest: state persistence survives a storage implementation
+ok 283 - state persistence survives a storage implementation
+  ---
+  duration_ms: 0.750057
+  type: 'test'
+  ...
+# Subtest: state persistence degrades safely when storage is unavailable
+ok 284 - state persistence degrades safely when storage is unavailable
+  ---
+  duration_ms: 3.526849
+  type: 'test'
+  ...
+# Subtest: null taskArgs renders unknown even when the task key is known
+ok 285 - null taskArgs renders unknown even when the task key is known
+  ---
+  duration_ms: 5.154465
+  type: 'test'
+  ...
+# Subtest: missing taskArgs renders unknown
+ok 286 - missing taskArgs renders unknown
+  ---
+  duration_ms: 0.518529
+  type: 'test'
+  ...
+# Subtest: empty object renders none as a known run without args
+ok 287 - empty object renders none as a known run without args
+  ---
+  duration_ms: 0.469537
+  type: 'test'
+  ...
+# Subtest: populated args render a truncated preview with a full-value drill-down
+ok 288 - populated args render a truncated preview with a full-value drill-down
+  ---
+  duration_ms: 1.445872
+  type: 'test'
+  ...
+# Subtest: short args render inline without truncation
+ok 289 - short args render inline without truncation
+  ---
+  duration_ms: 0.495105
+  type: 'test'
+  ...
+# Subtest: settings hash suffix survives the null/empty/value states
+ok 290 - settings hash suffix survives the null/empty/value states
+  ---
+  duration_ms: 0.379015
+  type: 'test'
+  ...
+# Subtest: account view groups account into task sections
+ok 291 - account view groups account into task sections
+  ---
+  duration_ms: 4.126635
+  type: 'test'
+  ...
+# Subtest: task view groups task into recordings across all accounts
+ok 292 - task view groups task into recordings across all accounts
+  ---
+  duration_ms: 1.066556
+  type: 'test'
+  ...
+# Subtest: filters combine account and task before grouping
+ok 293 - filters combine account and task before grouping
+  ---
+  duration_ms: 1.55164
+  type: 'test'
+  ...
+# Subtest: labels fall back to script and unknown sentinels
+ok 294 - labels fall back to script and unknown sentinels
+  ---
+  duration_ms: 1.113098
+  type: 'test'
+  ...
+# Subtest: standalone replay page loads playable recording sessions, not only tick catalog entries
+ok 295 - standalone replay page loads playable recording sessions, not only tick catalog entries
+  ---
+  duration_ms: 4.846106
+  type: 'test'
+  ...
+# Subtest: catalog reads exhaust cursor pages so trees stay complete past 200 rows
+ok 296 - catalog reads exhaust cursor pages so trees stay complete past 200 rows
+  ---
+  duration_ms: 0.512255
+  type: 'test'
+  ...
+# Subtest: catalog groups account into task sections with unknown and none args states
+ok 297 - catalog groups account into task sections with unknown and none args states
+  ---
+  duration_ms: 0.814746
+  type: 'test'
+  ...
+# Subtest: selecting a replay assigns the canonical video URL to the player
+ok 298 - selecting a replay assigns the canonical video URL to the player
+  ---
+  duration_ms: 0.511922
+  type: 'test'
+  ...
+# Subtest: replay page has explicit readable control colors and visible playback status
+ok 299 - replay page has explicit readable control colors and visible playback status
+  ---
+  duration_ms: 0.666674
+  type: 'test'
+  ...
+# Subtest: standalone replay inline script parses
+ok 300 - standalone replay inline script parses
+  ---
+  duration_ms: 2.542179
+  type: 'test'
+  ...
+# Failed to load builder goal run timeline: Error: Timeline request failed with HTTP 503
+#     at AccountTaskPlanner.loadBuilderGoalRunTimeline (/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/main/resources/static/js/account-task-planner.js:1994:15)
+#     at async TestContext.<anonymous> (/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/src/test/js/sc260-run-timeline.test.js:210:5)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# Subtest: SC-260 active tracking statuses include RUNNING, PAUSED, and STOPPING
+ok 301 - SC-260 active tracking statuses include RUNNING, PAUSED, and STOPPING
+  ---
+  duration_ms: 4.558643
+  type: 'test'
+  ...
+# Subtest: SC-260 RUNNING runs keep polling instead of stopping the tracker
+ok 302 - SC-260 RUNNING runs keep polling instead of stopping the tracker
+  ---
+  duration_ms: 4.131787
+  type: 'test'
+  ...
+# Subtest: SC-260 timeline refresh is throttled to the configured interval
+ok 303 - SC-260 timeline refresh is throttled to the configured interval
+  ---
+  duration_ms: 0.614886
+  type: 'test'
+  ...
+# Subtest: SC-260 timeline events are ordered chronologically with id tie-breaks
+ok 304 - SC-260 timeline events are ordered chronologically with id tie-breaks
+  ---
+  duration_ms: 0.909114
+  type: 'test'
+  ...
+# Subtest: SC-260 timeline event types carry the SC-260 vocabulary labels
+ok 305 - SC-260 timeline event types carry the SC-260 vocabulary labels
+  ---
+  duration_ms: 0.691576
+  type: 'test'
+  ...
+# Subtest: SC-260 failure events render the durable failure contract fields
+ok 306 - SC-260 failure events render the durable failure contract fields
+  ---
+  duration_ms: 1.060479
+  type: 'test'
+  ...
+# Subtest: SC-260 risk events render the executor risk payload
+ok 307 - SC-260 risk events render the executor risk payload
+  ---
+  duration_ms: 0.679391
+  type: 'test'
+  ...
+# Subtest: SC-260 timeline refresh throttle guarantees an update within five seconds
+ok 308 - SC-260 timeline refresh throttle guarantees an update within five seconds
+  ---
+  duration_ms: 0.353255
+  type: 'test'
+  ...
+# Subtest: SC-260 non-ok timeline HTTP responses render a degraded state, not an empty timeline
+ok 309 - SC-260 non-ok timeline HTTP responses render a degraded state, not an empty timeline
+  ---
+  duration_ms: 8.276651
+  type: 'test'
+  ...
+# Subtest: SC-260 cancelled terminal branch performs the final timeline refresh
+ok 310 - SC-260 cancelled terminal branch performs the final timeline refresh
+  ---
+  duration_ms: 1.681422
+  type: 'test'
+  ...
+# Subtest: contract display retains exact build/commit/schema/capabilities as text
+ok 311 - contract display retains exact build/commit/schema/capabilities as text
+  ---
+  duration_ms: 20.82608
+  type: 'test'
+  ...
+# Subtest: failed contract diagnostics show unavailable without inventing readiness
+ok 312 - failed contract diagnostics show unavailable without inventing readiness
+  ---
+  duration_ms: 4.002422
+  type: 'test'
+  ...
+# Subtest: missing optional shadow disables only shadow and recomputes on client selection
+ok 313 - missing optional shadow disables only shadow and recomputes on client selection
+  ---
+  duration_ms: 3.434938
+  type: 'test'
+  ...
+# Subtest: missing video and managed execution disable only their dependent starts
+ok 314 - missing video and managed execution disable only their dependent starts
+  ---
+  duration_ms: 3.293918
+  type: 'test'
+  ...
+# Subtest: measured client artifact refusal exposes its code without disabling another domain
+ok 315 - measured client artifact refusal exposes its code without disabling another domain
+  ---
+  duration_ms: 3.455137
+  type: 'test'
+  ...
+# Subtest: SC-968 runtime requires Assistant acceptance and a real RuneLite capture
+ok 316 - SC-968 runtime requires Assistant acceptance and a real RuneLite capture
+  ---
+  duration_ms: 6.048871
+  type: 'test'
+  ...
+# Subtest: SC-968 login prompts wait until each native client has initialized
+ok 317 - SC-968 login prompts wait until each native client has initialized
+  ---
+  duration_ms: 1.282168
+  type: 'test'
+  ...
+# Subtest: SC-968 allows its owned candidate registry to compile before probing it
+ok 318 - SC-968 allows its owned candidate registry to compile before probing it
+  ---
+  duration_ms: 0.382638
+  type: 'test'
+  ...
+# Subtest: SC-968 keeps interactive clients available for asynchronous operator response
+ok 319 - SC-968 keeps interactive clients available for asynchronous operator response
+  ---
+  duration_ms: 0.586972
+  type: 'test'
+  ...
+# Subtest: SC-968 PowerShell helpers do not shadow the read-only automatic PID variable
+ok 320 - SC-968 PowerShell helpers do not shadow the read-only automatic PID variable
+  ---
+  duration_ms: 0.661363
+  type: 'test'
+  ...
+# Subtest: SC-968 candidate evidence uses and validates the signed nested manifest identity
+ok 321 - SC-968 candidate evidence uses and validates the signed nested manifest identity
+  ---
+  duration_ms: 0.680827
+  type: 'test'
+  ...
+# Subtest: SC-967 isolated candidate clones support tracked Windows long paths
+ok 322 - SC-967 isolated candidate clones support tracked Windows long paths
+  ---
+  duration_ms: 1.45274
+  type: 'test'
+  ...
+# Subtest: SC-968 Micro6 captures bind certified stabilization and source provenance
+ok 323 - SC-968 Micro6 captures bind certified stabilization and source provenance
+  ---
+  duration_ms: 0.674048
+  type: 'test'
+  ...
+# Subtest: SC-968 certified fixture identity matches the pass executor contract
+ok 324 - SC-968 certified fixture identity matches the pass executor contract
+  ---
+  duration_ms: 4.714462
+  type: 'test'
+  ...
+# Subtest: certified report bundles retain the raw servlet stream for bounded parsing
+ok 325 - certified report bundles retain the raw servlet stream for bounded parsing
+  ---
+  duration_ms: 1.951426
+  type: 'test'
+  ...
+# Subtest: managed run creation uses capture authentication, not the operator credential
+ok 326 - managed run creation uses capture authentication, not the operator credential
+  ---
+  duration_ms: 0.899129
+  type: 'test'
+  ...
+# Subtest: SC-968 entrypoint and manifests require all five runtime evidence documents
+ok 327 - SC-968 entrypoint and manifests require all five runtime evidence documents
+  ---
+  duration_ms: 0.562038
+  type: 'test'
+  ...
+# Subtest: SC-968 one-command wrapper uses real local roots and creates isolated signing material
+ok 328 - SC-968 one-command wrapper uses real local roots and creates isolated signing material
+  ---
+  duration_ms: 0.879526
+  type: 'test'
+  ...
+# Subtest: acceptance scripts stay parseable by Windows PowerShell 5.1
+ok 329 - acceptance scripts stay parseable by Windows PowerShell 5.1
+  ---
+  duration_ms: 49.222775
+  type: 'test'
+  ...
+1..329
+# tests 329
+# suites 0
+# pass 329
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2747.077426

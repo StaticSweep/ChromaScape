@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" tests="23" skipped="0" failures="0" errors="0" timestamp="2026-10-26T15:06:19.475Z" hostname="fedora" time="2.229">
+  <properties/>
+  <testcase name="anAbandonedAttemptIsUncertainAndNeverRelaunched()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="1.368"/>
+  <testcase name="disabledExecutionStagesNothing()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.019"/>
+  <testcase name="aCausalJobWithoutAPinnedProfileStagesNothing()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.016"/>
+  <testcase name="aResultThatCannotBeRecordedIsNeverReportedAndBecomesRecoverable()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.221"/>
+  <testcase name="aStagingFailureEndsTheAttemptWithoutLaunching()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.016"/>
+  <testcase name="theRequestComesFromTheSignedManifestAndClosure()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.03"/>
+  <testcase name="onlyBothVerdictsTogetherMakeARunCertifiable()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.055"/>
+  <testcase name="aLostHostIsUncertainAndARefusedStartRanNothing()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.059"/>
+  <testcase name="aCorruptStoreEntryStopsTheJobBeforeTheHost()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.015"/>
+  <testcase name="aRecoveryThatFailedReleasesItsClaim()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.045"/>
+  <testcase name="aDuplicateRequestReattachesToItsRecordedResultWithoutASecondLaunch()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.058"/>
+  <testcase name="aCandidateThatIsNotRegisteredNeverReachesTheHost()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.012"/>
+  <testcase name="aValidatedOkResultPassesButADevelopmentWorkerIsNotCertifiable()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.02"/>
+  <testcase name="onlyAnUncertainOrFailedAttemptOfTheSameProposalWithAJournalCanBeRecovered()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.026"/>
+  <testcase name="twoRecoveriesCanNeverBothContinueOneAttempt()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.025"/>
+  <testcase name="everyBundleFileIsStagedUnderItsDigest()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.02"/>
+  <testcase name="aReusedKeyWithChangedInputsConflicts()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.022"/>
+  <testcase name="aResultForAnotherRequestIsInvalid()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.018"/>
+  <testcase name="aFencedOwnerCannotRecordItsResult()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.028"/>
+  <testcase name="aFailedRecoverysDescendantPreventsAnAncestorFromLaunchingAgain()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.042"/>
+  <testcase name="aRecoveryIsANewFencedAttemptThatNamesThePreviousJournal()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.025"/>
+  <testcase name="aFaultReachesTheHostOnlyThroughTheTestSeam()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.022"/>
+  <testcase name="aRunningJobIdIsRefusedAndCanBeCancelled()" classname="com.chromascape.web.aiplayer.routine.service.CandidateExecutionJobServiceTest" time="0.026"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
