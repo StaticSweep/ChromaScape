@@ -6,6 +6,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.chromascape.testsupport.IsolatedPostgresTestDatabase;
+import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
+import com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository;
 import com.chromascape.web.gameplay.bootstrap.BootstrapApprovalStore.ApprovalView;
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import com.chromascape.web.recording.entity.RecordingSessionRepository;
@@ -30,6 +32,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -54,6 +57,7 @@ class BootstrapRestartRecoveryTest {
 
   @Autowired private BootstrapApprovalStore approvals;
   @Autowired private BootstrapRecordingCoordinator recordings;
+  @Autowired private DebugSessionRepository debugSessions;
   @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbc;
 
   @DynamicPropertySource
@@ -88,6 +92,14 @@ class BootstrapRestartRecoveryTest {
 
   @Test
   void recordingStartSurvivesRestartWithoutRedispatch() {
+    // The tick-bearing session must exist before the approved recording can bind to it.
+    debugSessions.saveAndFlush(
+        new DebugSession(
+            "session-owner-2",
+            "bootstrap-account",
+            "Fishing",
+            java.time.LocalDateTime.now(),
+            0L));
     jdbc.execute(
         "INSERT INTO ab_orchestration (orchestration_id, request_id, idempotency_key,"
             + " request_fingerprint, envelope_digest, source_type, mode, state, failure_code,"
@@ -132,7 +144,13 @@ class BootstrapRestartRecoveryTest {
   @EntityScan(
       basePackages = {
         "com.chromascape.web.gameplay.bootstrap",
-        "com.chromascape.web.gameplay.orchestration.accountbuilder"
+        "com.chromascape.web.gameplay.orchestration.accountbuilder",
+        "com.chromascape.web.debug.tickdebugger.entity"
+      })
+  @EnableJpaRepositories(
+      basePackages = {
+        "com.chromascape.web.gameplay.bootstrap",
+        "com.chromascape.web.debug.tickdebugger.entity"
       })
   @Import(JsonConfiguration.class)
   static class TestApplication {
@@ -169,9 +187,11 @@ class BootstrapRestartRecoveryTest {
     BootstrapRecordingCoordinator recordingCoordinator(
         EntityManager entityManager,
         RecordingService recordingService,
-        RecordingSessionRepository recordingSessionRepository) {
+        RecordingSessionRepository recordingSessionRepository,
+        DebugSessionRepository debugSessionRepository) {
       return new BootstrapRecordingCoordinator(
-          entityManager, recordingService, recordingSessionRepository, CLOCK);
+          entityManager, recordingService, recordingSessionRepository, debugSessionRepository,
+          CLOCK);
     }
   }
 

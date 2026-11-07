@@ -1,5 +1,7 @@
 package com.chromascape.web.gameplay.bootstrap;
 
+import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
+import com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository;
 import com.chromascape.web.recording.config.RecordingTriggerSource;
 import com.chromascape.web.recording.entity.RecordingSession;
 import com.chromascape.web.recording.entity.RecordingSessionRepository;
@@ -42,24 +44,33 @@ public class BootstrapRecordingCoordinator {
   private final EntityManager entityManager;
   private final RecordingService recordingService;
   private final RecordingSessionRepository recordingSessionRepository;
+  private final DebugSessionRepository debugSessionRepository;
   private final Clock clock;
 
   @Autowired
   public BootstrapRecordingCoordinator(
       EntityManager entityManager,
       RecordingService recordingService,
-      RecordingSessionRepository recordingSessionRepository) {
-    this(entityManager, recordingService, recordingSessionRepository, Clock.systemUTC());
+      RecordingSessionRepository recordingSessionRepository,
+      DebugSessionRepository debugSessionRepository) {
+    this(
+        entityManager,
+        recordingService,
+        recordingSessionRepository,
+        debugSessionRepository,
+        Clock.systemUTC());
   }
 
   BootstrapRecordingCoordinator(
       EntityManager entityManager,
       RecordingService recordingService,
       RecordingSessionRepository recordingSessionRepository,
+      DebugSessionRepository debugSessionRepository,
       Clock clock) {
     this.entityManager = entityManager;
     this.recordingService = recordingService;
     this.recordingSessionRepository = recordingSessionRepository;
+    this.debugSessionRepository = debugSessionRepository;
     this.clock = clock;
   }
 
@@ -111,12 +122,19 @@ public class BootstrapRecordingCoordinator {
       throw new BootstrapRecordingException(
           "RECORDING_CONFLICT", "Recording identity was reused with different evidence");
     }
+    // SC-1498 finding 6: the client's AccountBuilder run already emits ticks through a debug
+    // session it created first, and the recording compiles only when that session carries this
+    // exact recording id. Resolve the tick-bearing session before the external side effect so a
+    // missing or ambiguous session fails closed with no recording started, and never bind a
+    // session that already owns a different recording.
+    DebugSession tickSession = resolveTickSession(accountId);
     // SC-1498: the real recording starts before any remote delivery. The preapproved recording id
     // is passed verbatim so the active recording id always matches the approved envelope.
     RecordingStart started =
         recordingService.startRecording(
             recordingId, RecordingTriggerSource.BOOTSTRAP_RECORDING, accountId, taskName);
     try {
+      bindTickSession(tickSession, recordingId);
       ensureRecordingSession(
           recordingId, started, providerSessionId, providerTurnId, accountId, taskName);
       BootstrapRecordingEntity entity = new BootstrapRecordingEntity();
@@ -146,6 +164,70 @@ public class BootstrapRecordingCoordinator {
       }
       throw failure;
     }
+  }
+
+  /**
+   * Resolves the single active debug session that must own the approved recording: it is the one
+   * receiving the run's tick stream and, because it has no recording yet, has not started a
+   * competing video. Missing or ambiguous candidates fail closed before any recording starts.
+   */
+  private DebugSession resolveTickSession(String accountId) {
+    List<DebugSession> candidates =
+        debugSessionRepository.findByEndTimeIsNullAndRecordingIdIsNullOrderByStartTimeDesc();
+    if (accountId != null && !accountId.isBlank()) {
+      List<DebugSession> scoped =
+          candidates.stream().filter(candidate -> accountId.equals(candidate.getAccountName()))
+              .toList();
+      if (scoped.size() > 1) {
+        throw new BootstrapRecordingException(
+            "SESSION_BINDING_AMBIGUOUS",
+            "More than one active unrecorded debug session belongs to the run account");
+      }
+      if (!scoped.isEmpty()) {
+        return scoped.get(0);
+      }
+      throw new BootstrapRecordingException(
+          "SESSION_BINDING_MISSING",
+          "No active unrecorded debug session exists for the run account");
+    }
+    if (candidates.isEmpty()) {
+      throw new BootstrapRecordingException(
+          "SESSION_BINDING_MISSING",
+          "No active unrecorded debug session is available for the bootstrap recording");
+    }
+    if (candidates.size() > 1) {
+      throw new BootstrapRecordingException(
+          "SESSION_BINDING_AMBIGUOUS",
+          "More than one active unrecorded debug session could own the bootstrap recording");
+    }
+    return candidates.get(0);
+  }
+
+  /**
+   * Binds the approved recording to the tick-bearing session. A session that already owns a
+   * different recording is a conflict, never a silent rebind; a session that already owns this
+   * recording is an idempotent replay.
+   */
+  private void bindTickSession(DebugSession session, String recordingId) {
+    DebugSession locked =
+        debugSessionRepository
+            .findBySessionIdForUpdate(session.getSessionId())
+            .orElseThrow(
+                () ->
+                    new BootstrapRecordingException(
+                        "SESSION_BINDING_MISSING",
+                        "The tick-bearing debug session disappeared before binding"));
+    String existing = locked.getRecordingId();
+    if (existing != null && !existing.isBlank()) {
+      if (!existing.equals(recordingId)) {
+        throw new BootstrapRecordingException(
+            "SESSION_BINDING_CONFLICT",
+            "The tick-bearing debug session already owns a different recording");
+      }
+      return;
+    }
+    locked.setRecordingId(recordingId);
+    debugSessionRepository.save(locked);
   }
 
   private void ensureRecordingSession(

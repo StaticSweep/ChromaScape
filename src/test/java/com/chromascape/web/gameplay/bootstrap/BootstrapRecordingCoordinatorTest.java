@@ -7,6 +7,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.chromascape.testsupport.IsolatedPostgresTestDatabase;
+import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
+import com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository;
 import com.chromascape.web.gameplay.bootstrap.BootstrapRecordingCoordinator.BootstrapRecordingException;
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import com.chromascape.web.recording.entity.RecordingSessionRepository;
@@ -31,6 +33,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -50,6 +53,7 @@ class BootstrapRecordingCoordinatorTest {
       Clock.fixed(Instant.parse("2026-08-30T12:00:00Z"), ZoneOffset.UTC);
 
   @Autowired private BootstrapRecordingCoordinator coordinator;
+  @Autowired private DebugSessionRepository debugSessions;
   @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbc;
 
   @DynamicPropertySource
@@ -59,6 +63,14 @@ class BootstrapRecordingCoordinatorTest {
 
   @Test
   void startIsIdempotentAndFinalizeIsWriteOnce() {
+    // The approved recording binds to the client's tick-bearing session, so one must be active.
+    debugSessions.saveAndFlush(
+        new DebugSession(
+            "session-owner-1",
+            "bootstrap-account",
+            "Fishing",
+            java.time.LocalDateTime.now(),
+            0L));
     // The recording references an SC-1431 orchestration with no foreign key; create the minimal
     // parent row so the V89 terminal-evidence gate can be satisfied. Only the identity columns
     // matter for this projection test.
@@ -144,7 +156,13 @@ class BootstrapRecordingCoordinatorTest {
   @EntityScan(
       basePackages = {
         "com.chromascape.web.gameplay.bootstrap",
-        "com.chromascape.web.gameplay.orchestration.accountbuilder"
+        "com.chromascape.web.gameplay.orchestration.accountbuilder",
+        "com.chromascape.web.debug.tickdebugger.entity"
+      })
+  @EnableJpaRepositories(
+      basePackages = {
+        "com.chromascape.web.gameplay.bootstrap",
+        "com.chromascape.web.debug.tickdebugger.entity"
       })
   @Import(JsonConfiguration.class)
   static class TestApplication {
@@ -169,9 +187,11 @@ class BootstrapRecordingCoordinatorTest {
     BootstrapRecordingCoordinator coordinator(
         EntityManager entityManager,
         RecordingService recordingService,
-        RecordingSessionRepository recordingSessionRepository) {
+        RecordingSessionRepository recordingSessionRepository,
+        DebugSessionRepository debugSessionRepository) {
       return new BootstrapRecordingCoordinator(
-          entityManager, recordingService, recordingSessionRepository, CLOCK);
+          entityManager, recordingService, recordingSessionRepository, debugSessionRepository,
+          CLOCK);
     }
   }
 

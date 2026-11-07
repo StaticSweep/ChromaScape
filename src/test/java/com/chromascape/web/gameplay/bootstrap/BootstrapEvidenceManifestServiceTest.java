@@ -234,6 +234,7 @@ class BootstrapEvidenceManifestServiceTest {
             mock(EntityManager.class),
             recordingService,
             sessions,
+            mock(com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository.class),
             Clock.fixed(NOW, ZoneOffset.UTC));
 
     // Publication succeeded before the database finalization rolled back.
