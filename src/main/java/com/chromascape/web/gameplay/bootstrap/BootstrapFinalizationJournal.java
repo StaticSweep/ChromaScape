@@ -32,7 +32,9 @@ public class BootstrapFinalizationJournal {
     this.clock = clock;
   }
 
-  /** Records the intent to stop once. Replaying the same intent never rewrites the first instant. */
+  /**
+   * Records the intent to stop once. Replaying the same intent never rewrites the first instant.
+   */
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void requestFinalization(String recordingId) {
     BootstrapRecordingEntity entity = lockByRecordingId(recordingId);
@@ -46,8 +48,22 @@ public class BootstrapFinalizationJournal {
   /** True when the run already asked to stop this recording, so its artifact may be recovered. */
   @Transactional(readOnly = true)
   public boolean finalizationRequested(String recordingId) {
-    BootstrapRecordingEntity entity = lockByRecordingId(recordingId);
-    return entity != null && entity.finalizationRequestedAt != null;
+    // Read-only: no row lock, so this is safe inside a read-only transaction and never blocks a
+    // concurrent finalization that is already holding the write lock.
+    return findViewFinalizationRequestedAt(recordingId) != null;
+  }
+
+  private Instant findViewFinalizationRequestedAt(String recordingId) {
+    var values =
+        entityManager
+            .createQuery(
+                "select r.finalizationRequestedAt from BootstrapRecordingEntity r"
+                    + " where r.recordingId=:recordingId",
+                Instant.class)
+            .setParameter("recordingId", recordingId)
+            .setMaxResults(1)
+            .getResultList();
+    return values.isEmpty() ? null : values.get(0);
   }
 
   private BootstrapRecordingEntity lockByRecordingId(String recordingId) {
@@ -63,6 +79,8 @@ public class BootstrapFinalizationJournal {
       return null;
     }
     return entityManager.find(
-        BootstrapRecordingEntity.class, values.get(0).orchestrationId, LockModeType.PESSIMISTIC_WRITE);
+        BootstrapRecordingEntity.class,
+        values.get(0).orchestrationId,
+        LockModeType.PESSIMISTIC_WRITE);
   }
 }

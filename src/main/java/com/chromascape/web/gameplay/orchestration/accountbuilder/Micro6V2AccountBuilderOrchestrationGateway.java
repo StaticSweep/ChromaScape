@@ -294,7 +294,8 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
       GatewayCorrelation correlation, Lease lease, Duration timeout) {
     Instant at = clock.instant();
     try {
-      JsonNode response = getWithTimeout("api/v2/gameplay/status/" + correlation.requestId(), timeout);
+      JsonNode response =
+          getWithTimeout("api/v2/gameplay/status/" + correlation.requestId(), timeout);
       return toReceipt(
           correlation.requestId(), correlation.envelopeDigest(), "STATUS", response, at, false);
     } catch (AccountBuilderOrchestrationException exception) {
@@ -779,6 +780,7 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
     canonical.put("phase", phase);
     canonical.put("response", response == null ? objectMapper.createObjectNode() : response);
     String digest = canonicalJson.digest(canonical);
-    return "v2:" + phase + ":" + requestId + ":" + digest.substring("sha256:".length(), "sha256:".length() + 16);
+    String derived = digest.substring("sha256:".length(), "sha256:".length() + 16);
+    return "v2:" + phase + ":" + requestId + ":" + derived;
   }
 }
