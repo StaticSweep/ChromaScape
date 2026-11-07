@@ -484,6 +484,16 @@ gameplay:
     # characters closes the boundary entirely. Compared in constant time; header presence is
     # never authentication on its own.
     operator-key: ${GAMEPLAY_V2_OPERATOR_KEY:}
+  # SC-1498 human-gated bootstrap recording. Default-off. The operator, recording and Micro6 v2
+  # gates plus the SC-1431 orchestration/live-delivery flags must all be enabled for a one-use
+  # approved run. The legacy v1 micro6-url remains only for the compatibility evidence path.
+  bootstrap:
+    operator-enabled: ${GAMEPLAY_BOOTSTRAP_OPERATOR_ENABLED:false}
+    operator-key: ${GAMEPLAY_BOOTSTRAP_OPERATOR_KEY:}
+    recording-enabled: ${GAMEPLAY_BOOTSTRAP_RECORDING_ENABLED:false}
+    micro6-v2-enabled: ${GAMEPLAY_BOOTSTRAP_MICRO6_V2_ENABLED:false}
+    micro6-v2-url: ${GAMEPLAY_BOOTSTRAP_MICRO6_V2_URL:http://127.0.0.1:8098}
+    evidence-root: ${GAMEPLAY_BOOTSTRAP_EVIDENCE_ROOT:.chromascape/bootstrap-recordings}
   # SC-1431 source-neutral orchestration. Both flags stay off until dependency and SC-1449
   # conformance evidence exists; HELD/SHADOW use the application service directly in tests.
   accountbuilder-orchestration:

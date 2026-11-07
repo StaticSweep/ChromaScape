@@ -13,20 +13,29 @@ import com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.Sessi
 import com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.TurnRequest;
 import com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.TurnState;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /** SC-1431 handoff boundary: only committed DECIDED turns are readable and nothing mutates. */
 class ProviderDecisionHandoffIntegrationTest extends AbstractProviderRuntimePostgresTest {
   private static final String DIGEST = "sha256:" + "a".repeat(64);
 
+  @TempDir Path temporary;
+
   @Autowired private JpaProviderRuntimeStore store;
   @Autowired private CanonicalGameplayJson canonicalJson;
 
   @Test
   void handoffExposesOnlyCommittedDecidedTurns() {
+    ProviderRuntimeProperties properties = new ProviderRuntimeProperties();
+    properties.setTranscriptRoot(temporary.resolve("transcripts"));
+    RedactedTranscriptStore transcripts = new RedactedTranscriptStore(properties, canonicalJson);
+    RedactedTranscriptStore.Artifact transcript = transcripts.store("provider transcript");
+
     SessionRequest session = session("handoff-" + System.nanoTime());
     store.createSession(session);
     TurnRequest decided = turn(session, "decided");
@@ -38,8 +47,8 @@ class ProviderDecisionHandoffIntegrationTest extends AbstractProviderRuntimePost
         FailureCode.NONE,
         decision,
         null,
-        "sha256:" + "f".repeat(64));
-    store.recordTranscript(decided.turnId(), "sha256:" + "f".repeat(64), 12L);
+        transcript.reference());
+    store.recordTranscript(decided.turnId(), transcript.reference(), transcript.byteLength());
 
     TurnRequest abstained = turn(session, "abstained");
     reserveAndStream(session, abstained);
@@ -52,13 +61,14 @@ class ProviderDecisionHandoffIntegrationTest extends AbstractProviderRuntimePost
 
     GameplayProviderRuntime runtime =
         new GameplayProviderRuntime(
-            new ProviderRuntimeProperties(), null, store, null, null, null, null, List.of());
+            properties, null, store, null, null, transcripts, null, List.of());
 
     ProviderDecisionHandoff.PersistedDecision persisted =
         runtime.findValidatedDecision(session.sessionId(), decided.turnId()).orElseThrow();
     assertEquals(decision.decisionId(), persisted.decision().decisionId());
     assertEquals(canonicalJson.digest(decision), persisted.decisionDigest());
-    assertEquals("sha256:" + "f".repeat(64), persisted.transcriptRef());
+    assertEquals(transcript.reference(), persisted.transcriptRef());
+    assertEquals(transcript.reference(), persisted.transcriptSha256());
 
     assertTrue(runtime.findValidatedDecision(session.sessionId(), abstained.turnId()).isEmpty());
     assertTrue(runtime.findValidatedDecision(session.sessionId(), failed.turnId()).isEmpty());

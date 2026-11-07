@@ -34,7 +34,11 @@ public final class AccountBuilderOrchestrationValidator {
     this(canonicalJson, Clock.systemUTC(), authorityVerifier);
   }
 
-  AccountBuilderOrchestrationValidator(
+  /**
+   * Deterministic-clock constructor. Public so cross-package SC-1498 tests can pin deadline/budget
+   * validation; production wiring uses the {@code Clock.systemUTC()} entry point above.
+   */
+  public AccountBuilderOrchestrationValidator(
       CanonicalGameplayJson canonicalJson,
       Clock clock,
       AccountBuilderAuthorityVerifier authorityVerifier) {

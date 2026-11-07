@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 import com.chromascape.web.recording.capture.WindowFrameCapture;
 import com.chromascape.web.recording.config.RecordingConfig;
 import com.chromascape.web.recording.config.RecordingTriggerSource;
+import com.chromascape.web.recording.exception.RecordingDisabledException;
 import com.chromascape.web.viewport.config.UnifiedCaptureConfig;
 import com.chromascape.web.viewport.service.UnifiedFrameCaptureService;
 import java.nio.file.Files;
@@ -64,6 +65,34 @@ class RecordingServiceAutoStartGateTest {
   void micro6Auto_refused_whenAutoRecordOffEvenIfTaskSessionsOn() {
     RecordingService svc = newService(config(true, false, true));
     assertFalse(svc.isAutoStartAllowed(RecordingTriggerSource.MICRO6_AUTO));
+  }
+
+  /**
+   * The preapproved recording id becomes the output filename, so a platform-unsafe id must be
+   * refused before any recording starts rather than failing on Windows after human approval.
+   */
+  @Test
+  void preapprovedRecordingIdMustBePlatformSafe() {
+    RecordingService svc = newService(config(true, true, true));
+    for (String id :
+        java.util.List.of(
+            "run:1", "rec.", "rec ", "CON", "nul.mp4", ".hidden", "a*b", "a?b", "a|b")) {
+      assertThrows(
+          IllegalArgumentException.class,
+          () -> svc.startRecording(id, RecordingTriggerSource.BOOTSTRAP_RECORDING, null, null),
+          id);
+    }
+  }
+
+  /** A platform-safe id passes the id check and then reaches the recorder's own gate. */
+  @Test
+  void aPlatformSafePreapprovedRecordingIdReachesTheRecorderGate() {
+    RecordingService svc = newService(config(false, false, false));
+    assertThrows(
+        RecordingDisabledException.class,
+        () ->
+            svc.startRecording(
+                "rec-safe-1", RecordingTriggerSource.BOOTSTRAP_RECORDING, null, null));
   }
 
   /** MANUAL is never routed through auto-start in practice, but the gate must permit it. */

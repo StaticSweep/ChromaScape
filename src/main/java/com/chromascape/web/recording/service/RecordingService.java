@@ -154,6 +154,64 @@ public class RecordingService implements FrameListener {
    * @return The recording ID for this session
    */
   public synchronized String startRecording(RecordingTriggerSource triggerSource) {
+    return startRecordingWithId(null, triggerSource, null, null);
+  }
+
+  /**
+   * Starts a recording bound to a caller-supplied, human-approved recording ID (SC-1498).
+   *
+   * <p>The recording ID is already part of the approved execution envelope, so this service must
+   * never generate a replacement ID. The call is idempotent only when the exact same recording is
+   * already active; any different active recording is rejected before any state changes.
+   *
+   * @param expectedRecordingId the preapproved recording ID to bind
+   * @param trigger what initiated this recording
+   * @param accountId owning account identity for the bootstrap session row (may be {@code null})
+   * @param taskName task name for the bootstrap session row (may be {@code null})
+   * @return the exact start timestamp and output path of the active recording
+   * @throws IllegalArgumentException when the expected recording ID is blank or malformed
+   * @throws RecordingAlreadyInProgressException when a different process-wide recording is active
+   */
+  public synchronized RecordingStart startRecording(
+      String expectedRecordingId,
+      RecordingTriggerSource trigger,
+      String accountId,
+      String taskName) {
+    RecordingIdPolicy.require(expectedRecordingId, "preapproved recordingId");
+    if (recording.get()) {
+      if (expectedRecordingId.equals(currentRecordingId)) {
+        // Idempotent restart of the exact same recording: report its live start facts.
+        return new RecordingStart(
+            currentRecordingId,
+            currentRecordingFile.getAbsolutePath(),
+            recordingStartTime,
+            trigger == null ? currentTriggerSource : trigger,
+            accountId,
+            taskName,
+            true);
+      }
+      logger.warn(
+          "Requested bootstrap recording {} but {} is already active",
+          expectedRecordingId,
+          currentRecordingId);
+      throw new RecordingAlreadyInProgressException(currentRecordingId);
+    }
+    String startedId = startRecordingWithId(expectedRecordingId, trigger, accountId, taskName);
+    return new RecordingStart(
+        startedId,
+        currentRecordingFile.getAbsolutePath(),
+        recordingStartTime,
+        trigger == null ? currentTriggerSource : trigger,
+        accountId,
+        taskName,
+        false);
+  }
+
+  private synchronized String startRecordingWithId(
+      String expectedRecordingId,
+      RecordingTriggerSource triggerSource,
+      String accountId,
+      String taskName) {
     if (!config.isEnabled()) {
       logger.warn("Recording is disabled");
       throw new RecordingDisabledException();
@@ -196,8 +254,15 @@ public class RecordingService implements FrameListener {
     currentTriggerSource = triggerSource;
 
     try {
-      // Generate recording ID using UUID (decouple from timestamp)
-      currentRecordingId = "recording_" + UUID.randomUUID().toString().substring(0, 8);
+      // SC-1498: when a preapproved recording id is bound it is used verbatim. The recording id
+      // is already a member of the human-approved execution envelope, so this service must never
+      // substitute a locally generated id for it.
+      if (expectedRecordingId != null && !expectedRecordingId.isBlank()) {
+        currentRecordingId = expectedRecordingId;
+      } else {
+        // Generate recording ID using UUID (decouple from timestamp)
+        currentRecordingId = "recording_" + UUID.randomUUID().toString().substring(0, 8);
+      }
       String filename = currentRecordingId + ".mp4";
       currentRecordingFile = Paths.get(config.getOutputDirectory(), filename).toFile();
 
@@ -604,6 +669,36 @@ public class RecordingService implements FrameListener {
   }
 
   /**
+   * Atomic exact-stop contract for the SC-1498 bootstrap finalization (SC-1498).
+   *
+   * <p>Stops the process-wide recording only when it is still the recording identified by {@code
+   * expectedRecordingId}, and returns that recording's final metadata in the same synchronized
+   * section so a concurrent start of a different recording can never be observed between the
+   * identity check and the stop. When a different recording is active, or none is, nothing is
+   * stopped and {@code null} is returned — the caller must treat that as a reconciliation case,
+   * never silently accept a foreign recording's bytes.
+   *
+   * @param expectedRecordingId the preapproved recording id that must still be active
+   * @return the stopped recording's metadata, or {@code null} when the exact recording is not the
+   *     active one
+   * @throws IllegalArgumentException when the expected recording id is blank
+   */
+  public synchronized RecordingMetadata stopRecordingIfCurrentWithMetadata(
+      String expectedRecordingId) {
+    if (expectedRecordingId == null || expectedRecordingId.isBlank()) {
+      throw new IllegalArgumentException("A non-blank expectedRecordingId is required");
+    }
+    if (!recording.get() || !expectedRecordingId.equals(currentRecordingId)) {
+      logger.warn(
+          "Refusing to stop recording {}: active recording is {}",
+          expectedRecordingId,
+          recording.get() ? currentRecordingId : "<none>");
+      return null;
+    }
+    return stopRecording();
+  }
+
+  /**
    * Get current recording metrics for monitoring.
    *
    * <p>Exposed via /api/recording/metrics endpoint.
@@ -691,6 +786,9 @@ public class RecordingService implements FrameListener {
       case TASK_AUTO -> config.isAutoRecordTaskSessions();
       case MICRO6_AUTO -> config.isAutoRecord();
       case MANUAL -> true;
+        // The bootstrap recording is started explicitly by the SC-1498 coordinator through the
+        // exact-ID start contract, never through auto-start; permit it here for completeness.
+      case BOOTSTRAP_RECORDING -> true;
     };
   }
 
@@ -1334,6 +1432,69 @@ public class RecordingService implements FrameListener {
 
     public String getVideoCodec() {
       return videoCodec;
+    }
+  }
+
+  /**
+   * Start facts of the bootstrap recording session (SC-1498).
+   *
+   * <p>Carries the exact preapproved recording id, its start timestamp and output path so the
+   * coordinator can persist a STARTED projection whose identity matches the approved envelope
+   * without any local id substitution.
+   */
+  public static class RecordingStart {
+    private final String id;
+    private final String filePath;
+    private final long startTime;
+    private final RecordingTriggerSource triggerSource;
+    private final String accountId;
+    private final String taskName;
+    private final boolean reconciled;
+
+    public RecordingStart(
+        String id,
+        String filePath,
+        long startTime,
+        RecordingTriggerSource triggerSource,
+        String accountId,
+        String taskName,
+        boolean reconciled) {
+      this.id = id;
+      this.filePath = filePath;
+      this.startTime = startTime;
+      this.triggerSource = triggerSource;
+      this.accountId = accountId;
+      this.taskName = taskName;
+      this.reconciled = reconciled;
+    }
+
+    public String getId() {
+      return id;
+    }
+
+    public String getFilePath() {
+      return filePath;
+    }
+
+    public long getStartTime() {
+      return startTime;
+    }
+
+    public RecordingTriggerSource getTriggerSource() {
+      return triggerSource;
+    }
+
+    public String getAccountId() {
+      return accountId;
+    }
+
+    public String getTaskName() {
+      return taskName;
+    }
+
+    /** True when the exact recording was already active and its live facts were replayed. */
+    public boolean isReconciled() {
+      return reconciled;
     }
   }
 }

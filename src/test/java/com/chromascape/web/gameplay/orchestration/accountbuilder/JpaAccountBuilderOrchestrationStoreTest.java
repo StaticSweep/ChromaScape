@@ -58,7 +58,7 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest(
     classes = JpaAccountBuilderOrchestrationStoreTest.JpaTestBootstrap.class,
     properties = {
-      "spring.flyway.target=49",
+      "spring.flyway.target=89",
       "spring.jpa.hibernate.ddl-auto=validate",
       "stabilization.auth.token=sc1431-read-token",
       "stabilization.auth.write-token=sc1431-write-token",

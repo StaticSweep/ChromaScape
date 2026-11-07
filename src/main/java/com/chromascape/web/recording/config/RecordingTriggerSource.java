@@ -7,5 +7,7 @@ public enum RecordingTriggerSource {
   /** Recording started automatically by task-detection logic. */
   TASK_AUTO,
   /** Recording started because Micro6 sent {@code recordingEnabled=true} in SESSION_START. */
-  MICRO6_AUTO
+  MICRO6_AUTO,
+  /** Recording started by the SC-1498 bootstrap coordinator before SC-1431 delivery. */
+  BOOTSTRAP_RECORDING
 }
