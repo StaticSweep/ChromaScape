@@ -179,6 +179,31 @@ class BootstrapGameplayOperatorServiceTest {
     assertThatDispatchRefusesWithoutSideEffects("TASK_INELIGIBLE");
   }
 
+  @Test
+  void anEligibleTaskWithAMismatchedSchemaDigestRefusesBeforeAnySideEffect() {
+    lenient()
+        .when(capabilityPreflight.probe(any()))
+        .thenReturn(
+            new CapabilitySnapshot(
+                "sha256:" + "c".repeat(64),
+                "sha256:" + "a".repeat(64),
+                "build-v1",
+                7,
+                9,
+                NOW,
+                NOW.plusSeconds(60),
+                true,
+                java.util.List.of(
+                    new TaskCapability(
+                        "FISHING_TRAINING",
+                        true,
+                        "sha256:" + "e".repeat(64),
+                        "build-v1",
+                        List.of()))));
+
+    assertThatDispatchRefusesWithoutSideEffects("TASK_INELIGIBLE");
+  }
+
   private void assertThatDispatchRefusesWithoutSideEffects(String expectedCode) {
     ExecutionEnvelope envelope = envelopeWithFutureDeadline();
     var bindings = bindings(envelope);
