@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.chromascape.testsupport.IsolatedPostgresTestDatabase;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -17,8 +18,12 @@ import org.junit.jupiter.api.Test;
 
 /** Proves the SC-1430 migration on an empty and a pre-existing isolated PostgreSQL schema. */
 class Sc1430FlywaySchemaTest {
-  private static final String DEFAULT_JDBC_URL =
-      "jdbc:postgresql://127.0.0.1:55450/chromascape_sc1430_review?sslmode=disable";
+  /** The SC-1430 migration is V22; later migrations are outside this proof's scope. */
+  private static final int TARGET_VERSION = 22;
+
+  private final IsolatedPostgresTestDatabase.Database database =
+      IsolatedPostgresTestDatabase.newDatabase();
+
   private static final List<String> TABLES =
       List.of(
           "gameplay_provider_session",
@@ -31,11 +36,13 @@ class Sc1430FlywaySchemaTest {
 
   @Test
   void migratesEmptySchemaAndCreatesProviderRuntimeTables() throws SQLException {
-    String schema = freshSchema("sc1430_flyway");
+    String schema = freshSchema(database.schema());
     Flyway flyway = configuration(schema).load();
     flyway.migrate();
 
-    assertEquals(MigrationVersion.fromVersion("22"), flyway.info().current().getVersion());
+    assertEquals(
+        MigrationVersion.fromVersion(String.valueOf(TARGET_VERSION)),
+        flyway.info().current().getVersion());
     try (Connection connection = connect()) {
       for (String table : TABLES) {
         assertTrue(tableExists(connection, schema, table), "missing table " + table);
@@ -55,7 +62,7 @@ class Sc1430FlywaySchemaTest {
 
   @Test
   void appliesProviderRuntimeMigrationOnTopOfExistingHistory() throws SQLException {
-    String schema = freshSchema("sc1430_upgrade");
+    String schema = freshSchema(database.schema());
     configuration(schema).target("5").load().migrate();
     try (Connection connection = connect()) {
       assertFalse(
@@ -73,15 +80,15 @@ class Sc1430FlywaySchemaTest {
 
   private FluentConfiguration configuration(String schema) {
     return Flyway.configure()
-        .dataSource(jdbcUrl(), username(), password())
+        .dataSource(database.jdbcUrl(), database.username(), database.password())
         .schemas(schema)
         .defaultSchema(schema)
         .locations("classpath:db/migration")
+        .target(String.valueOf(TARGET_VERSION))
         .cleanDisabled(false);
   }
 
-  private String freshSchema(String prefix) throws SQLException {
-    String schema = prefix + "_" + Long.toHexString(System.nanoTime());
+  private String freshSchema(String schema) throws SQLException {
     try (Connection connection = connect();
         Statement statement = connection.createStatement()) {
       statement.execute("drop schema if exists \"" + schema + "\" cascade");
@@ -91,7 +98,8 @@ class Sc1430FlywaySchemaTest {
   }
 
   private Connection connect() throws SQLException {
-    return DriverManager.getConnection(jdbcUrl(), username(), password());
+    return DriverManager.getConnection(
+        database.jdbcUrl(), database.username(), database.password());
   }
 
   private boolean tableExists(Connection connection, String schema, String table)
@@ -160,17 +168,5 @@ class Sc1430FlywaySchemaTest {
         return result.next();
       }
     }
-  }
-
-  private String jdbcUrl() {
-    return System.getProperty("chromascape.sc1430.jdbc-url", DEFAULT_JDBC_URL);
-  }
-
-  private String username() {
-    return System.getProperty("chromascape.sc1430.jdbc-username", "chromascape");
-  }
-
-  private String password() {
-    return System.getProperty("chromascape.sc1430.jdbc-password", "chromascape123");
   }
 }

@@ -1,5 +1,6 @@
 package com.chromascape.web.gameplay.provider.runtime;
 
+import com.chromascape.testsupport.IsolatedPostgresTestDatabase;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -7,27 +8,16 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 /**
- * Isolated PostgreSQL harness. Ports default to the SC-1430 review database (55450) and can be
- * pointed anywhere with the chromascape.sc1430.jdbc-* system properties.
+ * Isolated PostgreSQL harness. The datasource comes from the shared Testcontainers fixture, whose
+ * Flyway migration creates each test's private schema, so the SC-1430 persistence proofs never
+ * depend on a developer database or a fixed host port.
  */
-@SpringBootTest(
-    classes = ProviderRuntimePostgresTestApplication.class,
-    properties = {"spring.flyway.enabled=false", "spring.jpa.hibernate.ddl-auto=create-drop"})
+@SpringBootTest(classes = ProviderRuntimePostgresTestApplication.class)
 @AutoConfigureTestDatabase(replace = Replace.NONE)
 abstract class AbstractProviderRuntimePostgresTest {
-  private static final String DEFAULT_JDBC_URL =
-      "jdbc:postgresql://127.0.0.1:55450/chromascape_sc1430_review?sslmode=disable";
 
   @DynamicPropertySource
   static void isolatedDatasource(DynamicPropertyRegistry registry) {
-    registry.add(
-        "spring.datasource.url",
-        () -> System.getProperty("chromascape.sc1430.jdbc-url", DEFAULT_JDBC_URL));
-    registry.add(
-        "spring.datasource.username",
-        () -> System.getProperty("chromascape.sc1430.jdbc-username", "chromascape"));
-    registry.add(
-        "spring.datasource.password",
-        () -> System.getProperty("chromascape.sc1430.jdbc-password", "chromascape123"));
+    IsolatedPostgresTestDatabase.register(registry);
   }
 }
