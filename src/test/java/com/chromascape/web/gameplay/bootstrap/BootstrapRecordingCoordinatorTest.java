@@ -184,13 +184,23 @@ class BootstrapRecordingCoordinatorTest {
     }
 
     @Bean
+    BootstrapFinalizationJournal bootstrapFinalizationJournal(EntityManager entityManager) {
+      return new BootstrapFinalizationJournal(entityManager, CLOCK);
+    }
+
+    @Bean
     BootstrapRecordingCoordinator coordinator(
         EntityManager entityManager,
         RecordingService recordingService,
         RecordingSessionRepository recordingSessionRepository,
-        DebugSessionRepository debugSessionRepository) {
+        DebugSessionRepository debugSessionRepository,
+        BootstrapFinalizationJournal finalizationJournal) {
       return new BootstrapRecordingCoordinator(
-          entityManager, recordingService, recordingSessionRepository, debugSessionRepository,
+          entityManager,
+          recordingService,
+          recordingSessionRepository,
+          debugSessionRepository,
+          finalizationJournal,
           CLOCK);
     }
   }

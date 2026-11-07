@@ -242,6 +242,35 @@ class Sc1498FlywaySchemaTest {
         .hasMessageContaining("append-only");
   }
 
+  @Test
+  void finalizationIntentIsJournaledOnceAndCarriesNoTerminalEvidence() {
+    insertRecording("orch-intent-1", "rec-intent-1");
+    // A STARTED row may record the durable finalization intent before SC-1431 delivery exists.
+    jdbc.execute(
+        "UPDATE gameplay_bootstrap_recording SET finalization_requested_at=now()"
+            + " WHERE orchestration_id='orch-intent-1'");
+    assertThat(
+            jdbc.queryForObject(
+                "select finalization_requested_at from gameplay_bootstrap_recording"
+                    + " where orchestration_id='orch-intent-1'",
+                java.time.Instant.class))
+        .isNotNull();
+    // The intent is written once: recovery may never rewrite the instant it was first recorded.
+    assertThatThrownBy(
+            () ->
+                jdbc.execute(
+                    "UPDATE gameplay_bootstrap_recording SET finalization_requested_at=now()"
+                        + " + interval '1 second' WHERE orchestration_id='orch-intent-1'"))
+        .hasMessageContaining("finalization intent is immutable");
+    // A STARTED row can never carry terminal evidence before the transition is legal.
+    assertThatThrownBy(
+            () ->
+                jdbc.execute(
+                    "UPDATE gameplay_bootstrap_recording"
+                        + " SET artifact_ref='early.mp4' WHERE orchestration_id='orch-intent-1'"))
+        .hasMessageContaining("cannot carry terminal evidence");
+  }
+
   private void insertApproval(String approvalId, String hex) {
     String scope = "sha256:" + hex.repeat(64);
     String fingerprint = "sha256:" + "b".repeat(64);

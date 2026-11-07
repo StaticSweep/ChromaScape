@@ -319,13 +319,24 @@ class BootstrapRecordingTickBindingTest {
     }
 
     @Bean
+    BootstrapFinalizationJournal bootstrapFinalizationJournal(EntityManager entityManager) {
+      return new BootstrapFinalizationJournal(entityManager, CLOCK);
+    }
+
+    @Bean
     BootstrapRecordingCoordinator bootstrapRecordingCoordinator(
         EntityManager entityManager,
         RecordingService recordingService,
         RecordingSessionRepository recordingSessionRepository,
-        DebugSessionRepository debugSessionRepository) {
+        DebugSessionRepository debugSessionRepository,
+        BootstrapFinalizationJournal finalizationJournal) {
       return new BootstrapRecordingCoordinator(
-          entityManager, recordingService, recordingSessionRepository, debugSessionRepository, CLOCK);
+          entityManager,
+          recordingService,
+          recordingSessionRepository,
+          debugSessionRepository,
+          finalizationJournal,
+          CLOCK);
     }
   }
 

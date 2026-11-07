@@ -229,12 +229,17 @@ class BootstrapEvidenceManifestServiceTest {
             video.toString());
     durable.setEndTime(finalizedAt.atZone(ZoneOffset.UTC).toLocalDateTime());
     when(sessions.findByRecordingId(recordingId)).thenReturn(Optional.of(durable));
+    // The crashed run had already committed its finalization intent, which is what makes the
+    // existing video recoverable instead of a mid-recording crash.
+    BootstrapFinalizationJournal journal = mock(BootstrapFinalizationJournal.class);
+    when(journal.finalizationRequested(recordingId)).thenReturn(true);
     BootstrapRecordingCoordinator coordinator =
         new BootstrapRecordingCoordinator(
             mock(EntityManager.class),
             recordingService,
             sessions,
             mock(com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository.class),
+            journal,
             Clock.fixed(NOW, ZoneOffset.UTC));
 
     // Publication succeeded before the database finalization rolled back.

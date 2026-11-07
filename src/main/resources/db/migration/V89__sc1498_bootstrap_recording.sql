@@ -71,6 +71,9 @@ CREATE TABLE gameplay_bootstrap_recording (
     simulator_trace BOOLEAN NOT NULL DEFAULT FALSE,
     entity_version BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL,
+    -- Durable finalization intent. Written and committed before the irreversible recorder stop so
+    -- recovery can tell "the run asked to stop" from "the run crashed mid-recording".
+    finalization_requested_at TIMESTAMPTZ,
     finalized_at TIMESTAMPTZ,
     CONSTRAINT gameplay_bootstrap_recording_digest_check CHECK (
         decision_digest ~ '^sha256:[0-9a-f]{64}$'
@@ -128,9 +131,25 @@ BEGIN
         RAISE EXCEPTION 'SC-1498 bootstrap recording % is FINALIZED and immutable',
             OLD.orchestration_id USING ERRCODE = '55006';
     END IF;
-    -- The only permitted transition is STARTED -> FINALIZED with the full terminal payload.
-    IF NEW.manifest_state IS DISTINCT FROM 'FINALIZED'
-        OR NEW.terminal_outcome IS NULL
+    -- A STARTED row may only record the durable finalization intent. It may not carry terminal
+    -- evidence, and once the intent exists it can never be rewritten or cleared.
+    IF NEW.manifest_state = 'STARTED' THEN
+        IF NEW.terminal_outcome IS NOT NULL
+            OR NEW.stable_code IS NOT NULL
+            OR NEW.manifest_digest IS NOT NULL
+            OR NEW.artifact_ref IS NOT NULL
+            OR NEW.artifact_digest IS NOT NULL
+            OR NEW.finalized_at IS NOT NULL THEN
+            RAISE EXCEPTION 'SC-1498 bootstrap recording % is still STARTED and cannot carry terminal evidence',
+                OLD.orchestration_id USING ERRCODE = '55006';
+        END IF;
+        IF OLD.finalization_requested_at IS NOT NULL
+            AND NEW.finalization_requested_at IS DISTINCT FROM OLD.finalization_requested_at THEN
+            RAISE EXCEPTION 'SC-1498 bootstrap recording % finalization intent is immutable',
+                OLD.orchestration_id USING ERRCODE = '55006';
+        END IF;
+    -- The only permitted state transition is STARTED -> FINALIZED with the full terminal payload.
+    ELSIF NEW.terminal_outcome IS NULL
         OR NEW.manifest_digest IS NULL
         OR NEW.finalized_at IS NULL
         OR NEW.manifest_digest !~ '^sha256:[0-9a-f]{64}$' THEN
@@ -150,14 +169,16 @@ BEGIN
             OLD.orchestration_id USING ERRCODE = '55006';
     END IF;
     -- Terminal evidence gate: the recording starts before SC-1431 delivery, so the STARTED row
-    -- may exist without a parent orchestration. FINALIZED, however, is only permitted once the
-    -- delivered SC-1431 orchestration and its durable terminal result both exist for this id.
-    IF NOT EXISTS (
-            SELECT 1 FROM ab_orchestration o
-            WHERE o.orchestration_id = OLD.orchestration_id)
-        OR NOT EXISTS (
-            SELECT 1 FROM ab_orchestration_terminal_result t
-            WHERE t.orchestration_id = OLD.orchestration_id) THEN
+    -- (and its finalization intent) may exist without a parent orchestration. FINALIZED, however,
+    -- is only permitted once the delivered SC-1431 orchestration and its durable terminal result
+    -- both exist for this id.
+    IF NEW.manifest_state = 'FINALIZED' AND (
+            NOT EXISTS (
+                SELECT 1 FROM ab_orchestration o
+                WHERE o.orchestration_id = OLD.orchestration_id)
+            OR NOT EXISTS (
+                SELECT 1 FROM ab_orchestration_terminal_result t
+                WHERE t.orchestration_id = OLD.orchestration_id)) THEN
         RAISE EXCEPTION
             'SC-1498 bootstrap recording % cannot finalize without terminal SC-1431 evidence',
             OLD.orchestration_id USING ERRCODE = '55006';

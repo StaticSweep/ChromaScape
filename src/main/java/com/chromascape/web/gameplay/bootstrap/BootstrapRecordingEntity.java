@@ -76,6 +76,10 @@ public class BootstrapRecordingEntity {
   @Column(name = "created_at", nullable = false)
   public Instant createdAt;
 
+  /** Durable finalization intent, written before the irreversible recorder stop. */
+  @Column(name = "finalization_requested_at")
+  public Instant finalizationRequestedAt;
+
   @Column(name = "finalized_at")
   public Instant finalizedAt;
 }

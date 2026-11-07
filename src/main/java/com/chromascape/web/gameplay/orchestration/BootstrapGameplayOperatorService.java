@@ -468,11 +468,9 @@ public final class BootstrapGameplayOperatorService {
     try {
       // Stop the exact active recording once. When a different recording is active (or none),
       // reconciliation is required: never finalize a foreign recording's bytes.
-      var artifact =
-          recordingCoordinator
-              .stopForFinalization(recording.recordingId())
-              .or(() -> recordingCoordinator.rebuildArtifactForRecovery(recording.recordingId()))
-              .orElse(null);
+      // stopForFinalization journals the intent first and either stops the live recording or
+      // recovers the already-finalized file; it never returns an empty artifact.
+      var artifact = recordingCoordinator.stopForFinalization(recording.recordingId()).orElse(null);
       if (artifact == null) {
         return view;
       }
@@ -529,11 +527,9 @@ public final class BootstrapGameplayOperatorService {
       // approval; gameplay is never repeated to recover a manifest. When the live
       // recording already stopped before the crash, the artifact is rebuilt from the
       // durable recording session instead of repeating gameplay.
-      var artifact =
-          recordingCoordinator
-              .stopForFinalization(recording.recordingId())
-              .or(() -> recordingCoordinator.rebuildArtifactForRecovery(recording.recordingId()))
-              .orElse(null);
+      // stopForFinalization journals the intent first and either stops the live recording or
+      // recovers the already-finalized file; it never returns an empty artifact.
+      var artifact = recordingCoordinator.stopForFinalization(recording.recordingId()).orElse(null);
       if (artifact == null) {
         return view;
       }

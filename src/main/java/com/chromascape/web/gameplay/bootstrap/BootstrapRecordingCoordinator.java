@@ -18,6 +18,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -45,6 +46,7 @@ public class BootstrapRecordingCoordinator {
   private final RecordingService recordingService;
   private final RecordingSessionRepository recordingSessionRepository;
   private final DebugSessionRepository debugSessionRepository;
+  private final BootstrapFinalizationJournal finalizationJournal;
   private final Clock clock;
 
   @Autowired
@@ -52,12 +54,14 @@ public class BootstrapRecordingCoordinator {
       EntityManager entityManager,
       RecordingService recordingService,
       RecordingSessionRepository recordingSessionRepository,
-      DebugSessionRepository debugSessionRepository) {
+      DebugSessionRepository debugSessionRepository,
+      BootstrapFinalizationJournal finalizationJournal) {
     this(
         entityManager,
         recordingService,
         recordingSessionRepository,
         debugSessionRepository,
+        finalizationJournal,
         Clock.systemUTC());
   }
 
@@ -66,11 +70,13 @@ public class BootstrapRecordingCoordinator {
       RecordingService recordingService,
       RecordingSessionRepository recordingSessionRepository,
       DebugSessionRepository debugSessionRepository,
+      BootstrapFinalizationJournal finalizationJournal,
       Clock clock) {
     this.entityManager = entityManager;
     this.recordingService = recordingService;
     this.recordingSessionRepository = recordingSessionRepository;
     this.debugSessionRepository = debugSessionRepository;
+    this.finalizationJournal = finalizationJournal;
     this.clock = clock;
   }
 
@@ -269,9 +275,21 @@ public class BootstrapRecordingCoordinator {
     if (recordingId == null || recordingId.isBlank()) {
       throw new BootstrapRecordingException("INVALID_REQUEST", "A recording id is required");
     }
+    // The stop is irreversible: journal and commit the intent first so a crash between the stop
+    // and the projection update is recoverable instead of leaving a STARTED row with no end time.
+    finalizationJournal.requestFinalization(recordingId);
     RecordingMetadata metadata = recordingService.stopRecordingIfCurrentWithMetadata(recordingId);
     if (metadata == null) {
-      return Optional.empty();
+      // No live recording remains. Accept the already-finalized file only when the durable intent
+      // and the durable session evidence exist; otherwise fail closed with a stable code instead
+      // of returning an empty artifact that strands the projection.
+      Optional<RecordingArtifact> rebuilt = rebuildArtifactForRecovery(recordingId);
+      if (rebuilt.isEmpty()) {
+        throw new BootstrapRecordingException(
+            "RECORDING_STOP_UNRECONCILED",
+            "The recording stop cannot be reconciled from durable evidence");
+      }
+      return rebuilt;
     }
     String artifactDigest = digestFile(Path.of(metadata.getFilePath()));
     Instant endedAt = clock.instant();
@@ -332,12 +350,43 @@ public class BootstrapRecordingCoordinator {
     if (recordingId == null || recordingId.isBlank()) {
       throw new BootstrapRecordingException("INVALID_REQUEST", "A recording id is required");
     }
-    RecordingSession session =
-        recordingSessionRepository.findByRecordingId(recordingId).orElse(null);
-    if (session == null || session.getVideoPath() == null || session.getEndTime() == null) {
+    // Only a run that durably asked to stop may accept an existing file as complete; a crash in
+    // the middle of recording must never be recovered as a finished artifact.
+    if (!finalizationJournal.finalizationRequested(recordingId)) {
       return Optional.empty();
     }
-    String artifactDigest = digestFile(Path.of(session.getVideoPath()));
+    RecordingSession session =
+        recordingSessionRepository.findByRecordingId(recordingId).orElse(null);
+    if (session == null || session.getVideoPath() == null) {
+      return Optional.empty();
+    }
+    Path video = Path.of(session.getVideoPath());
+    if (!Files.isReadable(video)) {
+      return Optional.empty();
+    }
+    if (session.getEndTime() == null) {
+      // The stop already happened but its metadata was lost. The media file's own last write is
+      // durable evidence of when the last frame landed; persist the reconstruction so every later
+      // recovery attempt observes the identical end time and duration.
+      try {
+        LocalDateTime reconstructedEnd =
+            LocalDateTime.ofInstant(
+                Files.getLastModifiedTime(video).toInstant(), ZoneId.systemDefault());
+        if (session.getStartTime() != null && !reconstructedEnd.isAfter(session.getStartTime())) {
+          reconstructedEnd = session.getStartTime();
+        }
+        session.setEndTime(reconstructedEnd);
+        if (session.getStartTime() != null) {
+          session.setDurationMs(
+              Duration.between(session.getStartTime(), reconstructedEnd).toMillis());
+        }
+        recordingSessionRepository.save(session);
+      } catch (IOException exception) {
+        throw new BootstrapRecordingException(
+            "ARTIFACT_UNREADABLE", "The finalized recording artifact is not readable");
+      }
+    }
+    String artifactDigest = digestFile(video);
     return Optional.of(
         new RecordingArtifact(
             recordingId,
