@@ -86,6 +86,7 @@ class Micro6V2AccountBuilderOrchestrationGatewayTest {
                   + "d".repeat(64)
                   + "\","
                   + "\"expiresAt\":\"2026-08-30T13:00:00Z\"},"
+                  + "\"receiptId\":\"micro6:v2:reserve:req-1\","
                   + "\"evidenceRefs\":[\"micro6:v2:reserve:req-1\"]}");
         });
     server.createContext(
@@ -429,6 +430,32 @@ class Micro6V2AccountBuilderOrchestrationGatewayTest {
 
   private String envelopeOk() {
     return "\"envelopeDigest\":\"sha256:" + "e".repeat(64) + "\",";
+  }
+
+  @Test
+  void attestedReceiptIdentityIsUsedVerbatim() {
+    var gateway = gateway();
+    GatewayReceipt receipt = gateway.reserve(request(), "sha256:" + "e".repeat(64));
+    assertThat(receipt.receiptId()).isEqualTo("micro6:v2:reserve:req-1");
+  }
+
+  @Test
+  void identicalResponsesReconcileToTheSameReceiptIdentity() {
+    var gateway = gateway();
+    String digest = "sha256:" + "e".repeat(64);
+    GatewayReceipt firstReserve = gateway.reserve(request(), digest);
+    GatewayReceipt secondReserve = gateway.reserve(request(), digest);
+    assertThat(secondReserve.receiptId())
+        .as("an identical response is the same evidence, never a new random receipt")
+        .isEqualTo(firstReserve.receiptId());
+
+    GatewayCorrelation correlation = correlation("req-active", digest);
+    GatewayReceipt firstStatus = gateway.status(correlation, null);
+    GatewayReceipt secondStatus = gateway.status(correlation, null);
+    assertThat(secondStatus.receiptId()).isEqualTo(firstStatus.receiptId());
+    assertThat(gateway().status(correlation, null).receiptId())
+        .as("a fresh gateway instance derives the same receipt identity")
+        .isEqualTo(firstStatus.receiptId());
   }
 
   private GatewayCorrelation correlation(String requestId, String envelopeDigest) {

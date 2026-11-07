@@ -22,7 +22,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Primary;
@@ -359,7 +358,7 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
           null,
           List.of(),
           at,
-          receiptId(correlation.requestId(), "reconcile-reservation"),
+          receiptId(correlation.requestId(), "reconcile-reservation", null),
           false);
     } catch (AccountBuilderOrchestrationException exception) {
       throw exception;
@@ -449,7 +448,7 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
           lease,
           List.copyOf(evidenceRefs),
           at,
-          receiptId(responseRequestId, phase),
+          receiptId(responseRequestId, phase, response),
           killSwitch);
     }
     String wireStatus = firstText(response, "status", "outcome");
@@ -479,7 +478,7 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
         lease,
         List.copyOf(evidenceRefs),
         at,
-        receiptId(requestId, phase),
+        receiptId(requestId, phase, response),
         killSwitch);
   }
 
@@ -637,12 +636,21 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
     return value.isNumber() ? value.asLong() : -1L;
   }
 
-  private String receiptId(String requestId, String phase) {
-    return "v2:"
-        + phase
-        + ":"
-        + requestId
-        + ":"
-        + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+  /**
+   * Durable receipt identity. An attested remote receipt id wins; otherwise the identity is derived
+   * from the canonical response and phase, so reconciling the same response twice yields one
+   * receipt and the same evidence manifest instead of a fresh random id each time.
+   */
+  private String receiptId(String requestId, String phase, JsonNode response) {
+    String attested = response == null ? null : response.path("receiptId").asText(null);
+    if (attested != null && !attested.isBlank()) {
+      return attested;
+    }
+    java.util.Map<String, Object> canonical = new java.util.LinkedHashMap<>();
+    canonical.put("requestId", requestId);
+    canonical.put("phase", phase);
+    canonical.put("response", response == null ? objectMapper.createObjectNode() : response);
+    String digest = canonicalJson.digest(canonical);
+    return "v2:" + phase + ":" + requestId + ":" + digest.substring("sha256:".length(), "sha256:".length() + 16);
   }
 }
