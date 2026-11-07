@@ -185,7 +185,7 @@ class AccountBuilderOrchestrationRestartTest {
         "--spring.datasource.hikari.schema=" + database.schema(),
         "--spring.flyway.schemas=" + database.schema(),
         "--spring.flyway.default-schema=" + database.schema(),
-        "--spring.flyway.target=57",
+        "--spring.flyway.target=89",
         "--spring.flyway.create-schemas=true",
         "--spring.flyway.locations=classpath:db/migration",
         "--spring.jpa.properties.hibernate.default_schema=" + database.schema(),
