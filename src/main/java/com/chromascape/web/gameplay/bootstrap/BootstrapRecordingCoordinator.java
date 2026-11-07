@@ -41,6 +41,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class BootstrapRecordingCoordinator {
   private static final String ARTIFACT_DIGEST_PREFIX = "sha256:";
+  private static final String ORCHESTRATION_LOCK_PREFIX = "sc1498-bootstrap-recording:";
 
   private final EntityManager entityManager;
   private final RecordingService recordingService;
@@ -100,6 +101,10 @@ public class BootstrapRecordingCoordinator {
       String taskName) {
     requireId(orchestrationId, "Orchestration id is required");
     requireId(recordingId, "Recording id is required");
+    // Serialize identical dispatches for this orchestration before any read or side effect. The
+    // transaction-scoped lock is released on commit, so the request that loses the race observes
+    // the winner's durable projection and never starts or stops a recording of its own.
+    acquireOrchestrationClaim(orchestrationId);
     Instant now = clock.instant();
     BootstrapRecordingEntity existing =
         entityManager.find(BootstrapRecordingEntity.class, orchestrationId);
@@ -170,6 +175,18 @@ public class BootstrapRecordingCoordinator {
       }
       throw failure;
     }
+  }
+
+  /**
+   * Serializes concurrent identical dispatches on the durable orchestration identity. The advisory
+   * lock is transaction-scoped: it exists only for the duration of this invocation's claim, and the
+   * projection row it then inserts is the durable owner.
+   */
+  private void acquireOrchestrationClaim(String orchestrationId) {
+    entityManager
+        .createNativeQuery("select pg_advisory_xact_lock(hashtextextended(:key, 0))")
+        .setParameter("key", ORCHESTRATION_LOCK_PREFIX + orchestrationId)
+        .getSingleResult();
   }
 
   /**
