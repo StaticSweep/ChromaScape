@@ -31,6 +31,12 @@ class Micro6V2AccountBuilderOrchestrationGatewayTest {
   private ObjectMapper objectMapper;
   private CanonicalGameplayJson canonicalJson;
   private HttpServer server;
+  /** Mutable so a test can script the catalog's per-task attestation. */
+  private volatile String catalogBody;
+  /** Mutable so a test can script malformed worker evidence on the status route. */
+  private volatile String badStatusBody;
+  /** Scripted per-request delay for the slow-status deadline test. */
+  private volatile long statusDelayMillis;
 
   @BeforeEach
   void setUp() throws Exception {
@@ -41,20 +47,23 @@ class Micro6V2AccountBuilderOrchestrationGatewayTest {
             .build();
     canonicalJson = new CanonicalGameplayJson(objectMapper);
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    catalogBody =
+        "{\"contractVersion\":\"sc-1429/v2\",\"enabled\":true,\"buildId\":\"build-v1\","
+            + "\"catalogHash\":\"sha256:"
+            + "c".repeat(64)
+            + "\","
+            + "\"capabilityDigest\":\"sha256:"
+            + "a".repeat(64)
+            + "\","
+            + "\"tasks\":[{\"taskKey\":\"FISHING_TRAINING\",\"eligible\":true,"
+            + "\"schemaDigest\":\""
+            + com.chromascape.web.gameplay.contract.v2.GameplayV2EnvelopeRules.canonicalSchemaDigest()
+            + "\","
+            + "\"minimumBuildId\":\"build-v1\",\"denialReasons\":[]}],"
+            + "\"observationRevision\":7,\"taskRevision\":9}";
     server.createContext(
         "/api/v2/gameplay/catalog",
-        exchange ->
-            respond(
-                exchange,
-                200,
-                "{\"contractVersion\":\"sc-1429/v2\",\"enabled\":true,\"buildId\":\"build-v1\","
-                    + "\"catalogHash\":\"sha256:"
-                    + "c".repeat(64)
-                    + "\","
-                    + "\"capabilityDigest\":\"sha256:"
-                    + "a".repeat(64)
-                    + "\","
-                    + "\"observationRevision\":7,\"taskRevision\":9}"));
+        exchange -> respond(exchange, 200, catalogBody));
     server.createContext(
         "/api/v2/gameplay/observe",
         exchange ->
@@ -113,6 +122,26 @@ class Micro6V2AccountBuilderOrchestrationGatewayTest {
                     + "\","
                     + "\"deliveryAcknowledged\":true,\"terminalReconciled\":false,"
                     + "\"evidenceRefs\":[\"micro6:v2:status:req-active\"]}"));
+    server.createContext(
+        "/api/v2/gameplay/status/req-slow",
+        exchange -> {
+          try {
+            Thread.sleep(statusDelayMillis);
+          } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+          }
+          respond(
+              exchange,
+              200,
+              "{\"success\":true,\"requestId\":\"req-slow\",\"status\":\"ACTIVE\","
+                  + "\"envelopeDigest\":\"sha256:"
+                  + "e".repeat(64)
+                  + "\",\"deliveryAcknowledged\":true,\"terminalReconciled\":false,"
+                  + "\"evidenceRefs\":[\"micro6:v2:status:req-slow\"]}");
+        });
+    server.createContext(
+        "/api/v2/gameplay/status/req-bad",
+        exchange -> respond(exchange, 200, badStatusBody));
     server.createContext(
         "/api/v2/gameplay/stop",
         exchange -> {
@@ -430,6 +459,107 @@ class Micro6V2AccountBuilderOrchestrationGatewayTest {
 
   private String envelopeOk() {
     return "\"envelopeDigest\":\"sha256:" + "e".repeat(64) + "\",";
+  }
+
+  @Test
+  void theTerminalWaitNeverExceedsItsDeadline() {
+    statusDelayMillis = 3000L;
+    var gateway =
+        new Micro6V2AccountBuilderOrchestrationGateway(
+            objectMapper,
+            canonicalJson,
+            "http://127.0.0.1:" + server.getAddress().getPort(),
+            5000,
+            10000,
+            1000,
+            100,
+            true,
+            Clock.fixed(NOW, ZoneOffset.UTC));
+    GatewayCorrelation correlation =
+        correlation("req-slow", "sha256:" + "e".repeat(64));
+
+    long started = System.nanoTime();
+    GatewayReceipt receipt = gateway.awaitTerminal(correlation, null, NOW.plusMillis(1000));
+    long elapsedMillis = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+
+    assertThat(receipt.state()).isEqualTo(State.NEEDS_RECONCILIATION);
+    // The configured bound, not the per-request timeout or an unconditional final lookup, is the
+    // ceiling: a status call at the deadline must not double the wait.
+    assertThat(elapsedMillis)
+        .as("terminal wait stayed within its bound (elapsed %s ms)", elapsedMillis)
+        .isLessThan(2500L);
+  }
+
+  @Test
+  void malformedWorkerEvidenceIsRejectedAsABoundaryViolation() {
+    String digest = "sha256:" + "e".repeat(64);
+    // Blank, non-textual, duplicate and empty acknowledged evidence are all boundary violations:
+    // none of them may become durable provenance.
+    for (String evidence : java.util.List.of("[\"\"]", "[17]", "[\"a\",\"a\"]", "[]")) {
+      badStatusBody = successfulStatus(evidence, true);
+      assertThatThrownBy(() -> gateway().status(correlation("req-bad", digest), null))
+          .as("evidence %s must be rejected", evidence)
+          .isInstanceOfSatisfying(
+              com.chromascape.web.gameplay.orchestration.accountbuilder
+                  .AccountBuilderOrchestrationException.class,
+              exception -> assertThat(exception.failureCode()).isEqualTo(FailureCode.BOUNDARY_VIOLATION));
+    }
+  }
+
+  private String successfulStatus(String evidenceRefs, boolean acknowledged) {
+    return "{\"success\":true,\"requestId\":\"req-bad\",\"status\":\"ACTIVE\","
+        + "\"envelopeDigest\":\"sha256:"
+        + "e".repeat(64)
+        + "\",\"deliveryAcknowledged\":"
+        + acknowledged
+        + ",\"terminalReconciled\":false,\"evidenceRefs\":"
+        + evidenceRefs
+        + "}";
+  }
+
+  @Test
+  void anAbsentCatalogTaskIsNeverFabricatedAsEligible() {
+    catalogBody = catalogWith("\"tasks\":[]");
+    var gateway = gateway();
+
+    CapabilitySnapshot snapshot = gateway.capabilities(request());
+
+    assertThat(snapshot.liveDeliveryReady()).isTrue();
+    assertThat(snapshot.tasks()).isEmpty();
+    assertThat(snapshot.task("FISHING_TRAINING"))
+        .as("an absent task has no capability entry")
+        .isNull();
+  }
+
+  @Test
+  void anIneligibleCatalogTaskKeepsItsAttestedDenial() {
+    catalogBody =
+        catalogWith(
+            "\"tasks\":[{\"taskKey\":\"FISHING_TRAINING\",\"eligible\":false,"
+                + "\"schemaDigest\":\""
+                + com.chromascape.web.gameplay.contract.v2.GameplayV2EnvelopeRules
+                    .canonicalSchemaDigest()
+                + "\",\"minimumBuildId\":\"build-v1\","
+                + "\"denialReasons\":[\"TASK_MAINTENANCE\"]}]");
+    var gateway = gateway();
+
+    CapabilitySnapshot snapshot = gateway.capabilities(request());
+
+    assertThat(snapshot.task("FISHING_TRAINING")).isNotNull();
+    assertThat(snapshot.task("FISHING_TRAINING").eligible()).isFalse();
+    assertThat(snapshot.task("FISHING_TRAINING").denialReasons())
+        .containsExactly("TASK_MAINTENANCE");
+  }
+
+  private String catalogWith(String tasksField) {
+    return "{\"contractVersion\":\"sc-1429/v2\",\"enabled\":true,\"buildId\":\"build-v1\","
+        + "\"catalogHash\":\"sha256:"
+        + "c".repeat(64)
+        + "\",\"capabilityDigest\":\"sha256:"
+        + "a".repeat(64)
+        + "\","
+        + tasksField
+        + ",\"observationRevision\":7,\"taskRevision\":9}";
   }
 
   @Test

@@ -1,7 +1,6 @@
 package com.chromascape.web.gameplay.orchestration.accountbuilder;
 
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
-import com.chromascape.web.gameplay.contract.v2.GameplayV2EnvelopeRules;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayCorrelation;
@@ -153,8 +152,10 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
         return unavailable(now);
       }
       Instant expiresAt = now.plusSeconds(60);
-      // The v2 gate pins one canonical tool-schema digest for every task; the capability entry
-      // must attest that exact digest (never the catalog hash) for the requested task key.
+      // Only the catalog's own per-task attestation is eligible. The requested key is never turned
+      // into an eligible capability: an absent task yields no entry, and an ineligible entry keeps
+      // its attested denial reasons, so the validator refuses both with TASK_INELIGIBLE.
+      List<TaskCapability> tasks = catalogTasks(catalog);
       return new CapabilitySnapshot(
           catalogHash,
           capabilityDigest,
@@ -164,13 +165,7 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
           now,
           expiresAt,
           true,
-          List.of(
-              new TaskCapability(
-                  taskKey,
-                  true,
-                  GameplayV2EnvelopeRules.canonicalSchemaDigest(),
-                  catalogBuildId,
-                  List.of())));
+          tasks);
     } catch (RuntimeException exception) {
       return unavailable(now);
     }
@@ -235,9 +230,9 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
   /**
    * Bounded terminal wait for SC-1498 bootstrap delivery. This is a gateway-local helper, not part
    * of the SC-1431 transport interface: it polls {@code status} until the earliest envelope
-   * deadline, approved elapsed budget or configured terminal timeout, performs one final lookup at
-   * the bound, and returns reconciliation-only uncertainty when still nonterminal. Start is never
-   * repeated here.
+   * deadline, approved elapsed budget or configured terminal timeout. Every status request and poll
+   * sleep is capped to the remaining budget, and the wait returns reconciliation-only uncertainty
+   * without an extra lookup once the bound is exhausted. Start is never repeated here.
    */
   @Override
   public GatewayReceipt awaitTerminal(
@@ -255,26 +250,78 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
     // while the real wall clock (and the injected clock in production) advances the deadline.
     long startNanos = System.nanoTime();
     long budgetNanos = Math.max(0L, Duration.between(now, bound).toNanos());
-    while (System.nanoTime() - startNanos < budgetNanos) {
-      GatewayReceipt receipt = status(correlation, lease);
+    GatewayReceipt last = null;
+    while (true) {
+      long remaining = budgetNanos - (System.nanoTime() - startNanos);
+      if (remaining <= 0L) {
+        break;
+      }
+      // Every request is capped to what is left, so one slow status call cannot overrun the bound.
+      GatewayReceipt receipt;
+      try {
+        receipt = statusWithin(correlation, lease, Duration.ofNanos(remaining));
+      } catch (AccountBuilderOrchestrationException exception) {
+        if (exception.failureCode() == FailureCode.BOUNDARY_VIOLATION) {
+          throw exception;
+        }
+        // An expired or failed lookup at the bound is reconciliation-only, never an overrun.
+        break;
+      }
+      last = receipt;
       if (receipt.terminalReconciled() && receipt.state().provenTerminal()) {
         return receipt;
       }
-      if (!sleep(statusPollInterval)) {
+      remaining = budgetNanos - (System.nanoTime() - startNanos);
+      if (remaining <= 0L) {
+        break;
+      }
+      long sleepMillis =
+          Math.min(statusPollInterval.toMillis(), Duration.ofNanos(remaining).toMillis());
+      if (sleepMillis <= 0L) {
+        break;
+      }
+      if (!sleep(Duration.ofMillis(sleepMillis))) {
         // Interrupted: return the last nonterminal receipt as reconciliation-only.
         return nonterminalReceipt(correlation, receipt);
       }
     }
-    // One final lookup at the deadline before declaring the run reconciliation-only.
-    GatewayReceipt finalReceipt = status(correlation, lease);
-    if (finalReceipt.terminalReconciled() && finalReceipt.state().provenTerminal()) {
-      return finalReceipt;
+    // No budget remains: return reconciliation-only without an unconditional extra lookup.
+    return nonterminalReceipt(correlation, last);
+  }
+
+  /** Status lookup whose HTTP timeout is capped by the caller's remaining terminal budget. */
+  private GatewayReceipt statusWithin(
+      GatewayCorrelation correlation, Lease lease, Duration timeout) {
+    Instant at = clock.instant();
+    try {
+      JsonNode response = getWithTimeout("api/v2/gameplay/status/" + correlation.requestId(), timeout);
+      return toReceipt(
+          correlation.requestId(), correlation.envelopeDigest(), "STATUS", response, at, false);
+    } catch (AccountBuilderOrchestrationException exception) {
+      throw exception;
+    } catch (RuntimeException exception) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.DELIVERY_UNCERTAIN, "Micro6 v2 status could not be reconciled");
     }
-    return nonterminalReceipt(correlation, finalReceipt);
   }
 
   private GatewayReceipt nonterminalReceipt(
       GatewayCorrelation correlation, GatewayReceipt observed) {
+    if (observed == null) {
+      return new GatewayReceipt(
+          correlation.requestId(),
+          correlation.envelopeDigest(),
+          "TERMINAL_WAIT",
+          State.NEEDS_RECONCILIATION,
+          FailureCode.DELIVERY_UNCERTAIN,
+          false,
+          false,
+          null,
+          List.of(),
+          clock.instant(),
+          receiptId(correlation.requestId(), "TERMINAL_WAIT", null),
+          false);
+    }
     return new GatewayReceipt(
         correlation.requestId(),
         correlation.envelopeDigest(),
@@ -430,13 +477,7 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
       boolean acknowledged = response.path("deliveryAcknowledged").asBoolean(true);
       boolean reconciled = response.path("terminalReconciled").asBoolean(state.provenTerminal());
       Lease lease = parseLease(response);
-      List<String> evidenceRefs = new ArrayList<>();
-      response.path("evidenceRefs").forEach(item -> evidenceRefs.add(item.asText()));
-      if (acknowledged && evidenceRefs.isEmpty()) {
-        throw new AccountBuilderOrchestrationException(
-            FailureCode.BOUNDARY_VIOLATION,
-            "Micro6 v2 successful response is missing worker evidence");
-      }
+      List<String> evidenceRefs = parseEvidenceRefs(response, acknowledged);
       return new GatewayReceipt(
           responseRequestId,
           responseEnvelopeDigest,
@@ -465,8 +506,7 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
     // Failure responses carry no attested identity: the receipt records the attempted
     // correlation so recovery can reconcile it. No worker evidence is fabricated here.
     Lease lease = parseLease(response);
-    List<String> evidenceRefs = new ArrayList<>();
-    response.path("evidenceRefs").forEach(item -> evidenceRefs.add(item.asText()));
+    List<String> evidenceRefs = parseEvidenceRefs(response, acknowledged);
     return new GatewayReceipt(
         requestId,
         envelopeDigest,
@@ -480,6 +520,90 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
         at,
         receiptId(requestId, phase, response),
         killSwitch);
+  }
+
+  /**
+   * Reads the catalog's per-task capability entries. Attested eligibility, schema digest, minimum
+   * build and denial reasons are carried verbatim; nothing is derived from the request.
+   */
+  private List<TaskCapability> catalogTasks(JsonNode catalog) {
+    List<TaskCapability> tasks = new ArrayList<>();
+    JsonNode taskNodes = catalog.path("tasks");
+    if (!taskNodes.isArray()) {
+      return tasks;
+    }
+    for (JsonNode task : taskNodes) {
+      String key = firstText(task, "taskKey", "task_key");
+      if (key == null || key.isBlank()) {
+        continue;
+      }
+      boolean eligible =
+          task.has("eligible")
+              ? task.path("eligible").asBoolean(false)
+              : task.path("runnable").asBoolean(false);
+      String schemaDigest = firstText(task, "schemaDigest", "settings_schema_hash");
+      String minimumBuildId = firstText(task, "minimumBuildId", "minimum_build_id");
+      List<String> denialReasons = new ArrayList<>();
+      JsonNode reasons = task.path("denialReasons");
+      if (reasons.isArray()) {
+        reasons.forEach(reason -> denialReasons.add(reason.asText()));
+      } else {
+        String reason = firstText(task, "schema_error_reason", "denialReason");
+        if (reason != null && !reason.isBlank()) {
+          denialReasons.add(reason);
+        }
+      }
+      if (!eligible && denialReasons.isEmpty()) {
+        denialReasons.add("TASK_NOT_ELIGIBLE");
+      }
+      tasks.add(
+          new TaskCapability(key, eligible, schemaDigest, minimumBuildId, denialReasons));
+    }
+    return tasks;
+  }
+
+  /**
+   * Worker evidence as durable provenance. Every entry must be a nonblank textual reference and no
+   * reference may repeat; an acknowledged delivery must attest at least one. Anything else is a
+   * boundary violation, so malformed values can never be persisted as trusted evidence.
+   */
+  private List<String> parseEvidenceRefs(JsonNode response, boolean required) {
+    JsonNode refs = response.path("evidenceRefs");
+    if (refs.isMissingNode() || refs.isNull()) {
+      if (required) {
+        throw new AccountBuilderOrchestrationException(
+            FailureCode.BOUNDARY_VIOLATION,
+            "Micro6 v2 response is missing required worker evidence");
+      }
+      return List.of();
+    }
+    if (!refs.isArray()) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.BOUNDARY_VIOLATION,
+          "Micro6 v2 evidenceRefs must be an array of references");
+    }
+    List<String> refsList = new ArrayList<>();
+    java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+    for (JsonNode item : refs) {
+      if (!item.isTextual() || item.asText().isBlank()) {
+        throw new AccountBuilderOrchestrationException(
+            FailureCode.BOUNDARY_VIOLATION,
+            "Micro6 v2 evidenceRefs contains a blank or non-textual reference");
+      }
+      String reference = item.asText().trim();
+      if (!seen.add(reference)) {
+        throw new AccountBuilderOrchestrationException(
+            FailureCode.BOUNDARY_VIOLATION,
+            "Micro6 v2 evidenceRefs contains a duplicate reference");
+      }
+      refsList.add(reference);
+    }
+    if (required && refsList.isEmpty()) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.BOUNDARY_VIOLATION,
+          "Micro6 v2 acknowledged delivery is missing worker evidence");
+    }
+    return List.copyOf(refsList);
   }
 
   private State mapWireState(String wireStatus, boolean success) {
@@ -568,9 +692,13 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
   }
 
   private JsonNode get(String path) {
+    return getWithTimeout(path, requestTimeout);
+  }
+
+  private JsonNode getWithTimeout(String path, Duration timeout) {
     try {
       HttpRequest request =
-          HttpRequest.newBuilder(baseUri.resolve(path)).timeout(requestTimeout).GET().build();
+          HttpRequest.newBuilder(baseUri.resolve(path)).timeout(timeout).GET().build();
       HttpResponse<String> response =
           httpClient.send(request, HttpResponse.BodyHandlers.ofString());
       if (response.statusCode() < 200 || response.statusCode() >= 300) {

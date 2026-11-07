@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import com.chromascape.web.gameplay.authority.HumanGameplayAuthorityService;
@@ -21,6 +22,10 @@ import com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorServi
 import com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorService.PreviewRequest;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationView;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderCapabilityPreflight;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.TaskCapability;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationService;
 import com.chromascape.web.gameplay.provider.runtime.ProviderDecisionHandoff;
 import com.chromascape.web.gameplay.provider.runtime.ProviderDecisionHandoff.PersistedDecision;
@@ -58,6 +63,7 @@ class BootstrapGameplayOperatorServiceTest {
   @Mock private BootstrapRecordingCoordinator recordingCoordinator;
   @Mock private BootstrapEvidenceManifestService manifestService;
   @Mock private AccountBuilderOrchestrationService orchestrationService;
+  @Mock private AccountBuilderCapabilityPreflight capabilityPreflight;
 
   @Mock
   private com.chromascape.web.gameplay.provider.runtime.GameplayProviderRuntime providerRuntime;
@@ -84,6 +90,9 @@ class BootstrapGameplayOperatorServiceTest {
     authorityService = new HumanGameplayAuthorityService(canonicalJson, fixed, AUTHORITY_SECRET);
     FakeHandoff handoff = new FakeHandoff();
     assembler = new BootstrapProposalAssembler(handoff, authorityService, canonicalJson);
+    lenient()
+        .when(capabilityPreflight.probe(any()))
+        .thenReturn(eligibleSnapshot());
     service = service(true, true);
   }
 
@@ -97,6 +106,7 @@ class BootstrapGameplayOperatorServiceTest {
         recordingCoordinator,
         manifestService,
         orchestrationService,
+        capabilityPreflight,
         providerRuntime,
         objectMapper,
         fixed,
@@ -104,6 +114,130 @@ class BootstrapGameplayOperatorServiceTest {
         OPERATOR_KEY,
         recordingEnabled,
         micro6V2Enabled);
+  }
+
+  private CapabilitySnapshot eligibleSnapshot() {
+    return new CapabilitySnapshot(
+        "sha256:" + "c".repeat(64),
+        "sha256:" + "a".repeat(64),
+        "build-v1",
+        7,
+        9,
+        NOW,
+        NOW.plusSeconds(60),
+        true,
+        java.util.List.of(
+            new TaskCapability(
+                "FISHING_TRAINING",
+                true,
+                "sha256:" + "d".repeat(64),
+                "build-sc1429",
+                List.of())));
+  }
+
+  @Test
+  void anAbsentCatalogTaskRefusesBeforeAnyApprovalOrRecordingSideEffect() {
+    lenient()
+        .when(capabilityPreflight.probe(any()))
+        .thenReturn(
+            new CapabilitySnapshot(
+                "sha256:" + "c".repeat(64),
+                "sha256:" + "a".repeat(64),
+                "build-v1",
+                7,
+                9,
+                NOW,
+                NOW.plusSeconds(60),
+                true,
+                java.util.List.of()));
+
+    assertThatDispatchRefusesWithoutSideEffects("TASK_INELIGIBLE");
+  }
+
+  @Test
+  void anIneligibleCatalogTaskRefusesBeforeAnyApprovalOrRecordingSideEffect() {
+    lenient()
+        .when(capabilityPreflight.probe(any()))
+        .thenReturn(
+            new CapabilitySnapshot(
+                "sha256:" + "c".repeat(64),
+                "sha256:" + "a".repeat(64),
+                "build-v1",
+                7,
+                9,
+                NOW,
+                NOW.plusSeconds(60),
+                true,
+                java.util.List.of(
+                    new TaskCapability(
+                        "FISHING_TRAINING",
+                        false,
+                        "sha256:" + "d".repeat(64),
+                        "build-v1",
+                        List.of("TASK_MAINTENANCE")))));
+
+    assertThatDispatchRefusesWithoutSideEffects("TASK_INELIGIBLE");
+  }
+
+  private void assertThatDispatchRefusesWithoutSideEffects(String expectedCode) {
+    ExecutionEnvelope envelope = envelopeWithFutureDeadline();
+    var bindings = bindings(envelope);
+    org.assertj.core.api.Assertions.assertThat(bindings).isNotNull();
+    // A valid, already-approved bind: the refusal must come from the capability attestation, after
+    // assembly and provider-command validation, and before any durable or recorded side effect.
+    var assembled =
+        assembler.assemble("session-fixture", "turn-fixture", observation(), envelope, bindings);
+    String approvalId = "approval-ineligible";
+    when(approvalStore.find(approvalId))
+        .thenReturn(
+            new BootstrapApprovalStore.ApprovalView(
+                approvalId,
+                assembled.scopeDigest(),
+                "session-fixture",
+                "turn-fixture",
+                assembled.orchestrationId(),
+                assembled.requestId(),
+                assembled.recordingId(),
+                assembled.previewFingerprint(),
+                "operator-sc1498",
+                NOW,
+                NOW.plus(5, ChronoUnit.MINUTES),
+                "APPROVED",
+                null,
+                null,
+                NOW,
+                NOW));
+
+    assertThatThrownBy(
+            () ->
+                service.dispatch(
+                    OPERATOR_KEY,
+                    new DispatchRequest(
+                        approvalId, observation(), envelope, bindings)))
+        .isInstanceOf(BootstrapGameplayOperatorService.OperatorException.class)
+        .satisfies(
+            exception ->
+                org.assertj.core.api.Assertions.assertThat(
+                        ((BootstrapGameplayOperatorService.OperatorException) exception)
+                            .failureCode())
+                    .isEqualTo(expectedCode));
+    org.mockito.Mockito.verify(approvalStore, org.mockito.Mockito.never())
+        .bind(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
+    org.mockito.Mockito.verify(recordingCoordinator, org.mockito.Mockito.never())
+        .start(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
   }
 
   @Test

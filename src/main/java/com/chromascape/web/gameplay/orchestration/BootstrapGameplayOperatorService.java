@@ -12,7 +12,11 @@ import com.chromascape.web.gameplay.bootstrap.BootstrapRecordingCoordinator.Reco
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import com.chromascape.web.gameplay.contract.GameplayContracts.ExecutionEnvelope;
 import com.chromascape.web.gameplay.contract.GameplayContracts.HumanAuthority;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderCapabilityPreflight;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationException;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.TaskCapability;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Mode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationView;
@@ -57,6 +61,7 @@ public final class BootstrapGameplayOperatorService {
   private final BootstrapRecordingCoordinator recordingCoordinator;
   private final BootstrapEvidenceManifestService manifestService;
   private final AccountBuilderOrchestrationService orchestrationService;
+  private final AccountBuilderCapabilityPreflight capabilityPreflight;
   private final GameplayProviderRuntime providerRuntime;
   private final ObjectMapper objectMapper;
   private final Clock clock;
@@ -74,6 +79,7 @@ public final class BootstrapGameplayOperatorService {
       BootstrapRecordingCoordinator recordingCoordinator,
       BootstrapEvidenceManifestService manifestService,
       AccountBuilderOrchestrationService orchestrationService,
+      AccountBuilderCapabilityPreflight capabilityPreflight,
       GameplayProviderRuntime providerRuntime,
       ObjectMapper objectMapper,
       @Value("${gameplay.bootstrap.operator-enabled:false}") boolean enabled,
@@ -88,6 +94,7 @@ public final class BootstrapGameplayOperatorService {
         recordingCoordinator,
         manifestService,
         orchestrationService,
+        capabilityPreflight,
         providerRuntime,
         objectMapper,
         Clock.systemUTC(),
@@ -105,6 +112,7 @@ public final class BootstrapGameplayOperatorService {
       BootstrapRecordingCoordinator recordingCoordinator,
       BootstrapEvidenceManifestService manifestService,
       AccountBuilderOrchestrationService orchestrationService,
+      AccountBuilderCapabilityPreflight capabilityPreflight,
       GameplayProviderRuntime providerRuntime,
       ObjectMapper objectMapper,
       Clock clock,
@@ -119,6 +127,7 @@ public final class BootstrapGameplayOperatorService {
     this.recordingCoordinator = recordingCoordinator;
     this.manifestService = manifestService;
     this.orchestrationService = orchestrationService;
+    this.capabilityPreflight = capabilityPreflight;
     this.providerRuntime = providerRuntime;
     this.objectMapper = objectMapper;
     this.clock = clock;
@@ -342,6 +351,9 @@ public final class BootstrapGameplayOperatorService {
           "STALE_BINDING",
           "Persisted provider decision cannot back this dispatch");
     }
+    // Read-only capability attestation before the one-use bind and before any recording row: an
+    // absent, ineligible or mismatched task refuses with a stable code and leaves no durable trace.
+    requireEligibleTask(boundEnvelope, capabilityPreflight.probe(boundEnvelope));
     ApprovalView bound =
         approvalStore.bind(approval.approvalId(), authority.authorityId(), signatureDigest);
     // SC-1498 ordering: the durable recording projection STARTS before SC-1431 delivery, once the
@@ -636,6 +648,29 @@ public final class BootstrapGameplayOperatorService {
       reasons.add("ORCHESTRATION_UNAVAILABLE");
     }
     return List.copyOf(reasons);
+  }
+
+  /**
+   * Refuses unless the live Micro6 catalog attests this exact task as eligible with the schema the
+   * approved envelope binds. Nothing is fabricated from the request when the attestation is absent.
+   */
+  private void requireEligibleTask(
+      ExecutionEnvelope envelope, CapabilitySnapshot capabilities) {
+    if (capabilities == null || !capabilities.liveDeliveryReady()) {
+      throw error(
+          HttpStatus.SERVICE_UNAVAILABLE,
+          FailureCode.GATEWAY_UNAVAILABLE.name(),
+          "AccountBuilder capability attestation is unavailable");
+    }
+    TaskCapability task = capabilities.task(envelope.taskKey());
+    if (task == null
+        || !task.eligible()
+        || !java.util.Objects.equals(task.schemaDigest(), envelope.schemaDigest())) {
+      throw error(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          FailureCode.TASK_INELIGIBLE.name(),
+          "AccountBuilder task is not currently eligible");
+    }
   }
 
   private void requireOperator(String presentedKey) {
