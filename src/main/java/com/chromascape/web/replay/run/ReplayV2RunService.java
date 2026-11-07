@@ -12,7 +12,6 @@ import com.chromascape.web.replay.artifact.ReplayArtifactService;
 import com.chromascape.web.replay.artifact.entity.ArtifactRef;
 import com.chromascape.web.replay.artifact.repository.ArtifactRefRepository;
 import com.chromascape.web.replay.catalog.ReplayV2PreflightService;
-import com.chromascape.web.replay.catalog.dto.ReplayBlockingReason;
 import com.chromascape.web.replay.conversion.ActionProvenance;
 import com.chromascape.web.replay.conversion.ConversionMode;
 import com.chromascape.web.replay.conversion.ConversionQuality;
@@ -100,6 +99,12 @@ public class ReplayV2RunService {
     return preflightService.preflight(recordingId, conversionMode);
   }
 
+  @Transactional(readOnly = true)
+  public XrspsPreflightResponse preflight(
+      String recordingId, ConversionMode conversionMode, UUID curationId, String ownerId) {
+    return preflightService.preflight(recordingId, conversionMode, curationId, ownerId);
+  }
+
   public Creation create(String recordingId, CreateXrspsRunRequest request, String ownerId) {
     if (ownerId == null || ownerId.isBlank()) {
       throw new ReplayException(
@@ -147,13 +152,19 @@ public class ReplayV2RunService {
           "Enable REPLAY_ENABLED only for a reviewed replay deployment");
     }
 
-    XrspsPreflightResponse preflight =
-        preflightService.preflight(recordingId, request.conversionMode());
-    if (!preflight.simulationEligible()) {
-      throw preflightFailure(preflight);
-    }
+    // Resolve/compile once, so a newly published default curation cannot change the selected
+    // input between preview and execution. A refusal rolls back this outer transaction.
     ScenarioManifestV2Compiler.Compilation compilation =
-        compiler.compile(recordingId, request.conversionMode());
+        compiler.compile(recordingId, request.conversionMode(), request.curationId(), ownerId);
+    compilation.requireSimulationAllowed();
+    if (request.expectedManifestChecksum() != null
+        && !request
+            .expectedManifestChecksum()
+            .equals(compilation.manifest().getManifestChecksum())) {
+      throw ReplayException.conflict(
+          ReplayErrorCode.CHECKSUM_MISMATCH,
+          "Compilation inputs changed after preview; refresh preflight before starting the run");
+    }
     ReplayRun run = runService.createV2(compilation.manifest(), request, ownerId, fingerprint);
     return new Creation(toResponse(run), true);
   }
@@ -262,9 +273,10 @@ public class ReplayV2RunService {
           case "manifest" -> ArtifactKind.MANIFEST;
           case "trace" -> ArtifactKind.TRACE;
           case "report" -> ArtifactKind.REPORT;
+          case "outcome" -> ArtifactKind.OUTCOME;
           default -> throw ReplayException.badRequest(
               ReplayErrorCode.VALIDATION_ERROR,
-              "Unknown replay artifact; expected manifest, trace, hashes, or report");
+              "Unknown replay artifact; expected manifest, trace, hashes, report, or outcome");
         };
     ArtifactRef ref =
         artifactRepository
@@ -444,47 +456,15 @@ public class ReplayV2RunService {
     return value.replace("~", "~0").replace("/", "~1");
   }
 
-  private ReplayException preflightFailure(XrspsPreflightResponse preflight) {
-    ReplayBlockingReason selected = selectBlocker(preflight.blockingReasons());
-    if (selected == null) {
-      return ReplayException.invalid(
-          ReplayErrorCode.ACTION_UNSUPPORTED, "The recording is not eligible for xRSPS simulation");
-    }
-    ReplayErrorCode code = selected.code();
-    HttpStatus status = HttpStatus.UNPROCESSABLE_ENTITY;
-    boolean retryable = false;
-    if (code == ReplayErrorCode.XRSPS_CAPABILITY_UNAVAILABLE
-        || code == ReplayErrorCode.XRSPS_VERSION_INCOMPATIBLE) {
-      status = HttpStatus.SERVICE_UNAVAILABLE;
-      retryable = true;
-    }
-    return new ReplayException(code, status, retryable, selected.message(), selected.remediation());
-  }
-
-  private static ReplayBlockingReason selectBlocker(List<ReplayBlockingReason> blockers) {
-    if (blockers == null || blockers.isEmpty()) return null;
-    List<ReplayErrorCode> priority =
-        List.of(
-            ReplayErrorCode.XRSPS_CAPABILITY_UNAVAILABLE,
-            ReplayErrorCode.XRSPS_VERSION_INCOMPATIBLE,
-            ReplayErrorCode.DEBUG_SESSION_NOT_FINALIZED,
-            ReplayErrorCode.TICK_GAP_DETECTED,
-            ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
-            ReplayErrorCode.ACTION_UNSUPPORTED);
-    for (ReplayErrorCode code : priority) {
-      Optional<ReplayBlockingReason> matching =
-          blockers.stream().filter(reason -> reason.code() == code).findFirst();
-      if (matching.isPresent()) return matching.get();
-    }
-    return blockers.get(0);
-  }
-
   private String requestFingerprint(String recordingId, CreateXrspsRunRequest request) {
     var node = mapper.createObjectNode();
     node.put("recordingId", recordingId);
     node.put("conversionMode", request.conversionMode().name());
     node.put("openViewer", request.viewerRequested());
     node.put("stopPolicy", request.stopPolicy().name());
+    if (request.curationId() != null) node.put("curationId", request.curationId().toString());
+    if (request.expectedManifestChecksum() != null)
+      node.put("expectedManifestChecksum", request.expectedManifestChecksum());
     return projectionService.sha256Hex(projectionService.canonicalJsonBytes(node));
   }
 

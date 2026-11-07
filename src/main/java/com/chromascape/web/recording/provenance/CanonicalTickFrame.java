@@ -113,7 +113,11 @@ public final class CanonicalTickFrame {
       long sourceTick = event.path("sourceTick").asLong();
       if (sourceTick < 0) fail("INVALID_SOURCE_TICK");
       if (sourceTick > tick) fail("FUTURE_OBSERVATION");
-      if (sourceTick < tick - 1) fail("STALE_OBSERVATION");
+      long observationWindow =
+          HumanFishingFrameContract.applies(input)
+              ? HumanFishingFrameContract.MAX_TRANSITION_DELAY_TICKS
+              : 1;
+      if (sourceTick < tick - observationWindow) fail("STALE_OBSERVATION");
       if (!event.path("kind").isTextual() || !event.path("stage").isTextual())
         fail("INVALID_SEMANTIC_EVENT");
       if (!event
@@ -163,6 +167,8 @@ public final class CanonicalTickFrame {
     // Prove sensitive raw fields have already been excluded at the producer boundary.
     if (input.has("chat") || input.has("players") && !input.path("players").isEmpty())
       fail("UNREDACTED_CAPTURE");
+    if (HumanFishingFrameContract.applies(input))
+      HumanFishingFrameContract.validate(input, context);
     copy.put("contentHash", digest);
     return new CanonicalTickFrame(copy);
   }

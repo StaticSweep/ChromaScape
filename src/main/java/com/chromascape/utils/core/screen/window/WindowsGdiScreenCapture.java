@@ -1,5 +1,6 @@
 package com.chromascape.utils.core.screen.window;
 
+import com.chromascape.utils.core.AccountManager;
 import com.sun.jna.Memory;
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
@@ -14,10 +15,13 @@ import com.sun.jna.platform.win32.WinGDI;
 import com.sun.jna.platform.win32.WinGDI.BITMAPINFO;
 import com.sun.jna.platform.win32.WinNT.HANDLE;
 import com.sun.jna.platform.win32.WinUser;
+import com.sun.jna.ptr.IntByReference;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
+import java.time.Instant;
+import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,10 +33,15 @@ final class WindowsGdiScreenCapture {
   private WindowsGdiScreenCapture() {}
 
   interface User32Extended extends User32 {
-    User32Extended INSTANCE = Native.load("user32", User32Extended.class);
+    User32Extended INSTANCE =
+        Native.load(
+            "user32", User32Extended.class, com.sun.jna.win32.W32APIOptions.DEFAULT_OPTIONS);
 
     @SuppressWarnings("checkstyle:MethodName")
     void ClientToScreen(HWND hwnd, POINT point);
+
+    @SuppressWarnings("checkstyle:MethodName")
+    boolean IsChild(HWND parent, HWND child);
   }
 
   static BufferedImage captureWindow(WindowSelectionService selectionService) {
@@ -145,25 +154,112 @@ final class WindowsGdiScreenCapture {
         bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top);
   }
 
+  /**
+   * Auto-detection scans every desktop window, which is too costly to repeat for each captured
+   * frame (30 per second). The detected canvas is reused for a second and re-resolved earlier if
+   * the window no longer exists. Explicit selections are never cached.
+   */
+  private static final AutoTargetCache<CachedCanvas> AUTO_CANVAS_CACHE =
+      new AutoTargetCache<>(
+          1_000_000_000L, System::nanoTime, canvas -> canvas.isValid(User32Extended.INSTANCE));
+
   private static CanvasTarget resolveCanvasTarget(WindowSelectionService selectionService) {
-    HWND target = selectionService != null ? selectionService.getSelectedHwnd() : null;
-    String source = "explicit selection";
-    if (target == null) {
-      target = WindowHandler.getTargetWindow();
-      source = "auto-detection";
+    HWND selected = selectionService != null ? selectionService.getSelectedHwnd() : null;
+    if (selected != null) {
+      AUTO_CANVAS_CACHE.invalidate();
+      return new CanvasTarget(canvasOf(selected), "explicit selection");
     }
-    if (target == null) {
+    AutoContext context = autoContext(selectionService);
+    CachedCanvas cached =
+        AUTO_CANVAS_CACHE.get(
+            context,
+            () -> {
+              HWND detected = WindowHandler.getTargetWindow();
+              if (detected == null) return null;
+              HWND canvas = canvasOf(detected);
+              int pid = processId(User32.INSTANCE, detected);
+              Instant started = processStart(pid);
+              if (started == null) return null;
+              CachedCanvas target =
+                  new CachedCanvas(
+                      detected,
+                      canvas,
+                      pid,
+                      started,
+                      windowTitle(User32.INSTANCE, detected),
+                      windowClass(User32.INSTANCE, canvas));
+              return target.isValid(User32Extended.INSTANCE) ? target : null;
+            });
+    // Selection/account changes during discovery must not publish a displaced target.
+    if (!context.equals(autoContext(selectionService))) {
+      AUTO_CANVAS_CACHE.invalidate();
+      return new CanvasTarget(null, "selection changed during auto-detection");
+    }
+    HWND canvas = cached == null ? null : cached.canvas();
+    if (canvas == null) {
       logger.warn("No target window available for capture");
-      return new CanvasTarget(null, source);
     }
+    return new CanvasTarget(canvas, "auto-detection");
+  }
+
+  private record AutoContext(WindowSelectionService selection, long generation, String account) {}
+
+  private static AutoContext autoContext(WindowSelectionService selection) {
+    return new AutoContext(
+        selection,
+        selection == null ? 0 : selection.getSelectedGeneration(),
+        AccountManager.getSelectedAccount());
+  }
+
+  static record CachedCanvas(
+      HWND root, HWND canvas, int pid, Instant started, String title, String canvasClass) {
+    boolean isValid(User32Extended api) {
+      return api.IsWindow(root)
+          && api.IsWindow(canvas)
+          && processId(api, root) == pid
+          && processId(api, canvas) == pid
+          && Objects.equals(started, processStart(pid))
+          && (root.equals(canvas) || api.IsChild(root, canvas))
+          && title.equals(windowTitle(api, root))
+          && canvasClass.equals(windowClass(api, canvas));
+    }
+  }
+
+  private static int processId(User32 api, HWND window) {
+    IntByReference pid = new IntByReference();
+    api.GetWindowThreadProcessId(window, pid);
+    return pid.getValue();
+  }
+
+  private static Instant processStart(int pid) {
+    try {
+      return ProcessHandle.of(Integer.toUnsignedLong(pid))
+          .filter(ProcessHandle::isAlive)
+          .flatMap(handle -> handle.info().startInstant())
+          .orElse(null);
+    } catch (SecurityException e) {
+      return null;
+    }
+  }
+
+  private static String windowTitle(User32 api, HWND window) {
+    char[] value = new char[512];
+    api.GetWindowText(window, value, value.length);
+    return Native.toString(value);
+  }
+
+  private static String windowClass(User32 api, HWND window) {
+    char[] value = new char[256];
+    api.GetClassName(window, value, value.length);
+    return Native.toString(value);
+  }
+
+  private static HWND canvasOf(HWND target) {
     HWND canvas = WindowHandler.findNthChildWindow(target, "SunAwtCanvas", 2);
     if (canvas == null) {
       canvas = WindowHandler.findNthChildWindow(target, "SunAwtCanvas", 1);
     }
-    if (canvas == null) {
-      canvas = target;
-    }
-    return new CanvasTarget(canvas, source);
+    return canvas != null ? canvas : target;
   }
 
   private static String formatHwnd(HWND hwnd) {

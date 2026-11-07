@@ -26,8 +26,6 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -72,8 +70,9 @@ public class RecordingService implements FrameListener {
 
   // Frame buffer for producer-consumer pattern
   private static final int FRAME_BUFFER_SIZE = 300; // ~10 seconds at 30 FPS
-  private final BlockingQueue<TimestampedFrame> frameBuffer =
-      new ArrayBlockingQueue<>(FRAME_BUFFER_SIZE);
+  private static final long MAX_BUFFERED_BYTES = 192L * 1024 * 1024;
+  private final BoundedFrameBuffer<TimestampedFrame> frameBuffer =
+      new BoundedFrameBuffer<>(FRAME_BUFFER_SIZE, MAX_BUFFERED_BYTES, frame -> frame.bytes);
   private volatile boolean encoderRunning = false;
   private long encodedFrameCount = 0; // Track encoded frames for timestamp calculation
   private volatile long encodedMediaMicros = 0; // Last encoded media timestamp (real elapsed time)
@@ -161,9 +160,27 @@ public class RecordingService implements FrameListener {
     }
 
     if (!recording.get() && recorder != null) {
-      throw new RecordingException(
-          "Previous recording was not finalized",
-          "Restart the recording service before starting another recording.");
+      // A bounded stop may time out while the encoder drains. Once its owner has
+      // terminated, release the leftover native handle without deleting the media.
+      // Never close a recorder that may still be inside record().
+      if (encoderFuture != null && !encoderFuture.isDone()) {
+        throw new RecordingException(
+            "Previous recording was not finalized",
+            "The previous recording is still finishing. Wait before starting another recording.");
+      }
+      try {
+        recorder.stop();
+        recorder.release();
+        recorder = null;
+        logger.warn(
+            "Released previous recorder after its encoder finished: {}. "
+                + "Existing media retained; calibrated finalization is not asserted.",
+            currentRecordingId);
+      } catch (Exception e) {
+        throw new RecordingException(
+            "Previous recording was not finalized",
+            "The previous recorder could not be released. Restart the recording service.");
+      }
     }
 
     if (recording.get()) {
@@ -222,7 +239,13 @@ public class RecordingService implements FrameListener {
       timingQualityCodes.clear();
       lastMediaSlot = -1;
       // Keep the actual first-image capture time as well as its presentation origin.
-      frameBuffer.offer(new TimestampedFrame(normalizedFirstFrame, initialFrameCaptureNanos));
+      if (!frameBuffer
+          .offer(new TimestampedFrame(normalizedFirstFrame, initialFrameCaptureNanos))
+          .accepted()) {
+        throw new RecordingException(
+            "FRAME_MEMORY_BUDGET_EXCEEDED",
+            "The captured image exceeds the recording memory budget. Reduce the canvas size.");
+      }
       frameCount.set(1);
       framesRecorded = 1;
 
@@ -383,7 +406,8 @@ public class RecordingService implements FrameListener {
       if (nowNanos - lastProgressLogNanos > TimeUnit.SECONDS.toNanos(2)) {
         lastProgressLogNanos = nowNanos;
         logger.info(
-            "Waiting for a stable RuneLite canvas size (attempt {}, elapsed {} ms, last size {})...",
+            "Waiting for a stable RuneLite canvas size (attempt {}, elapsed {} ms, last size"
+                + " {})...",
             attempts,
             TimeUnit.NANOSECONDS.toMillis(nowNanos - startNanos),
             lastObservedDimensions != null ? lastObservedDimensions : "unknown");
@@ -591,6 +615,7 @@ public class RecordingService implements FrameListener {
     metrics.put("isRecording", recording.get());
     metrics.put("frameBufferSize", FRAME_BUFFER_SIZE);
     metrics.put("frameBufferDepth", frameBuffer.size());
+    metrics.put("frameBufferBytes", frameBuffer.bytes());
     metrics.put("frameBufferCapacity", frameBuffer.remainingCapacity());
     metrics.put("droppedFrames", droppedFrameCount.get());
     metrics.put("duplicatedFrames", duplicatedFrameCount.get());
@@ -745,18 +770,17 @@ public class RecordingService implements FrameListener {
         TimestampedFrame timestampedFrame =
             new TimestampedFrame(capturedImage, event.getCaptureTimeNanos());
 
-        // Drop-oldest policy: if full, remove oldest then add newest
-        if (frameBuffer.remainingCapacity() == 0) {
-          frameBuffer.poll(); // Drop oldest frame
-          long dropped = droppedFrameCount.incrementAndGet();
-          if (dropped % 30 == 1) {
+        // A count limit alone can retain gigabytes at large canvas sizes.
+        var admission = frameBuffer.offer(timestampedFrame);
+        if (admission.dropped() > 0) {
+          long dropped = droppedFrameCount.addAndGet(admission.dropped());
+          if (dropped % 30 < admission.dropped()) {
             logger.warn(
-                "Frame buffer full, dropped {} total frames (buffer size: {})",
+                "Frame budget reached; dropped {} frames, retained {} bytes",
                 dropped,
-                frameBuffer.size());
+                frameBuffer.bytes());
           }
         }
-        frameBuffer.offer(timestampedFrame);
         frameCount.incrementAndGet();
         framesRecorded++;
 
@@ -877,7 +901,7 @@ public class RecordingService implements FrameListener {
           }
 
           // Detect encoder lag
-          if (queueDepth > FRAME_BUFFER_SIZE * 0.8) {
+          if (queueDepth > FRAME_BUFFER_SIZE * 0.8 && encodedFrameCount % 30 == 0) {
             logger.warn(
                 "Encoder lag detected: queue depth {} ({}% full)",
                 queueDepth, Math.round((queueDepth / (double) FRAME_BUFFER_SIZE) * 100));
@@ -1144,7 +1168,7 @@ public class RecordingService implements FrameListener {
       return frame;
     }
 
-    logger.warn(
+    logger.debug(
         "Captured frame dimensions {}x{} are not even; trimming to {}x{} for recorder"
             + " compatibility.",
         width,
@@ -1235,10 +1259,17 @@ public class RecordingService implements FrameListener {
   private static class TimestampedFrame {
     final BufferedImage image;
     final long captureNanoTime;
+    final long bytes;
 
     TimestampedFrame(BufferedImage image, long captureNanoTime) {
       this.image = image;
       this.captureNanoTime = captureNanoTime;
+      // A subimage retains its parent's entire data buffer, not only the visible rectangle.
+      var data = image.getRaster().getDataBuffer();
+      this.bytes =
+          Math.multiplyExact(
+              Math.multiplyExact((long) data.getSize(), data.getNumBanks()),
+              (java.awt.image.DataBuffer.getDataTypeSize(data.getDataType()) + 7L) / 8L);
     }
   }
 

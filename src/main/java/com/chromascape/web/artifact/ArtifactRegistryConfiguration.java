@@ -13,8 +13,18 @@ public class ArtifactRegistryConfiguration {
       ObjectMapper json,
       @Value("${ai-player.dataset.output-dir:.chromascape/datasets}") String root,
       @Value("${artifacts.max-artifact-bytes:104857600}") long maxBytes,
-      @Value("${artifacts.quota-bytes:1073741824}") long quotaBytes) {
+      @Value("${artifacts.quota-bytes:1073741824}") long quotaBytes,
+      @Value("${artifacts.durability-mode:strict}") String durabilityMode) {
     return new ImmutableArtifactStore(
-        Path.of(root).resolve("artifacts"), maxBytes, quotaBytes, json);
+        Path.of(root).resolve("artifacts"), maxBytes, quotaBytes, json, mode(durabilityMode));
+  }
+
+  private static ImmutableArtifactStore.DurabilityMode mode(String value) {
+    try {
+      return ImmutableArtifactStore.DurabilityMode.valueOf(
+          value.trim().toUpperCase(java.util.Locale.ROOT));
+    } catch (IllegalArgumentException e) {
+      throw new IllegalStateException("Invalid artifacts.durability-mode: " + value, e);
+    }
   }
 }

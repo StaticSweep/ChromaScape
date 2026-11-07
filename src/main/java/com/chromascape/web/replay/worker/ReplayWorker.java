@@ -58,6 +58,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -87,7 +88,7 @@ public class ReplayWorker implements AutoCloseable {
 
   /** Closed action vocabulary; the live worker may truthfully attest only a subset. */
   private static final List<String> WORKER_ACTION_VOCABULARY =
-      CapabilityManifest.V1_SUPPORTED_ACTIONS;
+      CapabilityManifest.WORKER_ACTION_VOCABULARY;
 
   /** Deterministic kernel rejections: execution failed, infrastructure did not. */
   private static final Set<ReplayErrorCode> CONTRACT_ERROR_CODES =
@@ -134,6 +135,7 @@ public class ReplayWorker implements AutoCloseable {
   /** Genesis chain anchor: SHA-256 of the domain-separated literal. */
   private final String genesisChainHash;
 
+  @Autowired
   public ReplayWorker(
       ReplayRunRepository runRepository,
       com.chromascape.web.replay.run.repository.ReplayAttemptRepository attemptRepository,
@@ -299,6 +301,7 @@ public class ReplayWorker implements AutoCloseable {
       if (!actions.isArray()) {
         throw new IllegalStateException("Manifest actions missing");
       }
+      ReplaySourceSchedule sourceSchedule = new ReplaySourceSchedule(manifestDoc);
 
       ensureNotCancelled(run.getId());
       kernel = new XrspsKernelProcess(properties.getXrsps(), mapper);
@@ -317,15 +320,9 @@ public class ReplayWorker implements AutoCloseable {
       persistence.storeRuntimeIdentity(fence, runtimeIdentity);
       verifyManifestRuntime(manifestDoc, runtimeIdentity);
       verifyManifestActions(manifestDoc, workerCapability.supportedActions());
-
-      // reset with manifest as a JSON object (never an escaped string).
-      ObjectNode resetParams = mapper.createObjectNode();
-      resetParams.set("manifest", manifestDoc);
-      KernelMessage resetMsg = sendWithinRunDeadline(heartbeat, kernel, run, "reset", resetParams);
-      assertOk(resetMsg, "reset");
-      long expectedTick = resetMsg.result().path("initialTick").asLong(-1);
-      if (expectedTick < 0) {
-        throw new IllegalStateException("reset returned no initialTick");
+      if (sourceSchedule.timed()) requireSourceActionProtocol(caps);
+      if (workerCapability.nativeRun()) {
+        es.nativeLedger = new NativeRunLedger(manifestDoc);
       }
       es.causal = workerCapability.causalV2();
       es.manifestDigest = manifestDoc.path("manifestChecksum").asText();
@@ -335,85 +332,60 @@ public class ReplayWorker implements AutoCloseable {
               runtimeIdentity.xrspsBuildCommit(),
               runtimeIdentity.cacheRevision(),
               runtimeIdentity.contentRevision());
-      if (es.causal) {
-        es.chainHash = SemanticHashV2.genesisHash(es.manifestDigest, es.runtimeDigest);
-        StateHashSample resetSample = consumeCausalEvidence(run.getId(), resetMsg.result(), es);
-        persistence.appendActionResult(
-            fence, extractEvents(fence, resetMsg.result().path("events"), es), resetSample);
-        captureProjection(fence, resetMsg.result().path("causalProjection"), es);
-      } else
-        persistence.appendEvents(fence, extractEvents(fence, resetMsg.result().path("events"), es));
-
-      // ── branch resume: restore parent checkpoint instead of tick zero ──
+      long expectedTick;
       int startIndex = 0;
-      if (run.getParentCheckpointId() != null) {
-        var restored =
-            restoreFromCheckpoint(heartbeat, kernel, run, manifestDoc, runtimeIdentity, es);
+      if (es.nativeLedger != null && run.getParentCheckpointId() != null) {
+        // Native restore is the first state request. Never reset (or reinterpret descriptor4 as
+        // causal-v2) before validating the independent stored native anchors.
+        RestoredCheckpoint restored =
+            restoreNativeCheckpoint(heartbeat, kernel, run, manifestDoc, runtimeIdentity, es);
         startIndex = restored.actionIndex();
         expectedTick = restored.tick();
+      } else {
+        // reset with manifest as a JSON object (never an escaped string).
+        ObjectNode resetParams = mapper.createObjectNode();
+        resetParams.set("manifest", manifestDoc);
+        KernelMessage resetMsg =
+            sendWithinRunDeadline(heartbeat, kernel, run, "reset", resetParams);
+        assertOk(resetMsg, "reset");
+        if (es.nativeLedger != null) {
+          requireNativeObservation(resetMsg.result(), "initialObservation");
+          es.nativeLedger.acceptReset(resetMsg.result());
+          es.lastStateHash =
+              projectionService.stateHash(resetMsg.result().path("initialObservation"));
+        }
+        expectedTick = resetMsg.result().path("initialTick").asLong(-1);
+        if (expectedTick < 0) throw new IllegalStateException("reset returned no initialTick");
+        if (es.causal) {
+          es.chainHash = SemanticHashV2.genesisHash(es.manifestDigest, es.runtimeDigest);
+          StateHashSample resetSample = consumeCausalEvidence(run.getId(), resetMsg.result(), es);
+          persistence.appendActionResult(
+              fence, extractEvents(fence, resetMsg.result().path("events"), es), resetSample);
+          captureProjection(fence, resetMsg.result().path("causalProjection"), es);
+        } else recordResetEvents(fence, resetMsg.result(), es);
+        // Existing causal-v2 reset/restore behavior remains separate.
+        if (run.getParentCheckpointId() != null) {
+          var restored =
+              restoreFromCheckpoint(heartbeat, kernel, run, manifestDoc, runtimeIdentity, es);
+          startIndex = restored.actionIndex();
+          expectedTick = restored.tick();
+        }
       }
 
       persistence.updatePhase(fence, ReplayRunPhase.RESET, ReplayRunPhase.EXECUTE);
 
       // ── action iteration ──
-      for (int i = startIndex; i < actions.size() && !es.causalTerminated; i++) {
-        ensureNotCancelled(run.getId());
-        ensureWithinDeadline(run);
-        heartbeat.assertHealthy();
-
-        JsonNode action = actions.get(i);
-        ObjectNode stepParams = mapper.createObjectNode();
-        stepParams.put("expectedTick", expectedTick);
-        ObjectNode dispatchedAction = actionForKernel(action, i);
-        stepParams.set("action", dispatchedAction);
-        stepParams.put("sourceActionIndex", i);
-        stepParams.put("maxTicks", STEP_MAX_TICKS);
-        // sendWithinRunDeadline guards heartbeat + deadline BEFORE the send and rechecks the
-        // database deadline IMMEDIATELY after the response.
-        KernelMessage stepMsg = sendWithinRunDeadline(heartbeat, kernel, run, "step", stepParams);
-        if (es.causal
-            && stepMsg.error() != null
-            && stepMsg.result() != null
-            && stepMsg.result().has("causalFrame")) {
-          requireActionBinding(stepMsg.result(), dispatchedAction);
-          StateHashSample rejected = consumeCausalEvidence(run.getId(), stepMsg.result(), es);
-          persistence.appendActionResult(fence, List.of(), rejected);
-          captureProjection(fence, stepMsg.result().path("causalProjection"), es);
-        }
-        assertStepOk(stepMsg, i);
-        JsonNode result = stepMsg.result();
-
-        List<ReplayEvent> events = extractEvents(fence, result.path("events"), es);
-        JsonNode observation = result.path("observation");
-
-        long tick = result.path("terminalTick").asLong(expectedTick);
-        StateHashSample sample;
-        if (es.causal) {
-          requireActionBinding(result, dispatchedAction);
-          sample = consumeCausalEvidence(run.getId(), result, es);
-          if (tick - es.lastProjectionTick >= 100
-              || "TERMINAL".equals(result.path("causalFrame").path("kind").asText())) {
-            captureProjection(fence, result.path("causalProjection"), es);
-          }
-        } else {
-          String stateHash = projectionService.stateHash(observation);
-          es.lastStateHash = stateHash;
-          String actionDigest = projectionService.actionDigest(dispatchedAction);
-          es.chainHash = projectionService.chainHash(es.chainHash, actionDigest, stateHash);
-          sample = new StateHashSample(run.getId(), tick, 0, 1, stateHash, es.chainHash);
-        }
-        // Events and their hash sample persist atomically under one fence.
-        persistence.appendActionResult(fence, events, sample);
-        expectedTick = tick;
-        es.executedActions++;
-
-        boolean isLast = i == actions.size() - 1 || es.causalTerminated;
-        if ((i + 1) % CHECKPOINT_INTERVAL_ACTIONS == 0 || isLast) {
-          takeCheckpoint(kernel, heartbeat, fence, run, tick, i, es, manifestDoc, runtimeIdentity);
-          ensureNotCancelled(run.getId());
-          ensureWithinDeadline(run);
-        }
-      }
+      expectedTick =
+          executeSourceSchedule(
+              kernel,
+              heartbeat,
+              fence,
+              run,
+              es,
+              manifestDoc,
+              runtimeIdentity,
+              startIndex,
+              expectedTick);
 
       persistence.updatePhase(fence, ReplayRunPhase.EXECUTE, ReplayRunPhase.COMPARE);
 
@@ -421,6 +393,9 @@ public class ReplayWorker implements AutoCloseable {
       KernelMessage finalObserve = sendWithinRunDeadline(heartbeat, kernel, run, "observe", null);
       assertOk(finalObserve, "observe");
       JsonNode actualObservation = finalObserve.result().path("observation");
+      if (es.nativeLedger != null
+          && !es.lastStateHash.equals(projectionService.stateHash(actualObservation)))
+        throw checksumMismatch("Final native observation differs from the accepted terminal state");
 
       var comparison =
           mismatchEngine.evaluate(
@@ -474,6 +449,7 @@ public class ReplayWorker implements AutoCloseable {
           artifactService.prepareArtifact(
               run.getId(), ArtifactKind.MANIFEST, manifestBytes, "application/json"),
           es);
+      if (es.nativeLedger != null) captureNativeOutcome(fence, es);
 
       // Cancellation cutoff AND authoritative timestamp capture: entering FINALIZE_ARTIFACTS is
       // atomic, fenced, and locks the same run row as cancel(); afterwards cancellation is
@@ -494,7 +470,7 @@ public class ReplayWorker implements AutoCloseable {
               refreshed(run),
               claim.attempt(),
               reservation.outcome(),
-              hardStop ? "MISMATCH_HARD_STOP" : null,
+              hardStop ? "MISMATCH_HARD_STOP" : nativeTerminalReason(es),
               es.executedActions,
               es.checkpointCount,
               es.lastStateHash,
@@ -612,6 +588,246 @@ public class ReplayWorker implements AutoCloseable {
                 .getBytes(java.nio.charset.StandardCharsets.UTF_8));
     if (!expected.equals(result.path("causalFrame").path("actionDigest").asText()))
       throw checksumMismatch("Worker transition action binding mismatch");
+  }
+
+  /**
+   * Shared production source loop; transport/persistence can be independently exercised in tests.
+   */
+  long executeSourceSchedule(
+      XrspsKernelProcess kernel,
+      ReplayLeaseHeartbeat.Handle heartbeat,
+      ReplayFence fence,
+      ReplayRun run,
+      ExecutionState es,
+      JsonNode manifestDoc,
+      RuntimeIdentity runtimeIdentity,
+      int startIndex,
+      long expectedTick) {
+    JsonNode actions = manifestDoc.path("actions");
+    ReplaySourceSchedule schedule = new ReplaySourceSchedule(manifestDoc);
+    initializeNativeSourceCursor(fence, run, es);
+    for (int i = startIndex; i < actions.size() && !es.terminated(); i++) {
+      ensureNotCancelled(run.getId());
+      ensureWithinDeadline(run);
+      heartbeat.assertHealthy();
+      ObjectNode params;
+      do {
+        ensureNotCancelled(run.getId());
+        params = schedule.next(i, expectedTick, STEP_MAX_TICKS);
+        expectedTick = executeScheduledStep(kernel, heartbeat, fence, run, es, params, i);
+        if (es.causalTerminated && !params.has("action"))
+          throw ReplayException.invalid(
+              ReplayErrorCode.ACTION_SEQUENCE_INVALID,
+              "Worker terminated before the next timed source action");
+      } while (!params.has("action") && !es.terminated());
+      // A native actionless condition may terminate before action i. It consumes
+      // no receipt and must not increment executedActionCount or checkpoint index.
+      if (params.has("action")) es.executedActions++;
+      if (schedule.timed() && es.causalTerminated && i + 1 < actions.size())
+        throw ReplayException.invalid(
+            ReplayErrorCode.ACTION_SEQUENCE_INVALID,
+            "Worker terminated before every timed source action was consumed");
+      boolean isLast = i == actions.size() - 1 || es.terminated();
+      if (es.nativeLedger == null
+          ? (i + 1) % CHECKPOINT_INTERVAL_ACTIONS == 0 || isLast
+          : (i + 1) % CHECKPOINT_INTERVAL_ACTIONS == 0 && !es.terminated()) {
+        takeCheckpoint(
+            kernel, heartbeat, fence, run, expectedTick, i, es, manifestDoc, runtimeIdentity);
+        ensureNotCancelled(run.getId());
+        ensureWithinDeadline(run);
+      }
+    }
+    ObjectNode tail;
+    boolean advancedTail = false;
+    while (!es.terminated()
+        && (tail =
+                es.nativeLedger == null
+                    ? schedule.tail(expectedTick, STEP_MAX_TICKS)
+                    : schedule.nativeTail(expectedTick, STEP_MAX_TICKS))
+            != null) {
+      ensureNotCancelled(run.getId());
+      expectedTick = executeScheduledStep(kernel, heartbeat, fence, run, es, tail, actions.size());
+      advancedTail = true;
+    }
+    if (es.nativeLedger != null) {
+      if (!es.nativeLedger.terminal())
+        throw ReplayException.invalid(
+            ReplayErrorCode.XRSPS_PROTOCOL_ERROR,
+            "Native source execution ended without a terminal ledger");
+      takeCheckpoint(
+          kernel,
+          heartbeat,
+          fence,
+          run,
+          expectedTick,
+          es.executedActions - 1,
+          es,
+          manifestDoc,
+          runtimeIdentity);
+    } else if (advancedTail) {
+      takeCheckpoint(
+          kernel,
+          heartbeat,
+          fence,
+          run,
+          expectedTick,
+          actions.size() - 1,
+          es,
+          manifestDoc,
+          runtimeIdentity);
+    }
+    return expectedTick;
+  }
+
+  private void requireNativeObservation(JsonNode result, String field) {
+    JsonNode observation = result.path(field), tick = observation.path("tick");
+    JsonNode ledgerTick = result.path("runState").path("tick");
+    if (!observation.isObject()
+        || !tick.isIntegralNumber()
+        || !tick.canConvertToLong()
+        || !ledgerTick.isIntegralNumber()
+        || !ledgerTick.canConvertToLong()
+        || tick.asLong() != ledgerTick.asLong())
+      throw ReplayException.invalid(
+          ReplayErrorCode.XRSPS_PROTOCOL_ERROR,
+          "Native observation tick differs from its execution ledger");
+  }
+
+  private String nativeTerminalReason(ExecutionState es) {
+    if (es.nativeLedger == null) return null;
+    JsonNode prefix = es.nativeLedger.evidence().path("sourcePrefix");
+    boolean full =
+        prefix.path("allActionsConsumed").asBoolean()
+            && prefix.path("recordingEndReached").asBoolean();
+    return "NATIVE_"
+        + es.nativeLedger.state().path("reason").asText()
+        + (full ? "_FULL_RECORDING" : "_SOURCE_PREFIX");
+  }
+
+  void captureNativeOutcome(ReplayFence fence, ExecutionState es) {
+    if (!es.nativeLedger.terminal()
+        || es.executedActions != es.nativeLedger.state().path("acceptedActions").asInt())
+      throw ReplayException.invalid(
+          ReplayErrorCode.XRSPS_PROTOCOL_ERROR,
+          "Native final evidence differs from consumed source receipts");
+    ObjectNode evidence = es.nativeLedger.evidence();
+    JsonNode prefix = evidence.path("sourcePrefix");
+    evidence.put(
+        "conformanceScope",
+        prefix.path("allActionsConsumed").asBoolean()
+                && prefix.path("recordingEndReached").asBoolean()
+            ? "FULL_RECORDING"
+            : "SOURCE_PREFIX");
+    registerUnderFence(
+        fence,
+        artifactService.prepareArtifact(
+            fence.runId(), ArtifactKind.OUTCOME, canonicalBytes(evidence), "application/json"),
+        es);
+  }
+
+  /** Persist reset events through the same ordinal handling as subsequent native steps. */
+  void recordResetEvents(ReplayFence fence, JsonNode reset, ExecutionState es) {
+    persistence.appendEvents(fence, extractEvents(fence, reset.path("events"), es));
+  }
+
+  /** Bind once per attempt, including when an explicit checkpoint splits source iteration. */
+  void initializeNativeSourceCursor(ReplayFence fence, ReplayRun run, ExecutionState es) {
+    if (es.nativeLedger == null) return;
+    if (es.nativeSourceFence != null && !es.nativeSourceFence.equals(fence)) {
+      throw ReplayException.invalid(
+          ReplayErrorCode.XRSPS_PROTOCOL_ERROR,
+          "NATIVE_SOURCE_CURSOR_INVALID: execution belongs to a different attempt");
+    }
+    if (es.nativeSourceFence == null) {
+      persistence.initializeNativeSourceCursor(
+          fence,
+          NativeSourceCursor.initial(es.nativeLedger.state(), run.getParentCheckpointId() != null));
+      es.nativeSourceFence = fence;
+    }
+  }
+
+  long executeScheduledStep(
+      XrspsKernelProcess kernel,
+      ReplayLeaseHeartbeat.Handle heartbeat,
+      ReplayFence fence,
+      ReplayRun run,
+      ExecutionState es,
+      ObjectNode params,
+      int sourceIndex) {
+    if (es.nativeLedger != null && es.nativeLedger.terminal())
+      throw ReplayException.invalid(
+          ReplayErrorCode.XRSPS_PROTOCOL_ERROR, "Native gameplay request after terminal ledger");
+    JsonNode action =
+        params.path("action").isMissingNode() ? mapper.nullNode() : params.get("action");
+    KernelMessage message = sendWithinRunDeadline(heartbeat, kernel, run, "step", params);
+    if (es.causal
+        && message.error() != null
+        && message.result() != null
+        && message.result().has("causalFrame")) {
+      requireActionBinding(message.result(), action);
+      persistence.appendActionResult(
+          fence, List.of(), consumeCausalEvidence(run.getId(), message.result(), es));
+      captureProjection(fence, message.result().path("causalProjection"), es);
+    }
+    assertStepOk(message, sourceIndex);
+    JsonNode result = message.result();
+    if (es.nativeLedger != null) {
+      requireNativeObservation(result, "observation");
+      es.nativeLedger.acceptStep(params, result);
+    }
+    long before = params.path("expectedTick").asLong(), bound = params.path("maxTicks").asLong();
+    JsonNode terminal = result.path("terminalTick");
+    if (!terminal.isIntegralNumber()
+        || !terminal.canConvertToLong()
+        || terminal.asLong() < before
+        || terminal.asLong() > before + bound
+        || (bound == 0 && !result.path("actionApplied").asBoolean(false))
+        || (action.isNull()
+            && terminal.asLong() == before
+            && !es.causalTerminated
+            && es.nativeLedger == null))
+      throw ReplayException.invalid(
+          ReplayErrorCode.XRSPS_PROTOCOL_ERROR, "Worker violated scheduled step coordinates");
+    long tick = terminal.asLong();
+    StateHashSample sample;
+    if (es.causal) {
+      requireActionBinding(result, action);
+      sample = consumeCausalEvidence(run.getId(), result, es);
+      if (tick - es.lastProjectionTick >= 100 || es.causalTerminated)
+        captureProjection(fence, result.path("causalProjection"), es);
+    } else {
+      String stateHash = projectionService.stateHash(result.path("observation"));
+      es.lastStateHash = stateHash;
+      es.chainHash =
+          projectionService.chainHash(
+              es.chainHash, projectionService.actionDigest(action), stateHash);
+      es.lastSampleSequence = tick == es.lastSampleTick ? es.lastSampleSequence + 1 : 0;
+      es.lastSampleTick = tick;
+      sample =
+          new StateHashSample(run.getId(), tick, es.lastSampleSequence, 1, stateHash, es.chainHash);
+    }
+    var events = extractEvents(fence, result.path("events"), es);
+    if (es.nativeLedger != null) {
+      persistence.appendNativeActionResult(fence, events, sample, es.nativeLedger.state());
+    } else {
+      persistence.appendActionResult(fence, events, sample);
+    }
+    return tick;
+  }
+
+  private void requireSourceActionProtocol(KernelMessage caps) {
+    JsonNode capability =
+        caps.result().has("capabilities") ? caps.result().path("capabilities") : caps.result();
+    JsonNode protocol = capability.path("sourceActionProtocol");
+    if (!protocol.isObject()
+        || protocol.size() != 3
+        || !protocol.path("version").isInt()
+        || protocol.path("version").asInt() != 1
+        || !protocol.path("zeroTickStep").isBoolean()
+        || !protocol.path("zeroTickStep").asBoolean()
+        || !"INDEXED_ONE_USE".equals(protocol.path("receipts").asText()))
+      throw capabilityIncompatible(
+          "Timed recordings require indexed one-use zero-tick source action protocol v1");
   }
 
   /** Validates worker projection, sample and transition against the prior trusted response. */
@@ -1136,6 +1352,162 @@ public class ReplayWorker implements AutoCloseable {
   }
 
   /**
+   * Native-only anchored continuation; persistence/admission and native replay are separate gates.
+   */
+  RestoredCheckpoint restoreNativeCheckpoint(
+      ReplayLeaseHeartbeat.Handle heartbeat,
+      XrspsKernelProcess kernel,
+      ReplayRun run,
+      JsonNode manifestDoc,
+      RuntimeIdentity liveIdentity,
+      ExecutionState es) {
+    if (run == null
+        || run.getParentRunId() == null
+        || run.getParentCheckpointId() == null
+        || es.causal) throw snapshotIncompatible();
+    ReplayRun parent =
+        runRepository.findById(run.getParentRunId()).orElseThrow(this::snapshotIncompatible);
+    if (!run.getParentRunId().equals(parent.getId())
+        || run.getOwnerId() == null
+        || run.getOwnerId().isBlank()
+        || !run.getOwnerId().equals(parent.getOwnerId())
+        || run.getManifestId() == null
+        || !run.getManifestId().equals(parent.getManifestId())
+        || !manifestDoc.path("manifestChecksum").asText().equals(parent.getManifestChecksum())
+        || !parent.getManifestChecksum().equals(run.getManifestChecksum())
+        || run.getStopPolicy() != parent.getStopPolicy()
+        || run.getStopPolicy() == null
+        || parent.getState() == null
+        || !Set.of(
+                ReplayRunState.SUCCEEDED,
+                ReplayRunState.FAILED,
+                ReplayRunState.CANCELLED,
+                ReplayRunState.TIMED_OUT)
+            .contains(parent.getState())) throw snapshotIncompatible();
+    ReplayCheckpoint checkpoint =
+        checkpointRepository
+            .findById(run.getParentCheckpointId())
+            .orElseThrow(this::snapshotIncompatible);
+    if (!run.getParentCheckpointId().equals(checkpoint.getId())
+        || !parent.getId().equals(checkpoint.getRunId())
+        || !java.util.Objects.equals(parent.getBranchKey(), checkpoint.getBranchKey())
+        || !java.util.Objects.equals(
+            parent.getParentCheckpointId(), checkpoint.getParentCheckpointId())
+        || checkpoint.getRestoreContext() == null) throw snapshotIncompatible();
+    String address = checkpoint.getSnapshotArtifactChecksum();
+    if (address == null || !address.matches("sha256:[0-9a-f]{64}")) throw snapshotIncompatible();
+    ArtifactRef ref =
+        artifactRefRepository
+            .findByRunIdAndKindAndChecksum(parent.getId(), ArtifactKind.SNAPSHOT, address)
+            .filter(
+                r ->
+                    ArtifactRef.STATE_FINALIZED.equals(r.getState())
+                        && parent.getId().equals(r.getRunId())
+                        && r.getKind() == ArtifactKind.SNAPSHOT
+                        && address.equals(r.getChecksum()))
+            .orElseThrow(this::snapshotIncompatible);
+    byte[] bytes = artifactService.readFinalized(ref);
+    if (bytes == null) throw snapshotIncompatible();
+    if (!address.equals(projectionService.sha256Hex(bytes)))
+      throw checksumMismatch("Native snapshot content address differs");
+    JsonNode snapshot = readNativeJson(bytes, properties.getXrsps().getMaxStdoutLineBytes());
+    JsonNode context =
+        readNativeJson(
+            checkpoint.getRestoreContext().getBytes(java.nio.charset.StandardCharsets.UTF_8), 8192);
+    verifyManifestRuntime(manifestDoc, liveIdentity);
+    if (!snapshot.path("runtimeIdentity").isObject()) throw snapshotIncompatible();
+    verifySnapshotRuntime(snapshot, liveIdentity);
+    ObjectNode unhashed = snapshot.deepCopy();
+    unhashed.remove("checksum");
+    if (!projectionService
+        .sha256Hex(canonicalBytes(unhashed))
+        .equals(checkpoint.getSnapshotChecksum()))
+      throw checksumMismatch("Native snapshot internal checksum differs");
+    String runtimeDigest =
+        SemanticHashV2.runtimeDigest(
+            liveIdentity.xrspsAdapterVersion(),
+            liveIdentity.xrspsBuildCommit(),
+            liveIdentity.cacheRevision(),
+            liveIdentity.contentRevision());
+    NativeRunLedger restored =
+        NativeCheckpointContext.validate(
+            context, checkpoint, address, manifestDoc, runtimeDigest, snapshot, projectionService);
+    JsonNode ordinal = snapshot.path("eventQueue").path("nextOrdinal");
+    if (!ordinal.isIntegralNumber() || !ordinal.canConvertToLong() || ordinal.asLong() < 0)
+      throw snapshotIncompatible();
+    // Only after every stored binding passes may a fresh native worker reconstruct gameplay.
+    KernelMessage reply =
+        sendWithinRunDeadline(
+            heartbeat, kernel, run, "restore", mapper.createObjectNode().set("snapshot", snapshot));
+    assertOk(reply, "restore");
+    JsonNode restoredTick = reply.result().path("restoredTick");
+    if (!restoredTick.isIntegralNumber()
+        || !restoredTick.canConvertToLong()
+        || restoredTick.asLong() != checkpoint.getTick()) throw snapshotIncompatible();
+    requireNativeObservation(reply.result(), "observation");
+    restored.requireUnchanged(reply.result().path("runState"));
+    if (!checkpoint
+        .getStateHash()
+        .equals(projectionService.stateHash(reply.result().path("observation"))))
+      throw checksumMismatch("Native restore observation differs from checkpoint");
+    KernelMessage observed = sendWithinRunDeadline(heartbeat, kernel, run, "observe", null);
+    assertOk(observed, "observe");
+    if (!checkpoint
+        .getStateHash()
+        .equals(projectionService.stateHash(observed.result().path("observation"))))
+      throw checksumMismatch("Native post-restore observation differs from checkpoint");
+    KernelMessage readback = sendWithinRunDeadline(heartbeat, kernel, run, "snapshot", null);
+    assertOk(readback, "snapshot");
+    JsonNode actual = readback.result().path("snapshot");
+    requireNativeDepth(actual, 0);
+    restored.requireSnapshot(actual);
+    if (!address.equals(projectionService.sha256Hex(canonicalBytes(actual))))
+      throw checksumMismatch(
+          "Native post-restore complete snapshot differs from stored checkpoint");
+    // Commit the in-memory driver only after native replay AND complete readback agree. Inherited
+    // actions count toward the full lineage prefix; terminal parents dispatch no new steps.
+    es.nativeLedger = restored;
+    es.executedActions = checkpoint.getActionIndex();
+    es.lastStateHash = checkpoint.getStateHash();
+    es.chainHash = checkpoint.getChainHash();
+    es.lastPersistedOrdinal = ordinal.asLong() - 1;
+    es.lastSampleTick = -1;
+    es.lastSampleSequence = -1;
+    for (JsonNode receipt : restored.prefix()) {
+      long tick = receipt.path("terminalTick").asLong();
+      es.lastSampleSequence = tick == es.lastSampleTick ? es.lastSampleSequence + 1 : 0;
+      es.lastSampleTick = tick;
+    }
+    return new RestoredCheckpoint(checkpoint.getTick(), checkpoint.getActionIndex());
+  }
+
+  private JsonNode readNativeJson(byte[] bytes, long maximumBytes) {
+    if (bytes == null || bytes.length == 0 || bytes.length > maximumBytes)
+      throw snapshotIncompatible();
+    try {
+      ObjectMapper bounded = mapper.copy();
+      bounded
+          .getFactory()
+          .setStreamReadConstraints(
+              com.fasterxml.jackson.core.StreamReadConstraints.builder()
+                  .maxNestingDepth(128)
+                  .build());
+      bounded.enable(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
+      bounded.enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+      JsonNode value = bounded.readTree(bytes);
+      if (!value.isObject()) throw snapshotIncompatible();
+      return value;
+    } catch (Exception invalid) {
+      throw snapshotIncompatible();
+    }
+  }
+
+  private void requireNativeDepth(JsonNode value, int depth) {
+    if (value == null || depth > 128) throw snapshotIncompatible();
+    if (value.isContainerNode()) for (JsonNode child : value) requireNativeDepth(child, depth + 1);
+  }
+
+  /**
    * Compares the snapshot's embedded runtime identity (when present) with the live kernel
    * capability captured after the handshake.
    */
@@ -1241,7 +1613,27 @@ public class ReplayWorker implements AutoCloseable {
     KernelMessage snapMsg = sendWithinRunDeadline(heartbeat, kernel, run, "snapshot", null);
     assertOk(snapMsg, "snapshot");
     JsonNode snapshot = snapMsg.result().path("snapshot");
+    if (es.nativeLedger != null) {
+      requireNativeDepth(snapshot, 0);
+      es.nativeLedger.requireSnapshot(snapshot);
+      if (tick != es.nativeLedger.state().path("tick").asLong()
+          || actionIndex + 1 != es.nativeLedger.state().path("acceptedActions").asInt())
+        throw snapshotIncompatible();
+      if (!snapshot.path("runtimeIdentity").isObject()) throw snapshotIncompatible();
+      verifySnapshotRuntime(snapshot, liveIdentity);
+      ObjectNode unhashed = snapshot.deepCopy();
+      unhashed.remove("checksum");
+      if (!projectionService
+              .sha256Hex(canonicalBytes(unhashed))
+              .equals(snapshot.path("checksum").asText())
+          || !es.lastStateHash.equals(snapshot.path("canonicalStateHash").asText())
+          || !es.lastStateHash.equals(
+              snapshot.path("contentState").get(0).path("observationHash").asText()))
+        throw checksumMismatch("Native checkpoint checksum or observation binding differs");
+    }
     byte[] snapBytes = canonicalBytes(snapshot);
+    if (es.nativeLedger != null && snapBytes.length > properties.getXrsps().getMaxStdoutLineBytes())
+      throw snapshotIncompatible();
     PreparedArtifact prepared = null;
     byte[] validatedChainBytes = null;
     // SC-275 bound restore evidence: the worker snapshot carries the restore
@@ -1256,6 +1648,7 @@ public class ReplayWorker implements AutoCloseable {
     PreparedArtifact preparedChain = null;
     String restoreContextText = null;
     boolean hasBindings = !context.isMissingNode() || !priorFrames.isMissingNode();
+    if (es.nativeLedger != null && hasBindings) throw snapshotIncompatible();
     if ((es.causal || hasBindings) && (!context.isObject() || !priorFrames.isArray()))
       throw snapshotIncompatible();
     if (context.isObject() && priorFrames.isArray()) {
@@ -1344,6 +1737,23 @@ public class ReplayWorker implements AutoCloseable {
       // Full serialized artifact content address (distinct from the kernel-internal snapshot
       // checksum stored above); set inside the same transaction by registerCheckpoint.
       checkpoint.setParentCheckpointId(resolveParentCheckpointId(fence));
+      if (es.nativeLedger != null) {
+        String runtimeDigest =
+            SemanticHashV2.runtimeDigest(
+                liveIdentity.xrspsAdapterVersion(),
+                liveIdentity.xrspsBuildCommit(),
+                liveIdentity.cacheRevision(),
+                liveIdentity.contentRevision());
+        checkpoint.setRestoreContext(
+            projectionService.canonicalJson(
+                NativeCheckpointContext.create(
+                    checkpoint,
+                    projectionService.sha256Hex(snapBytes),
+                    manifestDoc.path("manifestChecksum").asText(),
+                    runtimeDigest,
+                    es.nativeLedger,
+                    projectionService)));
+      }
       if (preparedChain != null) {
         checkpoint.setRestoreContext(restoreContextText);
       }
@@ -1525,7 +1935,11 @@ public class ReplayWorker implements AutoCloseable {
         throw capabilityIncompatible(incompatible.getMessage());
       }
     }
-    return new WorkerCapability(identity, Set.copyOf(advertisedActions), causalV2);
+    return new WorkerCapability(
+        identity,
+        Set.copyOf(advertisedActions),
+        causalV2,
+        NativeRunProtocol.negotiated(capability));
   }
 
   /** Manifest action declarations must be a subset of the live worker's advertised action set. */
@@ -1556,20 +1970,8 @@ public class ReplayWorker implements AutoCloseable {
       throw capabilityIncompatible(
           "manifest action at index " + actionIndex + " is not a JSON object");
     }
-    ObjectNode action = ((ObjectNode) manifestAction).deepCopy();
-    for (String field : MANIFEST_PROVENANCE_FIELDS) {
-      action.remove(field);
-    }
-    return action;
+    return ReplaySourceSchedule.semanticAction(manifestAction);
   }
-
-  private static final List<String> MANIFEST_PROVENANCE_FIELDS =
-      List.of(
-          "sourceActionTick",
-          "sourceActionSequence",
-          "provenance",
-          "provenanceReason",
-          "sourceEvidence");
 
   private ReplayException capabilityIncompatible(String message) {
     return new ReplayException(
@@ -1583,7 +1985,10 @@ public class ReplayWorker implements AutoCloseable {
   }
 
   private record WorkerCapability(
-      RuntimeIdentity identity, Set<String> supportedActions, boolean causalV2) {}
+      RuntimeIdentity identity,
+      Set<String> supportedActions,
+      boolean causalV2,
+      boolean nativeRun) {}
 
   /** Blank and placeholder identities never enter replay: they cannot be certified. */
   private void rejectPlaceholderIdentity(String field, String value) {
@@ -1642,6 +2047,10 @@ public class ReplayWorker implements AutoCloseable {
     JsonNode json = entity.getManifestJson();
     if (json == null || !json.isObject()) {
       throw new IllegalStateException("Stored manifest JSON is not an object");
+    }
+    if (entity.getManifestVersion() == 2) {
+      com.chromascape.web.replay.manifest.ScenarioManifestImportValidator.requireSimulationAllowed(
+          json);
     }
     return json;
   }
@@ -1807,6 +2216,8 @@ public class ReplayWorker implements AutoCloseable {
 
   /** Mutable per-execution accumulator. Public so the certification harness can drive it. */
   public static class ExecutionState {
+    public NativeRunLedger nativeLedger;
+    private ReplayFence nativeSourceFence;
     public boolean causal;
     public boolean causalTerminated;
     public String manifestDigest;
@@ -1819,12 +2230,18 @@ public class ReplayWorker implements AutoCloseable {
     public String lastStateHash;
     public long lastPersistedOrdinal = -1;
     public int executedActions;
+    public long lastSampleTick = -1;
+    public int lastSampleSequence = -1;
     public int checkpointCount;
     public final List<String> artifactChecksums = new ArrayList<>();
     public final List<UUID> recordedMismatchIds = new ArrayList<>();
 
     public ExecutionState(String genesisChainHash) {
       this.chainHash = genesisChainHash;
+    }
+
+    public boolean terminated() {
+      return causalTerminated || nativeLedger != null && nativeLedger.terminal();
     }
   }
 }

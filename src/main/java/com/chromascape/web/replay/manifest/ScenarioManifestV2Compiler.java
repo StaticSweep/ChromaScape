@@ -55,7 +55,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class ScenarioManifestV2Compiler {
 
-  static final String COMPILER_VERSION = "2.0.0";
+  static final String COMPILER_VERSION = "2.4.0";
   static final String FIXED_CLOCK_ORIGIN = "2020-01-01T00:00:00.000Z";
   static final int MANIFEST_VERSION = 2;
 
@@ -79,6 +79,20 @@ public class ScenarioManifestV2Compiler {
   private static final int COMPILER_SCHEMA_VERSION = 2;
   private static final Set<String> SUPPORTED_FISHING_OPTIONS =
       Set.of("net", "bait", "lure", "cage", "harpoon");
+
+  /**
+   * Version of the exact recording-to-worker semantic mapping. The current authoritative worker
+   * handles Fishing through INTERACT_NPC; an option must never silently change its wire type to
+   * INTERACT_FISHING_SPOT, which that worker does not advertise.
+   */
+  static final String ACTION_MAPPING_VERSION = "1.1.0";
+
+  /**
+   * Creator marker for compiler-produced conversion curations. Operator curations carry the human
+   * or pipeline owner instead; the converter never overwrites those rows, it only inherits their
+   * dataset role.
+   */
+  public static final String CONVERSION_CREATED_BY = "replay-converter";
 
   private final ReplayRecordingResolver resolver;
   private final TickSnapshotRepository snapshotRepository;
@@ -113,10 +127,37 @@ public class ScenarioManifestV2Compiler {
 
   /** Compile one recording using the requested deterministic conversion mode. */
   public Compilation compile(String recordingId, ConversionMode requestedMode) {
+    return compile(recordingId, requestedMode, null, null);
+  }
+
+  /** Explicit selected snapshot and authenticated owner for the recording-to-worker path. */
+  public Compilation compile(
+      String recordingId, ConversionMode requestedMode, UUID selectedCurationId, String ownerId) {
+    return compileInternal(recordingId, requestedMode, selectedCurationId, ownerId, true);
+  }
+
+  /**
+   * Uses the execution compiler without publishing a curation, child action or manifest. Expected
+   * domain refusals become preflight data; they must not poison the caller's read-only transaction.
+   * Unexpected persistence failures retain the ordinary rollback behavior.
+   */
+  @Transactional(readOnly = true, noRollbackFor = ReplayException.class)
+  public Compilation preview(
+      String recordingId, ConversionMode requestedMode, UUID selectedCurationId, String ownerId) {
+    return compileInternal(recordingId, requestedMode, selectedCurationId, ownerId, false);
+  }
+
+  private Compilation compileInternal(
+      String recordingId,
+      ConversionMode requestedMode,
+      UUID selectedCurationId,
+      String ownerId,
+      boolean persist) {
     if (recordingId == null || recordingId.isBlank()) {
       throw ReplayException.badRequest(ReplayErrorCode.VALIDATION_ERROR, "recordingId is required");
     }
 
+    RecordingCuration selected = selectedCuration(recordingId, selectedCurationId, ownerId);
     ReplayRecordingResolver.ResolvedRecording resolved = resolver.resolve(recordingId);
     DebugSession session = resolved.debugSession();
     if (session == null || session.getSessionId() == null || session.getSessionId().isBlank()) {
@@ -130,6 +171,16 @@ public class ScenarioManifestV2Compiler {
           "The debug session must be finalized before xRSPS replay");
     }
 
+    PublishedCurationSnapshot published =
+        selected == null
+            ? null
+            : new PublishedCurationSnapshot(
+                selected,
+                recordingId,
+                session.getSessionId(),
+                ownerId,
+                objectMapper,
+                projectionService);
     CapabilityManifest capability = capabilityService.getManifest();
     requireSimulationCapability(capability);
 
@@ -143,6 +194,15 @@ public class ScenarioManifestV2Compiler {
                         "No tick snapshots exist for the debug session"));
     long endTick =
         snapshotRepository.findMaxTickBySessionId(session.getSessionId()).orElse(startTick);
+    if (published != null) {
+      if (published.startTick() < startTick || published.endTick() > endTick) {
+        throw ReplayException.invalid(
+            ReplayErrorCode.TICK_RANGE_INVALID,
+            "Published curation range exceeds recorded evidence");
+      }
+      startTick = published.startTick();
+      endTick = published.endTick();
+    }
     List<TickSnapshot> snapshots =
         snapshotRepository.findBySessionIdAndTickBetweenOrderByTick(
             session.getSessionId(), startTick, endTick);
@@ -151,12 +211,22 @@ public class ScenarioManifestV2Compiler {
     ConversionMode mode = requestedMode == null ? ConversionMode.AUTO : requestedMode;
     ReplayActionConversionResult conversion =
         conversionService.convert(session.getSessionId(), startTick, endTick, mode);
+    assertActionTicksInRange(conversion, startTick, endTick);
+    assertActionOrder(conversion);
+    boolean capturedAuthoritativePins =
+        conversion.quality() == com.chromascape.web.replay.conversion.ConversionQuality.CERTIFIED;
+    if (published != null) conversion = published.apply(conversion);
     if (conversion.quality() == com.chromascape.web.replay.conversion.ConversionQuality.UNSUPPORTED
         || conversion.actions().isEmpty()) {
       throw ReplayException.invalid(
           ReplayErrorCode.ACTION_UNSUPPORTED,
           "The recording contains no executable semantic replay action");
     }
+    assertActionTicksInRange(conversion, startTick, endTick);
+    assertActionOrder(conversion);
+    ScenarioCompilationEvidence sourceAudit =
+        new ScenarioCompilationEvidence(objectMapper, projectionService);
+    ObjectNode worldEvidence = sourceAudit.world(snapshots, conversion, capability);
 
     List<String> unsupported = unsupportedActions(conversion, capability);
     if (conversion.quality() == com.chromascape.web.replay.conversion.ConversionQuality.CERTIFIED
@@ -176,7 +246,9 @@ public class ScenarioManifestV2Compiler {
     }
 
     boolean authoritativeNpcPins =
-        conversion.quality() == com.chromascape.web.replay.conversion.ConversionQuality.CERTIFIED;
+        capturedAuthoritativePins
+            || conversion.quality()
+                == com.chromascape.web.replay.conversion.ConversionQuality.CERTIFIED;
     List<ReplayNpcPinValidator.Violation> npcPinViolations =
         ReplayNpcPinValidator.validate(snapshots, conversion, authoritativeNpcPins);
     if (!npcPinViolations.isEmpty()) {
@@ -185,13 +257,54 @@ public class ScenarioManifestV2Compiler {
     }
     RecordedStart recordedStart = RecordedStart.of(session, capability);
     ObjectNode initialState =
-        buildInitialState(snapshots.get(0), conversion, authoritativeNpcPins, recordedStart);
+        buildInitialState(
+            snapshots.get(0),
+            conversion,
+            authoritativeNpcPins,
+            published,
+            pinnedCollisionRevision(capability),
+            recordedStart);
+    NativeBankStateContract.validateInitialState(initialState);
+    NativeNpcBindingContract.validateSourceSnapshots(
+        initialState, snapshots, conversion, sourceAudit);
+    if (NativeNpcBindingContract.hasNativeWorld(initialState)) {
+      // Typed consistency is not native-world qualification. Keep the explicit requirement until
+      // an exact published world/collision/action contract is implemented and verified end to end.
+      worldEvidence
+          .withArray("requiredNativeBindings")
+          .addObject()
+          .put("tick", startTick)
+          .put("kind", "NATIVE_FISHING_WORLD_CONTRACT")
+          .put("stableId", initialState.path("nativeFishingWorld").path("catalogChecksum").asText())
+          .put(
+              "sourceRef",
+              published == null
+                  ? sourceAudit.snapshotRef(snapshots.get(0))
+                  : "curation:"
+                      + published.source().path("id").asText()
+                      + "/content/initialStateOverrides/nativeFishingWorld")
+          .put("provenance", "DERIVED");
+    }
+    if (authoritativeNpcPins && published != null) {
+      TickSnapshot projected = new TickSnapshot();
+      projected.setTick(startTick);
+      projected.setNpcs(initialState.path("npcs"));
+      List<TickSnapshot> pinEvidence = new ArrayList<>(snapshots);
+      pinEvidence.add(0, projected);
+      var projectedViolations = ReplayNpcPinValidator.validate(pinEvidence, conversion, true);
+      if (!projectedViolations.isEmpty()) {
+        var violation = projectedViolations.get(0);
+        throw ReplayException.invalid(violation.code(), violation.message());
+      }
+    }
     ObjectNode expectations = buildExpectations(snapshots.get(snapshots.size() - 1));
-    String recordingChecksum = recordingChecksum(recordingId, session, snapshots, conversion);
+    JsonNode context = resolved.recording() == null ? null : resolved.recording().getRunContext();
+    String recordingChecksum =
+        recordingChecksum(recordingId, session, snapshots, conversion, context);
     String sessionChecksum = sessionChecksum(session);
 
     RecordingCuration conversionCuration =
-        ensureConversionCuration(recordingId, session, conversion, unsupported);
+        ensureConversionCuration(recordingId, session, conversion, unsupported, published, persist);
     ObjectNode manifestDocument =
         buildManifestDocument(
             recordingId,
@@ -205,33 +318,55 @@ public class ScenarioManifestV2Compiler {
             initialState,
             expectations,
             recordedStart);
+    ArrayNode sourceGaps = (ArrayNode) manifestDocument.path("conversion").path("gaps");
+    for (JsonNode binding : worldEvidence.path("requiredNativeBindings")) {
+      sourceGaps
+          .addObject()
+          .put("tick", binding.path("tick").asLong())
+          .put("code", "NATIVE_WORLD_SUPPORT_REQUIRED")
+          .put(
+              "message",
+              "Unverified "
+                  + binding.path("kind").asText()
+                  + ": "
+                  + binding.path("stableId").asText()
+                  + " requires a pinned native world/action contract; later observations are not"
+                  + " initial state")
+          .put("sourceRef", binding.path("sourceRef").asText())
+          .put("provenance", "DERIVED");
+    }
+    for (String identity :
+        ScenarioCompilationEvidence.missingIdentityFields(
+            context, recordingId, session.getSessionId())) {
+      sourceGaps
+          .addObject()
+          .put("tick", startTick)
+          .put("code", "SOURCE_IDENTITY_INCOMPLETE")
+          .put("message", "BehaviorRunContext lacks valid exact source-bound " + identity)
+          .put("sourceRef", "recording:" + recordingId + "/runContext")
+          .put("provenance", "OBSERVED");
+    }
+    manifestDocument.put("manifestChecksum", "pending");
+    manifestDocument.set(
+        "compilationEvidence",
+        sourceAudit.audit(manifestDocument, context, snapshots, worldEvidence));
 
+    // Include the complete immutable compilation basis, including compiler revision and the
+    // selected curation/role. Otherwise a compiler upgrade can collide with a published row's id.
     UUID manifestId =
-        UUID.nameUUIDFromBytes(
-            ("scenario-manifest/v2:"
-                    + recordingChecksum
-                    + ":"
-                    + conversion.conversionChecksum()
-                    + ":"
-                    + capability.fidelity()
-                    + ":"
-                    + capability.xrsps().adapterVersion()
-                    + ":"
-                    + capability.xrsps().buildCommit()
-                    + ":"
-                    + capability.xrsps().cacheRevision()
-                    + ":"
-                    + capability.xrsps().contentRevision())
-                .getBytes(StandardCharsets.UTF_8));
+        UUID.nameUUIDFromBytes(projectionService.canonicalJsonBytes(manifestDocument));
     manifestDocument.put("manifestId", manifestId.toString());
     String manifestChecksum = manifestChecksum(manifestDocument);
     manifestDocument.put("manifestChecksum", manifestChecksum);
     String canonicalManifest = projectionService.canonicalJson(manifestDocument);
+    ScenarioManifestImportValidator.validate(manifestDocument);
 
     // The manifest id/checksum are deterministic; repeated button presses return the same row.
-    var existing = manifestRepository.findByManifestChecksum(manifestChecksum);
-    if (existing.isPresent()) {
-      return new Compilation(existing.get(), conversion, capability, unsupported);
+    if (persist) {
+      var existing = manifestRepository.findByManifestChecksum(manifestChecksum);
+      if (existing.isPresent()) {
+        return new Compilation(existing.get(), conversion, capability, unsupported);
+      }
     }
 
     ScenarioManifest entity = new ScenarioManifest();
@@ -257,11 +392,12 @@ public class ScenarioManifestV2Compiler {
     entity.setFidelity(capability.fidelity().name());
     entity.setConversionQuality(conversion.quality().name());
     entity.setActionCoveragePct(conversion.actionCoveragePct());
-    entity.setGapCount(conversion.gaps().size() + unsupported.size());
+    entity.setGapCount(sourceGaps.size());
     entity.setApproximationCount(conversion.approximations().size());
-    entity.setCompleteness("COMPLETE");
+    entity.setCompleteness(sourceGaps.isEmpty() ? "COMPLETE" : "INCOMPLETE");
     entity.setPublishState("PUBLISHED");
     entity.setCreatedAt(LocalDateTime.now());
+    if (!persist) return new Compilation(entity, conversion, capability, unsupported);
     try {
       entity = manifestRepository.saveAndFlush(entity);
     } catch (DataIntegrityViolationException race) {
@@ -495,11 +631,23 @@ public class ScenarioManifestV2Compiler {
     recording.put("debugSessionChecksum", sessionChecksum);
     recording.put("startTick", conversion.startTick());
     recording.put("endTick", conversion.endTick());
+    doc.set(
+        "execution",
+        ExecutionLimitContract.defaults(
+            objectMapper, conversion.startTick(), conversion.endTick()));
 
     ObjectNode curationNode = doc.putObject("curation");
     curationNode.put("curationId", curation.getId().toString());
     curationNode.put("version", curation.getVersion());
     curationNode.put("checksum", curation.getContentChecksum());
+    curationNode.put("datasetRole", curation.getRole().name());
+    if (curation.getContentJson().has("sourceCuration")) {
+      curationNode.set(
+          "sourceCuration", curation.getContentJson().path("sourceCuration").deepCopy());
+    }
+    doc.set(
+        "termination",
+        TerminationPolicyContract.fromSource(objectMapper, curationNode.path("sourceCuration")));
 
     ObjectNode compiler = doc.putObject("compiler");
     compiler.put("version", COMPILER_VERSION);
@@ -587,19 +735,26 @@ public class ScenarioManifestV2Compiler {
     return doc;
   }
 
-  private ObjectNode toKernelAction(ConvertedReplayAction converted) {
+  ObjectNode toKernelAction(ConvertedReplayAction converted) {
     RecordingAction source = converted.action();
     ObjectNode action = objectMapper.createObjectNode();
     String type = source.getActionType();
-    action.put("type", type);
     Map<String, Object> arguments = source.getArguments();
+    String kernelType = type;
+    action.put("type", kernelType);
+    action.put("mappingVersion", ACTION_MAPPING_VERSION);
     MapValue target = mapValue(source.getTarget());
-    switch (type) {
+    switch (kernelType) {
       case "WAIT_UNTIL_TICK" -> action.put("tick", source.getTick());
       case "WALK_TO" -> copyObjectArgument(action, arguments, "destination");
-      case "INTERACT_NPC", "INTERACT_OBJECT" -> {
+      case "INTERACT_NPC" -> {
         putStableTarget(action, target);
         putTextArgument(action, arguments, "option");
+      }
+      case "INTERACT_OBJECT" -> {
+        putStableTarget(action, target);
+        putTextArgument(action, arguments, "option");
+        copyObjectArgument(action, arguments, "sourceItem");
       }
       case "INTERACT_GROUND_ITEM" -> {
         putStableTarget(action, target);
@@ -610,6 +765,8 @@ public class ScenarioManifestV2Compiler {
         putStableTarget(action, target);
         putIntegerArgument(action, arguments, "slot");
         putIntegerArgument(action, arguments, "itemId");
+        putIntegerArgument(action, arguments, "sourceSlot");
+        putIntegerArgument(action, arguments, "sourceItemId");
         putTextArgument(action, arguments, "option");
       }
       case "INTERACT_WIDGET" -> {
@@ -617,6 +774,9 @@ public class ScenarioManifestV2Compiler {
         putTextArgument(action, arguments, "option");
         putIntegerArgument(action, arguments, "widgetId");
         putIntegerArgument(action, arguments, "widgetIndex");
+        putIntegerArgument(action, arguments, "productId");
+        putIntegerArgument(action, arguments, "quantity");
+        copyObjectArgument(action, arguments, "input");
       }
       case "SELECT_DIALOGUE_OPTION" -> {
         putStableTarget(action, target);
@@ -628,6 +788,8 @@ public class ScenarioManifestV2Compiler {
       case "CAST_SPELL" -> {
         putStableTarget(action, target);
         putIntegerArgument(action, arguments, "spellId");
+        putIntegerArgument(action, arguments, "slot");
+        putIntegerArgument(action, arguments, "itemId");
         putTextArgument(action, arguments, "option");
         putIntegerArgument(action, arguments, "widgetId");
         putIntegerArgument(action, arguments, "widgetIndex");
@@ -662,6 +824,12 @@ public class ScenarioManifestV2Compiler {
     action.put("provenance", converted.provenance().name());
     action.put("provenanceReason", converted.provenanceReason());
     ObjectNode evidence = action.putObject("sourceEvidence");
+    if ("MICRO6_CLIENT_OBSERVATION".equals(source.getSource())
+        && source.getArguments().containsKey("observationEvidence")) {
+      evidence.set(
+          "clientObservation",
+          objectMapper.valueToTree(source.getArguments().get("observationEvidence")));
+    }
     if (converted.sourceLogId() != null) evidence.put("logId", converted.sourceLogId());
     if (converted.sourceSnapshotId() != null)
       evidence.put("snapshotId", converted.sourceSnapshotId());
@@ -678,22 +846,44 @@ public class ScenarioManifestV2Compiler {
   }
 
   private void putIntegerArgument(ObjectNode action, Map<String, Object> arguments, String key) {
-    Integer value = intValue(arguments, key);
-    if (value != null) action.put(key, value);
+    if (arguments == null || !arguments.containsKey(key)) return;
+    JsonNode value = jsonValue(arguments, key);
+    if (value == null || !value.isIntegralNumber() || !value.canConvertToInt()) {
+      throw ReplayException.invalid(
+          ReplayErrorCode.VALIDATION_ERROR,
+          "Semantic action argument " + key + " must be an exact integer");
+    }
+    action.set(key, value.deepCopy());
   }
 
   private void copyObjectArgument(ObjectNode action, Map<String, Object> arguments, String key) {
+    if (arguments == null || !arguments.containsKey(key)) return;
     JsonNode value = jsonValue(arguments, key);
-    if (value != null && value.isObject()) action.set(key, value.deepCopy());
+    if (value == null || !value.isObject()) {
+      throw ReplayException.invalid(
+          ReplayErrorCode.VALIDATION_ERROR,
+          "Semantic action argument " + key + " must be an object");
+    }
+    action.set(key, value.deepCopy());
   }
 
   private RecordingCuration ensureConversionCuration(
       String recordingId,
       DebugSession session,
       ReplayActionConversionResult conversion,
-      List<String> unsupported) {
+      List<String> unsupported,
+      PublishedCurationSnapshot published,
+      boolean persist) {
     ObjectNode content = objectMapper.createObjectNode();
     content.put("schema", "recording-conversion/v1");
+    content.put("recordingId", recordingId);
+    content.put("debugSessionId", session.getSessionId());
+    CurationRole conversionRole =
+        published == null
+            ? CurationRole.HELD_OUT
+            : CurationRole.valueOf(published.source().path("role").asText());
+    content.put("datasetRole", conversionRole.name());
+    if (published != null) content.set("sourceCuration", published.source());
     content.put("conversionChecksum", conversion.conversionChecksum());
     content.put("mode", conversion.mode().name());
     content.put("quality", conversion.quality().name());
@@ -734,10 +924,12 @@ public class ScenarioManifestV2Compiler {
     RecordingCuration existingByChecksum =
         curationRepository.findByContentChecksum(checksum).orElse(null);
     if (existingByChecksum != null) {
+      requireMatchingCuration(
+          existingByChecksum, recordingId, session, conversionRole, checksum, content);
       // A previous process may have committed the curation before its child rows were flushed.
       // Repair only missing children; the content checksum makes this idempotent and prevents
       // unrelated operator curations from being overwritten.
-      persistMissingCuratedActions(existingByChecksum.getId(), conversion);
+      if (persist) persistMissingCuratedActions(existingByChecksum.getId(), conversion);
       return existingByChecksum;
     }
 
@@ -747,7 +939,9 @@ public class ScenarioManifestV2Compiler {
                 .getBytes(StandardCharsets.UTF_8));
     RecordingCuration existingById = curationRepository.findById(curationId).orElse(null);
     if (existingById != null) {
-      persistMissingCuratedActions(existingById.getId(), conversion);
+      requireMatchingCuration(
+          existingById, recordingId, session, conversionRole, checksum, content);
+      if (persist) persistMissingCuratedActions(existingById.getId(), conversion);
       return existingById;
     }
 
@@ -757,20 +951,86 @@ public class ScenarioManifestV2Compiler {
     curation.setDebugSessionId(session.getSessionId());
     curation.setVersion(nextCurationVersion(recordingId));
     curation.setState(CurationState.PUBLISHED);
-    curation.setRole(CurationRole.HELD_OUT);
+    curation.setRole(conversionRole);
     curation.setSchemaVersion(1);
     curation.setContentJson(content);
     curation.setContentChecksum(checksum);
-    curation.setCreatedBy("replay-converter");
+    curation.setCreatedBy(CONVERSION_CREATED_BY);
     curation.setCreatedAt(LocalDateTime.now());
     curation.setPublishedAt(curation.getCreatedAt());
+    if (!persist) return curation;
     try {
       RecordingCuration saved = curationRepository.saveAndFlush(curation);
       persistMissingCuratedActions(saved.getId(), conversion);
       return saved;
     } catch (DataIntegrityViolationException race) {
-      return curationRepository.findByContentChecksum(checksum).orElseThrow(() -> race);
+      RecordingCuration winner =
+          curationRepository.findByContentChecksum(checksum).orElseThrow(() -> race);
+      requireMatchingCuration(winner, recordingId, session, conversionRole, checksum, content);
+      return winner;
     }
+  }
+
+  private void requireMatchingCuration(
+      RecordingCuration curation,
+      String recordingId,
+      DebugSession session,
+      CurationRole role,
+      String checksum,
+      ObjectNode content) {
+    if (!recordingId.equals(curation.getRecordingId())
+        || !session.getSessionId().equals(curation.getDebugSessionId())
+        || role != curation.getRole()
+        || curation.getState() != CurationState.PUBLISHED
+        || !CONVERSION_CREATED_BY.equals(curation.getCreatedBy())
+        || !checksum.equals(curation.getContentChecksum())
+        || curation.getContentJson() == null
+        // PostgreSQL JSONB normalizes numeric node types (e.g. DecimalNode(1) to IntNode(1)).
+        // Compare the exact canonical bytes used by the checksum, not Jackson node subclasses.
+        || !projectionService
+            .canonicalJson(content)
+            .equals(projectionService.canonicalJson(curation.getContentJson()))) {
+      throw ReplayException.invalid(
+          ReplayErrorCode.CURATION_REQUIRED,
+          "Existing conversion curation conflicts with the immutable compilation source");
+    }
+  }
+
+  /**
+   * Resolves the dataset role for a compiler-produced conversion curation (SC-274). The latest
+   * published operator curation for the recording wins, so train/validation/held-out roles and
+   * their privacy boundaries survive compilation. Converter-produced rows never vote; with no
+   * operator curation the fail-closed default is HELD_OUT.
+   */
+  private RecordingCuration selectedCuration(String recordingId, UUID id, String ownerId) {
+    if (id != null) {
+      return curationRepository
+          .findById(id)
+          .orElseThrow(
+              () ->
+                  ReplayException.notFound(
+                      ReplayErrorCode.CURATION_NOT_PUBLISHED,
+                      "Published curation is not available for this recording and owner"));
+    }
+    List<RecordingCuration> candidates =
+        ownerId == null
+            ? curationRepository.findByRecordingIdOrderByVersionDesc(recordingId)
+            : curationRepository.findByRecordingIdAndCreatedByOrderByVersionDesc(
+                recordingId, ownerId);
+    RecordingCuration selected =
+        candidates.stream()
+            .filter(curation -> curation.getState() == CurationState.PUBLISHED)
+            .filter(curation -> !CONVERSION_CREATED_BY.equals(curation.getCreatedBy()))
+            .findFirst()
+            .orElse(null);
+    // A recording has no user-owner field. Never infer access from a caller knowing its id:
+    // authenticated execution needs an owned published curation as its explicit authority.
+    if (ownerId != null && selected == null) {
+      throw ReplayException.notFound(
+          ReplayErrorCode.CURATION_NOT_PUBLISHED,
+          "Published curation is not available for this recording and owner");
+    }
+    return selected;
   }
 
   private int nextCurationVersion(String recordingId) {
@@ -901,22 +1161,62 @@ public class ScenarioManifestV2Compiler {
   }
 
   private ObjectNode buildInitialState(
+      TickSnapshot first, ReplayActionConversionResult conversion, boolean authoritativeNpcPins) {
+    return buildInitialState(first, conversion, authoritativeNpcPins, RecordedStart.NONE);
+  }
+
+  private ObjectNode buildInitialState(
+      TickSnapshot first,
+      ReplayActionConversionResult conversion,
+      boolean authoritativeNpcPins,
+      PublishedCurationSnapshot published) {
+    return buildInitialState(
+        first, conversion, authoritativeNpcPins, published, null, RecordedStart.NONE);
+  }
+
+  private ObjectNode buildInitialState(
       TickSnapshot first,
       ReplayActionConversionResult conversion,
       boolean authoritativeNpcPins,
       RecordedStart recordedStart) {
-    JsonNode playerState = first.getPlayerState();
+    return buildInitialState(first, conversion, authoritativeNpcPins, null, null, recordedStart);
+  }
+
+  ObjectNode buildInitialState(
+      TickSnapshot first,
+      ReplayActionConversionResult conversion,
+      boolean authoritativeNpcPins,
+      PublishedCurationSnapshot published,
+      String pinnedCollisionRevision) {
+    return buildInitialState(
+        first,
+        conversion,
+        authoritativeNpcPins,
+        published,
+        pinnedCollisionRevision,
+        RecordedStart.NONE);
+  }
+
+  private ObjectNode buildInitialState(
+      TickSnapshot first,
+      ReplayActionConversionResult conversion,
+      boolean authoritativeNpcPins,
+      PublishedCurationSnapshot published,
+      String pinnedCollisionRevision,
+      RecordedStart recordedStart) {
+    // Project into detached inert JSON before applying authorized fixtures. The captured row,
+    // its checksum, and all execution-tick evidence remain untouched. Validate the resulting
+    // input, not an incomplete captured base and not an unchecked post-validation patch.
+    ObjectNode input = initialStateInput(first);
+    if (published != null) input = published.overrideInitialState(input);
+    JsonNode playerState = input.get("player");
     if (playerState == null || !playerState.isObject()) {
       throw ReplayException.invalid(
           ReplayErrorCode.PLAYER_STATE_MISSING, "Earliest tick snapshot has no player state");
     }
-    ObjectNode state = objectMapper.createObjectNode();
-    JsonNode world = playerState.path("world");
-    JsonNode worldId =
-        world.isObject() && world.has("worldId")
-            ? world.get("worldId")
-            : playerState.get("worldId");
-    if (worldId == null && recordedStart.worldId() != null) {
+    ObjectNode state = input.deepCopy();
+    JsonNode worldId = input.get("worldId");
+    if ((worldId == null || worldId.isNull()) && recordedStart.worldId() != null) {
       worldId = objectMapper.getNodeFactory().numberNode(recordedStart.worldId());
     }
     if (worldId == null
@@ -925,25 +1225,56 @@ public class ScenarioManifestV2Compiler {
         || worldId.asInt() <= 0) {
       throw ReplayException.invalid(
           ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
-          "Recorded world id missing or invalid at start tick");
+          "Recorded world id missing or invalid at start tick " + first.getTick());
     }
     state.put("worldId", worldId.asInt());
 
-    JsonNode collisionRevision =
-        playerState.has("collisionRevision")
-            ? playerState.get("collisionRevision")
-            : world.isObject() ? world.get("collisionRevision") : null;
-    if (collisionRevision == null && recordedStart.collisionModel() != null) {
-      collisionRevision = objectMapper.getNodeFactory().textNode(recordedStart.collisionModel());
-    }
-    if (collisionRevision == null
-        || !collisionRevision.isTextual()
-        || collisionRevision.asText().isBlank()) {
+    // Region identity is part of the initial world: collision data, spawn selection and travel are
+    // keyed by region, so a scenario that cannot name its region cannot be simulated. The producer
+    // records it inside the per-tick world observation; a captured or operator-supplied top-level
+    // region is accepted too, but it is never inferred from a world id or a coordinate.
+    JsonNode regionId = input.get("regionId");
+    if (regionId == null
+        || !regionId.isIntegralNumber()
+        || !regionId.canConvertToInt()
+        || regionId.asInt() <= 0) {
       throw ReplayException.invalid(
           ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
-          "Recorded collision revision missing or blank at start tick");
+          "Recorded region identity missing or invalid at start tick " + first.getTick());
     }
-    state.put("collisionRevision", collisionRevision.asText().trim());
+    state.put("regionId", regionId.asInt());
+
+    JsonNode collisionRevision = input.get("collisionRevision");
+    String capturedCollision =
+        collisionRevision != null
+                && collisionRevision.isTextual()
+                && !collisionRevision.asText().isBlank()
+            ? collisionRevision.asText().trim()
+            : null;
+    if (capturedCollision != null
+        && pinnedCollisionRevision != null
+        && !capturedCollision.equals(pinnedCollisionRevision)) {
+      // Derivation must never mask an incompatibility: a capture taken against different collision
+      // data than the pinned simulator content is a different world, so it is refused instead of
+      // being silently rewritten to the pinned value.
+      throw ReplayException.invalid(
+          ReplayErrorCode.SNAPSHOT_INCOMPATIBLE,
+          "Captured collision revision at start tick "
+              + first.getTick()
+              + " does not match the pinned simulator content revision");
+    }
+    String collision =
+        capturedCollision != null
+            ? capturedCollision
+            : pinnedCollisionRevision != null
+                ? pinnedCollisionRevision
+                : recordedStart.collisionModel();
+    if (collision == null) {
+      throw ReplayException.invalid(
+          ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
+          "Recorded collision revision missing or blank at start tick " + first.getTick());
+    }
+    state.put("collisionRevision", collision);
 
     // Start with the complete captured player object. The canonical fields below are normalized
     // for the worker, while every additional captured field (HP, prayer, animation, aliases,
@@ -960,15 +1291,15 @@ public class ScenarioManifestV2Compiler {
     if (skills.isObject()) {
       player.set("skills", normalizedSkills(skills));
     }
-    player.set("inventory", normalizeSlots(first.getInventory(), "inventory"));
-    player.set("equipment", normalizeSlots(first.getEquipment(), "equipment"));
+    player.set("inventory", normalizeSlots(playerState.get("inventory"), "inventory"));
+    player.set("equipment", normalizeSlots(playerState.get("equipment"), "equipment"));
     state.set("player", player);
 
-    JsonNode npcs = first.getNpcs();
-    if (npcs == null || !npcs.isArray() || npcs.isEmpty()) {
+    JsonNode npcs = input.get("npcs");
+    if (npcs == null || !npcs.isArray()) {
       throw ReplayException.invalid(
           ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
-          "Initial world must contain a non-empty typed NPC list");
+          "Initial world must contain a typed NPC list (which may be empty)");
     }
     ArrayNode normalizedNpcs = state.putArray("npcs");
     List<JsonNode> npcEntries = new ArrayList<>();
@@ -993,6 +1324,14 @@ public class ScenarioManifestV2Compiler {
         npcsByStableId
             .computeIfAbsent(npc.path("stableId").asText(), ignored -> new ArrayList<>())
             .add(npc);
+      }
+      // Future targets are resolved against their execution-tick evidence separately. Never insert
+      // those later observations into this initial snapshot. Native-loading requirements stay gaps.
+      for (ConvertedReplayAction converted : conversion.actions()) {
+        String id = textValue(converted.action().getTarget(), "stableId");
+        if (converted.action().getTick() > first.getTick() && !npcsByStableId.containsKey(id)) {
+          referencedNpcIds.remove(id);
+        }
       }
       validateNpcActions(npcsByStableId, conversion);
       for (String stableId : referencedNpcIds) {
@@ -1078,11 +1417,6 @@ public class ScenarioManifestV2Compiler {
         npcEntries.add(normalized);
       }
     }
-    if (npcEntries.isEmpty()) {
-      throw ReplayException.invalid(
-          ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
-          "Initial world contains no supported fishing NPC");
-    }
     npcEntries.sort(Comparator.comparing(npc -> npc.path("stableId").asText()));
     Set<String> stableIds = new HashSet<>();
     for (JsonNode npc : npcEntries) {
@@ -1093,25 +1427,72 @@ public class ScenarioManifestV2Compiler {
       normalizedNpcs.add(npc);
     }
 
-    if (first.getGameObjects() == null || first.getGroundItems() == null) {
+    if (!input.path("objects").isArray() || !input.path("groundItems").isArray()) {
       throw ReplayException.invalid(
           ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
           "Initial object and ground-item state must be present");
     }
-    state.set("objects", first.getGameObjects().deepCopy());
-    state.set("groundItems", first.getGroundItems().deepCopy());
-    state.set("threats", nullable(first.getThreats()));
-    state.set("projectiles", nullable(first.getProjectiles()));
-    state.set("cooldowns", nullable(first.getCooldowns()));
-    state.set("quest", nullable(first.getQuest()));
-    state.set("questHelper", nullable(first.getQuestHelper()));
-    state.set("dialogue", nullable(first.getDialogue()));
-    state.set("spells", nullable(first.getSpells()));
-    state.set("vars", nullable(first.getVars()));
-    state.set("groundObjects", nullable(first.getGroundObjects()));
-    state.set("players", nullable(first.getPlayers()));
-    state.set("widgets", nullable(first.getWidgets()));
     return state;
+  }
+
+  /**
+   * Derives the collision revision from the pinned simulator content identity. A capture may omit
+   * it, but the derived value must still name the revision it came from; without a pinned
+   * content/cache revision the scenario stays incomplete rather than defaulting silently.
+   */
+  private static String pinnedCollisionRevision(CapabilityManifest capability) {
+    if (capability == null) return null;
+    String content = capability.xrsps().contentRevision();
+    if (content != null && !content.isBlank()) return content.trim();
+    String cache = capability.xrsps().cacheRevision();
+    return cache != null && !cache.isBlank() ? cache.trim() : null;
+  }
+
+  private ObjectNode initialStateInput(TickSnapshot first) {
+    ObjectNode input = objectMapper.createObjectNode();
+    JsonNode captured = first.getPlayerState();
+    JsonNode world = captured == null ? objectMapper.nullNode() : captured.path("world");
+    input.set(
+        "worldId",
+        nullable(
+            world.isObject() && world.has("worldId")
+                ? world.get("worldId")
+                : captured == null ? null : captured.get("worldId")));
+    input.set(
+        "collisionRevision",
+        nullable(
+            captured != null && captured.has("collisionRevision")
+                ? captured.get("collisionRevision")
+                : world.get("collisionRevision")));
+    input.set(
+        "regionId",
+        nullable(
+            world.isObject() && world.has("regionId")
+                ? world.get("regionId")
+                : captured == null ? null : captured.get("regionId")));
+    if (captured != null && captured.isObject()) {
+      ObjectNode player = ((ObjectNode) captured).deepCopy();
+      player.set("inventory", nullable(first.getInventory()));
+      player.set("equipment", nullable(first.getEquipment()));
+      input.set("player", player);
+    } else {
+      input.set("player", nullable(captured));
+    }
+    input.set("npcs", nullable(first.getNpcs()));
+    input.set("objects", nullable(first.getGameObjects()));
+    input.set("groundItems", nullable(first.getGroundItems()));
+    input.set("threats", nullable(first.getThreats()));
+    input.set("projectiles", nullable(first.getProjectiles()));
+    input.set("cooldowns", nullable(first.getCooldowns()));
+    input.set("quest", nullable(first.getQuest()));
+    input.set("questHelper", nullable(first.getQuestHelper()));
+    input.set("dialogue", nullable(first.getDialogue()));
+    input.set("spells", nullable(first.getSpells()));
+    input.set("vars", nullable(first.getVars()));
+    input.set("groundObjects", nullable(first.getGroundObjects()));
+    input.set("players", nullable(first.getPlayers()));
+    input.set("widgets", nullable(first.getWidgets()));
+    return input;
   }
 
   private void validateNpcActions(
@@ -1302,12 +1683,22 @@ public class ScenarioManifestV2Compiler {
           "Initial " + name + " state is missing");
     }
     List<JsonNode> entries = new ArrayList<>();
+    Set<Integer> slots = new HashSet<>();
     for (JsonNode item : raw) {
       if (!item.isObject()
           || !item.has("slot")
           || !item.has("itemId")
           || item.path("slot").asInt(-1) < 0
-          || item.path("itemId").asInt(-1) < 0) {
+          || !item.path("slot").isIntegralNumber()
+          || !item.path("slot").canConvertToInt()
+          || item.path("slot").asInt() > ("inventory".equals(name) ? 27 : 13)
+          || !item.path("itemId").isIntegralNumber()
+          || !item.path("itemId").canConvertToInt()
+          || item.path("itemId").asInt(-1) < 0
+          || !item.path("quantity").isIntegralNumber()
+          || !item.path("quantity").canConvertToInt()
+          || item.path("quantity").asInt(-1) < 0
+          || !slots.add(item.path("slot").asInt())) {
         throw ReplayException.invalid(
             "inventory".equals(name)
                 ? ReplayErrorCode.INVENTORY_SLOT_MISSING
@@ -1315,7 +1706,6 @@ public class ScenarioManifestV2Compiler {
             "Initial " + name + " contains an invalid slot");
       }
       ObjectNode normalized = item.deepCopy();
-      if (!normalized.has("quantity")) normalized.put("quantity", 1);
       entries.add(normalized);
     }
     entries.sort(Comparator.comparingInt(node -> node.path("slot").asInt()));
@@ -1346,13 +1736,16 @@ public class ScenarioManifestV2Compiler {
       String recordingId,
       DebugSession session,
       List<TickSnapshot> snapshots,
-      ReplayActionConversionResult conversion) {
+      ReplayActionConversionResult conversion,
+      JsonNode context) {
     ObjectNode evidence = objectMapper.createObjectNode();
     evidence.put("recordingId", recordingId);
     evidence.put("debugSessionId", session.getSessionId());
     evidence.put("start", String.valueOf(session.getStartTime()));
     evidence.put("end", String.valueOf(session.getEndTime()));
     evidence.put("conversionChecksum", conversion.conversionChecksum());
+    evidence.set("captureIdentity", session.getCaptureIdentity());
+    evidence.set("behaviorRunContext", context);
     ArrayNode snapshotNodes = evidence.putArray("snapshots");
     for (TickSnapshot snapshot : snapshots) {
       ObjectNode node = snapshotNode(snapshot);
@@ -1401,14 +1794,87 @@ public class ScenarioManifestV2Compiler {
           "Tick snapshots do not cover the complete range " + start + ".." + end);
     }
     long expected = start;
+    Integer recordingSchema = null;
     for (TickSnapshot snapshot : snapshots) {
       if (snapshot == null || snapshot.getTick() == null || snapshot.getTick() != expected) {
         throw ReplayException.invalid(
             ReplayErrorCode.TICK_GAP_DETECTED,
             "Tick snapshots are not contiguous in the requested range");
       }
+      if (!com.chromascape.web.replay.catalog.ReplayEvidenceValidator.supportsSnapshotSchema(
+              snapshot.getSchemaVersion())
+          || (recordingSchema != null && !recordingSchema.equals(snapshot.getSchemaVersion()))) {
+        throw ReplayException.invalid(
+            ReplayErrorCode.SCHEMA_VERSION_UNSUPPORTED,
+            "Unsupported, missing or changed snapshot schema at tick " + expected);
+      }
+      recordingSchema = snapshot.getSchemaVersion();
       expected++;
     }
+  }
+
+  /**
+   * Fail-closed range check (SC-274 negative matrix: off-by-one ticks). Converted actions must fall
+   * inside the compiled snapshot range; anything outside fails stably instead of silently shifting
+   * the scenario.
+   */
+  private static void assertActionTicksInRange(
+      ReplayActionConversionResult conversion, long startTick, long endTick) {
+    for (ConvertedReplayAction converted : conversion.actions()) {
+      long tick = converted.action().getTick();
+      if (tick < startTick || tick > endTick) {
+        throw ReplayException.invalid(
+            ReplayErrorCode.TICK_RANGE_INVALID,
+            "Converted action at tick "
+                + tick
+                + " is outside the compiled range "
+                + startTick
+                + ".."
+                + endTick);
+      }
+    }
+  }
+
+  /**
+   * Fail-closed ordering check (SC-274 negative matrix: duplicate or reordered actions). The kernel
+   * replays (tick, sequence) in order, so a duplicate or regressing pair fails stably instead of
+   * executing ambiguously.
+   */
+  private static void assertActionOrder(ReplayActionConversionResult conversion) {
+    long previousTick = 0;
+    int previousSequence = -1;
+    boolean first = true;
+    for (ConvertedReplayAction converted : conversion.actions()) {
+      RecordingAction action = converted.action();
+      if (!first
+          && (action.getTick() < previousTick
+              || (action.getTick() == previousTick && action.getSequence() <= previousSequence))) {
+        throw ReplayException.invalid(
+            ReplayErrorCode.ACTION_SEQUENCE_INVALID,
+            "Converted actions are not strictly ordered at tick " + action.getTick());
+      }
+      first = false;
+      previousTick = action.getTick();
+      previousSequence = action.getSequence();
+    }
+  }
+
+  /**
+   * Fail-closed gap policy (SC-274): the reasons an incomplete scenario is blocked from causal
+   * simulation. Empty means COMPLETE. The compiled artifact itself stays usable for playback and
+   * policy replay; only the simulation entry point refuses it.
+   */
+  static List<String> simulationBlockedReasons(
+      ReplayActionConversionResult conversion, List<String> unsupported) {
+    List<String> reasons = new ArrayList<>();
+    if (conversion == null) return List.of("Conversion evidence is missing");
+    for (ReplayGap gap : conversion.gaps()) {
+      reasons.add("gap at tick " + gap.tick() + ": " + gap.code());
+    }
+    for (String action : unsupported) {
+      reasons.add("unsupported action " + action);
+    }
+    return List.copyOf(reasons);
   }
 
   private ObjectNode gapNode(ReplayGap gap) {
@@ -1456,6 +1922,13 @@ public class ScenarioManifestV2Compiler {
   }
 
   private static ObjectNode normalizedPosition(JsonNode raw) {
+    if (!hasCoordinate(raw, "plane")
+        || raw.path("plane").asInt(-1) < 0
+        || raw.path("plane").asInt(4) > 3) {
+      throw ReplayException.invalid(
+          ReplayErrorCode.POSITION_MISSING,
+          "Position has no exact supported plane; the compiler cannot default it to zero");
+    }
     ObjectNode position = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
     position.put("x", coordinate(raw, "x", "worldX"));
     position.put("y", coordinate(raw, "y", "z", "worldY"));
@@ -1465,7 +1938,17 @@ public class ScenarioManifestV2Compiler {
 
   private static boolean hasCoordinate(JsonNode node, String field) {
     JsonNode value = node.get(field);
-    return value != null && ((value.isNumber() && value.isIntegralNumber()) || value.isTextual());
+    if (value == null) return false;
+    if (value.isIntegralNumber()) return value.canConvertToInt();
+    if (value.isTextual()) {
+      try {
+        Integer.parseInt(value.asText());
+        return true;
+      } catch (NumberFormatException ignored) {
+        return false;
+      }
+    }
+    return false;
   }
 
   private static int coordinate(JsonNode node, String... fields) {
@@ -1534,6 +2017,50 @@ public class ScenarioManifestV2Compiler {
       List<String> unsupportedActions) {
     public Compilation {
       unsupportedActions = List.copyOf(unsupportedActions == null ? List.of() : unsupportedActions);
+    }
+
+    /** Actionable reasons this scenario is blocked from causal simulation; empty when COMPLETE. */
+    public List<String> simulationBlockedReasons() {
+      List<String> reasons =
+          new ArrayList<>(
+              ScenarioManifestV2Compiler.simulationBlockedReasons(conversion, unsupportedActions));
+      if (manifest != null && manifest.getManifestJson() != null) {
+        for (JsonNode gap : manifest.getManifestJson().path("conversion").path("gaps")) {
+          String reason =
+              "gap at tick " + gap.path("tick").asLong() + ": " + gap.path("code").asText();
+          if (!reasons.contains(reason)) reasons.add(reason);
+        }
+        try {
+          ScenarioManifestImportValidator.requireSimulationAllowed(manifest.getManifestJson());
+        } catch (ReplayException invalidEvidence) {
+          reasons.add("Manifest source audit rejected: " + invalidEvidence.getMessage());
+        }
+      } else {
+        reasons.add("Manifest source audit is missing");
+      }
+      return List.copyOf(reasons);
+    }
+
+    /** True when causal simulation may run; playback and policy replay never consult this. */
+    public boolean isSimulationAllowed() {
+      return simulationBlockedReasons().isEmpty();
+    }
+
+    /**
+     * Fail-closed simulation gate (SC-274): throws with the actionable reasons when the scenario is
+     * incomplete. Playback and policy-replay paths must not call this.
+     */
+    public void requireSimulationAllowed() {
+      List<String> reasons = simulationBlockedReasons();
+      if (!reasons.isEmpty()) {
+        throw ReplayException.invalid(
+            ReplayErrorCode.SIM_INITIAL_STATE_INCOMPLETE,
+            "Scenario "
+                + (manifest == null ? "<missing>" : manifest.getRecordingId())
+                + " is simulation-blocked: "
+                + String.join("; ", reasons)
+                + ". It remains available for playback and policy replay");
+      }
     }
   }
 }

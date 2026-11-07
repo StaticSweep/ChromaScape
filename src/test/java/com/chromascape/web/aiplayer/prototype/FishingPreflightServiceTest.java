@@ -228,6 +228,15 @@ class FishingPreflightServiceTest {
     assertThat(report.issues())
         .extracting(PreflightIssue::code)
         .contains(PreflightReport.IssueCode.CATCH_COUNT_MISMATCH);
+    assertThat(report.issues())
+        .filteredOn(issue -> PreflightReport.IssueCode.CATCH_COUNT_MISMATCH.equals(issue.code()))
+        .singleElement()
+        .satisfies(
+            issue ->
+                assertThat(issue.message())
+                    .contains("net inventory total change of exactly 5")
+                    .contains("observed 3")
+                    .doesNotContain("positive inventory additions"));
   }
 
   @Test

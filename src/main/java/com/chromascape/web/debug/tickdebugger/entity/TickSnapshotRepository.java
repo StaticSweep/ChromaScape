@@ -14,6 +14,18 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface TickSnapshotRepository extends JpaRepository<TickSnapshot, Long> {
 
+  interface EvidenceMetadata {
+    Long getTick();
+
+    Integer getSchemaVersion();
+  }
+
+  /** Catalog continuity/schema checks do not need every historical world JSON payload. */
+  @Query(
+      "SELECT t.tick AS tick, t.schemaVersion AS schemaVersion FROM TickSnapshot t "
+          + "WHERE t.sessionId = :sessionId ORDER BY t.tick ASC, t.id ASC")
+  List<EvidenceMetadata> findEvidenceMetadataBySessionId(@Param("sessionId") String sessionId);
+
   /** Find all snapshots for a session, ordered by tick. */
   List<TickSnapshot> findBySessionIdOrderByTick(String sessionId);
 

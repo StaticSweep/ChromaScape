@@ -118,7 +118,12 @@ public class ReplayRecoveryReportTransaction {
     // 4. Committed evidence only.
     ReplayAttempt attempt =
         attemptRepository.findFirstByRunIdOrderByAttemptNoDesc(runId).orElse(null);
-    long executedActions = hashSampleRepository.countByIdRunId(runId);
+    // Native source progress includes actionless advances and inherited branch prefixes.
+    // Hash-sample count is not an action count for this protocol. Legacy attempts retain their
+    // historical reporting rule; the migration never guesses or backfills missing progress.
+    long executedActions = attempt != null && attempt.getNativeSourceCursor() != null
+        ? NativeSourceCursor.acceptedActions(attempt.getNativeSourceCursor())
+        : hashSampleRepository.countByIdRunId(runId);
     StateHashSample last =
         hashSampleRepository.findTopByIdRunIdOrderByIdTickDescIdSequenceDesc(runId).orElse(null);
     int checkpointCount = (int) checkpointRepository.countByRunId(runId);

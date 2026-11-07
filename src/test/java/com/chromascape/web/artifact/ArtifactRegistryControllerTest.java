@@ -16,7 +16,9 @@ class ArtifactRegistryControllerTest {
 
   @Test
   void authenticatedOwnerComesFromPrincipalAndResetIsDisabledOutsideDevelopment() throws Exception {
-    var s = new ImmutableArtifactStore(root, 1024, 65536, new ObjectMapper());
+    var s =
+        new ImmutableArtifactStore(
+            root, 1024, 65536, new ObjectMapper(), TestDurability.positiveMode());
     var controller =
         new ArtifactRegistryController(s, new ReplayPrincipalService(), new StandardEnvironment());
     assertThrows(
@@ -37,7 +39,9 @@ class ArtifactRegistryControllerTest {
 
   @Test
   void rawPublicationIsBoundedBeforeRegistration() throws Exception {
-    var s = new ImmutableArtifactStore(root, 4, 65536, new ObjectMapper());
+    var s =
+        new ImmutableArtifactStore(
+            root, 4, 65536, new ObjectMapper(), TestDurability.positiveMode());
     var controller =
         new ArtifactRegistryController(s, new ReplayPrincipalService(), new StandardEnvironment());
     var request = new org.springframework.mock.web.MockHttpServletRequest();
@@ -55,7 +59,9 @@ class ArtifactRegistryControllerTest {
 
   @Test
   void chunkedPublicationIsBoundedBeforeRegistration() throws Exception {
-    var s = new ImmutableArtifactStore(root, 4, 65536, new ObjectMapper());
+    var s =
+        new ImmutableArtifactStore(
+            root, 4, 65536, new ObjectMapper(), TestDurability.positiveMode());
     var controller =
         new ArtifactRegistryController(s, new ReplayPrincipalService(), new StandardEnvironment());
     var request =
@@ -79,7 +85,9 @@ class ArtifactRegistryControllerTest {
 
   @Test
   void httpRoutesPublishAndResolveOnlyTheAuthenticatedOwnersArtifacts() throws Exception {
-    var store = new ImmutableArtifactStore(root, 1024, 65536, new ObjectMapper());
+    var store =
+        new ImmutableArtifactStore(
+            root, 1024, 65536, new ObjectMapper(), TestDurability.positiveMode());
     var mvc =
         org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(
                 new ArtifactRegistryController(

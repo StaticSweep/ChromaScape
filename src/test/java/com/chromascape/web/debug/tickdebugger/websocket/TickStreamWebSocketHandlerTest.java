@@ -119,6 +119,57 @@ class TickStreamWebSocketHandlerTest {
   private WebSocketSession wsSession;
   private TickStreamWebSocketHandler handler;
 
+  @Test
+  void selectedRecorderNeverFallsBackToAnotherIdleClient() throws Exception {
+    setup("capture-socket");
+    when(wsSession.isOpen()).thenReturn(true);
+    handler.afterConnectionEstablished(wsSession);
+    var other = mock(WebSocketSession.class);
+    when(other.getId()).thenReturn("unrelated-socket");
+    when(other.isOpen()).thenReturn(true);
+    when(other.getAttributes()).thenReturn(new java.util.HashMap<>());
+    handler.afterConnectionEstablished(other);
+    assertThat(handler.selectManualRecorder(null, "capture-socket")).isEqualTo("capture-socket");
+    org.junit.jupiter.api.Assertions.assertThrows(
+        IllegalStateException.class, () -> handler.selectManualRecorder(null, "unknown-socket"));
+    org.junit.jupiter.api.Assertions.assertThrows(
+        IllegalStateException.class, () -> handler.selectManualRecorder(null));
+  }
+
+  @Test
+  void recorderHelloReturnsOnlyItsActualConnectionId() throws Exception {
+    setup("capture-socket");
+    handler.handleTextMessage(wsSession, new TextMessage("{\"type\":\"RECORDER_HELLO\"}"));
+    var sent = ArgumentCaptor.forClass(TextMessage.class);
+    verify(wsSession).sendMessage(sent.capture());
+    assertThat(
+            objectMapper
+                .readTree(sent.getValue().getPayload())
+                .path("recorderConnectionId")
+                .asText())
+        .isEqualTo("capture-socket");
+  }
+
+  @Test
+  void recordingControlForwardsExactTaskAndRunContext() throws Exception {
+    setup("capture-socket");
+    when(wsSession.isOpen()).thenReturn(true);
+    handler.afterConnectionEstablished(wsSession);
+    org.mockito.Mockito.clearInvocations(wsSession);
+    var args = objectMapper.readTree("{\"targetFish\":\"TROUT\"}");
+    var context = objectMapper.readTree("{\"dataOrigin\":\"HUMAN\",\"behaviorProfileVersion\":1}");
+    String session = "23441431-b139-470d-9c5d-203761924274";
+    handler.sendRecordingControl(
+        "capture-socket", "START", session, "Manual Fishing", "FISHING_TRAINING", args, context);
+    var sent = ArgumentCaptor.forClass(TextMessage.class);
+    verify(wsSession).sendMessage(sent.capture());
+    var payload = objectMapper.readTree(sent.getValue().getPayload());
+    assertThat(payload.path("sessionId").asText()).isEqualTo(session);
+    assertThat(payload.path("taskKey").asText()).isEqualTo("FISHING_TRAINING");
+    assertThat(payload.path("taskArgs")).isEqualTo(args);
+    assertThat(payload.path("runContext")).isEqualTo(context);
+  }
+
   private void setup(String wsId) {
     sessionService = mock(DebugSessionService.class);
     ingestionService = mock(TickStreamIngestionService.class);

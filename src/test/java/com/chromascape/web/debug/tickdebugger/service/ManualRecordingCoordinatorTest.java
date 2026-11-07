@@ -22,6 +22,21 @@ class ManualRecordingCoordinatorTest {
   }
 
   @Test
+  void forwardsExactRunContextForUuidSessions() throws Exception {
+    var json = new com.fasterxml.jackson.databind.ObjectMapper();
+    var args = json.readTree("{\"targetFish\":\"TROUT\"}");
+    var context = json.readTree("{\"dataOrigin\":\"HUMAN\",\"behaviorProfileVersion\":1}");
+    String sessionId = "23441431-b139-470d-9c5d-203761924274";
+    when(snapshots.countBySessionId(sessionId)).thenReturn(0L, 1L);
+    when(transport.isRecorderBound("socket", sessionId)).thenReturn(false, true);
+    new ManualRecordingCoordinator(transport, snapshots, 1000)
+        .startAndAwaitTick("socket", sessionId, "manual", "FISHING_TRAINING", args, context);
+    verify(transport)
+        .sendRecordingControl(
+            "socket", "START", sessionId, "manual", "FISHING_TRAINING", args, context);
+  }
+
+  @Test
   void oldTicksAndAnOpenSocketCannotEstablishReadiness() {
     when(snapshots.countBySessionId("debug_1")).thenReturn(7L);
     when(transport.isRecorderBound("socket", "debug_1")).thenReturn(true);

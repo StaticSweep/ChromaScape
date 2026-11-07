@@ -23,6 +23,10 @@ class LocalReplayPrincipalConfigTest {
 
     assertTrue(registration.getUrlPatterns().contains("/api/replay/*"));
     assertTrue(registration.getUrlPatterns().contains("/api/recordings/*"));
+    assertTrue(registration.getUrlPatterns().contains("/api/xrsps/sessions/*"));
+    assertTrue(registration.getUrlPatterns().contains("/xrsps-sessions"));
+    assertTrue(registration.getUrlPatterns().contains("/xrsps-client"));
+    assertTrue(registration.getUrlPatterns().contains("/xrsps-client/"));
     // SC-2150: the owner review workspace and the external-video API are same-host local calls
     // too. When this pattern is missing, main answers 401 for every mouse-video request.
     assertTrue(registration.getUrlPatterns().contains("/api/debug/mouse-videos/*"));

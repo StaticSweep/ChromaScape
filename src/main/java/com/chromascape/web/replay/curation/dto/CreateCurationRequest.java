@@ -13,4 +13,15 @@ public record CreateCurationRequest(
     @NotNull long tickRangeEnd,
     JsonNode initialStateOverrides,
     @Valid List<CuratedActionDto> actionLabels,
-    String createdBy) {}
+    String createdBy,
+    JsonNode termination) {
+  public CreateCurationRequest(
+      CurationRole role,
+      long tickRangeStart,
+      long tickRangeEnd,
+      JsonNode initialStateOverrides,
+      List<CuratedActionDto> actionLabels,
+      String createdBy) {
+    this(role, tickRangeStart, tickRangeEnd, initialStateOverrides, actionLabels, createdBy, null);
+  }
+}

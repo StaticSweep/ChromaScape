@@ -349,6 +349,9 @@ micro6:
     transport:
       base-url: ${MICRO6_SOURCE_TRANSPORT_BASE_URL:}
       auth-token: ${MICRO6_SOURCE_TRANSPORT_AUTH_TOKEN:}
+      # Purpose-specific Micro6 tokens (manifest-read / file-read). Each falls back to auth-token.
+      metadata-token: ${MICRO6_SOURCE_TRANSPORT_METADATA_TOKEN:}
+      content-token: ${MICRO6_SOURCE_TRANSPORT_CONTENT_TOKEN:}
       actor: ${MICRO6_SOURCE_TRANSPORT_ACTOR:chromascape-web}
 
 # Analysis Provider Configuration - For BMAD (Bot Metric Analysis & Diagnostics)

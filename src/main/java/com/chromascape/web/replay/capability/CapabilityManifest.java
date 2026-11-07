@@ -29,7 +29,48 @@ public record CapabilityManifest(
     boolean certifiable,
     Fidelity fidelity,
     List<String> supportedActions,
-    String viewerTraceSchema) {
+    String viewerTraceSchema,
+    List<ReplayMethodCapability> supportedMethods) {
+
+  public CapabilityManifest {
+    supportedActions = supportedActions == null ? null : List.copyOf(supportedActions);
+    supportedMethods = supportedMethods == null ? List.of() : List.copyOf(supportedMethods);
+    ReplayMethodCapability.validateDeclarations(supportedMethods, supportedActions);
+  }
+
+  /** Older workers attest no method-specific coverage; never infer it from action names. */
+  public CapabilityManifest(
+      int schemaVersion,
+      boolean controlAllowed,
+      CapabilityModes modes,
+      List<Integer> scenarioSchemaVersions,
+      List<Integer> semanticActionVersions,
+      List<Integer> snapshotVersions,
+      List<Integer> projectionVersions,
+      List<String> hashVersions,
+      XrspsIdentity xrsps,
+      boolean openRuneAvailable,
+      boolean certifiable,
+      Fidelity fidelity,
+      List<String> supportedActions,
+      String viewerTraceSchema) {
+    this(
+        schemaVersion,
+        controlAllowed,
+        modes,
+        scenarioSchemaVersions,
+        semanticActionVersions,
+        snapshotVersions,
+        projectionVersions,
+        hashVersions,
+        xrsps,
+        openRuneAvailable,
+        certifiable,
+        fidelity,
+        supportedActions,
+        viewerTraceSchema,
+        List.of());
+  }
 
   @com.fasterxml.jackson.annotation.JsonProperty("workerClass")
   public String workerClass() {
@@ -101,9 +142,19 @@ public record CapabilityManifest(
           "CAST_SPELL",
           "EQUIP_ITEM");
 
+  /**
+   * Worker wire vocabulary also includes the already-implemented item-on-NPC action. Keeping the
+   * historical ten-action profile unchanged avoids advertising new support in synthetic callers.
+   * Vocabulary membership is not an attestation that a particular worker implements an action.
+   */
+  public static final List<String> WORKER_ACTION_VOCABULARY =
+      java.util.stream.Stream.concat(
+              V1_SUPPORTED_ACTIONS.stream(), java.util.stream.Stream.of("USE_ITEM_ON_NPC"))
+          .toList();
+
   /** Returns whether an action belongs to the closed v1 semantic vocabulary. */
   public static boolean isSupportedAction(String action) {
-    return action != null && V1_SUPPORTED_ACTIONS.contains(action);
+    return action != null && WORKER_ACTION_VOCABULARY.contains(action);
   }
 
   /**

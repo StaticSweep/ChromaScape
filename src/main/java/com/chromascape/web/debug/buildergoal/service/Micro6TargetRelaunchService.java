@@ -190,6 +190,9 @@ public class Micro6TargetRelaunchService {
   @org.springframework.beans.factory.annotation.Value("${builder-goal.local-launch.enabled:true}")
   private boolean localLaunchEnabled = true;
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private BuilderGoalTopologyGuard topologyGuard;
+
   private final String launchCommandTemplate;
   private final String extraRunArgs;
   private final int defaultWorld;
@@ -237,7 +240,9 @@ public class Micro6TargetRelaunchService {
     logIgnoredLegacyGradleTaskOverride();
     logIgnoredLegacyLaunchTemplateOverride();
     logger.info(
-        "Builder Goal local launch config loaded: projectDir={}, gradleTask={}, launchTemplateConfigured={}, defaultWorld={}, executorBaseUrl={}, chromaScapeBaseUrl={}, leeuwbotApiUrl={}",
+        "Builder Goal local launch config loaded: projectDir={}, gradleTask={},"
+            + " launchTemplateConfigured={}, defaultWorld={}, executorBaseUrl={},"
+            + " chromaScapeBaseUrl={}, leeuwbotApiUrl={}",
         this.micro6ProjectDir,
         this.gradleRunTask,
         this.launchCommandTemplate != null,
@@ -257,7 +262,8 @@ public class Micro6TargetRelaunchService {
       return;
     }
     logger.warn(
-        "Ignoring legacy Builder Goal Gradle task override '{}'; local Builder Goal launches always use '{}'",
+        "Ignoring legacy Builder Goal Gradle task override '{}'; local Builder Goal launches always"
+            + " use '{}'",
         legacyOverride,
         DEFAULT_GRADLE_RUN_TASK);
   }
@@ -267,7 +273,8 @@ public class Micro6TargetRelaunchService {
       return;
     }
     logger.warn(
-        "Ignoring legacy Builder Goal launch command template on Windows; automated local launches now use the direct PowerShell payload launcher");
+        "Ignoring legacy Builder Goal launch command template on Windows; automated local launches"
+            + " now use the direct PowerShell payload launcher");
   }
 
   public RelaunchResult restartTarget(
@@ -350,6 +357,8 @@ public class Micro6TargetRelaunchService {
       boolean packetCapture)
       throws Exception {
     if (!localLaunchEnabled) throw new IllegalStateException("DIRECT_LOCAL_LAUNCH_DISABLED");
+    // Validate child authentication before capture setup, process probes or client replacement.
+    configureExecutorCredentials(new LinkedHashMap<>());
     try (RsproxLaunchSession capture = packetCapture ? RsproxLaunchSession.connect() : null) {
       RelaunchResult result =
           restartTargetWithCapture(
@@ -403,6 +412,7 @@ public class Micro6TargetRelaunchService {
     String resolvedBaseUrl = firstNonBlank(normalizeBaseUrl(targetBaseUrl), defaultExecutorBaseUrl);
     Integer targetPort = parsePort(resolvedBaseUrl);
     String localExecutorBaseUrl = resolveLocalExecutorBaseUrl(targetPort);
+    executorHealthRequest(localExecutorBaseUrl);
     File logFile = projectDir.resolve(launchLogFile).toFile();
     if (!AccountIdentityContract.isCanonicalHash(accountHash)) {
       throw new IllegalArgumentException(
@@ -802,7 +812,8 @@ public class Micro6TargetRelaunchService {
           && failure != null
           && failure.retryable()) {
         logger.warn(
-            "Retrying local Micro6 Builder Goal launch for account {} after retryable failure {}: {}",
+            "Retrying local Micro6 Builder Goal launch for account {} after retryable failure {}:"
+                + " {}",
             accountName,
             failure.kind(),
             failure.detail());
@@ -971,7 +982,8 @@ public class Micro6TargetRelaunchService {
                   FAILURE_KIND_PROCESS_EXITED,
                   firstNonBlank(
                       failure.detail(),
-                      "Micro6 relaunch process exited after the client launched but before the local executor became ready. Check "
+                      "Micro6 relaunch process exited after the client launched but before the"
+                          + " local executor became ready. Check "
                           + logFile.toAbsolutePath()),
                   false);
         }
@@ -1030,7 +1042,8 @@ public class Micro6TargetRelaunchService {
           maskedLaunchArgs,
           logFile,
           FAILURE_KIND_GRADLE_TIMEOUT,
-          "Micro6 Gradle build did not reach the client launch before the local launch watchdog expired. Check "
+          "Micro6 Gradle build did not reach the client launch before the local launch watchdog"
+              + " expired. Check "
               + logFile.toAbsolutePath(),
           attemptId);
       throw new RelaunchException(
@@ -1052,7 +1065,8 @@ public class Micro6TargetRelaunchService {
         firstNonBlank(lastReadinessPhase, PHASE_WAITING_FOR_HEALTH),
         firstNonBlank(
                 lastReadinessReason,
-                "Micro6 local executor did not become ready for the selected account before the local launch watchdog expired.")
+                "Micro6 local executor did not become ready for the selected account before the"
+                    + " local launch watchdog expired.")
             + " Check "
             + logFile.toAbsolutePath(),
         true,
@@ -1223,7 +1237,8 @@ public class Micro6TargetRelaunchService {
 
     Process process = processBuilder.start();
     logger.info(
-        "Started Micro6 relaunch for account {} using launch target {} with world {} and command {} (pid={}, localHealthUrl={}, targetBaseUrl={})",
+        "Started Micro6 relaunch for account {} using launch target {} with world {} and command {}"
+            + " (pid={}, localHealthUrl={}, targetBaseUrl={})",
         accountName,
         gradleRunTask,
         resolveWorld(world),
@@ -1533,7 +1548,8 @@ public class Micro6TargetRelaunchService {
         return;
       }
       logger.warn(
-          "Blocking Micro6 executor replacement: port {} ownership is unverifiable (owner={}, probe={})",
+          "Blocking Micro6 executor replacement: port {} ownership is unverifiable (owner={},"
+              + " probe={})",
           targetPort,
           probe.pid() != null ? probe.pid() : "unknown",
           probe.detail());
@@ -1564,8 +1580,8 @@ public class Micro6TargetRelaunchService {
     if (ownership != PortOwnershipState.VERIFIED_OWNER) {
       PortProbe probe = probeListeningPort(targetPort);
       logger.warn(
-          "Blocking Micro6 executor termination: port {} ownership is unverifiable before termination"
-              + " (owner={}, probe={})",
+          "Blocking Micro6 executor termination: port {} ownership is unverifiable before"
+              + " termination (owner={}, probe={})",
           targetPort,
           probe.pid() != null ? probe.pid() : "unknown",
           probe.detail());
@@ -1573,7 +1589,8 @@ public class Micro6TargetRelaunchService {
           launchLog,
           "Unable to verify that the Micro6 executor port "
               + targetPort
-              + " is owned by a Builder Goal process before termination; replacement is blocked (owner="
+              + " is owned by a Builder Goal process before termination; replacement is blocked"
+              + " (owner="
               + (probe.pid() != null ? probe.pid() : "unknown")
               + ", probe="
               + probe.detail()
@@ -2150,7 +2167,8 @@ public class Micro6TargetRelaunchService {
           contract.path("authoritative_run_task").asText(null))) {
         throw launcherContractException(
             logFile,
-            "Builder Goal launcher contract does not advertise the authoritative Gradle task. Check "
+            "Builder Goal launcher contract does not advertise the authoritative Gradle task. Check"
+                + " "
                 + launcherScript,
             "Builder Goal launcher contract does not advertise the authoritative Gradle task");
       }
@@ -2559,6 +2577,7 @@ public class Micro6TargetRelaunchService {
     if (environment == null) {
       return;
     }
+    configureExecutorCredentials(environment);
     environment.put("MICRO6_LOCAL_EXECUTOR_ENABLED", "true");
     // ChromaScape owns this value as part of the trusted launch environment. The ordinary local
     // Builder Goal launch serves no authoritative source, and declaring that explicitly is what
@@ -2578,6 +2597,30 @@ public class Micro6TargetRelaunchService {
     if (resolvedLeeuwbotApiUrl != null) {
       environment.put("LEEUWBOT_API_URL", resolvedLeeuwbotApiUrl);
     }
+  }
+
+  private void configureExecutorCredentials(Map<String, String> environment) {
+    if (topologyGuard == null) {
+      throw new IllegalStateException("EXECUTOR_TRANSPORT_AUTH_NOT_CONFIGURED");
+    }
+    topologyGuard.configureExecutorEnvironment(environment);
+  }
+
+  private HttpRequest executorHealthRequest(String baseUrl) {
+    // A browser-selected or advertised origin must never receive the server's credential.
+    if (!java.util.Objects.equals(
+        normalizeBaseUrl(baseUrl), normalizeBaseUrl(defaultExecutorBaseUrl))) {
+      throw new IllegalStateException("EXECUTOR_AUTH_ORIGIN_MISMATCH");
+    }
+    if (topologyGuard == null) {
+      throw new IllegalStateException("EXECUTOR_AUTH_NOT_CONFIGURED");
+    }
+    return HttpRequest.newBuilder()
+        .uri(URI.create(baseUrl + "/health"))
+        .timeout(Duration.ofSeconds(5))
+        .header("Authorization", topologyGuard.executorAuthorization())
+        .GET()
+        .build();
   }
 
   private List<String> buildClientArgs(
@@ -2692,12 +2735,7 @@ public class Micro6TargetRelaunchService {
       if (cancellation != null) {
         cancellation.throwIfCancelled();
       }
-      HttpRequest request =
-          HttpRequest.newBuilder()
-              .uri(URI.create(baseUrl + "/health"))
-              .timeout(Duration.ofSeconds(5))
-              .GET()
-              .build();
+      HttpRequest request = executorHealthRequest(baseUrl);
       HttpResponse<String> response =
           httpClient.send(request, HttpResponse.BodyHandlers.ofString());
       if (cancellation != null) {
@@ -3377,13 +3415,16 @@ public class Micro6TargetRelaunchService {
    */
   protected List<String> buildWindowsPortProbeCommand(Integer port) {
     String script =
-        "$ErrorActionPreference='Stop'; $probeErrors=@(); $connections=@(Get-NetTCPConnection -LocalPort "
+        "$ErrorActionPreference='Stop'; $probeErrors=@(); $connections=@(Get-NetTCPConnection"
+            + " -LocalPort "
             + port
-            + " -State Listen -ErrorAction SilentlyContinue -ErrorVariable +probeErrors); "
-            + "$unexpected=@($probeErrors | Where-Object { $_.FullyQualifiedErrorId -notlike 'CmdletizationQuery_NotFound*' }); "
-            + "if ($unexpected.Count -gt 0) { throw $unexpected[0] }; "
-            + "$owner=($connections | Select-Object -ExpandProperty OwningProcess | Select-Object -First 1); "
-            + "if ($null -ne $owner) { [Console]::Out.Write('PORT_PID=' + $owner) } else { [Console]::Out.Write('PORT_FREE') }";
+            + " -State Listen -ErrorAction SilentlyContinue -ErrorVariable +probeErrors);"
+            + " $unexpected=@($probeErrors | Where-Object { $_.FullyQualifiedErrorId -notlike"
+            + " 'CmdletizationQuery_NotFound*' }); if ($unexpected.Count -gt 0) { throw"
+            + " $unexpected[0] }; $owner=($connections | Select-Object -ExpandProperty"
+            + " OwningProcess | Select-Object -First 1); if ($null -ne $owner) {"
+            + " [Console]::Out.Write('PORT_PID=' + $owner) } else {"
+            + " [Console]::Out.Write('PORT_FREE') }";
     return List.of(
         "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script);
   }
@@ -3726,8 +3767,8 @@ public class Micro6TargetRelaunchService {
         FAILURE_KIND_EXECUTOR_STARTUP_REJECTED,
         "Micro6 local executor refused startup: "
             + marker
-            + ". It will not listen on the executor port for this attempt, so the launch was stopped "
-            + "instead of waiting for readiness. Check "
+            + ". It will not listen on the executor port for this attempt, so the launch was"
+            + " stopped instead of waiting for readiness. Check "
             + logFile.toAbsolutePath(),
         false);
   }
@@ -3739,7 +3780,8 @@ public class Micro6TargetRelaunchService {
         && combined.contains("build\\classes\\java\\main")) {
       return new LaunchFailure(
           FAILURE_KIND_BUILD_OUTPUT_LOCK,
-          "Micro6 relaunch compile step failed because build output is locked by an existing Micro6 or Gradle process. Check "
+          "Micro6 relaunch compile step failed because build output is locked by an existing Micro6"
+              + " or Gradle process. Check "
               + logFile.toAbsolutePath(),
           true);
     }
@@ -3747,7 +3789,8 @@ public class Micro6TargetRelaunchService {
       if (combined.contains("Cannot locate tasks that match")) {
         return new LaunchFailure(
             FAILURE_KIND_LAUNCH_CONFIGURATION_INVALID,
-            "Micro6 Gradle task is not available. Verify the :client:prepareBuilderGoal and :client:runBuilderGoal tasks exist in the Micro6 root composite build. Check "
+            "Micro6 Gradle task is not available. Verify the :client:prepareBuilderGoal and"
+                + " :client:runBuilderGoal tasks exist in the Micro6 root composite build. Check "
                 + logFile.toAbsolutePath(),
             false);
       }

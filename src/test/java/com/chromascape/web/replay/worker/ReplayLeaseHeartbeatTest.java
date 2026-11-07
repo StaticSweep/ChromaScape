@@ -12,6 +12,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.chromascape.web.replay.config.ReplayProperties;
 import com.chromascape.web.replay.error.ReplayErrorCode;
 import com.chromascape.web.replay.error.ReplayException;
 import com.chromascape.web.replay.run.ReplayFence;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 /**
  * Independent periodic lease renewal through the transactional {@link ReplayLeaseRenewalService}: a
@@ -59,6 +61,19 @@ class ReplayLeaseHeartbeatTest {
   @AfterEach
   void tearDown() {
     heartbeat.destroy();
+  }
+
+  @Test
+  void workerEnabledContextCreatesHeartbeatWithConfiguredDependencies() {
+    new ApplicationContextRunner()
+        .withPropertyValues("replay.worker.enabled=true")
+        .withBean(ReplayProperties.class)
+        .withBean(ReplayLeaseRenewalService.class, () -> renewalService)
+        .withUserConfiguration(ReplayLeaseHeartbeat.class)
+        .run(
+            context -> {
+              assertNotNull(context.getBean(ReplayLeaseHeartbeat.class));
+            });
   }
 
   @Test

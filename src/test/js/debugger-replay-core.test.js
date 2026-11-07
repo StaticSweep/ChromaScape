@@ -5,6 +5,40 @@ const path = require('node:path');
 
 const core = require('../../main/resources/static/js/debugger-replay-core.js');
 
+test('scenario Start freezes the previewed selection and checksum without mutating preflight', () => {
+  const preflight = {
+    simulationEligible: true, conversionMode: 'AUTO',
+    compiledInput: { curationId: '2458e418-890e-456d-ad3e-6249367c1710', manifestChecksum: 'sha256:' + 'a'.repeat(64) }
+  };
+  const original = structuredClone(preflight);
+  const request = core.createScenarioRunRequest(preflight, 'stable-key');
+  assert.deepEqual(request, {
+    conversionMode: 'AUTO', openViewer: true, stopPolicy: 'STOP_ON_FIRST_HARD', idempotencyKey: 'stable-key',
+    curationId: preflight.compiledInput.curationId, expectedManifestChecksum: preflight.compiledInput.manifestChecksum
+  });
+  assert.deepEqual(preflight, original);
+  preflight.compiledInput.curationId = 'later-selection';
+  assert.equal(request.curationId, original.compiledInput.curationId);
+});
+
+test('scenario Start refuses missing, corrupt or blocked preview pins', () => {
+  for (const preflight of [null, {}, { simulationEligible: true },
+    { simulationEligible: true, compiledInput: { manifestChecksum: 'sha256:placeholder' } },
+    { simulationEligible: false, compiledInput: { manifestChecksum: 'sha256:' + 'a'.repeat(64) } }]) {
+    assert.throws(() => core.createScenarioRunRequest(preflight, 'key'), /Refresh preflight/);
+  }
+});
+
+test('scenario Start with no operator snapshot still pins the exact compiled manifest', () => {
+  const checksum = 'sha256:' + 'b'.repeat(64);
+  const request = core.createScenarioRunRequest({ simulationEligible: true, conversionMode: 'AUTO',
+    compiledInput: { curationId: null, manifestChecksum: checksum } }, 'stable-key');
+  assert.equal(request.curationId, null);
+  assert.equal(request.expectedManifestChecksum, checksum);
+  const ui = fs.readFileSync(path.join(__dirname, '../../main/resources/static/js/replay-debugger.js'), 'utf8');
+  assert.match(ui, /ChromaScapeReplayCore\.createScenarioRunRequest\(/);
+});
+
 test('recovery subtracts only the recovered interval from a truncated window', () => {
   assert.deepEqual(
     core.subtractTruncatedWindows([{ start: 0, end: 100, cursor: 'wide' }], 0, 50),

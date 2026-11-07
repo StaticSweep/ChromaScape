@@ -32,6 +32,25 @@ import org.junit.jupiter.api.io.TempDir;
 
 class Micro6TargetRelaunchServiceTest {
 
+  private static final String EXECUTOR_TOKEN = "1".repeat(40);
+  private static final String HEARTBEAT_TOKEN = "2".repeat(40);
+
+  private static void configureTransport(Micro6TargetRelaunchService service) {
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        service,
+        "topologyGuard",
+        new BuilderGoalTopologyGuard(
+            "DEV",
+            HEARTBEAT_TOKEN,
+            EXECUTOR_TOKEN,
+            "http://127.0.0.1:8084",
+            "",
+            "http://127.0.0.1:8084",
+            "",
+            false,
+            true));
+  }
+
   /**
    * Test subclass that pins the platform so launch-mode resolution is deterministic regardless of
    * the machine the suite runs on.
@@ -77,6 +96,7 @@ class Micro6TargetRelaunchServiceTest {
           "http://localhost:8086");
       this.windows = windows;
       this.structuredWindowsLaunch = structuredWindowsLaunch;
+      configureTransport(this);
     }
 
     @Override
@@ -379,7 +399,8 @@ class Micro6TargetRelaunchServiceTest {
         launcher,
         "#!/bin/bash\n"
             + "if [ \"$1\" = \"--contract-version\" ]; then\n"
-            + "  echo '{\"contract_version\":3,\"validate_only\":true,\"compile_only\":true,\"run_task\":\":client:runBuilderGoal\",\"prepare_task\":\":client:prepareBuilderGoal\",\"authoritative_run_task\":\":client:runBuilderGoalAuthoritative\",\"source_mode_env\":\"MICRO6_SOURCE_MODE\",\"source_modes\":[\"disabled\",\"authoritative\"]}'\n"
+            + "  echo"
+            + " '{\"contract_version\":3,\"validate_only\":true,\"compile_only\":true,\"run_task\":\":client:runBuilderGoal\",\"prepare_task\":\":client:prepareBuilderGoal\",\"authoritative_run_task\":\":client:runBuilderGoalAuthoritative\",\"source_mode_env\":\"MICRO6_SOURCE_MODE\",\"source_modes\":[\"disabled\",\"authoritative\"]}'\n"
             + "  exit 0\n"
             + "fi\n"
             + "if [ \"$1\" = \"--validate-only\" ] || [ \"$1\" = \"--compile-only\" ]; then\n"
@@ -407,9 +428,11 @@ class Micro6TargetRelaunchServiceTest {
         Files.readString(wrapper)
             .replace(
                 "touch started.marker",
-                "echo '[Micro6Executor] refusing startup: running packaged artifact identity is unavailable'\n"
+                "echo '[Micro6Executor] refusing startup: running packaged artifact identity is"
+                    + " unavailable'\n"
                     + "echo '[AccountBuilderPlugin] Local builder executor did not start:'\n"
-                    + "echo 'source_startup_failed:running packaged artifact identity is unavailable'\n"
+                    + "echo 'source_startup_failed:running packaged artifact identity is"
+                    + " unavailable'\n"
                     + "touch started.marker");
     Files.writeString(wrapper, script);
 
@@ -528,6 +551,7 @@ class Micro6TargetRelaunchServiceTest {
             "http://127.0.0.1:8098",
             "http://localhost:8086");
 
+    configureTransport(service);
     Map<String, String> environment = new LinkedHashMap<>();
     Method method =
         Micro6TargetRelaunchService.class.getDeclaredMethod(
@@ -538,9 +562,66 @@ class Micro6TargetRelaunchServiceTest {
     assertThat(environment)
         .containsEntry("MICRO6_LOCAL_EXECUTOR_ENABLED", "true")
         .containsEntry("MICRO6_SOURCE_MODE", "disabled")
+        .containsEntry("MICRO6_BUILDER_EXECUTOR_AUTH_TOKEN", EXECUTOR_TOKEN)
+        .containsEntry("CHROMASCAPE_BUILDER_HEARTBEAT_TOKEN", HEARTBEAT_TOKEN)
         .containsEntry("MICRO6_EXECUTOR_BIND_ADDR", "127.0.0.1:8098")
         .containsEntry("CHROMASCAPE_BASE_URL", "http://localhost:8090")
         .containsEntry("LEEUWBOT_API_URL", "http://localhost:8086");
+  }
+
+  @Test
+  void missingTransportCredentialsRefuseBeforeAnyProgressOrClientInspection() throws Exception {
+    var service = newWindowsGradleService(tempDir.resolve("does-not-exist").toString());
+    org.springframework.test.util.ReflectionTestUtils.setField(service, "topologyGuard", null);
+    List<Micro6TargetRelaunchService.RelaunchProgress> progress = new ArrayList<>();
+    assertThatThrownBy(
+            () ->
+                service.restartTarget(
+                    "account",
+                    "1111111111111111",
+                    "fixture@example.invalid",
+                    "fixture-password",
+                    360,
+                    "http://127.0.0.1:8098",
+                    progress::add,
+                    null,
+                    false,
+                    true))
+        .hasMessage("EXECUTOR_TRANSPORT_AUTH_NOT_CONFIGURED");
+    assertThat(progress).isEmpty();
+    assertThat(Files.exists(tempDir.resolve("does-not-exist"))).isFalse();
+  }
+
+  @Test
+  void healthCredentialIsNotSentToAnotherOrigin() throws Exception {
+    var requests = new java.util.concurrent.atomic.AtomicInteger();
+    var trap =
+        com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+    trap.createContext(
+        "/health",
+        exchange -> {
+          requests.incrementAndGet();
+          exchange.sendResponseHeaders(401, -1);
+          exchange.close();
+        });
+    trap.start();
+    try {
+      var service = new HttpAwareService(tempDir.toString(), "http://127.0.0.1:18997", 4242L);
+      var result =
+          service.readHealthyExecutorTarget(
+              "http://127.0.0.1:" + trap.getAddress().getPort(),
+              "1111111111111111",
+              "account",
+              360,
+              Instant.now(),
+              -1L,
+              null,
+              null);
+      assertThat(result.targetClient()).isEmpty();
+      assertThat(requests.get()).isZero();
+    } finally {
+      trap.stop(0);
+    }
   }
 
   /**
@@ -566,6 +647,7 @@ class Micro6TargetRelaunchServiceTest {
             "http://127.0.0.1:8098",
             "http://localhost:8086");
 
+    configureTransport(service);
     Map<String, String> environment = new LinkedHashMap<>();
     // Simulate an inherited developer .env: these must not influence the declared mode.
     environment.put("MICRO6_SOURCE_BUNDLE_ROOT", "C:\\Dev\\SC810\\micro6-source-bundles");
@@ -590,13 +672,14 @@ class Micro6TargetRelaunchServiceTest {
     assertThat(
             Micro6TargetRelaunchService.detectFatalExecutorStartupMarker(
                 List.of(
-                    "[Micro6Executor] refusing startup: "
-                        + "source_startup_failed:running packaged artifact identity is unavailable")))
+                    "[Micro6Executor] refusing startup: source_startup_failed:running packaged"
+                        + " artifact identity is unavailable")))
         .isEqualTo("running packaged artifact identity is unavailable");
     assertThat(
             Micro6TargetRelaunchService.detectFatalExecutorStartupMarker(
                 List.of(
-                    "[Micro6Executor] refusing authoritative artifact identity: no artifact sidecar configured")))
+                    "[Micro6Executor] refusing authoritative artifact identity: no artifact sidecar"
+                        + " configured")))
         .isNull();
     assertThat(
             Micro6TargetRelaunchService.detectFatalExecutorStartupMarker(
@@ -610,7 +693,8 @@ class Micro6TargetRelaunchServiceTest {
             Micro6TargetRelaunchService.detectFatalExecutorStartupMarker(
                 List.of(
                     "[buildergoal] source_mode=disabled",
-                    "[Micro6Executor] refusing authoritative artifact identity: no artifact sidecar configured",
+                    "[Micro6Executor] refusing authoritative artifact identity: no artifact sidecar"
+                        + " configured",
                     "[AccountBuilderPlugin] Local builder executor started on 127.0.0.1:8098")))
         .isNull();
   }
@@ -638,9 +722,11 @@ class Micro6TargetRelaunchServiceTest {
             Micro6TargetRelaunchService.detectFatalExecutorStartupMarker(
                 List.of(
                     "[Micro6Executor] attempting startup on 127.0.0.1:8098",
-                    "[Micro6Executor] refusing startup: running packaged artifact identity is unavailable",
-                    "[AccountBuilderPlugin] Local builder executor did not start: "
-                        + "source_startup_failed:running packaged artifact identity is unavailable")))
+                    "[Micro6Executor] refusing startup: running packaged artifact identity is"
+                        + " unavailable",
+                    "[AccountBuilderPlugin] Local builder executor did not start:"
+                        + " source_startup_failed:running packaged artifact identity is"
+                        + " unavailable")))
         .isEqualTo("running packaged artifact identity is unavailable");
 
     // Every published marker is present; specificity order decides, not log order.
@@ -1296,7 +1382,9 @@ class Micro6TargetRelaunchServiceTest {
                     "FAILURE: Build failed with an exception.",
                     "",
                     "* What went wrong:",
-                    "Cannot locate tasks that match ':runelite-client:run' as project 'runelite-client' not found in root project 'runelite'. Some candidates are: 'runelite-agent'.",
+                    "Cannot locate tasks that match ':runelite-client:run' as project"
+                        + " 'runelite-client' not found in root project 'runelite'. Some candidates"
+                        + " are: 'runelite-agent'.",
                     "",
                     "* Try:",
                     "BUILD FAILED in 13s",
@@ -1612,7 +1700,8 @@ class Micro6TargetRelaunchServiceTest {
     assertThat(emittedPhases).contains(Micro6TargetRelaunchService.PHASE_EXECUTOR_STARTUP_REJECTED);
     assertThat(emittedPhases)
         .as(
-            "a refusal published while the client is explicitly still alive must never be reported as PROCESS_EXITED")
+            "a refusal published while the client is explicitly still alive must never be reported"
+                + " as PROCESS_EXITED")
         .doesNotContain(Micro6TargetRelaunchService.PHASE_PROCESS_EXITED);
     // The refused client never binds the executor port, so it must not outlive the failed attempt:
     // both the owned root and its backgrounded descendant are dead before the lease-owning method
@@ -1760,7 +1849,8 @@ class Micro6TargetRelaunchServiceTest {
   }
 
   @Test
-  void readHealthyExecutorTarget_mapsLoginIncompleteToWaitingForLogin() throws Exception {
+  void readHealthyExecutorTarget_authenticatesAndMapsLoginIncompleteToWaitingForLogin()
+      throws Exception {
     com.sun.net.httpserver.HttpServer server =
         com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
     try {
@@ -1776,6 +1866,12 @@ class Micro6TargetRelaunchServiceTest {
       server.createContext(
           "/health",
           exchange -> {
+            if (!("Bearer " + EXECUTOR_TOKEN)
+                .equals(exchange.getRequestHeaders().getFirst("Authorization"))) {
+              exchange.sendResponseHeaders(401, -1);
+              exchange.close();
+              return;
+            }
             byte[] payload = body.getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200, payload.length);
             exchange.getResponseBody().write(payload);
@@ -2157,14 +2253,20 @@ class Micro6TargetRelaunchServiceTest {
     // Previous attempt's failure references the obsolete classpath task.
     Files.writeString(
         logFile,
-        "FAILURE: Build failed with an exception.\n* What went wrong:\nExecution failed for task ':client:writeBuilderGoalRuntimeClasspath'.\nBUILD FAILED in 13s\n",
+        "FAILURE: Build failed with an exception.\n"
+            + "* What went wrong:\n"
+            + "Execution failed for task ':client:writeBuilderGoalRuntimeClasspath'.\n"
+            + "BUILD FAILED in 13s\n",
         StandardCharsets.UTF_8);
     long offset = Files.size(logFile);
     // Current attempt's failure references the canonical task. The earlier BUILD FAILED block must
     // never be classified as the current attempt's failure.
     Files.writeString(
         logFile,
-        "FAILURE: Build failed with an exception.\n* What went wrong:\nExecution failed for task ':client:runBuilderGoal'.\nBUILD FAILED in 5s\n",
+        "FAILURE: Build failed with an exception.\n"
+            + "* What went wrong:\n"
+            + "Execution failed for task ':client:runBuilderGoal'.\n"
+            + "BUILD FAILED in 5s\n",
         StandardCharsets.UTF_8,
         java.nio.file.StandardOpenOption.APPEND);
 
@@ -2191,7 +2293,8 @@ class Micro6TargetRelaunchServiceTest {
             + "FAILURE: Build failed with an exception.\n\n"
             + "* What went wrong:\n"
             + "Execution failed for task ':client:runBuilderGoal'.\n"
-            + "> Process 'command 'C:\\Java\\bin\\java.exe'' finished with non-zero exit value -1073741819\n\n"
+            + "> Process 'command 'C:\\Java\\bin\\java.exe'' finished with non-zero exit value"
+            + " -1073741819\n\n"
             + "BUILD FAILED in 2m 52s\n",
         StandardCharsets.UTF_8);
 
@@ -2679,7 +2782,8 @@ class Micro6TargetRelaunchServiceTest {
     Path launcher = project.resolve("launch-buildergoal-client.ps1");
     Files.writeString(
         launcher,
-        "param([string]$PayloadFile, [switch]$CompileOnly, [switch]$ValidateOnly, [switch]$ContractVersion)\n"
+        "param([string]$PayloadFile, [switch]$CompileOnly, [switch]$ValidateOnly,"
+            + " [switch]$ContractVersion)\n"
             + "if ($ContractVersion) { [Console]::Out.Write('"
             + contractJson.replace("'", "''")
             + "'); exit 0 }\n"
@@ -2811,8 +2915,7 @@ class Micro6TargetRelaunchServiceTest {
         "{\"contract_version\":3,\"validate_only\":true,\"compile_only\":true,"
             + "\"run_task\":\":client:runBuilderGoal\",\"prepare_task\":\":client:prepareBuilderGoal\","
             + "\"authoritative_run_task\":\":client:runBuilderGoalAuthoritative\","
-            + "\"source_mode_env\":\"MICRO6_SOURCE_MODE\","
-            + "\"source_modes\":[\"disabled\"]}");
+            + "\"source_mode_env\":\"MICRO6_SOURCE_MODE\",\"source_modes\":[\"disabled\"]}");
     Path logFile = project.resolve("micro6-recovery-launch.log");
     ControlledPlatformService service = newWindowsService(project.toString(), "", "");
 
@@ -2836,7 +2939,8 @@ class Micro6TargetRelaunchServiceTest {
     Path project = createProjectDir("compile-real-success");
     Files.writeString(
         project.resolve("launch-buildergoal-client.ps1"),
-        "param([string]$PayloadFile, [switch]$CompileOnly, [switch]$ValidateOnly, [switch]$ContractVersion)\n"
+        "param([string]$PayloadFile, [switch]$CompileOnly, [switch]$ValidateOnly,"
+            + " [switch]$ContractVersion)\n"
             + "[Console]::Out.Write(($PSBoundParameters.Keys -join ','))\n"
             + "exit 0\n",
         StandardCharsets.UTF_8);
@@ -2868,7 +2972,8 @@ class Micro6TargetRelaunchServiceTest {
     Path project = createProjectDir("compile-real-failure");
     Files.writeString(
         project.resolve("launch-buildergoal-client.ps1"),
-        "param([string]$PayloadFile, [switch]$CompileOnly, [switch]$ValidateOnly, [switch]$ContractVersion)\n"
+        "param([string]$PayloadFile, [switch]$CompileOnly, [switch]$ValidateOnly,"
+            + " [switch]$ContractVersion)\n"
             + "exit 1\n",
         StandardCharsets.UTF_8);
     Path logFile = project.resolve("micro6-recovery-launch.log");

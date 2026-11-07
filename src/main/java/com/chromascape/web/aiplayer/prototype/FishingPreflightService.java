@@ -138,9 +138,9 @@ public class FishingPreflightService {
       issues.add(
           new PreflightIssue(
               PreflightReport.IssueCode.CATCH_COUNT_MISMATCH,
-              "Recording must show exactly "
+              "Recording must show a net inventory total change of exactly "
                   + REQUIRED_CATCH_COUNT
-                  + " positive inventory additions (observed "
+                  + " (observed "
                   + ctx.catchDelta()
                   + ")"));
     }

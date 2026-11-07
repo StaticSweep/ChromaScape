@@ -80,6 +80,11 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
 
   private static final Logger log = LoggerFactory.getLogger(TickStreamWebSocketHandler.class);
 
+  /** Isolated logger so the bounded SESSION_START diagnosis can be enabled without noisy DEBUG. */
+  private static final Logger sessionStartDiagnostics =
+      LoggerFactory.getLogger(
+          TickStreamWebSocketHandler.class.getName() + ".SessionStartDiagnostics");
+
   private final ObjectMapper objectMapper;
   private final DebugSessionService sessionService;
 
@@ -337,6 +342,16 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
         String type = root.has("type") ? root.get("type").asText() : "";
 
         switch (type) {
+          case "RECORDER_HELLO":
+            session.sendMessage(
+                new TextMessage(
+                    objectMapper.writeValueAsString(
+                        Map.of(
+                            "type",
+                            "RECORDER_CONNECTION",
+                            "recorderConnectionId",
+                            session.getId()))));
+            break;
           case "CALIBRATION_PING":
             long receivedMillis = System.currentTimeMillis();
             String probeId = root.path("requestId").asText();
@@ -512,6 +527,23 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
         return;
       }
       wsSession.getAttributes().put("selectedTickBatchVersion", selectedVersion);
+      // Bounded, value-free diagnosis of a SESSION_START (SC-274, 3 November 2026). Presence and
+      // shape only: the payload carries the account name and task settings, so neither is logged,
+      // and no body is serialized.
+      if (sessionStartDiagnostics.isDebugEnabled()) {
+        sessionStartDiagnostics.debug(
+            "SESSION_START request: clientRequestId={}, preferredSessionId={}, recordingEnabled={},"
+                + " triggerSource={}, taskKey={}, taskArgsFields={}, runContextFields={},"
+                + " captureIdentityPresent={}",
+            clientRequestId,
+            preferred,
+            recordingEnabled,
+            request.getTriggerSource(),
+            request.getTaskKey(),
+            fieldCount(request.getTaskArgs()),
+            fieldCount(request.getRunContext()),
+            request.getCaptureIdentity() != null);
+      }
       // Call the authoritative service outside the ownership lock.
       SessionStartOutcome outcome;
       try {
@@ -938,6 +970,15 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     synchronized (ownershipLock) {
       return preferredReservations.containsValue(wsId);
     }
+  }
+
+  /**
+   * Counts the top-level fields of a SESSION_START payload node for a value-free diagnostic, so the
+   * log shows whether a context was supplied without recording its contents.
+   */
+  private int fieldCount(com.fasterxml.jackson.databind.JsonNode value) {
+    if (value == null || value.isNull()) return -1;
+    return value.isObject() ? value.size() : -2;
   }
 
   /**
@@ -1830,11 +1871,21 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
 
   /** Select exactly one recorder without touching unrelated task-owned connections. */
   public String selectManualRecorder(String preferredSessionId) {
+    return selectManualRecorder(preferredSessionId, null);
+  }
+
+  public String selectManualRecorder(String preferredSessionId, String recorderConnectionId) {
+    if (recorderConnectionId != null && !recorderConnectionId.matches("[A-Za-z0-9_.:-]{1,200}")) {
+      throw new IllegalArgumentException("INVALID_RECORDER_CONNECTION");
+    }
     synchronized (ownershipLock) {
       String owner = preferredSessionId == null ? null : sessionOwners.get(preferredSessionId);
       var candidates =
           micro6Clients.stream()
               .filter(WebSocketSession::isOpen)
+              .filter(
+                  client ->
+                      recorderConnectionId == null || recorderConnectionId.equals(client.getId()))
               .filter(
                   client ->
                       owner != null
@@ -1855,6 +1906,17 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
   /** Send a targeted command; authoritative ownership still comes from SESSION_START/STOP. */
   public void sendRecordingControl(
       String clientId, String action, String sessionId, String scriptName) {
+    sendRecordingControl(clientId, action, sessionId, scriptName, null, null, null);
+  }
+
+  public void sendRecordingControl(
+      String clientId,
+      String action,
+      String sessionId,
+      String scriptName,
+      String taskKey,
+      JsonNode taskArgs,
+      JsonNode runContext) {
     WebSocketSession client =
         micro6Clients.stream()
             .filter(socket -> socket.getId().equals(clientId))
@@ -1871,18 +1933,25 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
         }
       }
       try {
-        client.sendMessage(
-            new TextMessage(
-                objectMapper.writeValueAsString(
-                    Map.of(
-                        "type",
-                        "RECORDING_CONTROL",
-                        "action",
-                        action,
-                        "sessionId",
-                        sessionId,
-                        "scriptName",
-                        scriptName == null ? "Manual Recording" : scriptName))));
+        var payload = objectMapper.createObjectNode();
+        payload.put("type", "RECORDING_CONTROL");
+        payload.put("action", action);
+        payload.put("sessionId", sessionId);
+        payload.put("scriptName", scriptName == null ? "Manual Recording" : scriptName);
+        if (runContext != null && !runContext.isNull()) {
+          if (!"START".equals(action)
+              || taskKey == null
+              || taskKey.isBlank()
+              || taskArgs == null
+              || !taskArgs.isObject()
+              || !runContext.isObject()) {
+            throw new IllegalArgumentException("INVALID_RECORDING_CONTROL_PROVENANCE");
+          }
+          payload.put("taskKey", taskKey);
+          payload.set("taskArgs", taskArgs.deepCopy());
+          payload.set("runContext", runContext.deepCopy());
+        }
+        client.sendMessage(new TextMessage(objectMapper.writeValueAsString(payload)));
       } catch (java.io.IOException failure) {
         throw new IllegalStateException("RECORDER_COMMAND_FAILED", failure);
       }

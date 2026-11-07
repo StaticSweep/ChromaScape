@@ -36,8 +36,13 @@ import java.util.Set;
  */
 public final class ReplayEvidenceValidator {
 
-  /** The only supported snapshot schema version in v1. */
+  /** Legacy full-snapshot version retained by existing fixtures and callers. */
   public static final int SUPPORTED_SNAPSHOT_SCHEMA_VERSION = 1;
+
+  /** Full snapshot projections. V3 canonical frames are redacted and need a separate adapter. */
+  public static boolean supportsSnapshotSchema(Integer version) {
+    return version != null && (version == 1 || version == 2 || version == 4);
+  }
 
   /** Supported interaction options == supported fishing spot types in v1. */
   public static final Set<String> SUPPORTED_SPOT_TYPES =
@@ -261,6 +266,7 @@ public final class ReplayEvidenceValidator {
     }
 
     // 2. Explicit supported schema version on EVERY snapshot — never null, never drifted.
+    Integer recordingSchema = null;
     for (TickSnapshot snap : orderedSnapshots) {
       Integer version = snap.getSchemaVersion();
       if (version == null) {
@@ -271,7 +277,7 @@ public final class ReplayEvidenceValidator {
                 "Re-record on a pipeline that stamps schema versions"));
         break;
       }
-      if (version != SUPPORTED_SNAPSHOT_SCHEMA_VERSION) {
+      if (!supportsSnapshotSchema(version)) {
         violations.add(
             new Violation(
                 ReplayErrorCode.SCHEMA_VERSION_UNSUPPORTED,
@@ -279,10 +285,18 @@ public final class ReplayEvidenceValidator {
                     + snap.getTick()
                     + " carries unsupported schema version "
                     + version,
-                "Re-record on a pipeline producing schema version "
-                    + SUPPORTED_SNAPSHOT_SCHEMA_VERSION));
+                "Use a complete snapshot projection with schema version 1, 2, or 4"));
         break;
       }
+      if (recordingSchema != null && !recordingSchema.equals(version)) {
+        violations.add(
+            new Violation(
+                ReplayErrorCode.SCHEMA_VERSION_UNSUPPORTED,
+                "Snapshot schema changes within the recording at tick " + snap.getTick(),
+                "Use one immutable snapshot schema throughout the recording"));
+        break;
+      }
+      recordingSchema = version;
     }
 
     // 3. Initial-tick world evidence.

@@ -70,6 +70,7 @@ class XrspsDurableBoundaryTest {
     workers = mock(XrspsSessionWorker.class);
     worker = mock(XrspsSessionWorker.Boundary.class);
     when(workers.open(any())).thenReturn(worker);
+    when(workers.openPaced(any())).thenReturn(worker);
     when(worker.call(eq("step"), any()))
         .thenAnswer(
             i -> {
@@ -179,5 +180,103 @@ class XrspsDurableBoundaryTest {
     assertEquals(first.firstMismatch(), retry.firstMismatch());
     assertEquals(0, retry.submitted());
     verifyNoInteractions(workers);
+  }
+
+  @Test
+  void timedJournalDispatchesExplicitSourceIndexesWithoutProvenancePayloadAndRetriesNoEffects() {
+    var journal = timedJournal();
+    when(worker.call(eq("session.apply"), any()))
+        .thenAnswer(
+            i -> {
+              var params = (com.fasterxml.jackson.databind.JsonNode) i.getArgument(1);
+              assertFalse(params.path("action").has("sourceActionTick"));
+              return mapper
+                  .createObjectNode()
+                  .put("actionApplied", true)
+                  .put("terminalTick", params.path("expectedTick").asLong())
+                  .set(
+                      "observation",
+                      mapper.createObjectNode().put("tick", params.path("expectedTick").asLong()));
+            });
+    var result = service.run(id, journal);
+    assertEquals(XrspsRunHaltReason.COMPLETED, result.haltReason());
+    var params = org.mockito.ArgumentCaptor.forClass(com.fasterxml.jackson.databind.JsonNode.class);
+    verify(worker, times(3)).call(eq("session.apply"), params.capture());
+    assertEquals(
+        List.of(0, 1, 2),
+        params.getAllValues().stream().map(p -> p.path("sourceActionIndex").asInt(-1)).toList());
+    assertEquals(
+        List.of(20L, 20L, 23L),
+        params.getAllValues().stream().map(p -> p.path("expectedTick").asLong()).toList());
+    assertEquals(3, doc.receipts.size());
+    service.run(id, journal);
+    verify(worker, times(3)).call(eq("session.apply"), any());
+    assertTrue(service.finishRecording(id).recordingExecuted());
+  }
+
+  @Test
+  void timedJournalWrongTickPayloadOrOmittedSourcePrefixRefusesBeforeAnyWorkerCall() {
+    for (int variant = 0; variant < 3; variant++) {
+      var journal = new java.util.ArrayList<>(timedJournal());
+      var first = journal.get(0);
+      if (variant == 0)
+        journal.set(
+            0,
+            new XrspsRecordedAction(
+                1, first.commandId(), first.actionType(), first.payloadHash(), 0, first.payload()));
+      if (variant == 1) {
+        var altered = first.payload().deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) altered).put("option", "bait");
+        journal.set(
+            0,
+            new XrspsRecordedAction(
+                0,
+                first.commandId(),
+                first.actionType(),
+                canonical.actionDigest(altered),
+                0,
+                altered));
+      }
+      if (variant == 2) journal.remove(0);
+      assertThrows(ReplayException.class, () -> service.run(id, journal));
+      verifyNoInteractions(workers);
+      assertTrue(doc.receipts.isEmpty());
+    }
+  }
+
+  private List<XrspsRecordedAction> timedJournal() {
+    var session =
+        new XrspsSession(id, XrspsSessionMode.RECORDED_ACTIONS, "timed", "scenario", "alice");
+    session.markReady();
+    session.start();
+    doc.lifecycle = session.snapshot();
+    doc.receipts.clear();
+    doc.journal = List.of();
+    doc.mismatch = null;
+    ((com.fasterxml.jackson.databind.node.ObjectNode) doc.manifest).put("manifestVersion", 2);
+    var actions =
+        ((com.fasterxml.jackson.databind.node.ObjectNode) doc.manifest).putArray("actions");
+    var journal = new java.util.ArrayList<XrspsRecordedAction>();
+    for (int index = 0; index < 3; index++) {
+      int tick = index < 2 ? 20 : 23;
+      var source =
+          actions
+              .addObject()
+              .put("type", "INTERACT_NPC")
+              .put("targetStableId", "spot")
+              .put("option", "lure")
+              .put("sourceActionTick", tick)
+              .put("sourceActionSequence", index);
+      var payload = com.chromascape.web.replay.worker.ReplaySourceSchedule.semanticAction(source);
+      journal.add(
+          new XrspsRecordedAction(
+              tick - 20,
+              UUID.randomUUID().toString(),
+              "INTERACT_NPC",
+              canonical.actionDigest(payload),
+              index,
+              payload));
+    }
+    return journal;
   }
 }

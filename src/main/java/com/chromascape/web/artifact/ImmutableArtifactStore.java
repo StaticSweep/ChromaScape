@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -118,6 +119,7 @@ public final class ImmutableArtifactStore {
           byte[] bytes = json.writeValueAsBytes(reference);
           Path pointer = refs(owner).resolve("active-knowledge.pointer");
           validateAncestors(pointer);
+          directory(pointer.getParent());
           long priorSize =
               Files.exists(pointer, LinkOption.NOFOLLOW_LINKS) ? Files.size(pointer) : 0;
           if (bytes.length - priorSize > quotaBytes - usedBytes())
@@ -138,6 +140,7 @@ public final class ImmutableArtifactStore {
                 pointer,
                 java.nio.file.StandardCopyOption.ATOMIC_MOVE,
                 java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            forceDirectory(pointer.getParent());
             return reference;
           } finally {
             Files.deleteIfExists(temp);
@@ -171,23 +174,254 @@ public final class ImmutableArtifactStore {
 
   private record Envelope(String checksum, Manifest manifest) {}
 
+  /** Durable publication contract selected for this root. */
+  public enum DurabilityMode {
+    /**
+     * Directory-entry persistence is required for every write; unsupported platforms fail closed.
+     */
+    STRICT,
+    /** Explicitly unqualified development root; never accepted by strict production stores. */
+    DEVELOPMENT
+  }
+
+  /**
+   * Injectable directory-persistence primitive so unsupported platforms and faults are testable.
+   */
+  @FunctionalInterface
+  interface DirectoryForce {
+    void force(Path directory) throws IOException;
+  }
+
+  private record DurabilityMarker(
+      DurabilityMode mode,
+      String platform,
+      boolean directoryForce,
+      boolean qualified,
+      String createdAt,
+      String adoptionReview) {}
+
   private static final int MAX_MANIFEST_BYTES = 65536;
   private static final Map<Path, ReentrantLock> LOCKS = new ConcurrentHashMap<>();
   private final Path root;
   private final long maxBytes;
   private final long quotaBytes;
   private final ObjectMapper json;
+  private final DurabilityMode durabilityMode;
+  private final DirectoryForce directoryForce;
+  private final boolean qualifiedDurability;
+  private volatile boolean admitted;
+  private final String adoptionReview;
 
   public ImmutableArtifactStore(Path root, long maxBytes, long quotaBytes, ObjectMapper json) {
+    this(root, maxBytes, quotaBytes, json, DurabilityMode.STRICT);
+  }
+
+  public ImmutableArtifactStore(
+      Path root, long maxBytes, long quotaBytes, ObjectMapper json, DurabilityMode mode) {
+    this(root, maxBytes, quotaBytes, json, mode, ImmutableArtifactStore::nativeDirectoryForce);
+  }
+
+  ImmutableArtifactStore(
+      Path root,
+      long maxBytes,
+      long quotaBytes,
+      ObjectMapper json,
+      DurabilityMode mode,
+      DirectoryForce force) {
+    this(root, maxBytes, quotaBytes, json, mode, force, null);
+  }
+
+  private ImmutableArtifactStore(
+      Path root,
+      long maxBytes,
+      long quotaBytes,
+      ObjectMapper json,
+      DurabilityMode mode,
+      DirectoryForce force,
+      String adoptionReview) {
     if (maxBytes < 1 || quotaBytes < maxBytes)
       throw new IllegalArgumentException("Invalid artifact limits");
+    if (mode == null || force == null)
+      throw new IllegalArgumentException("Invalid durability mode");
     this.root = root.toAbsolutePath().normalize();
     this.maxBytes = maxBytes;
     this.quotaBytes = quotaBytes;
+    this.durabilityMode = mode;
+    this.directoryForce = force;
+    this.adoptionReview = adoptionReview;
     this.json =
         json.copy()
             .configure(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY, true)
             .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
+    this.qualifiedDurability = initializeDurability();
+  }
+
+  /**
+   * Qualifies or refuses this root before any artifact write. Strict mode refuses unsupported
+   * persistence and roots previously published as development, so unqualified output can never be
+   * served as production evidence. Development mode refuses a qualified root, keeping the two
+   * classes of root disjoint. Admission runs under the root's JVM mutex and OS lock so concurrent
+   * initializers and operations observe exactly one admitted mode.
+   */
+  private boolean initializeDurability() {
+    try {
+      validateAncestors(root);
+      if (durabilityMode == DurabilityMode.STRICT) {
+        // Probe the trusted boundary (nearest existing ancestor) before creating anything.
+        try {
+          directoryForce.force(nearestExisting(root));
+        } catch (AccessDeniedException e) {
+          throw durabilityUnavailable(
+              "Directory persistence is unavailable on this platform; strict durability refuses"
+                  + " this root");
+        }
+      }
+    } catch (IOException e) {
+      throw new ResponseStatusException(
+          HttpStatus.SERVICE_UNAVAILABLE, "ARTIFACT_STORAGE_UNAVAILABLE", e);
+    }
+    boolean qualified = locked(this::admit);
+    admitted = true;
+    return qualified;
+  }
+
+  private boolean admit() throws IOException {
+    boolean strict = durabilityMode == DurabilityMode.STRICT;
+    DurabilityMarker existing = marker();
+    if (existing == null) {
+      if (populated() && adoptionReview == null)
+        throw error(HttpStatus.CONFLICT, "ARTIFACT_DURABILITY_MARKER_MISSING");
+      writeMarker(strict, adoptionReview);
+      return strict;
+    }
+    if (strict && !existing.qualified())
+      throw durabilityUnavailable(
+          "Root was published in development mode and cannot become production evidence");
+    if (!strict && existing.qualified())
+      throw error(HttpStatus.CONFLICT, "ARTIFACT_DURABILITY_CONFLICT");
+    return strict;
+  }
+
+  /**
+   * Explicit, reviewed adoption of a populated root that has no valid durability marker. The root
+   * is recorded as an unqualified DEVELOPMENT root and can never be promoted in place: production
+   * evidence must be re-published into a fresh STRICT root. Existing content is left untouched.
+   */
+  public static ImmutableArtifactStore adoptLegacyRootAsDevelopment(
+      Path root, long maxBytes, long quotaBytes, ObjectMapper json, String reviewReference) {
+    if (reviewReference == null || reviewReference.isBlank())
+      throw error(HttpStatus.BAD_REQUEST, "ARTIFACT_ADOPTION_REVIEW_REQUIRED");
+    ImmutableArtifactStore store =
+        new ImmutableArtifactStore(
+            root,
+            maxBytes,
+            quotaBytes,
+            json,
+            DurabilityMode.DEVELOPMENT,
+            ImmutableArtifactStore::nativeDirectoryForce,
+            reviewReference);
+    return store;
+  }
+
+  /** A root holding anything beyond lock, pending and marker has history that needs migration. */
+  private boolean populated() throws IOException {
+    try (var entries = Files.list(root)) {
+      return entries.anyMatch(
+          p -> {
+            String name = p.getFileName().toString();
+            return !name.equals("registry.lock")
+                && !name.equals("pending")
+                && !name.equals("durability.json");
+          });
+    }
+  }
+
+  private void writeMarker(boolean qualified, String adoptionReview) throws IOException {
+    DurabilityMarker marker =
+        new DurabilityMarker(
+            durabilityMode,
+            System.getProperty("os.name", "unknown"),
+            qualified,
+            qualified,
+            java.time.Instant.now().toString(),
+            adoptionReview);
+    byte[] bytes = json.writeValueAsBytes(marker);
+    Path temp = root.resolve("pending").resolve(UUID.randomUUID() + ".tmp");
+    try {
+      try (var channel =
+          FileChannel.open(temp, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+        ByteBuffer buffer = ByteBuffer.wrap(bytes);
+        while (buffer.hasRemaining()) channel.write(buffer);
+        channel.force(true);
+      }
+      try {
+        // Link creation never replaces a marker that another mode may have published.
+        Files.createLink(root.resolve("durability.json"), temp);
+      } catch (java.nio.file.FileAlreadyExistsException e) {
+        throw error(HttpStatus.CONFLICT, "ARTIFACT_DURABILITY_CONFLICT");
+      }
+      forceDirectory(root);
+    } finally {
+      Files.deleteIfExists(temp);
+    }
+  }
+
+  /** Absent yields null; malformed, null, or internally inconsistent markers fail closed. */
+  private DurabilityMarker marker() throws IOException {
+    Path path = root.resolve("durability.json");
+    if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return null;
+    DurabilityMarker marker;
+    try {
+      marker = json.readValue(bounded(path, MAX_MANIFEST_BYTES), DurabilityMarker.class);
+    } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+      throw error(HttpStatus.CONFLICT, "ARTIFACT_DURABILITY_MARKER_CORRUPT");
+    }
+    if (marker == null
+        || marker.mode() == null
+        || marker.qualified() != (marker.mode() == DurabilityMode.STRICT)
+        || marker.directoryForce() != marker.qualified())
+      throw error(HttpStatus.CONFLICT, "ARTIFACT_DURABILITY_MARKER_CORRUPT");
+    return marker;
+  }
+
+  /** Every locked operation re-confirms the root still carries the mode this instance admitted. */
+  private void revalidateMarker() throws IOException {
+    DurabilityMarker current = marker();
+    if (current == null || current.mode() != durabilityMode)
+      throw error(HttpStatus.CONFLICT, "ARTIFACT_DURABILITY_CONFLICT");
+  }
+
+  private static Path nearestExisting(Path path) {
+    Path p = path;
+    while (p != null && !Files.exists(p, LinkOption.NOFOLLOW_LINKS)) p = p.getParent();
+    if (p == null) throw error(HttpStatus.SERVICE_UNAVAILABLE, "ARTIFACT_STORAGE_UNAVAILABLE");
+    return p;
+  }
+
+  public DurabilityMode durabilityMode() {
+    return durabilityMode;
+  }
+
+  /** True only when every publication on this root must survive directory-entry persistence. */
+  public boolean durabilityQualified() {
+    return qualifiedDurability;
+  }
+
+  private static ResponseStatusException durabilityUnavailable(String message) {
+    return new ResponseStatusException(
+        HttpStatus.SERVICE_UNAVAILABLE, "ARTIFACT_DURABILITY_UNAVAILABLE: " + message);
+  }
+
+  private void forceDirectory(Path directory) {
+    try {
+      directoryForce.force(directory);
+    } catch (AccessDeniedException e) {
+      if (durabilityMode == DurabilityMode.STRICT)
+        throw durabilityUnavailable("Directory persistence failed");
+    } catch (IOException e) {
+      throw new ResponseStatusException(
+          HttpStatus.SERVICE_UNAVAILABLE, "ARTIFACT_DURABILITY_UNAVAILABLE", e);
+    }
   }
 
   /** A missing reference never resolves, even if a crash left published but unregistered bytes. */
@@ -227,17 +461,25 @@ public final class ImmutableArtifactStore {
             if (!manifest.equals(existing))
               throw error(HttpStatus.CONFLICT, "ARTIFACT_ID_CONFLICT");
             verifyTree(owner, id, new HashSet<>(), 0);
+            forceDirectory(ref.getParent()); // an earlier attempt may have died before persisting
+            forceDirectory(object(existing.checksum()).getParent());
             return existing;
           }
           Path blob = object(manifest.checksum());
           boolean reuse = Files.exists(blob, LinkOption.NOFOLLOW_LINKS);
-          if (reuse) verify(blob, manifest.checksum(), manifest.sizeBytes());
+          if (reuse) {
+            verify(blob, manifest.checksum(), manifest.sizeBytes());
+            // A retained orphan may exist because its directory force failed; satisfy it before
+            // any manifest references the bytes.
+            forceDirectory(blob.getParent());
+          }
           long needed = Math.addExact(reuse ? 0 : content.length, envelope.length);
           if (needed > quotaBytes - usedBytes())
             throw error(HttpStatus.INSUFFICIENT_STORAGE, "ARTIFACT_QUOTA_EXCEEDED");
           if (!reuse) publish(blob, content);
           verify(blob, manifest.checksum(), manifest.sizeBytes());
-          publish(ref, envelope); // only this atomic publication makes the artifact discoverable
+          // Only this atomic publication makes the artifact discoverable.
+          publish(ref, envelope, true);
           return manifest;
         });
   }
@@ -287,6 +529,7 @@ public final class ImmutableArtifactStore {
         () -> {
           Path dir = refs(owner);
           validateAncestors(dir);
+          boolean removed = false;
           if (Files.exists(dir))
             try (var entries = Files.list(dir)) {
               for (Path p : entries.toList()) {
@@ -297,8 +540,10 @@ public final class ImmutableArtifactStore {
                     || Files.isSymbolicLink(p))
                   throw error(HttpStatus.CONFLICT, "ARTIFACT_REGISTRY_INVALID");
                 Files.delete(p);
+                removed = true;
               }
             }
+          if (removed) forceDirectory(dir);
           return null;
         });
   }
@@ -376,6 +621,14 @@ public final class ImmutableArtifactStore {
   }
 
   private void publish(Path path, byte[] bytes) throws IOException {
+    publish(path, bytes, false);
+  }
+
+  /**
+   * Publishes through an atomic hard link. With {@code retract}, a failed directory persistence
+   * removes the link this call created, so an unpersisted entry never remains discoverable.
+   */
+  private void publish(Path path, byte[] bytes, boolean retract) throws IOException {
     directory(path.getParent());
     Path temp = root.resolve("pending").resolve(UUID.randomUUID() + ".tmp");
     try {
@@ -389,11 +642,28 @@ public final class ImmutableArtifactStore {
         throw error(HttpStatus.CONFLICT, "ARTIFACT_CORRUPT");
       // Hard-link creation is atomic and never replaces a winner. No non-atomic fallback.
       Files.createLink(path, temp);
-      try (var channel = FileChannel.open(path.getParent(), StandardOpenOption.READ)) {
-        channel.force(true);
+      try {
+        forceDirectory(path.getParent());
+      } catch (RuntimeException e) {
+        if (retract) Files.deleteIfExists(path);
+        throw e;
       }
     } finally {
       Files.deleteIfExists(temp);
+    }
+  }
+
+  /**
+   * Forces the newly linked directory entry through the configured persistence primitive.
+   *
+   * <p>POSIX systems persist a directory entry by forcing the parent directory. Windows does not
+   * allow {@code java.nio} to open a directory handle, so the equivalent call fails with {@link
+   * AccessDeniedException}. Strict roots refuse that platform at construction; development roots
+   * record an explicitly unqualified marker and tolerate only that specific refusal.
+   */
+  private static void nativeDirectoryForce(Path directory) throws IOException {
+    try (var channel = FileChannel.open(directory, StandardOpenOption.READ)) {
+      channel.force(true);
     }
   }
 
@@ -454,9 +724,23 @@ public final class ImmutableArtifactStore {
     }
   }
 
+  /**
+   * Creates each missing level in order and forces the parent of every new entry. The nearest
+   * existing ancestor is the trusted boundary and is never itself re-forced.
+   */
   private void directory(Path dir) throws IOException {
     validateAncestors(dir);
-    Files.createDirectories(dir);
+    java.util.ArrayDeque<Path> missing = new java.util.ArrayDeque<>();
+    for (Path p = dir; p != null && !Files.exists(p, LinkOption.NOFOLLOW_LINKS); p = p.getParent())
+      missing.push(p);
+    for (Path p : missing) {
+      try {
+        Files.createDirectory(p);
+      } catch (java.nio.file.FileAlreadyExistsException e) {
+        if (!Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS)) throw e;
+      }
+      forceDirectory(p.getParent());
+    }
   }
 
   @FunctionalInterface
@@ -477,13 +761,18 @@ public final class ImmutableArtifactStore {
                   LinkOption.NOFOLLOW_LINKS);
           var lock = channel.lock()) {
         directory(root.resolve("pending"));
-        try (var abandoned = Files.list(root.resolve("pending"))) {
+        Path pending = root.resolve("pending");
+        if (admitted) revalidateMarker();
+        boolean removed = false;
+        try (var abandoned = Files.list(pending)) {
           for (Path p : abandoned.toList()) {
             if (Files.isSymbolicLink(p) || !p.getFileName().toString().endsWith(".tmp"))
               throw error(HttpStatus.CONFLICT, "ARTIFACT_REGISTRY_INVALID");
             Files.delete(p);
+            removed = true;
           }
         }
+        if (removed) forceDirectory(pending);
         return operation.run();
       }
     } catch (IOException e) {

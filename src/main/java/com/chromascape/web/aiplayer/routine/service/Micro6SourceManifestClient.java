@@ -49,6 +49,17 @@ public class Micro6SourceManifestClient {
   @Value("${micro6.source.transport.auth-token:}")
   private String authToken;
 
+  /**
+   * Micro6 authorizes each read by purpose: manifest reads require its metadata token and file
+   * reads its content token, and each is rejected on the other's routes. When a purpose-specific
+   * token is configured it is sent for that purpose; otherwise the shared auth token is used.
+   */
+  @Value("${micro6.source.transport.metadata-token:}")
+  private String metadataToken;
+
+  @Value("${micro6.source.transport.content-token:}")
+  private String contentToken;
+
   @Value("${micro6.source.transport.actor:chromascape-web}")
   private String actor;
 
@@ -324,7 +335,8 @@ public class Micro6SourceManifestClient {
 
   private byte[] getBytes(String path, long maximumBytes, String purpose) {
     try {
-      if (authToken == null || authToken.isBlank()) {
+      String token = tokenFor(purpose);
+      if (token == null || token.isBlank()) {
         throw sourceError(
             SourceManifestFailureCode.SOURCE_ACCESS_DENIED,
             "source transport authentication is not configured");
@@ -337,7 +349,7 @@ public class Micro6SourceManifestClient {
       URI endpoint = trustedEndpoint(path);
       HttpRequest.Builder builder =
           HttpRequest.newBuilder(endpoint).timeout(Duration.ofSeconds(15)).GET();
-      builder.header("Authorization", "Bearer " + authToken);
+      builder.header("Authorization", "Bearer " + token);
       builder.header("X-Source-Actor", boundedActor());
       builder.header("X-Source-Purpose", purpose);
       builder.header("X-Correlation-ID", correlationId());
@@ -360,6 +372,11 @@ public class Micro6SourceManifestClient {
           "source endpoint is unavailable",
           exception);
     }
+  }
+
+  private String tokenFor(String purpose) {
+    String specific = PURPOSE_MANIFEST.equals(purpose) ? metadataToken : contentToken;
+    return specific == null || specific.isBlank() ? authToken : specific.trim();
   }
 
   /** Bounded actor identity for Micro6 audit. */

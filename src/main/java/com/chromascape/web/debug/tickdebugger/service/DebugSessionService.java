@@ -220,9 +220,19 @@ public class DebugSessionService {
       if (previous.isPresent() && previous.get().getRecordingId() != null) {
         var row = contexts.recording(previous.get().getRecordingId());
         var expected = contexts.bind(contextSnapshot, row.getRecordingId(), preferredSessionId);
-        if (!expected.equals(row.getRunContext()))
+        var stored = row.getRunContext();
+        // Compare canonical identities, not raw trees: the digest is what every consumer uses, and
+        // it normalizes numbers that an executor may round-trip as floating point.
+        if (!contexts.sameProvenance(expected, stored)) {
+          // Bounded, non-secret diagnosis: name the differing fields, never their values.
+          log.warn(
+              "Immutable provenance mismatch on session {}: recording={}, differingFields={}",
+              preferredSessionId,
+              row.getRecordingId(),
+              contexts.differingPaths(expected, stored));
           throw new com.chromascape.web.recording.provenance.ProvenanceException(
               "IMMUTABLE_PROVENANCE");
+        }
         if (!previous.get().isActive()) {
           var response =
               new SessionStartResponse(
@@ -265,14 +275,26 @@ public class DebugSessionService {
     // rollback.
     if (reusedPreferredSession && session.getRecordingId() != null) {
       var existing = recordingSessionRepository.findByRecordingId(session.getRecordingId());
-      if (existing.isPresent()
-          && taskKey != null
-          && (!java.util.Objects.equals(existing.get().getTaskKey(), taskKey)
-              || taskArgs != null
-                  && !java.util.Objects.equals(
-                      existing.get().getSettingsHash(), provenance.settingsHash())))
-        throw new com.chromascape.web.recording.provenance.ProvenanceException(
-            "IMMUTABLE_PROVENANCE");
+      if (existing.isPresent() && taskKey != null) {
+        boolean taskKeyDiffers = !java.util.Objects.equals(existing.get().getTaskKey(), taskKey);
+        boolean settingsDiffer =
+            taskArgs != null
+                && !java.util.Objects.equals(
+                    existing.get().getSettingsHash(), provenance.settingsHash());
+        if (taskKeyDiffers || settingsDiffer) {
+          var differing = new java.util.ArrayList<String>();
+          if (taskKeyDiffers) differing.add("taskKey");
+          if (settingsDiffer) differing.add("settingsHash");
+          log.warn(
+              "Immutable provenance mismatch on reused session {}: recording={},"
+                  + " differingFields={}",
+              sessionId,
+              session.getRecordingId(),
+              differing);
+          throw new com.chromascape.web.recording.provenance.ProvenanceException(
+              "IMMUTABLE_PROVENANCE");
+        }
+      }
     }
     String previousRecordingId = session.getRecordingId();
     LocalDateTime previousStartTime = session.getStartTime();

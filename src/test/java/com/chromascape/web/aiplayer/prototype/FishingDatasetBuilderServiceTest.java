@@ -47,6 +47,48 @@ class FishingDatasetBuilderServiceTest {
     ReflectionTestUtils.setField(builder, "shadowMode", false);
     ReflectionTestUtils.setField(builder, "controlEnabled", false);
 
+    var contexts = mock(com.chromascape.web.recording.provenance.BehaviorRunContextService.class);
+    var context =
+        objectMapper.createObjectNode().put("runId", "frozen-run").put("profileVersion", 1);
+    when(contexts.requireTrainingContext("recording_1")).thenReturn(context);
+    ReflectionTestUtils.setField(builder, "runContexts", contexts);
+    var frames = mock(com.chromascape.web.recording.provenance.CanonicalFrameStore.class);
+    when(frames.atTick(
+            org.mockito.ArgumentMatchers.eq("recording_1"), org.mockito.ArgumentMatchers.anyLong()))
+        .thenAnswer(
+            invocation -> {
+              long tick = invocation.getArgument(1);
+              var payload = objectMapper.createObjectNode();
+              payload.put("tick", tick);
+              var player = payload.putObject("playerState");
+              player
+                  .put("worldX", 100)
+                  .put("worldY", 100)
+                  .put("plane", 0)
+                  .put("moving", false)
+                  .put("idle", true)
+                  .put("animationId", -1);
+              var semantic = payload.putObject("semanticSnapshot");
+              semantic
+                  .putObject("inventory")
+                  .put("occupiedSlots", 1)
+                  .put("totalQuantity", 1)
+                  .put("positiveDeltaFromStart", 0);
+              semantic.putArray("nearbyNpcs");
+              payload
+                  .putArray("semanticEvents")
+                  .addObject()
+                  .put("sourceTick", tick)
+                  .put("actionId", "INTERACT_NPC_NET")
+                  .put("source", "CLIENT_EVENT")
+                  .put("humanObserved", true);
+              var frame = mock(com.chromascape.web.recording.provenance.CanonicalTickFrame.class);
+              when(frame.payload()).thenReturn(payload);
+              when(frame.digest()).thenReturn("sha256:" + "a".repeat(64));
+              return frame;
+            });
+    ReflectionTestUtils.setField(builder, "canonicalFrames", frames);
+
     session = new DebugSession("debug_1", "acct", "script", LocalDateTime.now(), 0L);
     session.setRecordingId("recording_1");
     session.setEndTick(2000L);

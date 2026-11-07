@@ -88,6 +88,92 @@ class Micro6SourceManifestClientTest {
   }
 
   @Test
+  void sendsPurposeSpecificTokensToAPurposeScopedProducer() throws Exception {
+    KeyPair signingKey = KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
+    ObjectNode manifest = SourceManifestTestFixtures.signedManifest(signingKey);
+    HttpServer server = purposeScopedServer(manifest, "metadata-secret", "content-secret");
+    try {
+      Micro6SourceManifestClient client = client(server, signingKey);
+      setField(client, "metadataToken", "metadata-secret");
+      setField(client, "contentToken", "content-secret");
+
+      Micro6SourceManifestClient.SourceBinding binding =
+          client.resolve(
+              new Micro6SourceManifestClient.SourceRequest(
+                  "EXAMPLE_TASK", "com.example.Entry", "Entry#run()", null));
+
+      assertEquals(SourceManifestTestFixtures.FILE_ID, binding.fileId());
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test
+  void sharedTokenCannotReadBothPurposesFromAPurposeScopedProducer() throws Exception {
+    KeyPair signingKey = KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
+    ObjectNode manifest = SourceManifestTestFixtures.signedManifest(signingKey);
+    // The helper's shared token is valid for manifests only, as with a Micro6 metadata token.
+    HttpServer server = purposeScopedServer(manifest, "test-token", "content-secret");
+    try {
+      SourceManifestException exception =
+          assertThrows(
+              SourceManifestException.class,
+              () ->
+                  client(server, signingKey)
+                      .resolve(
+                          new Micro6SourceManifestClient.SourceRequest(
+                              "EXAMPLE_TASK", "com.example.Entry", "Entry#run()", null)));
+      assertEquals(SourceManifestFailureCode.SOURCE_ACCESS_DENIED, exception.code());
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  /** Mirrors Micro6: the bearer token is checked against the token for the declared purpose. */
+  private static HttpServer purposeScopedServer(
+      ObjectNode manifest, String metadataToken, String contentToken) throws IOException {
+    byte[] manifestBytes = new ObjectMapper().writeValueAsBytes(manifest);
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext(
+        "/api/v1/source-manifests/EXAMPLE_TASK",
+        exchange ->
+            respondIfAuthorized(
+                exchange, "manifest-read", metadataToken, manifestBytes));
+    server.createContext(
+        "/api/v1/source-snapshots/"
+            + manifest.path("source_snapshot_id").asText()
+            + "/files/"
+            + SourceManifestTestFixtures.FILE_ID,
+        exchange ->
+            respondIfAuthorized(
+                exchange,
+                "file-read",
+                contentToken,
+                SourceManifestTestFixtures.CONTENT.getBytes(StandardCharsets.UTF_8)));
+    server.start();
+    return server;
+  }
+
+  private static void respondIfAuthorized(
+      HttpExchange exchange, String purpose, String token, byte[] body) throws IOException {
+    boolean authorized =
+        purpose.equals(exchange.getRequestHeaders().getFirst("X-Source-Purpose"))
+            && ("Bearer " + token).equals(exchange.getRequestHeaders().getFirst("Authorization"));
+    if (authorized) {
+      respond(exchange, 200, body);
+    } else {
+      respond(
+          exchange, 401, "{\"code\":\"SOURCE_ACCESS_DENIED\"}".getBytes(StandardCharsets.UTF_8));
+    }
+  }
+
+  private static void setField(Object target, String name, String value) throws Exception {
+    Field field = Micro6SourceManifestClient.class.getDeclaredField(name);
+    field.setAccessible(true);
+    field.set(target, value);
+  }
+
+  @Test
   void mapsPrunedUpstreamResponsesToTheStableFailureCode() throws Exception {
     HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     server.createContext(

@@ -41,6 +41,10 @@ class FishingArtifactRegistryIntegrationTest {
     objectMapper = new ObjectMapper().findAndRegisterModules();
     builder = new FishingDatasetBuilderService(preflightService, loader, objectMapper);
     ReflectionTestUtils.setField(builder, "outputDir", tempDir.toString());
+    ReflectionTestUtils.setField(
+        builder,
+        "durabilityMode",
+        com.chromascape.web.artifact.TestDurability.positiveMode().name());
     ReflectionTestUtils.setField(builder, "aiPlayerEnabled", true);
     ReflectionTestUtils.setField(builder, "shadowMode", false);
     ReflectionTestUtils.setField(builder, "controlEnabled", false);
@@ -158,7 +162,11 @@ class FishingArtifactRegistryIntegrationTest {
     assertThat(result.status()).isEqualTo("TRAINED");
     var registry =
         new com.chromascape.web.artifact.ImmutableArtifactStore(
-            tempDir.resolve("artifacts"), 104857600, 1073741824, objectMapper);
+            tempDir.resolve("artifacts"),
+            104857600,
+            1073741824,
+            objectMapper,
+            com.chromascape.web.artifact.TestDurability.positiveMode());
     var modelRef = registry.get("fishing-prototype", result.modelId());
     assertThat(modelRef.lineage()).containsEntry("recordingId", "recording_1");
     var datasetRef = registry.get("fishing-prototype", modelRef.dependencies().get("dataset"));

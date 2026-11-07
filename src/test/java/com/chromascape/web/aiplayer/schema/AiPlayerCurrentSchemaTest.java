@@ -262,6 +262,31 @@ class AiPlayerCurrentSchemaTest {
   }
 
   @Test
+  void nonemptyPreviousReplayContractIsRejectedWithoutApplyingPendingMigration() throws Exception {
+    sql("DROP SCHEMA ai_player_dev CASCADE");
+    org.flywaydb.core.Flyway.configure()
+        .configuration(AiPlayerCurrentSchema.migrations(source).getConfiguration())
+        .target("6")
+        .load()
+        .migrate();
+    String before = fingerprint();
+    assertEquals("sc609-current-v1", scalar("SELECT identity FROM ai_player_schema_identity"));
+    assertEquals(
+        "6", scalar("SELECT count(*) FROM flyway_schema_history WHERE version IS NOT NULL"));
+    assertThrows(IllegalStateException.class, schema::bootstrap);
+    assertEquals(before, fingerprint());
+    assertEquals("sc609-current-v1", scalar("SELECT identity FROM ai_player_schema_identity"));
+    assertEquals(
+        "6", scalar("SELECT count(*) FROM flyway_schema_history WHERE version IS NOT NULL"));
+    assertEquals(
+        "0",
+        scalar(
+            "SELECT count(*) FROM information_schema.columns WHERE table_schema='ai_player_dev'"
+                + " AND table_name='replay_checkpoints' AND column_name='restore_context'"));
+    assertEquals("preserve-me", scalar("SELECT value FROM public.sc665_outside_sentinel"));
+  }
+
+  @Test
   void alteredTriggerOrUnexpectedMigrationHistoryIsRejected() throws Exception {
     sql("ALTER TABLE ai_player_behavior_profiles DISABLE TRIGGER ai_player_profile_immutable");
     assertThrows(IllegalStateException.class, schema::verify);

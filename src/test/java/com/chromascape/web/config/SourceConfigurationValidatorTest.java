@@ -39,7 +39,9 @@ class SourceConfigurationValidatorTest {
                         "upstream",
                         "chromascape-web",
                         "metadata",
-                        "content")
+                        "content",
+                        "",
+                        "")
                     .validate());
     assertTrue(endpointFailure.getMessage().contains("base-url"));
 
@@ -53,7 +55,9 @@ class SourceConfigurationValidatorTest {
                         "",
                         "chromascape-web",
                         "metadata",
-                        "content")
+                        "content",
+                        "",
+                        "")
                     .validate());
     assertTrue(tokenFailure.getMessage().contains("auth-token"));
   }
@@ -87,7 +91,9 @@ class SourceConfigurationValidatorTest {
                     "upstream",
                     "../actor",
                     "metadata",
-                    "content")
+                    "content",
+                    "",
+                    "")
                 .validate());
   }
 
@@ -108,6 +114,8 @@ class SourceConfigurationValidatorTest {
         "upstream-token",
         "chromascape-web",
         "metadata-token",
-        "content-token");
+        "content-token",
+        "",
+        "");
   }
 }

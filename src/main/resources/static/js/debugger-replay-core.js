@@ -151,6 +151,23 @@
     };
   }
 
+  /** Freeze the exact compiled input shown by preflight; the server rechecks its checksum. */
+  function createScenarioRunRequest(preflight, idempotencyKey) {
+    const input = preflight?.compiledInput;
+    if (preflight?.simulationEligible !== true || !input
+        || !/^sha256:[0-9a-f]{64}$/.test(input.manifestChecksum)) {
+      throw new Error('Refresh preflight before starting this scenario.');
+    }
+    return {
+      conversionMode: preflight.conversionMode,
+      openViewer: true,
+      stopPolicy: 'STOP_ON_FIRST_HARD',
+      idempotencyKey,
+      curationId: input.curationId ?? null,
+      expectedManifestChecksum: input.manifestChecksum
+    };
+  }
+
   const api = {
     subtractTruncatedWindows,
     chooseRecoveryWindow,
@@ -159,7 +176,8 @@
     createInFlightRegistry,
     acceptsReplayResponse,
     packetIdentityKey,
-    packetDisplayIdentity
+    packetDisplayIdentity,
+    createScenarioRunRequest
   };
 
   global.ChromaScapeReplayCore = api;

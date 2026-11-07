@@ -21,6 +21,11 @@ public class ReplayProperties {
   @Valid private final Worker worker = new Worker();
   @Valid private final Artifacts artifacts = new Artifacts();
   @Valid private final Viewer viewer = new Viewer();
+  @Valid private final Client client = new Client();
+
+  public Client getClient() {
+    return client;
+  }
 
   public boolean isEnabled() {
     return enabled;
@@ -75,6 +80,51 @@ public class ReplayProperties {
 
     /** Bounded response queue capacity; the kernel is strictly one-request-at-a-time. */
     @Positive private int responseQueueCapacity = 16;
+
+    /**
+     * OS-enforced ceilings applied to every worker before it executes. These are provisional safety
+     * ceilings, not measured production budgets: production values must come from measured cold,
+     * warm and concurrent runs on the target platform.
+     */
+    @Positive private long maxHeapMb = 4096;
+
+    @Positive private long cpuLimitSeconds = 1800;
+
+    @Positive private long maxFileBytes = 134_217_728;
+
+    @Positive private long maxOpenFiles = 4096;
+
+    public long getMaxHeapMb() {
+      return maxHeapMb;
+    }
+
+    public void setMaxHeapMb(long maxHeapMb) {
+      this.maxHeapMb = maxHeapMb;
+    }
+
+    public long getCpuLimitSeconds() {
+      return cpuLimitSeconds;
+    }
+
+    public void setCpuLimitSeconds(long cpuLimitSeconds) {
+      this.cpuLimitSeconds = cpuLimitSeconds;
+    }
+
+    public long getMaxFileBytes() {
+      return maxFileBytes;
+    }
+
+    public void setMaxFileBytes(long maxFileBytes) {
+      this.maxFileBytes = maxFileBytes;
+    }
+
+    public long getMaxOpenFiles() {
+      return maxOpenFiles;
+    }
+
+    public void setMaxOpenFiles(long maxOpenFiles) {
+      this.maxOpenFiles = maxOpenFiles;
+    }
 
     public String getExecutable() {
       return executable;
@@ -373,6 +423,37 @@ public class ReplayProperties {
 
     public void setTokenTtlSeconds(long tokenTtlSeconds) {
       this.tokenTtlSeconds = tokenTtlSeconds;
+    }
+  }
+
+  /** Packaged actual-client assets and pinned caches. Paths are operator configuration only. */
+  public static class Client {
+    private boolean enabled;
+    private String assetsDirectory;
+    private String cachesDirectory;
+
+    public boolean isEnabled() {
+      return enabled;
+    }
+
+    public void setEnabled(boolean value) {
+      enabled = value;
+    }
+
+    public String getAssetsDirectory() {
+      return assetsDirectory;
+    }
+
+    public void setAssetsDirectory(String value) {
+      assetsDirectory = value;
+    }
+
+    public String getCachesDirectory() {
+      return cachesDirectory;
+    }
+
+    public void setCachesDirectory(String value) {
+      cachesDirectory = value;
     }
   }
 }

@@ -21,6 +21,9 @@ public class LocalReplayPrincipalConfig {
         "/api/replay/*",
         "/api/recordings/*",
         "/api/xrsps/sessions/*",
+        "/xrsps-sessions",
+        "/xrsps-client",
+        "/xrsps-client/",
         // SC-2150 external video and the owner review workspace: without this pattern every
         // owner call is refused as unauthenticated on the local-development host.
         "/api/debug/mouse-videos/*");

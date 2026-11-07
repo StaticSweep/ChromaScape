@@ -1,0 +1,489 @@
+{
+  "evidenceKind" : "AUTHORED_OBSERVER_TEST",
+  "context" : {
+    "debugSessionId" : "00000000-0000-4000-8000-000000000001",
+    "runId" : "00000000-0000-4000-8000-000000000002",
+    "allocationId" : "allocationId",
+    "executorId" : "executorId",
+    "clientInstanceId" : "clientInstanceId",
+    "behaviorProfileId" : "behaviorProfileId",
+    "catalogHash" : "catalogHash",
+    "settingsHash" : "settingsHash",
+    "taskKey" : "FISHING_TRAINING",
+    "behaviorProfileVersion" : 1,
+    "dataOrigin" : "HUMAN",
+    "settings" : {
+      "targetFish" : "TROUT"
+    },
+    "semanticContractDigest" : "sha256:6d94438f281684af3f52ee57ead6e5f03b3d98d892241da6db300a4e9868d9f0",
+    "privacy" : {
+      "policyVersion" : "authored-test-v1",
+      "redactedFields" : [ ]
+    }
+  },
+  "frames" : [ {
+    "schemaVersion" : 3,
+    "type" : "TICK_BATCH",
+    "batchId" : "test-1",
+    "sessionId" : "00000000-0000-4000-8000-000000000001",
+    "tick" : 1,
+    "playerState" : {
+      "worldX" : 3100,
+      "worldY" : 3431,
+      "animationId" : -1,
+      "isIdle" : true,
+      "plane" : 0,
+      "isMoving" : false
+    },
+    "inventory" : [ {
+      "quantity" : 1,
+      "slot" : 0,
+      "itemId" : 309
+    }, {
+      "quantity" : 50,
+      "slot" : 1,
+      "itemId" : 314
+    } ],
+    "equipment" : [ ],
+    "threats" : [ ],
+    "projectiles" : [ ],
+    "cooldowns" : { },
+    "npcs" : [ {
+      "x" : 3100,
+      "y" : 3430,
+      "npcId" : 1526,
+      "plane" : 0,
+      "fishingSpot" : true,
+      "index" : 7,
+      "stableId" : "npc:1526:3100:3430:0"
+    } ],
+    "gameObjects" : [ ],
+    "groundObjects" : [ ],
+    "groundItems" : [ ],
+    "quest" : { },
+    "questHelper" : { },
+    "humanCapture" : {
+      "schema" : "human-fishing-observation/v1",
+      "sessionId" : "00000000-0000-4000-8000-000000000001",
+      "producerId" : "0c0fc6ee-3f92-49ff-acc4-26714e19ca38",
+      "tick" : 1,
+      "terminal" : false,
+      "observedCallbacks" : 0,
+      "acceptedIntents" : 0,
+      "pendingCount" : 0,
+      "dropped" : 0,
+      "issues" : [ ],
+      "actions" : [ ],
+      "semanticSnapshot" : {
+        "inventory" : {
+          "occupiedSlots" : 2,
+          "totalQuantity" : 51,
+          "positiveDeltaFromStart" : 0
+        },
+        "nearbyNpcs" : [ {
+          "distance" : 1,
+          "name" : "Rod Fishing spot",
+          "plane" : 0,
+          "x" : 3100,
+          "y" : 3430
+        } ],
+        "visibleTarget" : true,
+        "requiredSupplies" : true,
+        "legalActionIds" : [ "WAIT", "INTERACT_NPC_LURE" ]
+      }
+    },
+    "activePluginClasses" : [ ],
+    "runId" : "00000000-0000-4000-8000-000000000002",
+    "sequence" : 1,
+    "producerEpoch" : "04697583-04a6-4a50-822c-83185836e772",
+    "runContext" : {
+      "allocationId" : "allocationId",
+      "executorId" : "executorId",
+      "clientInstanceId" : "clientInstanceId",
+      "taskKey" : "FISHING_TRAINING",
+      "behaviorProfileId" : "behaviorProfileId",
+      "behaviorProfileVersion" : "1",
+      "catalogHash" : "catalogHash",
+      "settingsHash" : "settingsHash"
+    },
+    "semanticContractDigest" : "sha256:6d94438f281684af3f52ee57ead6e5f03b3d98d892241da6db300a4e9868d9f0",
+    "privacy" : {
+      "policyVersion" : "authored-test-v1",
+      "redactedFields" : [ ]
+    },
+    "taskState" : {
+      "stage" : "UNKNOWN",
+      "stageRevision" : 0,
+      "progressRevision" : 0,
+      "terminalState" : null
+    },
+    "semanticEvents" : [ ],
+    "quality" : {
+      "producerVersion" : "micro6-human-fishing-observer-v1",
+      "adapterVersion" : "human-fishing-observation-adapter-v1",
+      "expected" : 0,
+      "observed" : 0,
+      "unknown" : 0,
+      "dropped" : 0,
+      "gapRanges" : [ ],
+      "captureLimitations" : [ "Manual origin is operator-declared; no hardware-origin attestation", "Client lure observation only; no script/provider intent or oracle fidelity claim" ],
+      "unsupportedFamilies" : [ ],
+      "eventFamilyCounters" : {
+        "CLIENT_EVENT" : 0,
+        "TICK_OBSERVATION" : 1
+      }
+    },
+    "semanticSnapshot" : {
+      "inventory" : {
+        "occupiedSlots" : 2,
+        "totalQuantity" : 51,
+        "positiveDeltaFromStart" : 0
+      },
+      "nearbyNpcs" : [ {
+        "distance" : 1,
+        "name" : "Rod Fishing spot",
+        "plane" : 0,
+        "x" : 3100,
+        "y" : 3430
+      } ],
+      "visibleTarget" : true,
+      "requiredSupplies" : true,
+      "legalActionIds" : [ "WAIT", "INTERACT_NPC_LURE" ]
+    },
+    "absoluteSnapshotReason" : "EACH_ACCEPTED_TICK",
+    "absoluteSnapshotCadence" : 1,
+    "sparseDeltas" : [ ],
+    "contentHash" : "a37b127984682c063443609072a8d94dc19a208488544faabfcd546f678f1c1f"
+  }, {
+    "schemaVersion" : 3,
+    "type" : "TICK_BATCH",
+    "batchId" : "test-2",
+    "sessionId" : "00000000-0000-4000-8000-000000000001",
+    "tick" : 2,
+    "playerState" : {
+      "worldX" : 3100,
+      "worldY" : 3431,
+      "animationId" : 623,
+      "isIdle" : false,
+      "plane" : 0,
+      "isMoving" : false
+    },
+    "inventory" : [ {
+      "quantity" : 1,
+      "slot" : 0,
+      "itemId" : 309
+    }, {
+      "quantity" : 50,
+      "slot" : 1,
+      "itemId" : 314
+    } ],
+    "equipment" : [ ],
+    "threats" : [ ],
+    "projectiles" : [ ],
+    "cooldowns" : { },
+    "npcs" : [ {
+      "x" : 3100,
+      "y" : 3430,
+      "npcId" : 1526,
+      "plane" : 0,
+      "fishingSpot" : true,
+      "index" : 7,
+      "stableId" : "npc:1526:3100:3430:0"
+    } ],
+    "gameObjects" : [ ],
+    "groundObjects" : [ ],
+    "groundItems" : [ ],
+    "quest" : { },
+    "questHelper" : { },
+    "humanCapture" : {
+      "schema" : "human-fishing-observation/v1",
+      "sessionId" : "00000000-0000-4000-8000-000000000001",
+      "producerId" : "0c0fc6ee-3f92-49ff-acc4-26714e19ca38",
+      "tick" : 2,
+      "terminal" : false,
+      "observedCallbacks" : 1,
+      "acceptedIntents" : 1,
+      "pendingCount" : 0,
+      "dropped" : 0,
+      "issues" : [ ],
+      "actions" : [ {
+        "schema" : "client-observed-fishing-action/v1",
+        "eventId" : "13a75f50-2d81-4c91-ad75-21e178522e87",
+        "source" : "CLIENT_EVENT",
+        "kind" : "INTERACT_NPC_LURE",
+        "sourceTick" : 2,
+        "beforeSnapshotTick" : 1,
+        "observationTick" : 2,
+        "beforeAnimationId" : -1,
+        "afterAnimationId" : 623,
+        "menuConsumed" : false,
+        "dispatchCorrelationId" : 0,
+        "capturedAt" : "2026-10-31T20:59:23.378291Z",
+        "target" : {
+          "kind" : "NPC",
+          "stableId" : "npc:1526:3100:3430:0",
+          "npcId" : 1526,
+          "clientIndex" : 7,
+          "npcTypeId" : 1526,
+          "size" : 1,
+          "x" : 3100,
+          "y" : 3430,
+          "plane" : 0,
+          "spotType" : "lure",
+          "spotId" : "river_lure_bait"
+        }
+      } ],
+      "semanticSnapshot" : {
+        "inventory" : {
+          "occupiedSlots" : 2,
+          "totalQuantity" : 51,
+          "positiveDeltaFromStart" : 0
+        },
+        "nearbyNpcs" : [ {
+          "distance" : 1,
+          "name" : "Rod Fishing spot",
+          "plane" : 0,
+          "x" : 3100,
+          "y" : 3430
+        } ],
+        "visibleTarget" : true,
+        "requiredSupplies" : true,
+        "legalActionIds" : [ "WAIT", "INTERACT_NPC_LURE" ]
+      }
+    },
+    "activePluginClasses" : [ ],
+    "runId" : "00000000-0000-4000-8000-000000000002",
+    "sequence" : 2,
+    "producerEpoch" : "04697583-04a6-4a50-822c-83185836e772",
+    "runContext" : {
+      "allocationId" : "allocationId",
+      "executorId" : "executorId",
+      "clientInstanceId" : "clientInstanceId",
+      "taskKey" : "FISHING_TRAINING",
+      "behaviorProfileId" : "behaviorProfileId",
+      "behaviorProfileVersion" : "1",
+      "catalogHash" : "catalogHash",
+      "settingsHash" : "settingsHash"
+    },
+    "semanticContractDigest" : "sha256:6d94438f281684af3f52ee57ead6e5f03b3d98d892241da6db300a4e9868d9f0",
+    "privacy" : {
+      "policyVersion" : "authored-test-v1",
+      "redactedFields" : [ ]
+    },
+    "taskState" : {
+      "stage" : "UNKNOWN",
+      "stageRevision" : 0,
+      "progressRevision" : 0,
+      "terminalState" : null
+    },
+    "semanticEvents" : [ {
+      "eventSequence" : 1,
+      "eventId" : "13a75f50-2d81-4c91-ad75-21e178522e87",
+      "sourceTick" : 2,
+      "source" : "CLIENT_EVENT",
+      "kind" : "INTERACT_NPC_LURE",
+      "stage" : "OBSERVED_FISHING",
+      "reasonCode" : "FISHING_ANIMATION_STARTED",
+      "outcome" : "SUCCEEDED",
+      "dispatched" : false,
+      "humanObserved" : false,
+      "automationOrigin" : "UNKNOWN",
+      "observation" : {
+        "schema" : "client-observed-fishing-action/v1",
+        "eventId" : "13a75f50-2d81-4c91-ad75-21e178522e87",
+        "source" : "CLIENT_EVENT",
+        "kind" : "INTERACT_NPC_LURE",
+        "sourceTick" : 2,
+        "beforeSnapshotTick" : 1,
+        "observationTick" : 2,
+        "beforeAnimationId" : -1,
+        "afterAnimationId" : 623,
+        "menuConsumed" : false,
+        "dispatchCorrelationId" : 0,
+        "capturedAt" : "2026-10-31T20:59:23.378291Z",
+        "target" : {
+          "kind" : "NPC",
+          "stableId" : "npc:1526:3100:3430:0",
+          "npcId" : 1526,
+          "clientIndex" : 7,
+          "npcTypeId" : 1526,
+          "size" : 1,
+          "x" : 3100,
+          "y" : 3430,
+          "plane" : 0,
+          "spotType" : "lure",
+          "spotId" : "river_lure_bait"
+        }
+      }
+    } ],
+    "quality" : {
+      "producerVersion" : "micro6-human-fishing-observer-v1",
+      "adapterVersion" : "human-fishing-observation-adapter-v1",
+      "expected" : 1,
+      "observed" : 1,
+      "unknown" : 0,
+      "dropped" : 0,
+      "gapRanges" : [ ],
+      "captureLimitations" : [ "Manual origin is operator-declared; no hardware-origin attestation", "Client lure observation only; no script/provider intent or oracle fidelity claim" ],
+      "unsupportedFamilies" : [ ],
+      "eventFamilyCounters" : {
+        "CLIENT_EVENT" : 1,
+        "TICK_OBSERVATION" : 1
+      }
+    },
+    "semanticSnapshot" : {
+      "inventory" : {
+        "occupiedSlots" : 2,
+        "totalQuantity" : 51,
+        "positiveDeltaFromStart" : 0
+      },
+      "nearbyNpcs" : [ {
+        "distance" : 1,
+        "name" : "Rod Fishing spot",
+        "plane" : 0,
+        "x" : 3100,
+        "y" : 3430
+      } ],
+      "visibleTarget" : true,
+      "requiredSupplies" : true,
+      "legalActionIds" : [ "WAIT", "INTERACT_NPC_LURE" ]
+    },
+    "absoluteSnapshotReason" : "EACH_ACCEPTED_TICK",
+    "absoluteSnapshotCadence" : 1,
+    "sparseDeltas" : [ ],
+    "contentHash" : "7105b16f81087ad0b40f5e081835cf6c7db0240bdbf28a4b1e1e64978a5abe36"
+  }, {
+    "schemaVersion" : 3,
+    "type" : "TICK_BATCH",
+    "batchId" : "test-3",
+    "sessionId" : "00000000-0000-4000-8000-000000000001",
+    "tick" : 3,
+    "playerState" : {
+      "worldX" : 3100,
+      "worldY" : 3431,
+      "animationId" : 623,
+      "isIdle" : false,
+      "plane" : 0,
+      "isMoving" : false
+    },
+    "inventory" : [ {
+      "quantity" : 1,
+      "slot" : 0,
+      "itemId" : 309
+    }, {
+      "quantity" : 50,
+      "slot" : 1,
+      "itemId" : 314
+    } ],
+    "equipment" : [ ],
+    "threats" : [ ],
+    "projectiles" : [ ],
+    "cooldowns" : { },
+    "npcs" : [ {
+      "x" : 3100,
+      "y" : 3430,
+      "npcId" : 1526,
+      "plane" : 0,
+      "fishingSpot" : true,
+      "index" : 7,
+      "stableId" : "npc:1526:3100:3430:0"
+    } ],
+    "gameObjects" : [ ],
+    "groundObjects" : [ ],
+    "groundItems" : [ ],
+    "quest" : { },
+    "questHelper" : { },
+    "humanCapture" : {
+      "schema" : "human-fishing-observation/v1",
+      "sessionId" : "00000000-0000-4000-8000-000000000001",
+      "producerId" : "0c0fc6ee-3f92-49ff-acc4-26714e19ca38",
+      "tick" : 3,
+      "terminal" : true,
+      "observedCallbacks" : 1,
+      "acceptedIntents" : 1,
+      "pendingCount" : 0,
+      "dropped" : 0,
+      "issues" : [ ],
+      "actions" : [ ],
+      "semanticSnapshot" : {
+        "inventory" : {
+          "occupiedSlots" : 2,
+          "totalQuantity" : 51,
+          "positiveDeltaFromStart" : 0
+        },
+        "nearbyNpcs" : [ {
+          "distance" : 1,
+          "name" : "Rod Fishing spot",
+          "plane" : 0,
+          "x" : 3100,
+          "y" : 3430
+        } ],
+        "visibleTarget" : true,
+        "requiredSupplies" : true,
+        "legalActionIds" : [ "WAIT", "INTERACT_NPC_LURE" ]
+      }
+    },
+    "activePluginClasses" : [ ],
+    "runId" : "00000000-0000-4000-8000-000000000002",
+    "sequence" : 3,
+    "producerEpoch" : "04697583-04a6-4a50-822c-83185836e772",
+    "runContext" : {
+      "allocationId" : "allocationId",
+      "executorId" : "executorId",
+      "clientInstanceId" : "clientInstanceId",
+      "taskKey" : "FISHING_TRAINING",
+      "behaviorProfileId" : "behaviorProfileId",
+      "behaviorProfileVersion" : "1",
+      "catalogHash" : "catalogHash",
+      "settingsHash" : "settingsHash"
+    },
+    "semanticContractDigest" : "sha256:6d94438f281684af3f52ee57ead6e5f03b3d98d892241da6db300a4e9868d9f0",
+    "privacy" : {
+      "policyVersion" : "authored-test-v1",
+      "redactedFields" : [ ]
+    },
+    "taskState" : {
+      "stage" : "UNKNOWN",
+      "stageRevision" : 0,
+      "progressRevision" : 0,
+      "terminalState" : null
+    },
+    "semanticEvents" : [ ],
+    "quality" : {
+      "producerVersion" : "micro6-human-fishing-observer-v1",
+      "adapterVersion" : "human-fishing-observation-adapter-v1",
+      "expected" : 0,
+      "observed" : 0,
+      "unknown" : 0,
+      "dropped" : 0,
+      "gapRanges" : [ ],
+      "captureLimitations" : [ "Manual origin is operator-declared; no hardware-origin attestation", "Client lure observation only; no script/provider intent or oracle fidelity claim" ],
+      "unsupportedFamilies" : [ ],
+      "eventFamilyCounters" : {
+        "CLIENT_EVENT" : 0,
+        "TICK_OBSERVATION" : 1
+      }
+    },
+    "semanticSnapshot" : {
+      "inventory" : {
+        "occupiedSlots" : 2,
+        "totalQuantity" : 51,
+        "positiveDeltaFromStart" : 0
+      },
+      "nearbyNpcs" : [ {
+        "distance" : 1,
+        "name" : "Rod Fishing spot",
+        "plane" : 0,
+        "x" : 3100,
+        "y" : 3430
+      } ],
+      "visibleTarget" : true,
+      "requiredSupplies" : true,
+      "legalActionIds" : [ "WAIT", "INTERACT_NPC_LURE" ]
+    },
+    "absoluteSnapshotReason" : "EACH_ACCEPTED_TICK",
+    "absoluteSnapshotCadence" : 1,
+    "sparseDeltas" : [ ],
+    "contentHash" : "ec8ac01c30ee1b2356b6ed931142d0134505668e6419a39918ec96be1e2997df"
+  } ]
+}

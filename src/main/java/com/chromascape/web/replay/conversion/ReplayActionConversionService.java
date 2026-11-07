@@ -59,6 +59,19 @@ public class ReplayActionConversionService {
   private final TickSnapshotRepository snapshotRepository;
   private final ObjectMapper objectMapper;
   private final CanonicalProjectionService canonicalProjection;
+  private HumanFishingActionReader humanFishing;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public ReplayActionConversionService(
+      ReplayRecordingActionRepository typedRepository,
+      TickLogRepository logRepository,
+      TickSnapshotRepository snapshotRepository,
+      ObjectMapper objectMapper,
+      CanonicalProjectionService canonicalProjection,
+      HumanFishingActionReader humanFishing) {
+    this(typedRepository, logRepository, snapshotRepository, objectMapper, canonicalProjection);
+    this.humanFishing = humanFishing;
+  }
 
   public ReplayActionConversionService(
       ReplayRecordingActionRepository typedRepository,
@@ -83,6 +96,10 @@ public class ReplayActionConversionService {
       throw new IllegalArgumentException("Invalid conversion tick range");
     }
     ConversionMode mode = requestedMode == null ? ConversionMode.AUTO : requestedMode;
+    if (humanFishing != null && mode != ConversionMode.LEGACY_BEST_EFFORT) {
+      var observed = humanFishing.convert(sessionId, startTick, endTick, mode);
+      if (observed.isPresent()) return observed.get();
+    }
 
     List<ReplayRecordingAction> typed =
         typedRepository.findBySessionIdAndTickBetweenOrderByTickAscSequenceAsc(
@@ -496,7 +513,8 @@ public class ReplayActionConversionService {
             new ReplayApproximation(
                 snapshot.getTick(),
                 "LEGACY_MOVEMENT_ROUTE_INCOMPLETE",
-                "WALK_TO was inferred from a snapshot delta; intermediate route and dispatch are unknown",
+                "WALK_TO was inferred from a snapshot delta; intermediate route and dispatch are"
+                    + " unknown",
                 ActionProvenance.INFERRED,
                 snapshot.getId()));
         if (Math.max(Math.abs(current.x() - previous.x()), Math.abs(current.y() - previous.y()))

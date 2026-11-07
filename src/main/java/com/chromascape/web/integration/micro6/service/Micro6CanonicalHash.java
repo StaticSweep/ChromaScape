@@ -89,6 +89,13 @@ public final class Micro6CanonicalHash {
    * sorted normalized aliases — mirroring Micro6 exactly.
    */
   static String catalogHash(JsonNode payload, String defaultCapabilityVersion) {
+    // SC-572 producers publish CanonicalCatalogModel (including settings), while older
+    // CatalogV2Publication producers publish the summary model below. Accept either
+    // only after recomputing its complete canonical projection; never trust an attested hash.
+    String canonicalModelHash = canonicalModelCatalogHash(payload, defaultCapabilityVersion);
+    if (canonicalModelHash.equals(text(payload.get("catalog_hash")))) {
+      return canonicalModelHash;
+    }
     String catalogVersion =
         firstNonBlank(text(payload.get("catalog_version")), text(payload.get("version")), "2");
     String capabilityVersion =
@@ -137,6 +144,72 @@ public final class Micro6CanonicalHash {
     return sha256WithPrefix(stable);
   }
 
+  static boolean hasVerifiedCanonicalModel(JsonNode payload) {
+    return canonicalModelCatalogHash(payload, DEFAULT_CAPABILITY_VERSION)
+        .equals(text(payload.get("catalog_hash")));
+  }
+
+  private static String canonicalModelCatalogHash(JsonNode payload, String capabilityVersion) {
+    Set<String> fields =
+        Set.of(
+            "key",
+            "task_key",
+            "name",
+            "display_name",
+            "category",
+            "category_family",
+            "enabled",
+            "runnable",
+            "task_type",
+            "type",
+            "target_enum",
+            "search_aliases",
+            "args_schema",
+            "settings_schema_version",
+            "supports_task_metadata",
+            "stability_tier",
+            "tags",
+            "membership",
+            "primary_skill",
+            "description",
+            "certification_allowed");
+    List<Map<String, Object>> tasks = new ArrayList<>();
+    for (JsonNode task : payload.path("tasks")) {
+      if (!task.isObject()) continue;
+      Map<String, Object> stableTask = new LinkedHashMap<>();
+      for (String key : fields) {
+        if (task.hasNonNull(key)) stableTask.put(key, nodeValue(task.get(key)));
+      }
+      tasks.add(stableTask);
+    }
+    tasks.sort(
+        Comparator.comparing(
+            row -> String.valueOf(row.getOrDefault("task_key", row.getOrDefault("key", "")))));
+    List<Map<String, Object>> aliases = new ArrayList<>();
+    for (JsonNode alias : payload.path("aliases")) {
+      if (!alias.isObject() || !alias.hasNonNull("alias") || !alias.hasNonNull("task_key"))
+        continue;
+      Map<String, Object> entry = new LinkedHashMap<>();
+      entry.put("alias", nodeValue(alias.get("alias")));
+      entry.put("task_key", nodeValue(alias.get("task_key")));
+      aliases.add(entry);
+    }
+    aliases.sort(Comparator.comparing(row -> String.valueOf(row.get("alias"))));
+    Map<String, Object> model = new LinkedHashMap<>();
+    model.put(
+        "catalog_version",
+        firstNonBlank(text(payload.get("catalog_version")), text(payload.get("version")), "2"));
+    model.put(
+        "capability_version",
+        firstNonBlank(
+            text(payload.get("capability_version")),
+            capabilityVersion,
+            DEFAULT_CAPABILITY_VERSION));
+    model.put("tasks", tasks);
+    model.put("aliases", aliases);
+    return sha256WithPrefix(model);
+  }
+
   /**
    * Recomputes the schema bundle exactly as {@code CatalogV2Publication.schemaBundleHash}: only
    * tasks with an object {@code args_schema} participate, and their published schema fields are
@@ -149,6 +222,15 @@ public final class Micro6CanonicalHash {
     JsonNode tasksNode = payload.get("tasks");
     if (tasksNode == null || !tasksNode.isArray() || tasksNode.isEmpty()) {
       return null;
+    }
+    // SC-663 producers bind schema state into the bundle, while earlier canonical-model producers
+    // publish the projection below. Accept either only after recomputing it in full, as for the
+    // catalog hash above; never trust an attested hash.
+    if (hasVerifiedCanonicalModel(payload)) {
+      String stateBound = canonicalModelSchemaBundleHash(tasksNode, catalogHash);
+      if (stateBound != null && stateBound.equals(text(payload.get("schema_bundle_hash")))) {
+        return stateBound;
+      }
     }
     List<Map<String, Object>> schemaTasks = new ArrayList<>();
     for (JsonNode task : tasksNode) {
@@ -173,6 +255,49 @@ public final class Micro6CanonicalHash {
     }
     schemaTasks.sort(Comparator.comparing(row -> String.valueOf(row.get("task_key"))));
 
+    Map<String, Object> bundle = new LinkedHashMap<>();
+    bundle.put("catalog_hash", catalogHash);
+    bundle.put("tasks", schemaTasks);
+    return sha256WithPrefix(bundle);
+  }
+
+  /**
+   * Recomputes the bundle exactly as an SC-663 {@code CatalogV2Publication.schemaBundleHash}: every
+   * task participates, carries its {@code settings_schema_state}, and adds only that state's fields.
+   */
+  private static String canonicalModelSchemaBundleHash(JsonNode tasksNode, String catalogHash) {
+    List<Map<String, Object>> schemaTasks = new ArrayList<>();
+    for (JsonNode task : tasksNode) {
+      if (task == null || !task.isObject()) {
+        continue;
+      }
+      Map<String, Object> entry = new LinkedHashMap<>();
+      entry.put("task_key", nodeValue(task.get("task_key")));
+      String state = text(task.get("settings_schema_state"));
+      entry.put("settings_schema_state", state);
+      if ("AVAILABLE".equals(state)) {
+        entry.put("settings_schema_version", nodeValue(task.get("settings_schema_version")));
+        entry.put("settings_schema_hash", nodeValue(task.get("settings_schema_hash")));
+        entry.put("args_schema", nodeValue(canonicalizeSchema(task.get("args_schema"))));
+      } else if ("NOT_APPLICABLE".equals(state)) {
+        entry.put(
+            "schema_not_applicable_reason", nodeValue(task.get("schema_not_applicable_reason")));
+      } else if ("ERROR".equals(state)) {
+        entry.put("schema_error_reason", nodeValue(task.get("schema_error_reason")));
+        List<String> errors = new ArrayList<>();
+        JsonNode rawErrors = task.get("schema_validation_errors");
+        if (rawErrors != null && rawErrors.isArray()) {
+          rawErrors.forEach(error -> errors.add(text(error)));
+        }
+        errors.sort(Comparator.naturalOrder());
+        entry.put("schema_validation_errors", errors);
+      }
+      schemaTasks.add(entry);
+    }
+    if (schemaTasks.isEmpty()) {
+      return null;
+    }
+    schemaTasks.sort(Comparator.comparing(row -> String.valueOf(row.get("task_key"))));
     Map<String, Object> bundle = new LinkedHashMap<>();
     bundle.put("catalog_hash", catalogHash);
     bundle.put("tasks", schemaTasks);

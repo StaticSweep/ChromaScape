@@ -24,6 +24,113 @@ import org.junit.jupiter.api.Test;
 class RecordingServiceRoundTripTest {
 
   @Test
+  void automaticDurationStopPublishesIndexFromRealDispatchThread() throws Exception {
+    var output = Files.createTempDirectory("auto-stop-index");
+    var config = new RecordingConfig();
+    config.setEnabled(true);
+    config.setOutputDirectory(output.toString());
+    config.setMinCaptureWidth(16);
+    config.setMinCaptureHeight(16);
+    config.setStabilityWindowMs(0);
+    config.setMaxDurationMinutes(1);
+    var captureConfig = new UnifiedCaptureConfig();
+    captureConfig.setEnabled(true);
+    captureConfig.setFps(5);
+    var capture = mock(WindowFrameCapture.class);
+    when(capture.captureEvent())
+        .thenAnswer(call -> event(binding(), Color.GREEN, System.nanoTime()));
+    var unified = new UnifiedFrameCaptureService(captureConfig, capture);
+    var service = new RecordingService(config, captureConfig, unified, capture);
+    try {
+      String id = service.startRecording();
+      // Expire only the duration guard; no wall-clock change or minute-long sleep.
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          service, "recordingStartTime", System.currentTimeMillis() - 60_001L);
+      Path video = output.resolve(id + ".mp4");
+      Path sidecar = MeasuredVideoIndex.sidecar(video);
+      long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(12);
+      while (!Files.exists(sidecar) && System.nanoTime() < deadline) Thread.sleep(20);
+      assertThat(service.isActive()).isFalse();
+      assertThat(sidecar).exists();
+      // This virtual elapsed-time injection may mark a clock reset; it must still
+      // finalize honest index bytes rather than interrupting the owning callback.
+      assertThat(MeasuredVideoIndex.read(video, id).frames()).isNotEmpty();
+    } finally {
+      service.cleanup();
+    }
+  }
+
+  @Test
+  void burstInOneCaptureSlotDoesNotStretchTheMediaTimeline() throws Exception {
+    RecordingConfig config = new RecordingConfig();
+    config.setEnabled(true);
+    config.setMinCaptureWidth(16);
+    config.setMinCaptureHeight(16);
+    config.setStabilityWindowMs(0);
+    config.setOutputDirectory(Files.createTempDirectory("calibrated-burst").toString());
+    UnifiedCaptureConfig captureConfig = new UnifiedCaptureConfig();
+    captureConfig.setEnabled(true);
+    captureConfig.setFps(10);
+    WindowFrameCapture capture = mock(WindowFrameCapture.class);
+    when(capture.captureEvent()).thenAnswer(call -> event(binding(), Color.RED, System.nanoTime()));
+    RecordingService service =
+        new RecordingService(
+            config, captureConfig, mock(UnifiedFrameCaptureService.class), capture);
+    try {
+      String id = service.startRecording();
+      long origin =
+          (long)
+              org.springframework.test.util.ReflectionTestUtils.getField(
+                  service, "recordingStartTimeNano");
+      FrameEvent burst = event(binding(), Color.GREEN, origin + 1_000_000);
+      for (int i = 0; i < 1000; i++) service.onFrameCaptured(burst);
+      Thread.sleep(120);
+      service.onFrameCaptured(event(binding(), Color.BLUE, System.nanoTime()));
+      var metadata = service.stopRecording();
+      assertThat(metadata).isNotNull();
+      var index = MeasuredVideoIndex.read(Path.of(metadata.getFilePath()), id);
+      assertThat(index.mediaDurationMicros())
+          .isLessThanOrEqualTo((metadata.getDuration() + 200) * 1000);
+      assertThat(index.frames().size()).isLessThan(100);
+      assertThat(metadata.getFrameCount()).isEqualTo(index.frames().size());
+    } finally {
+      service.cleanup();
+    }
+  }
+
+  @Test
+  void failedReleaseRefusesAnotherStartAndRetainsMedia() throws Exception {
+    Path output = Files.createTempDirectory("recorder-release-failure");
+    Path media = Files.writeString(output.resolve("previous.mp4"), "preserve-existing-media");
+    RecordingConfig config = new RecordingConfig();
+    config.setEnabled(true);
+    config.setOutputDirectory(output.toString());
+    config.setMinCaptureWidth(16);
+    config.setMinCaptureHeight(16);
+    config.setStabilityWindowMs(0);
+    RecordingService service =
+        new RecordingService(
+            config,
+            new UnifiedCaptureConfig(),
+            mock(UnifiedFrameCaptureService.class),
+            mock(WindowFrameCapture.class));
+    var nativeRecorder = mock(org.bytedeco.javacv.FFmpegFrameRecorder.class);
+    org.mockito.Mockito.doThrow(new RuntimeException("release failed")).when(nativeRecorder).stop();
+    org.springframework.test.util.ReflectionTestUtils.setField(service, "recorder", nativeRecorder);
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        service, "encoderFuture", java.util.concurrent.CompletableFuture.completedFuture(null));
+    try {
+      org.assertj.core.api.Assertions.assertThatThrownBy(service::startRecording)
+          .hasMessageContaining("not finalized");
+      assertThat(org.springframework.test.util.ReflectionTestUtils.getField(service, "recorder"))
+          .isSameAs(nativeRecorder);
+      assertThat(Files.readString(media)).isEqualTo("preserve-existing-media");
+    } finally {
+      service.cleanup();
+    }
+  }
+
+  @Test
   void encoderTimeoutDoesNotCloseOwnedNativeRecorderOrPublishSuccess() throws Exception {
     RecordingConfig config = new RecordingConfig();
     config.setEnabled(true);
@@ -68,8 +175,19 @@ class RecordingServiceRoundTripTest {
         .thenAnswer(invocation -> event(binding, Color.RED, System.nanoTime()));
     RecordingService service = new RecordingService(config, captureConfig, unified, capture);
 
+    // Reproduce the state after a stop timed out, then its encoder drained later.
+    var previousRecorder = mock(org.bytedeco.javacv.FFmpegFrameRecorder.class);
+    Path previousMedia = Files.writeString(output.resolve("previous.mp4"), "retained-media");
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        service, "recorder", previousRecorder);
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        service, "encoderFuture", java.util.concurrent.CompletableFuture.completedFuture(null));
+
     try {
       String recordingId = service.startRecording(RecordingTriggerSource.MANUAL);
+      verify(previousRecorder).stop();
+      verify(previousRecorder).release();
+      assertThat(Files.readString(previousMedia)).isEqualTo("retained-media");
       Thread.sleep(120);
       service.onFrameCaptured(event(binding, Color.GREEN, System.nanoTime()));
       Thread.sleep(120);

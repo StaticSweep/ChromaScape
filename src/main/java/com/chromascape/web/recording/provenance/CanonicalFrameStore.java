@@ -67,7 +67,9 @@ public class CanonicalFrameStore {
     input.path("semanticEvents").forEach(event -> incomingIds.add(event.path("eventId").asText()));
     if (!incomingIds.isEmpty()
         && jdbc.queryForObject(
-                "SELECT count(*) FROM recording_tick_frames f WHERE session_id=? AND EXISTS (SELECT 1 FROM jsonb_array_elements(f.frame->'semanticEvents') event WHERE event->>'eventId'=ANY(string_to_array(?,',')))",
+                "SELECT count(*) FROM recording_tick_frames f WHERE session_id=? AND EXISTS (SELECT"
+                    + " 1 FROM jsonb_array_elements(f.frame->'semanticEvents') event WHERE"
+                    + " event->>'eventId'=ANY(string_to_array(?,',')))",
                 Long.class,
                 session,
                 String.join(",", incomingIds))
@@ -86,7 +88,18 @@ public class CanonicalFrameStore {
       summary.put(field, addChecked(summary.path(field).asLong(), quality.path(field).asLong()));
     for (String field : new String[] {"gapRanges", "unsupportedFamilies", "captureLimitations"}) {
       var array = summary.withArray(field);
-      for (JsonNode item : quality.path(field)) array.add(item.deepCopy());
+      for (JsonNode item : quality.path(field)) {
+        if (!field.equals("gapRanges")) {
+          boolean present = false;
+          for (JsonNode priorItem : array)
+            if (priorItem.equals(item)) {
+              present = true;
+              break;
+            }
+          if (present) continue;
+        }
+        array.add(item.deepCopy());
+      }
       if (array.size() > 4096) throw new ProvenanceException("QUALITY_QUEUE_LIMIT");
     }
     ObjectNode counters = summary.withObject("eventFamilyCounters");
@@ -103,17 +116,50 @@ public class CanonicalFrameStore {
         .put("producerVersion", quality.path("producerVersion").asText())
         .put("adapterVersion", quality.path("adapterVersion").asText());
     summary.put("lastObservedSequence", frame.sequence().toString());
+    if (HumanFishingFrameContract.applies(input)) {
+      String observer = input.path("humanCapture").path("producerId").asText();
+      JsonNode capture = input.path("humanCapture");
+      if (!summary.has("humanObserverId")
+          || observer.equals(summary.path("humanObserverId").asText())) {
+        if (capture.path("acceptedIntents").asLong()
+                != summary.path("lastHumanAccepted").asLong() + capture.path("actions").size()
+            || capture.path("observedCallbacks").asLong()
+                < summary.path("lastHumanCallbacks").asLong()
+            || summary.path("lastHumanTerminal").asBoolean())
+          throw new ProvenanceException("HUMAN_COVERAGE_COUNTER_MISMATCH");
+      }
+      if (summary.has("lastHumanTick")
+          && input.path("tick").asLong() != summary.path("lastHumanTick").asLong() + 1) {
+        summary.put("unknown", addChecked(summary.path("unknown").asLong(), 1));
+        summary.withArray("unsupportedFamilies").add("HUMAN_TICK_GAP");
+      }
+      if (summary.has("humanObserverId")
+          && !observer.equals(summary.path("humanObserverId").asText())) {
+        summary.put("unknown", addChecked(summary.path("unknown").asLong(), 1));
+        summary.withArray("unsupportedFamilies").add("HUMAN_OBSERVER_RESTART");
+      }
+      summary.put("humanObserverId", observer);
+      summary.put("lastHumanAccepted", capture.path("acceptedIntents").asLong());
+      summary.put("lastHumanCallbacks", capture.path("observedCallbacks").asLong());
+      summary.put("lastHumanTick", input.path("tick").asLong());
+      summary.put("lastHumanPending", input.path("humanCapture").path("pendingCount").asLong());
+      summary.put("lastHumanTerminal", input.path("humanCapture").path("terminal").asBoolean());
+    }
     if (!summary.has("firstObservedSequence"))
       summary.put("firstObservedSequence", frame.sequence().toString());
     jdbc.update(
-        "INSERT INTO recording_tick_frames(session_id,sequence,producer_epoch,content_hash,frame,accepted_at) VALUES(?,?,?::uuid,?,?::jsonb,now())",
+        "INSERT INTO"
+            + " recording_tick_frames(session_id,sequence,producer_epoch,content_hash,frame,accepted_at)"
+            + " VALUES(?,?,?::uuid,?,?::jsonb,now())",
         session,
         new java.math.BigDecimal(frame.sequence()),
         input.path("producerEpoch").asText(),
         frame.digest(),
         frame.payload().toString());
     jdbc.update(
-        "INSERT INTO recording_capture_quality(session_id,quality,updated_at) VALUES(?,?::jsonb,now()) ON CONFLICT(session_id) DO UPDATE SET quality=excluded.quality,updated_at=now()",
+        "INSERT INTO recording_capture_quality(session_id,quality,updated_at)"
+            + " VALUES(?,?::jsonb,now()) ON CONFLICT(session_id) DO UPDATE SET"
+            + " quality=excluded.quality,updated_at=now()",
         session,
         summary.toString());
     return new Receipt(frame.sequence().toString(), true, frame.payload());
@@ -125,7 +171,8 @@ public class CanonicalFrameStore {
         "SELECT pg_advisory_xact_lock(hashtextextended(?,609))", Object.class, "frame:" + session);
     var rows =
         jdbc.queryForList(
-            "SELECT quality::text FROM recording_capture_quality WHERE session_id=? AND finalized=false",
+            "SELECT quality::text FROM recording_capture_quality WHERE session_id=? AND"
+                + " finalized=false",
             String.class,
             session);
     if (rows.isEmpty()) {
@@ -144,17 +191,25 @@ public class CanonicalFrameStore {
       quality.putArray("gapRanges");
       quality.putArray("unsupportedFamilies").add("CAPTURE_NOT_OBSERVED");
       jdbc.update(
-          "INSERT INTO recording_capture_quality(session_id,quality,finalized,updated_at) VALUES(?,?::jsonb,true,now())",
+          "INSERT INTO recording_capture_quality(session_id,quality,finalized,updated_at)"
+              + " VALUES(?,?::jsonb,true,now())",
           session,
           quality.toString());
       return;
     }
     ObjectNode quality = (ObjectNode) parse(rows.get(0));
     quality.put("closure", cause);
+    if (quality.has("humanObserverId")
+        && (!quality.path("lastHumanTerminal").asBoolean()
+            || quality.path("lastHumanPending").asLong(-1) != 0)) {
+      quality.put("unknown", addChecked(quality.path("unknown").asLong(), 1));
+      quality.withArray("unsupportedFamilies").add("HUMAN_TERMINAL_UNPROVEN");
+    }
     if (!"EXPLICIT_STOP".equals(cause))
       quality.put("unknown", addChecked(quality.path("unknown").asLong(), 1));
     jdbc.update(
-        "UPDATE recording_capture_quality SET quality=?::jsonb,finalized=true,updated_at=now() WHERE session_id=?",
+        "UPDATE recording_capture_quality SET quality=?::jsonb,finalized=true,updated_at=now()"
+            + " WHERE session_id=?",
         quality.toString(),
         session);
   }
@@ -180,7 +235,9 @@ public class CanonicalFrameStore {
     quality.withArray("gapRanges");
     quality.withArray("unsupportedFamilies");
     jdbc.update(
-        "INSERT INTO recording_capture_quality(session_id,quality,updated_at) VALUES(?,?::jsonb,now()) ON CONFLICT(session_id) DO UPDATE SET quality=excluded.quality,updated_at=now()",
+        "INSERT INTO recording_capture_quality(session_id,quality,updated_at)"
+            + " VALUES(?,?::jsonb,now()) ON CONFLICT(session_id) DO UPDATE SET"
+            + " quality=excluded.quality,updated_at=now()",
         session,
         quality.toString());
   }
@@ -194,7 +251,8 @@ public class CanonicalFrameStore {
     if (context == null) throw new ProvenanceException("RUN_CONTEXT_REQUIRED");
     return jdbc
         .queryForList(
-            "SELECT frame::text FROM recording_tick_frames WHERE session_id=? AND sequence>? ORDER BY sequence LIMIT ?",
+            "SELECT frame::text FROM recording_tick_frames WHERE session_id=? AND sequence>? ORDER"
+                + " BY sequence LIMIT ?",
             String.class,
             context.path("debugSessionId").asText(),
             new java.math.BigDecimal(after),
@@ -210,7 +268,8 @@ public class CanonicalFrameStore {
     if (context == null) throw new ProvenanceException("RUN_CONTEXT_REQUIRED");
     var values =
         jdbc.queryForList(
-            "SELECT frame::text FROM recording_tick_frames WHERE session_id=? AND (frame->>'tick')::bigint=? LIMIT 2",
+            "SELECT frame::text FROM recording_tick_frames WHERE session_id=? AND"
+                + " (frame->>'tick')::bigint=? LIMIT 2",
             String.class,
             context.path("debugSessionId").asText(),
             tick);

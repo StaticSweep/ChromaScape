@@ -567,7 +567,8 @@ public class TickReplayController {
       response.put("hasAnyLogs", hasAnyLogs);
 
       log.debug(
-          "Unified timeline sync for {} at {}ms ({}): returned {} standard logs + {} tick logs = {} total",
+          "Unified timeline sync for {} at {}ms ({}): returned {} standard logs + {} tick logs = {}"
+              + " total",
           recordingId,
           videoTimeMs,
           scopeMode,
@@ -646,7 +647,11 @@ public class TickReplayController {
         recordingEnabled = true;
       }
 
-      String recorderClientId = manualRecordingCoordinator.selectRecorder(request.getSessionId());
+      String recorderClientId =
+          request.getRecorderConnectionId() == null
+              ? manualRecordingCoordinator.selectRecorder(request.getSessionId())
+              : manualRecordingCoordinator.selectRecorder(
+                  request.getSessionId(), request.getRecorderConnectionId());
       started =
           debugSessionService.startSessionWithOutcome(
               accountName,
@@ -658,8 +663,18 @@ public class TickReplayController {
               request.getTaskArgs(),
               request.getRunContext());
       SessionStartResponse response = started.response();
-      manualRecordingCoordinator.startAndAwaitTick(
-          recorderClientId, response.getSessionId(), scriptName);
+      if (request.getRunContext() == null || request.getRunContext().isNull()) {
+        manualRecordingCoordinator.startAndAwaitTick(
+            recorderClientId, response.getSessionId(), scriptName);
+      } else {
+        manualRecordingCoordinator.startAndAwaitTick(
+            recorderClientId,
+            response.getSessionId(),
+            scriptName,
+            request.getTaskKey(),
+            request.getTaskArgs(),
+            request.getRunContext());
+      }
 
       log.info(
           "Started recording via replay page: sessionId={}, recordingId={}",
@@ -1136,7 +1151,8 @@ public class TickReplayController {
         error.put("error", "No tick data available for this recording");
         error.put(
             "message",
-            "This recording was made before tick tracking was enabled. Only video playback is available.");
+            "This recording was made before tick tracking was enabled. Only video playback is"
+                + " available.");
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
             .headers(deprecatedTickCardHeaders(recordingId))
             .body(error);
@@ -1708,6 +1724,16 @@ public class TickReplayController {
 
   /** Request DTO for starting a recording. */
   public static class RecordingStartRequest {
+    private String recorderConnectionId;
+
+    public String getRecorderConnectionId() {
+      return recorderConnectionId;
+    }
+
+    public void setRecorderConnectionId(String value) {
+      recorderConnectionId = value;
+    }
+
     private String taskKey;
     private com.fasterxml.jackson.databind.JsonNode taskArgs;
     private com.fasterxml.jackson.databind.JsonNode runContext;

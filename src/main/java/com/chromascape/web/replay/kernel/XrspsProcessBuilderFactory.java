@@ -46,9 +46,25 @@ public final class XrspsProcessBuilderFactory {
           "Offline worker isolation is unavailable",
           "Run workers on an approved Linux host with bubblewrap and unprivileged namespaces");
     }
+    // OS resource ceilings are applied by prlimit before bwrap and inherited by the worker. A host
+    // that cannot apply them refuses to launch; there is no unbounded fallback. The ceilings are
+    // CPU seconds, open files, largest file written and no core dumps. Node's V8 heap is bounded
+    // below because an address-space limit is incompatible with V8's reservations.
+    Path limiter = Path.of("/usr/bin/prlimit");
+    if (!Files.isExecutable(limiter)) {
+      throw unavailable(
+          "Offline worker resource limits are unavailable",
+          "Install util-linux prlimit on the approved Linux worker host");
+    }
     var command = new java.util.ArrayList<String>();
     java.util.Collections.addAll(
         command,
+        limiter.toString(),
+        "--cpu=" + config.getCpuLimitSeconds(),
+        "--nofile=" + config.getMaxOpenFiles(),
+        "--fsize=" + config.getMaxFileBytes(),
+        "--core=0",
+        "--",
         isolation.toString(),
         "--unshare-all",
         "--new-session",
@@ -89,6 +105,10 @@ public final class XrspsProcessBuilderFactory {
           command, "--ro-bind", config.getExecutable(), config.getExecutable());
     java.util.Collections.addAll(command, "--chdir", workRoot.toString(), "--");
     command.add(config.getExecutable());
+    String executableName = Path.of(config.getExecutable()).getFileName().toString();
+    if (executableName.equals("node") || executableName.equals("nodejs")) {
+      command.add("--max-old-space-size=" + config.getMaxHeapMb());
+    }
     command.add(config.getEntrypoint());
     command.add(mode);
 

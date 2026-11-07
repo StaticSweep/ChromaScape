@@ -61,6 +61,9 @@ public class FishingDatasetBuilderService {
   @Value("${ai-player.dataset.output-dir:.chromascape/datasets}")
   private String outputDir;
 
+  @Value("${artifacts.durability-mode:strict}")
+  private String durabilityMode = "strict";
+
   @Value("${features.ai-player.enabled:false}")
   private boolean aiPlayerEnabled;
 
@@ -379,6 +382,16 @@ public class FishingDatasetBuilderService {
         throw new PrototypeApiException(
             HttpStatus.CONFLICT, "MODEL_ARTIFACT_INVALID", "Artifact is not a model");
       return objectMapper.readValue(store().read(ARTIFACT_OWNER, modelId), FishingModel.class);
+    } catch (org.springframework.web.server.ResponseStatusException e) {
+      // A missing registry reference is the stable MODEL_NOT_FOUND contract for callers. Other
+      // registry faults (corruption, quarantine, unavailable storage) keep their storage status.
+      if (HttpStatus.NOT_FOUND.equals(e.getStatusCode()))
+        throw new PrototypeApiException(
+            HttpStatus.NOT_FOUND,
+            "MODEL_NOT_FOUND",
+            "No registered model artifact exists for modelId " + modelId,
+            Map.of("modelId", modelId));
+      throw e;
     } catch (IOException e) {
       throw new PrototypeApiException(
           HttpStatus.INTERNAL_SERVER_ERROR,
@@ -395,7 +408,9 @@ public class FishingDatasetBuilderService {
             Path.of(outputDir).resolve("artifacts"),
             maxArtifactBytes,
             artifactQuotaBytes,
-            objectMapper);
+            objectMapper,
+            ImmutableArtifactStore.DurabilityMode.valueOf(
+                durabilityMode.trim().toUpperCase(java.util.Locale.ROOT)));
   }
 
   private Map<String, String> artifactLineage(RecordingContext ctx) {

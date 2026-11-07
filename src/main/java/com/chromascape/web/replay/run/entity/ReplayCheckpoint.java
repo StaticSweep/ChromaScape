@@ -47,9 +47,10 @@ public class ReplayCheckpoint {
   private String chainHash;
 
   /**
-   * SC-275 bound restore context document (JSON), binding snapshot digest, causal state digest,
-   * tick, ordinal, and predecessor chain hash. Null for historical rows, which restore through the
-   * legacy path guard.
+   * Version-discriminated restore context (JSON): SC-275 causal-v2 bindings require a CHAIN
+   * artifact; xrsps-native-checkpoint-context/v1 binds the Java-accepted prefix independently of
+   * the native snapshot and never fabricates a CHAIN artifact. Historical unbound native rows are
+   * refused.
    */
   @Column(name = "restore_context", columnDefinition = "TEXT")
   private String restoreContext;
