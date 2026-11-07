@@ -95,3 +95,13 @@ content revision was silently kept, and region identity was not part of the init
 Two gaps are reported rather than implemented: G1 (no hidden-state requirement — timers, varps,
 RNG, quest) and G4 (no Mule/coordination interval concept). Both need a contract decision before
 `simulationBlockedReasons()` can claim causal completeness.
+
+## 7 November 2026: retained rows on the genuine capture
+
+| Row | Status | Evidence |
+|---|---|---|
+| Capture | CLOSED: `recording_cf368b42`, 20/20, ELIGIBLE | `capture\capture-verification.json` |
+| 5 genuine half | CLOSED: both recordings, 0 writes, flags identical | `acceptance\row5-genuine-20261107.json` |
+| Output | Present with provenance or named blockers | `output-completeness-20261107.md` |
+
+Merge and closure remain owner decisions. See `final-evidence-20261107.md`.
