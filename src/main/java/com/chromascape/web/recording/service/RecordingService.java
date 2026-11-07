@@ -177,12 +177,7 @@ public class RecordingService implements FrameListener {
       RecordingTriggerSource trigger,
       String accountId,
       String taskName) {
-    if (expectedRecordingId == null
-        || expectedRecordingId.isBlank()
-        || !expectedRecordingId.matches("[A-Za-z0-9][A-Za-z0-9._:-]{0,159}")) {
-      throw new IllegalArgumentException(
-          "A valid preapproved recordingId is required (got " + expectedRecordingId + ")");
-    }
+    RecordingIdPolicy.require(expectedRecordingId, "preapproved recordingId");
     if (recording.get()) {
       if (expectedRecordingId.equals(currentRecordingId)) {
         // Idempotent restart of the exact same recording: report its live start facts.

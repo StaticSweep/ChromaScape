@@ -57,6 +57,77 @@ class BootstrapApprovalStorePostgresTest {
   }
 
   @Test
+  void aSubMillisecondExpiryIsNormalizedInsteadOfFailingTheDatabase() {
+    String scope = "sha256:" + "7".repeat(64);
+    String fingerprint = "sha256:" + "8".repeat(64);
+    Instant now = CLOCK.instant();
+    // 500 microseconds ahead is strictly valid, and is exactly the window the old code stored at or
+    // before approved_at and then lost to the strict expiry constraint.
+    var claim =
+        store.create(
+            "session-precise",
+            "turn-precise",
+            "orch-precise-1",
+            "req-precise-1",
+            "rec-precise-1",
+            fingerprint,
+            scope,
+            "operator-sc1498",
+            now.plusNanos(500_000));
+
+    assertThat(claim.view().expiresAt()).isAfter(claim.view().approvedAt());
+  }
+
+  @Test
+  void anExpiryThatNormalizesAwayIsRejectedWithAStableCode() {
+    String scope = "sha256:" + "7".repeat(64);
+    String fingerprint = "sha256:" + "8".repeat(64);
+    assertThatThrownBy(
+            () ->
+                store.create(
+                    "session-precise-2",
+                    "turn-precise-2",
+                    "orch-precise-2",
+                    "req-precise-2",
+                    "rec-precise-2",
+                    fingerprint,
+                    scope,
+                    "operator-sc1498",
+                    CLOCK.instant().plusNanos(500)))
+        .isInstanceOfSatisfying(
+            BootstrapApprovalException.class,
+            exception -> assertThat(exception.failureCode()).isEqualTo("AUTHORITY_EXPIRY_INVALID"));
+  }
+
+  @Test
+  void platformUnsafeRecordingIdsNeverReachTheDatabase() {
+    String scope = "sha256:" + "9".repeat(64);
+    String fingerprint = "sha256:" + "6".repeat(64);
+    for (String recordingId : java.util.List.of("run:1", "rec.", "CON", "nul.mp4")) {
+      assertThatThrownBy(
+              () ->
+                  store.create(
+                      "session-unsafe",
+                      "turn-unsafe",
+                      "orch-unsafe-" + recordingId.replaceAll("[^A-Za-z0-9]", "_"),
+                      "req-unsafe-" + recordingId.replaceAll("[^A-Za-z0-9]", "_"),
+                      recordingId,
+                      fingerprint,
+                      scope,
+                      "operator-sc1498",
+                      CLOCK.instant().plusSeconds(300)))
+          .as("recording id %s", recordingId)
+          .isInstanceOfSatisfying(
+              BootstrapApprovalException.class,
+              exception -> assertThat(exception.failureCode()).isEqualTo("RECORDING_ID_UNSAFE"));
+    }
+    assertThat(
+            store.findByOrchestration("orch-unsafe-run_1"))
+        .as("no approval row is written for an unsafe recording id")
+        .isEmpty();
+  }
+
+  @Test
   void identicalCreatesReturnSameDurableOwner() throws Exception {
     String scope = "sha256:" + "a".repeat(64);
     String fingerprint = "sha256:" + "b".repeat(64);

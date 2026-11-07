@@ -1,6 +1,7 @@
 package com.chromascape.web.gameplay.bootstrap;
 
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
+import com.chromascape.web.recording.service.RecordingIdPolicy;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import jakarta.transaction.Transactional;
@@ -58,19 +59,29 @@ public class BootstrapApprovalStore {
     requireId(orchestrationId, "Orchestration id is required");
     requireId(requestId, "Request id is required");
     requireId(recordingId, "Recording id is required");
+    if (!RecordingIdPolicy.isPlatformSafe(recordingId)) {
+      throw new BootstrapApprovalException(
+          "RECORDING_ID_UNSAFE", "The recording id cannot be used as an output filename");
+    }
     requireDigest(requestFingerprint, "Request fingerprint is required");
     requireDigest(scopeDigest, "Scope digest is required");
     if (approvedBy == null || !approvedBy.matches(ID_PATTERN)) {
       throw new BootstrapApprovalException(
           "APPROVER_INVALID", "A stable human operator id is required");
     }
-    Instant now = clock.instant();
-    if (expiresAt == null || !expiresAt.isAfter(now) || expiresAt.isAfter(now.plusSeconds(900))) {
+    // One clock read, normalized to the precision PostgreSQL actually stores, so the validation the
+    // caller sees is the comparison the database enforces: an expiry that would be stored at or
+    // before approved_at is refused with a stable code instead of a constraint error.
+    Instant now = truncate(clock.instant());
+    Instant normalizedExpiry = expiresAt == null ? null : truncate(expiresAt);
+    if (normalizedExpiry == null
+        || !normalizedExpiry.isAfter(now)
+        || normalizedExpiry.isAfter(now.plusSeconds(900))) {
       throw new BootstrapApprovalException(
           "AUTHORITY_EXPIRY_INVALID", "Authority must expire within 15 minutes");
     }
     String approvalId = "approval_" + UUID.randomUUID().toString().replace("-", "");
-    Instant truncatedExpiry = truncate(expiresAt);
+    Instant truncatedExpiry = normalizedExpiry;
     int inserted =
         entityManager
             .createNativeQuery(
@@ -297,8 +308,9 @@ public class BootstrapApprovalStore {
     }
   }
 
+  /** PostgreSQL {@code TIMESTAMPTZ} stores microseconds; validate and persist at that precision. */
   private Instant truncate(Instant value) {
-    return value.truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+    return value.truncatedTo(java.time.temporal.ChronoUnit.MICROS);
   }
 
   public record Claim(ApprovalView view, boolean created) {}
