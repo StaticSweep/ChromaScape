@@ -28,11 +28,13 @@ previously duplicated that ordering in `BootstrapGameplayOperatorService` and su
   leaves neither a bound-but-unused approval nor an orphan `STARTED` recording. The dispatch test
   asserts this order with a Mockito `InOrder`.
 
-## Migration renumbering (V49 → V50)
+## Migration renumbering (V49 → V50 → V89)
 
 SC-1431 adds `V49__sc1431_bootstrap_provider_identity.sql`. Because SC-1431 lands first, the SC-1498
 migration was renamed `V49__sc1498_bootstrap_recording.sql` →
-`V50__sc1498_bootstrap_recording.sql`. Migration-head assertions were advanced to `50`
+`V50__sc1498_bootstrap_recording.sql`. Rebasing onto `main` (migration head `V88`) renamed it
+again to `V89__sc1498_bootstrap_recording.sql`. Migration-head assertions on `main` are advanced
+to `89`
 (`IsolatedPostgresTestDatabase`, `AccountBuilderOrchestrationRestartTest`,
 `Sc1431BudgetIntegritySchemaTest`, `Sc1498FlywaySchemaTest` javadoc/method name).
 
@@ -113,7 +115,7 @@ New or extended coverage:
   closed gates rejecting before any recording/approval interaction.
 - `BootstrapApprovalStorePostgresTest` — recording-id-only reuse yields a stable `APPROVAL_CONFLICT`.
 - `AccountBuilderOrchestrationRestartTest`, `IsolatedPostgresTestDatabase`,
-  `Sc1431BudgetIntegritySchemaTest`, `Sc1498FlywaySchemaTest` — V50 head.
+  `Sc1431BudgetIntegritySchemaTest`, `Sc1498FlywaySchemaTest` — V89 head.
 
 ## Fedora verification
 

@@ -24,7 +24,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-/** Flyway and constraint proof for the SC-1498 durable approval/recording schema (V50). */
+/** Flyway and constraint proof for the SC-1498 durable approval/recording schema (V89). */
 @SpringBootTest(
     classes = Sc1498FlywaySchemaTest.TestApplication.class,
     properties = {

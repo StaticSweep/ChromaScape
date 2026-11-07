@@ -60,7 +60,7 @@ class BootstrapRecordingCoordinatorTest {
   @Test
   void startIsIdempotentAndFinalizeIsWriteOnce() {
     // The recording references an SC-1431 orchestration with no foreign key; create the minimal
-    // parent row so the V50 terminal-evidence gate can be satisfied. Only the identity columns
+    // parent row so the V89 terminal-evidence gate can be satisfied. Only the identity columns
     // matter for this projection test.
     jdbc.execute(
         "INSERT INTO ab_orchestration (orchestration_id, request_id, idempotency_key,"
@@ -71,7 +71,7 @@ class BootstrapRecordingCoordinatorTest {
             + " 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',"
             + " 'PROVIDER:CLAUDE','BOOTSTRAP_RECORDING','ACTIVE','NONE','{}','{}',FALSE,0,"
             + " now(),now(),0) ON CONFLICT DO NOTHING");
-    // V50 requires durable terminal SC-1431 evidence before the STARTED projection may finalize.
+    // V89 requires durable terminal SC-1431 evidence before the STARTED projection may finalize.
     jdbc.execute(
         "INSERT INTO ab_orchestration_terminal_result (orchestration_id, outcome, stable_code,"
             + " retry_allowed, reconciled, evidence_digest, terminal_at) VALUES ('orch-rec-1',"
