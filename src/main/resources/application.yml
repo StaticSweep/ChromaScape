@@ -518,6 +518,11 @@ gameplay:
       command: ["${GAMEPLAY_PROVIDER_CODEX_COMMAND:codex}"]
       allowed-models: ["gpt-*", "o3", "o4-*"]
       credential-environment-names: ["OPENAI_API_KEY"]
+    mistral:
+      base-url: ${GAMEPLAY_PROVIDER_MISTRAL_BASE_URL:https://api.mistral.ai/v1}
+      allowed-models: ["mistral-*", "magistral-*"]
+      credential-environment-names: ["MISTRAL_API_KEY"]
+      max-response-bytes: ${GAMEPLAY_PROVIDER_MISTRAL_MAX_RESPONSE_BYTES:1048576}
 
 # AI Player Configuration
 ai-player:

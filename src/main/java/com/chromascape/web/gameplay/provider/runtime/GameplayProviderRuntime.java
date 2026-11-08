@@ -68,8 +68,7 @@ public final class GameplayProviderRuntime implements ProviderDecisionHandoff {
   public SessionView createSession(SessionRequest request) {
     requireEnabled();
     validator.validateSession(request);
-    ProviderRuntimeProperties.ProviderProcess process = process(request.provider());
-    if (!process.allowsModel(request.modelId())) {
+    if (!allowsModel(request.provider(), request.modelId())) {
       throw new ProviderRuntimeException("MODEL_NOT_ALLOWED", "Provider model is not allowlisted");
     }
     ProviderAdapter adapter = adapter(request.provider());
@@ -308,8 +307,12 @@ public final class GameplayProviderRuntime implements ProviderDecisionHandoff {
     };
   }
 
-  private ProviderRuntimeProperties.ProviderProcess process(Provider provider) {
-    return provider == Provider.CLAUDE ? properties.getClaude() : properties.getCodex();
+  private boolean allowsModel(Provider provider, String modelId) {
+    return switch (provider) {
+      case CLAUDE -> properties.getClaude().allowsModel(modelId);
+      case CODEX -> properties.getCodex().allowsModel(modelId);
+      case MISTRAL -> properties.getMistral().allowsModel(modelId);
+    };
   }
 
   private ProviderAdapter adapter(Provider provider) {
