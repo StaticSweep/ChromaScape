@@ -84,7 +84,9 @@ Invoke-RestMethod http://127.0.0.1:8098/health | ConvertTo-Json -Depth 20
 
 Without the operator key header, availability reports only `enabled`. With it, the expected
 response is `enabled=true`, `operatorKeyConfigured=true`, `providerReady=true`, empty
-`blockingReasons`, and both CLAUDE and CODEX in `providerModels`. Micro6 must report the current runtime artifact, account/client/build/catalog
+`blockingReasons`, and CLAUDE and CODEX in `providerModels`. MISTRAL also appears once
+`MISTRAL_API_KEY` is present in the instance's environment; its absence is not a blocker when the
+run stays on CLAUDE or CODEX. Micro6 must report the current runtime artifact, account/client/build/catalog
 identity, and dispatch readiness expected by the envelope.
 
 ## 4. Prepare the exact proposal
