@@ -15,7 +15,8 @@ public final class GameplayContracts {
 
   public enum Provider {
     CLAUDE,
-    CODEX
+    CODEX,
+    MISTRAL
   }
 
   public enum ActionKind {

@@ -21,7 +21,8 @@ public final class GameplayV2Contracts {
 
   public enum Provider {
     CLAUDE,
-    CODEX
+    CODEX,
+    MISTRAL
   }
 
   public enum TaskSkillMaturity {

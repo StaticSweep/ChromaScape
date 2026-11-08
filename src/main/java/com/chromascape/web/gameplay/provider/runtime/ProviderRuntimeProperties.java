@@ -27,6 +27,12 @@ public final class ProviderRuntimeProperties {
   private ProviderProcess codex =
       new ProviderProcess(
           List.of("codex"), List.of("gpt-*", "o3", "o4-*"), List.of("OPENAI_API_KEY"));
+  private ProviderHttp mistral =
+      new ProviderHttp(
+          "https://api.mistral.ai/v1",
+          List.of("mistral-*", "magistral-*"),
+          List.of("MISTRAL_API_KEY"),
+          1_048_576);
 
   @PostConstruct
   void validate() {
@@ -49,6 +55,7 @@ public final class ProviderRuntimeProperties {
     }
     claude.validate("claude");
     codex.validate("codex");
+    mistral.validate("mistral");
   }
 
   public boolean isEnabled() {
@@ -147,6 +154,14 @@ public final class ProviderRuntimeProperties {
     this.codex = codex;
   }
 
+  public ProviderHttp getMistral() {
+    return mistral;
+  }
+
+  public void setMistral(ProviderHttp mistral) {
+    this.mistral = mistral;
+  }
+
   public static final class ProviderProcess {
     private List<String> command = new ArrayList<>();
     private List<String> allowedModels = new ArrayList<>();
@@ -199,6 +214,90 @@ public final class ProviderRuntimeProperties {
       this.credentialEnvironmentNames = new ArrayList<>(credentialEnvironmentNames);
     }
 
+    public boolean allowsModel(String model) {
+      return model != null
+          && allowedModels.stream()
+              .anyMatch(
+                  pattern ->
+                      model.matches(
+                          "^"
+                              + java.util.regex.Pattern.quote(pattern).replace("*", "\\E.*\\Q")
+                              + "$"));
+    }
+  }
+
+  /** Direct HTTPS endpoint configuration for the Mistral chat-completions provider. */
+  public static final class ProviderHttp {
+    private String baseUrl = "";
+    private List<String> allowedModels = new ArrayList<>();
+    private List<String> credentialEnvironmentNames = new ArrayList<>();
+    private int maxResponseBytes = 1_048_576;
+
+    /** Creates an empty configuration for property binding. */
+    public ProviderHttp() {}
+
+    /** Creates a fully specified configuration. */
+    public ProviderHttp(
+        String baseUrl,
+        List<String> allowedModels,
+        List<String> credentialEnvironmentNames,
+        int maxResponseBytes) {
+      this.baseUrl = baseUrl;
+      this.allowedModels = new ArrayList<>(allowedModels);
+      this.credentialEnvironmentNames = new ArrayList<>(credentialEnvironmentNames);
+      this.maxResponseBytes = maxResponseBytes;
+    }
+
+    void validate(String provider) {
+      if (baseUrl == null || baseUrl.isBlank() || !baseUrl.startsWith("https://")) {
+        throw new IllegalStateException(provider + " base URL must be an https URL");
+      }
+      if (allowedModels == null || allowedModels.isEmpty()) {
+        throw new IllegalStateException(provider + " requires at least one allowed model pattern");
+      }
+      if (credentialEnvironmentNames == null
+          || credentialEnvironmentNames.isEmpty()
+          || credentialEnvironmentNames.stream().anyMatch(String::isBlank)) {
+        throw new IllegalStateException(provider + " credential environment names are invalid");
+      }
+      if (maxResponseBytes < 4096) {
+        throw new IllegalStateException(provider + " response limit must be at least 4096 bytes");
+      }
+    }
+
+    public String getBaseUrl() {
+      return baseUrl;
+    }
+
+    public void setBaseUrl(String baseUrl) {
+      this.baseUrl = baseUrl;
+    }
+
+    public List<String> getAllowedModels() {
+      return List.copyOf(allowedModels);
+    }
+
+    public void setAllowedModels(List<String> allowedModels) {
+      this.allowedModels = new ArrayList<>(allowedModels);
+    }
+
+    public List<String> getCredentialEnvironmentNames() {
+      return List.copyOf(credentialEnvironmentNames);
+    }
+
+    public void setCredentialEnvironmentNames(List<String> credentialEnvironmentNames) {
+      this.credentialEnvironmentNames = new ArrayList<>(credentialEnvironmentNames);
+    }
+
+    public int getMaxResponseBytes() {
+      return maxResponseBytes;
+    }
+
+    public void setMaxResponseBytes(int maxResponseBytes) {
+      this.maxResponseBytes = maxResponseBytes;
+    }
+
+    /** Returns whether the model id matches one of the configured patterns. */
     public boolean allowsModel(String model) {
       return model != null
           && allowedModels.stream()

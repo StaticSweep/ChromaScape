@@ -38,7 +38,7 @@
       "properties":{
         "contractVersion":{"const":"sc-1429/v2"},
         "mode":{"$ref":"#/$defs/executionMode"},
-        "provider":{"enum":["CLAUDE","CODEX"]},
+        "provider":{"enum":["CLAUDE","CODEX","MISTRAL"]},
         "modelVersion":{"$ref":"#/$defs/token"},
         "decisionId":{"$ref":"#/$defs/token"},
         "identities":{"$ref":"#/$defs/identities"},
@@ -231,7 +231,7 @@
           "properties":{
             "contractVersion":{"const":"sc-1429/v2"},
             "kind":{"const":"SELECTED"},
-            "provider":{"enum":["CLAUDE","CODEX"]},
+            "provider":{"enum":["CLAUDE","CODEX","MISTRAL"]},
             "modelVersion":{"$ref":"#/$defs/token"},
             "decisionId":{"$ref":"#/$defs/token"},
             "promptId":{"$ref":"#/$defs/token"},
@@ -249,7 +249,7 @@
           "properties":{
             "contractVersion":{"const":"sc-1429/v2"},
             "kind":{"const":"ABSTAINED"},
-            "provider":{"enum":["CLAUDE","CODEX"]},
+            "provider":{"enum":["CLAUDE","CODEX","MISTRAL"]},
             "modelVersion":{"$ref":"#/$defs/token"},
             "decisionId":{"$ref":"#/$defs/token"},
             "promptId":{"$ref":"#/$defs/token"},
@@ -274,7 +274,7 @@
       "properties":{
         "contractVersion":{"const":"sc-1429/v2"},
         "mode":{"$ref":"#/$defs/executionMode"},
-        "provider":{"enum":["CLAUDE","CODEX"]},
+        "provider":{"enum":["CLAUDE","CODEX","MISTRAL"]},
         "modelVersion":{"$ref":"#/$defs/token"},
         "decisionId":{"$ref":"#/$defs/token"},
         "promptId":{"$ref":"#/$defs/token"},

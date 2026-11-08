@@ -2,6 +2,7 @@ package com.chromascape.web.gameplay.provider.runtime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
@@ -55,6 +56,42 @@ class GameplayProviderRuntimeTest {
             .runtime
             .findValidatedDecision(fixture.session.sessionId(), fixture.turn.turnId())
             .isPresent());
+    fixture.runtime.close();
+  }
+
+  @Test
+  void mistralSessionReachesPersistedDecision() throws Exception {
+    Fixture fixture = fixture(validResult(), Provider.MISTRAL, "mistral-test");
+    fixture.runtime.createSession(fixture.session);
+
+    var first = fixture.runtime.submitTurn(fixture.session.sessionId(), fixture.turn);
+    var retry = fixture.runtime.submitTurn(fixture.session.sessionId(), fixture.turn);
+    TurnView terminal =
+        awaitTerminal(fixture.runtime, fixture.session.sessionId(), fixture.turn.turnId());
+
+    assertTrue(first.created());
+    assertFalse(retry.created());
+    assertEquals(TurnState.DECIDED, terminal.state());
+    assertEquals(Provider.MISTRAL, terminal.provider());
+    assertEquals(1, fixture.adapter.calls.get());
+    assertTrue(
+        fixture
+            .runtime
+            .findValidatedDecision(fixture.session.sessionId(), fixture.turn.turnId())
+            .isPresent());
+    fixture.runtime.close();
+  }
+
+  @Test
+  void mistralSessionRefusesNonMistralModel() throws Exception {
+    Fixture fixture = fixture(validResult(), Provider.MISTRAL, "gpt-4o");
+
+    ProviderRuntimeException exception =
+        assertThrows(
+            ProviderRuntimeException.class, () -> fixture.runtime.createSession(fixture.session));
+
+    assertEquals("MODEL_NOT_ALLOWED", exception.failureCode());
+    assertEquals(0, fixture.adapter.calls.get());
     fixture.runtime.close();
   }
 
@@ -147,6 +184,12 @@ class GameplayProviderRuntimeTest {
   }
 
   private Fixture fixture(ProviderAdapter.ProviderTurnResult result) throws Exception {
+    return fixture(result, Provider.CLAUDE, "claude-test");
+  }
+
+  private Fixture fixture(
+      ProviderAdapter.ProviderTurnResult result, Provider provider, String modelId)
+      throws Exception {
     ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
     CanonicalGameplayJson canonical = new CanonicalGameplayJson(mapper);
     JsonNode fixtures;
@@ -160,8 +203,8 @@ class GameplayProviderRuntimeTest {
     SessionRequest session =
         new SessionRequest(
             "session-runtime",
-            Provider.CLAUDE,
-            "claude-test",
+            provider,
+            modelId,
             "task-runtime",
             "run-runtime",
             "recording-runtime",
@@ -214,7 +257,7 @@ class GameplayProviderRuntimeTest {
     properties.setOperatorKey("operator-key-that-is-at-least-32-characters");
     properties.setTranscriptRoot(temporary.resolve("transcripts"));
     properties.setWorkRoot(temporary.resolve("work"));
-    FakeAdapter adapter = new FakeAdapter(result);
+    FakeAdapter adapter = new FakeAdapter(result, provider);
     InMemoryStore store = new InMemoryStore(canonical);
     GameplayProviderRuntime runtime =
         new GameplayProviderRuntime(
@@ -266,17 +309,23 @@ class GameplayProviderRuntimeTest {
   private static final class FakeAdapter implements ProviderAdapter {
     private final AtomicInteger calls = new AtomicInteger();
     private final ProviderTurnResult configured;
+    private final Provider provider;
     private String rawDecision;
     private String toolName;
     private String toolDigest;
 
     private FakeAdapter(ProviderTurnResult configured) {
+      this(configured, Provider.CLAUDE);
+    }
+
+    private FakeAdapter(ProviderTurnResult configured, Provider provider) {
       this.configured = configured;
+      this.provider = provider;
     }
 
     @Override
     public Provider provider() {
-      return Provider.CLAUDE;
+      return provider;
     }
 
     @Override

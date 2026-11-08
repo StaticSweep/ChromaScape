@@ -48,7 +48,7 @@
       "type":"object","additionalProperties":false,
       "required":["contractVersion","provider","modelVersion","decisionId","requestId","idempotencyKey","goalPlanDigest","taskSkillDigests","taskKey","settings","identities","catalogDigest","schemaDigest","policyDigest","knowledgeDigest","semanticActionDigest","expectedTransition","verifierId","buildId","expectedObservationRevision","expectedTaskRevision","authorityId","leaseGeneration","fence","budgets","deadline","killSwitchScope"],
       "properties": {
-        "contractVersion":{"const":"sc-1429/v1"},"provider":{"enum":["CLAUDE","CODEX"]},"modelVersion":{"$ref":"#/$defs/token"},
+        "contractVersion":{"const":"sc-1429/v1"},"provider":{"enum":["CLAUDE","CODEX","MISTRAL"]},"modelVersion":{"$ref":"#/$defs/token"},
         "decisionId":{"$ref":"#/$defs/token"},"requestId":{"$ref":"#/$defs/token"},"idempotencyKey":{"$ref":"#/$defs/token"},
         "goalPlanDigest":{"$ref":"#/$defs/sha256"},"taskSkillDigests":{"type":"array","minItems":1,"maxItems":16,"items":{"$ref":"#/$defs/sha256"}},
         "taskKey":{"const":"FISHING_TRAINING"},"settings":{"$ref":"#/$defs/semanticAction/oneOf/0/properties/settings"},

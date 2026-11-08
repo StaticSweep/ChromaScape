@@ -30,6 +30,28 @@ class ProviderRuntimeBoundaryTest {
   }
 
   @Test
+  void mistralPropertiesAreClosedAndValidated() {
+    ProviderRuntimeProperties properties = new ProviderRuntimeProperties();
+    properties.validate();
+    assertTrue(properties.getMistral().allowsModel("mistral-medium-latest"));
+    assertFalse(properties.getMistral().allowsModel("gpt-4o"));
+    assertFalse(properties.getCodex().allowsModel("mistral-large-latest"));
+
+    ProviderRuntimeProperties.ProviderHttp insecure =
+        new ProviderRuntimeProperties.ProviderHttp(
+            "http://127.0.0.1:1234/v1",
+            List.of("mistral-*"),
+            List.of("MISTRAL_API_KEY"),
+            1_048_576);
+    assertThrows(IllegalStateException.class, () -> insecure.validate("mistral"));
+
+    ProviderRuntimeProperties.ProviderHttp emptyAllowlist =
+        new ProviderRuntimeProperties.ProviderHttp(
+            "https://api.mistral.ai/v1", List.of(), List.of("MISTRAL_API_KEY"), 1_048_576);
+    assertThrows(IllegalStateException.class, () -> emptyAllowlist.validate("mistral"));
+  }
+
+  @Test
   void enabledRuntimeRequiresLongOperatorKey() {
     ProviderRuntimeProperties properties = new ProviderRuntimeProperties();
     properties.setEnabled(true);

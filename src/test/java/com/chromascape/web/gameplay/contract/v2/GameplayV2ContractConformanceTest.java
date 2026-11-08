@@ -166,6 +166,16 @@ class GameplayV2ContractConformanceTest {
   }
 
   @Test
+  void providerEnumAcceptsMistralAndRejectsUnknownProviders() {
+    JsonNode envelope = fixtures.path("executionEnvelope").deepCopy();
+    ((com.fasterxml.jackson.databind.node.ObjectNode) envelope).put("provider", "MISTRAL");
+    validator.validate("executionEnvelope", envelope);
+
+    ((com.fasterxml.jackson.databind.node.ObjectNode) envelope).put("provider", "GEMINI");
+    assertThat(capture(() -> validator.validate("executionEnvelope", envelope))).isNotNull();
+  }
+
+  @Test
   void canonicalV2ResourcesHaveFrozenByteDigests() throws Exception {
     assertThat(resourceSha256("contracts/gameplay/sc-1429-gameplay-contract-v2.schema.json"))
         .isEqualTo(V2_SCHEMA_SHA256);
@@ -221,9 +231,9 @@ class GameplayV2ContractConformanceTest {
   }
 
   static final String V2_SCHEMA_SHA256 =
-      "1d032dc935e36af0b10ad0269330c7e3df65a26b9212c81caae5bc4afd0abf0b";
+      "e2030605498d9a6ea453211318da7fa0fefa7ef2a04bcfdd2cbe313558aa9f13";
   static final String V2_FIXTURES_SHA256 =
-      "96813afb0a3af5dcb79cf41d32d86db2bcf0e921d8c94968a887492253d7f549";
+      "7ddb76f64ed70d735f77f45eccfefdec50cf6c36db038399b73e08fb113cb9b1";
 
   private String resourceSha256(String resource) throws Exception {
     try (InputStream input = getClass().getClassLoader().getResourceAsStream(resource)) {

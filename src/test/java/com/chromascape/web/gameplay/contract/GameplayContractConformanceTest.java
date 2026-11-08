@@ -93,9 +93,20 @@ class GameplayContractConformanceTest {
   }
 
   @Test
+  void providerEnumAcceptsMistralAndRejectsUnknownProviders() {
+    JsonNode envelope = fixtures.path("executionEnvelope").deepCopy();
+    ((com.fasterxml.jackson.databind.node.ObjectNode) envelope).put("provider", "MISTRAL");
+    validator.validate("executionEnvelope", envelope);
+
+    ((com.fasterxml.jackson.databind.node.ObjectNode) envelope).put("provider", "GEMINI");
+    assertThatThrownBy(() -> validator.validate("executionEnvelope", envelope))
+        .isInstanceOf(GameplayContractValidator.GameplayContractViolation.class);
+  }
+
+  @Test
   void canonicalResourcesHaveFrozenByteDigests() throws Exception {
     assertThat(resourceSha256("contracts/gameplay/sc-1429-gameplay-contract-v1.schema.json"))
-        .isEqualTo("010cba11ada57f328b43968be894f4875edd2ef8ee582c6eb5a924153e461469");
+        .isEqualTo("76cfd639fa10e61f654fa166afff3a0a77fddbb1d48a0e56168e89d91ee1d16e");
     assertThat(resourceSha256("contracts/gameplay/sc-1429-golden-fixtures-v1.json"))
         .isEqualTo("c55ad78af5b6367803bc7098e0ef0a03e03d8efff6465bd4eae7829aa743c19c");
   }
