@@ -89,6 +89,13 @@ public final class GameplayBootstrapController {
     return operatorService.run(operatorKey, orchestrationId);
   }
 
+  @GetMapping("/runs/{orchestrationId}/evidence")
+  public Object evidence(
+      @RequestHeader(OPERATOR_KEY_HEADER) String operatorKey,
+      @PathVariable String orchestrationId) {
+    return operatorService.evidence(operatorKey, orchestrationId);
+  }
+
   @PostMapping("/runs/{orchestrationId}/stop")
   public Object stop(
       @RequestHeader(OPERATOR_KEY_HEADER) String operatorKey,

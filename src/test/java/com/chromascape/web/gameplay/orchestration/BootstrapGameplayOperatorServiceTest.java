@@ -2,6 +2,7 @@ package com.chromascape.web.gameplay.orchestration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -25,6 +26,8 @@ import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderO
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderCapabilityPreflight;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Mode;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.State;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.TaskCapability;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationService;
 import com.chromascape.web.gameplay.provider.runtime.ProviderDecisionHandoff;
@@ -94,6 +97,79 @@ class BootstrapGameplayOperatorServiceTest {
         .when(capabilityPreflight.probe(any()))
         .thenReturn(eligibleSnapshot());
     service = service(true, true);
+  }
+
+  /**
+   * Orchestration status alone must not imply the evidence is complete: a proven terminal execution
+   * with a still-STARTED projection is PENDING, which is the state the failed run was left in.
+   */
+  @Test
+  void evidenceDistinguishesPendingFinalizationFromCompleteEvidence() {
+    when(orchestrationService.find("orch-evidence"))
+        .thenReturn(view(State.DENIED, FailureCode.DELIVERY_UNCERTAIN));
+    when(recordingCoordinator.find("orch-evidence"))
+        .thenReturn(Optional.of(recording("STARTED")));
+
+    var pending = service.evidence(OPERATOR_KEY, "orch-evidence");
+    assertEquals("PENDING", pending.finalization());
+    assertEquals("DENIED", pending.state());
+
+    when(recordingCoordinator.find("orch-evidence"))
+        .thenReturn(Optional.of(recording("FINALIZED")));
+    assertEquals("FINALIZED", service.evidence(OPERATOR_KEY, "orch-evidence").finalization());
+
+    when(recordingCoordinator.find("orch-evidence")).thenReturn(Optional.empty());
+    assertEquals("NONE", service.evidence(OPERATOR_KEY, "orch-evidence").finalization());
+  }
+
+  @Test
+  void evidenceReportsInProgressWhileExecutionIsNotTerminal() {
+    when(orchestrationService.find("orch-live")).thenReturn(view(State.ACTIVE, FailureCode.NONE));
+    when(recordingCoordinator.find("orch-live"))
+        .thenReturn(Optional.of(recording("STARTED")));
+
+    assertEquals("IN_PROGRESS", service.evidence(OPERATOR_KEY, "orch-live").finalization());
+  }
+
+  private OrchestrationView view(State state, FailureCode code) {
+    return new OrchestrationView(
+        "sc-1431/v1",
+        "orch-evidence",
+        "req-evidence",
+        "idem-evidence",
+        "sha256:" + "1".repeat(64),
+        "sha256:" + "2".repeat(64),
+        Mode.BOOTSTRAP_RECORDING,
+        "PROVIDER:CLAUDE",
+        state,
+        code,
+        null,
+        java.util.List.of(),
+        false,
+        false,
+        0,
+        NOW,
+        NOW);
+  }
+
+  private BootstrapRecordingCoordinator.RecordingView recording(String manifestState) {
+    return new BootstrapRecordingCoordinator.RecordingView(
+        "orch-evidence",
+        "recording-evidence",
+        "session-evidence",
+        "turn-evidence",
+        "sha256:" + "3".repeat(64),
+        "sha256:" + "4".repeat(64),
+        "CLAUDE",
+        "claude-v1",
+        manifestState,
+        "DENIED",
+        "DELIVERY_UNCERTAIN",
+        "sha256:" + "5".repeat(64),
+        "/tmp/recording.mp4",
+        "sha256:" + "6".repeat(64),
+        NOW,
+        NOW);
   }
 
   private BootstrapGameplayOperatorService service(

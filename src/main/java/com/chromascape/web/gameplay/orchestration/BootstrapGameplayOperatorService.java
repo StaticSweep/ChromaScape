@@ -408,6 +408,54 @@ public final class BootstrapGameplayOperatorService {
     }
   }
 
+  /**
+   * Reports the recording projection and whether its evidence is actually complete.
+   *
+   * <p>Orchestration status alone must never imply the evidence is finished: a proven terminal
+   * execution with a still-STARTED recording projection means finalization is outstanding, and the
+   * caller has to see that distinctly. This route is read-only and never finalizes, reserves or
+   * starts anything.
+   */
+  public EvidenceView evidence(String presentedKey, String orchestrationId) {
+    requireOperator(presentedKey);
+    OrchestrationView view;
+    try {
+      view = orchestrationService.find(orchestrationId);
+    } catch (RuntimeException exception) {
+      throw error(HttpStatus.NOT_FOUND, "RUN_NOT_FOUND", "Bootstrap run was not found");
+    }
+    RecordingView recording = recordingCoordinator.find(orchestrationId).orElse(null);
+    return new EvidenceView(
+        orchestrationId,
+        view.state().name(),
+        view.failureCode().name(),
+        recording,
+        finalizationState(view, recording));
+  }
+
+  /**
+   * Derives the finalization state from durable facts only. {@code PENDING} is the case that
+   * matters: execution is terminal but the manifest projection has not been finalized, so the
+   * evidence is incomplete even though the run is over.
+   */
+  private String finalizationState(OrchestrationView view, RecordingView recording) {
+    if (recording == null) {
+      return "NONE";
+    }
+    if ("FINALIZED".equals(recording.manifestState())) {
+      return "FINALIZED";
+    }
+    return view.state().provenTerminal() ? "PENDING" : "IN_PROGRESS";
+  }
+
+  /** Read-only evidence status for one run. */
+  public record EvidenceView(
+      String orchestrationId,
+      String state,
+      String failureCode,
+      RecordingView recording,
+      String finalization) {}
+
   public OrchestrationView stop(String presentedKey, StopRequest request) {
     requireOperator(presentedKey);
     if (request == null || request.orchestrationId() == null || request.reason() == null) {
