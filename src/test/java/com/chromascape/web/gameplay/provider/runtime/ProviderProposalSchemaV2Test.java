@@ -59,6 +59,42 @@ class ProviderProposalSchemaV2Test {
     assertThat(schema().validate(decision)).isNotEmpty();
   }
 
+  /**
+   * The request-side schema must not drift from the authoritative contract definition: anything the
+   * contract rejects as a providerDecision must be rejected here too, or a provider could be asked
+   * for a shape the runtime then refuses.
+   */
+  @Test
+  void agreesWithTheAuthoritativeContractOnEveryMutation() throws Exception {
+    com.chromascape.web.gameplay.contract.v2.GameplayV2ContractValidator validator =
+        new com.chromascape.web.gameplay.contract.v2.GameplayV2ContractValidator(
+            JsonMapper.builder().build());
+
+    for (String member : java.util.List.of("goalPlan", "eligibleInputDigest", "promptId", "kind")) {
+      ObjectNode mutated = (ObjectNode) fixtures().path("claudeDecision").deepCopy();
+      mutated.remove(member);
+
+      boolean contractRejects =
+          rejectsContract(validator, mutated);
+      boolean proposalRejects = !schema().validate(mutated).isEmpty();
+
+      assertThat(proposalRejects)
+          .as("proposal schema must agree with the contract on a missing %s", member)
+          .isEqualTo(contractRejects);
+    }
+  }
+
+  private boolean rejectsContract(
+      com.chromascape.web.gameplay.contract.v2.GameplayV2ContractValidator validator,
+      JsonNode decision) {
+    try {
+      validator.validate("providerDecision", decision);
+      return false;
+    } catch (RuntimeException exception) {
+      return true;
+    }
+  }
+
   private JsonSchema schema() {
     return JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012)
         .getSchema(ProviderProposalSchemaV2.JSON);
