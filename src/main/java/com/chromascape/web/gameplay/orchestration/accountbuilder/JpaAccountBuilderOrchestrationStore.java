@@ -1030,7 +1030,7 @@ public class JpaAccountBuilderOrchestrationStore implements AccountBuilderOrches
       String envelopeDigest) {
     if (!request.orchestrationId().equals(orchestrationId)
         || authority == null
-        || !GameplayContracts.VERSION.equals(authority.contractVersion())
+        || !AccountBuilderOrchestrationModels.ownsAuthorityVersion(authority.contractVersion())
         || !authority.oneUse()
         || !"HUMAN".equals(authority.actorType())
         || !validId(authority.authorityId())

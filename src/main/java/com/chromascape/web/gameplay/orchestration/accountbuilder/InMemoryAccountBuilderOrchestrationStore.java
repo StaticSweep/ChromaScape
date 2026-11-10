@@ -655,7 +655,7 @@ public final class InMemoryAccountBuilderOrchestrationStore
       GameplayContracts.HumanAuthority authority,
       String envelopeDigest) {
     if (authority == null
-        || !GameplayContracts.VERSION.equals(authority.contractVersion())
+        || !AccountBuilderOrchestrationModels.ownsAuthorityVersion(authority.contractVersion())
         || !authority.oneUse()
         || !"HUMAN".equals(authority.actorType())
         || !validId(authority.authorityId())

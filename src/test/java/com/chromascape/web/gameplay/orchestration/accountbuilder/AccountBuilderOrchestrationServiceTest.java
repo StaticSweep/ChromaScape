@@ -34,6 +34,8 @@ import org.junit.jupiter.api.Test;
 
 class AccountBuilderOrchestrationServiceTest {
   private static final Instant NOW = Instant.parse("2026-08-30T12:05:00Z");
+  /** The envelope digest the frozen v2 fixture binds; the authority must attest the same one. */
+  private static final String V2_ENVELOPE_DIGEST = "sha256:" + "5".repeat(64);
   private ObjectMapper objectMapper;
   private CanonicalGameplayJson canonicalJson;
   private AccountBuilderOrchestrationValidator validator;
@@ -576,6 +578,15 @@ class AccountBuilderOrchestrationServiceTest {
     assertThat(gateway.stops).hasValue(0);
   }
 
+  /**
+   * The v2 path is exercised against the same fixed clock the service and validator use, so a
+   * frozen bundle's deadline and budget horizon are evaluated at the instant it was approved.
+   */
+  private InMemoryAccountBuilderOrchestrationStore v2Store() {
+    return new InMemoryAccountBuilderOrchestrationStore(
+        Clock.fixed(NOW, ZoneOffset.UTC), (a, e) -> true);
+  }
+
   private AccountBuilderOrchestrationService service(FakeGateway gateway) {
     return service(
         gateway,
@@ -616,7 +627,7 @@ class AccountBuilderOrchestrationServiceTest {
     OrchestrationRequest sample = request("capability", Mode.HELD);
     FakeGateway gateway = new FakeGateway(State.ACTIVE);
     gateway.staleCapabilities = true;
-    InMemoryAccountBuilderOrchestrationStore store = new InMemoryAccountBuilderOrchestrationStore();
+    InMemoryAccountBuilderOrchestrationStore store = v2Store();
     AccountBuilderOrchestrationService service = service(gateway, store);
 
     var command =
@@ -640,6 +651,198 @@ class AccountBuilderOrchestrationServiceTest {
   }
 
   /**
+   * The whole v2 chain through the durable owner: one claim, one capability probe, one reserve and
+   * one dispatch, with the approved bundle's envelope digest as the delivery identity throughout.
+   */
+  @Test
+  void frozenV2DeliveryReservesOnceAndDispatchesTheApprovedEnvelope() {
+    OrchestrationRequest sample = request("capability", Mode.HELD);
+    FakeGateway gateway = new FakeGateway(State.CONFIRMED);
+    InMemoryAccountBuilderOrchestrationStore store = v2Store();
+    AccountBuilderOrchestrationService service = service(gateway, store);
+
+    var submission =
+        service.orchestrateFrozenV2(
+            new AccountBuilderOrchestrationModels.FrozenV2Command(
+                "orch-v2-live",
+                "req-v2-live",
+                "idem-v2-live",
+                Mode.BOOTSTRAP_RECORDING,
+                NOW.plusSeconds(300),
+                "session-v2-1",
+                "turn-v2-1",
+                frozenV2Bundle(sample)));
+
+    assertThat(submission.created()).isTrue();
+    assertThat(submission.view().state()).isEqualTo(State.CONFIRMED);
+    assertThat(submission.view().failureCode()).isEqualTo(FailureCode.NONE);
+    assertThat(submission.view().envelopeDigest())
+        .as("the delivery identity is the approved envelope, never a recomputed v1 digest")
+        .isEqualTo(V2_ENVELOPE_DIGEST);
+    assertThat(gateway.reservations.get()).isEqualTo(1);
+    assertThat(gateway.dispatches.get()).isEqualTo(1);
+    assertThat(store.find("orch-v2-live").orElseThrow().authorityConsumed()).isTrue();
+  }
+
+  /**
+   * A certification-mode executor refuses to bind its listener, so the capability probe can never
+   * succeed. The delivery must deny without reserving, dispatching or consuming the one-use
+   * authority: a refused executor is never a delivery attempt.
+   */
+  @Test
+  void frozenV2CertificationRefusalDeniesWithoutReservingOrConsumingAuthority() {
+    OrchestrationRequest sample = request("capability", Mode.HELD);
+    FakeGateway gateway = new FakeGateway(State.CONFIRMED);
+    gateway.executorRefused = true;
+    InMemoryAccountBuilderOrchestrationStore store = v2Store();
+    AccountBuilderOrchestrationService service = service(gateway, store);
+
+    var submission =
+        service.orchestrateFrozenV2(
+            new AccountBuilderOrchestrationModels.FrozenV2Command(
+                "orch-v2-refused",
+                "req-v2-refused",
+                "idem-v2-refused",
+                Mode.BOOTSTRAP_RECORDING,
+                NOW.plusSeconds(300),
+                "session-v2-1",
+                "turn-v2-1",
+                frozenV2Bundle(sample)));
+
+    assertThat(submission.view().state()).isEqualTo(State.DENIED);
+    assertThat(submission.view().failureCode()).isEqualTo(FailureCode.GATEWAY_UNAVAILABLE);
+    assertThat(gateway.reservations.get()).isZero();
+    assertThat(gateway.dispatches.get()).isZero();
+    assertThat(store.find("orch-v2-refused").orElseThrow().authorityConsumed()).isFalse();
+  }
+
+  /**
+   * A frozen bundle whose budget limits are outside the contract bounds is refused before the claim
+   * is persisted and before any gateway access, so an invalid approval can never burn authority.
+   */
+  @Test
+  void frozenV2InvalidBudgetIsRefusedBeforeAnyClaimOrGatewayAccess() {
+    OrchestrationRequest sample = request("capability", Mode.HELD);
+    FakeGateway gateway = new FakeGateway(State.CONFIRMED);
+    InMemoryAccountBuilderOrchestrationStore store = v2Store();
+    AccountBuilderOrchestrationService service = service(gateway, store);
+
+    assertThatThrownBy(
+            () ->
+                service.orchestrateFrozenV2(
+                    new AccountBuilderOrchestrationModels.FrozenV2Command(
+                        "orch-v2-invalid",
+                        "req-v2-invalid",
+                        "idem-v2-invalid",
+                        Mode.BOOTSTRAP_RECORDING,
+                        NOW.plusSeconds(300),
+                        "session-v2-1",
+                        "turn-v2-1",
+                        frozenV2Bundle(sample, 0))))
+        .isInstanceOf(AccountBuilderOrchestrationException.class)
+        .hasMessageContaining("budget");
+
+    assertThat(gateway.capabilityReads.get()).isZero();
+    assertThat(gateway.reservations.get()).isZero();
+    assertThat(gateway.dispatches.get()).isZero();
+    assertThat(store.find("orch-v2-invalid")).isEmpty();
+  }
+
+  /**
+   * A crash after the reserve was submitted leaves the outcome unknown. Recovery may only look the
+   * reservation up by its durable correlation: it must never reserve or dispatch a second time, and
+   * it must converge on the state the executor actually holds.
+   */
+  @Test
+  void frozenV2CrashAfterSubmissionResumesLookupOnly() {
+    OrchestrationRequest sample = request("capability", Mode.HELD);
+    FakeGateway gateway = new FakeGateway(State.CONFIRMED);
+    gateway.timeOutAfterSubmission = true;
+    InMemoryAccountBuilderOrchestrationStore store = v2Store();
+    AccountBuilderOrchestrationService service = service(gateway, store);
+
+    var submission =
+        service.orchestrateFrozenV2(
+            new AccountBuilderOrchestrationModels.FrozenV2Command(
+                "orch-v2-crash",
+                "req-v2-crash",
+                "idem-v2-crash",
+                Mode.BOOTSTRAP_RECORDING,
+                NOW.plusSeconds(300),
+                "session-v2-1",
+                "turn-v2-1",
+                frozenV2Bundle(sample)));
+
+    assertThat(submission.view().state()).isEqualTo(State.NEEDS_RECONCILIATION);
+    assertThat(submission.view().failureCode()).isEqualTo(FailureCode.DELIVERY_UNCERTAIN);
+    assertThat(store.find("orch-v2-crash").orElseThrow().authorityConsumed()).isTrue();
+
+    gateway.timeOutAfterSubmission = false;
+    // Micro6's status payload always attests the reservation lease, so a lookup of a request that
+    // does exist can hand the durable owner the lease it never received.
+    gateway.lookupCarriesLease = true;
+    OrchestrationView recovered = service.reconcile("orch-v2-crash");
+
+    assertThat(recovered.state()).isEqualTo(State.CONFIRMED);
+    assertThat(gateway.reservations.get()).as("recovery never reserves again").isEqualTo(1);
+    assertThat(gateway.dispatches.get()).as("recovery never dispatches").isZero();
+    assertThat(gateway.reservationReconciliations.get()).isEqualTo(1);
+  }
+
+  /**
+   * A kill-switch stop is authorized by the approved scope, and the v2 bundle is the only place that
+   * scope can come from. Without a RUN scope the request is refused before any gateway access.
+   */
+  @Test
+  void frozenV2KillSwitchStopWithoutTheApprovedScopeNeverReachesTheGateway() {
+    OrchestrationRequest sample = request("capability", Mode.HELD);
+    FakeGateway gateway = new FakeGateway(State.ACTIVE);
+    InMemoryAccountBuilderOrchestrationStore store = v2Store();
+    AccountBuilderOrchestrationService service = service(gateway, store);
+    service.orchestrateFrozenV2(
+        new AccountBuilderOrchestrationModels.FrozenV2Command(
+            "orch-v2-kill-denied",
+            "req-v2-kill-denied",
+            "idem-v2-kill-denied",
+            Mode.BOOTSTRAP_RECORDING,
+            NOW.plusSeconds(300),
+            "session-v2-1",
+            "turn-v2-1",
+            frozenV2Bundle(sample)));
+
+    assertThatThrownBy(
+            () -> service.stop("orch-v2-kill-denied", "kill-switch:operator", true))
+        .isInstanceOf(AccountBuilderOrchestrationException.class)
+        .hasMessageContaining("not authorized");
+    assertThat(gateway.stops.get()).isZero();
+  }
+
+  /** The same stop is accepted when the approved bundle declares the RUN scope. */
+  @Test
+  void frozenV2KillSwitchStopIsAuthorizedByTheApprovedScope() {
+    OrchestrationRequest sample = request("capability", Mode.HELD);
+    FakeGateway gateway = new FakeGateway(State.ACTIVE);
+    InMemoryAccountBuilderOrchestrationStore store = v2Store();
+    AccountBuilderOrchestrationService service = service(gateway, store);
+    service.orchestrateFrozenV2(
+        new AccountBuilderOrchestrationModels.FrozenV2Command(
+            "orch-v2-kill",
+            "req-v2-kill",
+            "idem-v2-kill",
+            Mode.BOOTSTRAP_RECORDING,
+            NOW.plusSeconds(300),
+            "session-v2-1",
+            "turn-v2-1",
+            frozenV2Bundle(sample, 1, "RUN")));
+
+    OrchestrationView stopped = service.stop("orch-v2-kill", "kill-switch:operator", true);
+
+    assertThat(stopped.state()).isEqualTo(State.STOPPED);
+    assertThat(gateway.stops.get()).isEqualTo(1);
+    assertThat(gateway.lastStopKillSwitch).isTrue();
+  }
+
+  /**
    * An exact replay of a frozen v2 delivery is lookup-only: the durable claim already owns the
    * bundle digest, so no second reserve is attempted.
    */
@@ -648,7 +851,7 @@ class AccountBuilderOrchestrationServiceTest {
     OrchestrationRequest sample = request("capability", Mode.HELD);
     FakeGateway gateway = new FakeGateway(State.ACTIVE);
     gateway.staleCapabilities = true;
-    InMemoryAccountBuilderOrchestrationStore store = new InMemoryAccountBuilderOrchestrationStore();
+    InMemoryAccountBuilderOrchestrationStore store = v2Store();
     AccountBuilderOrchestrationService service = service(gateway, store);
     var command =
         new AccountBuilderOrchestrationModels.FrozenV2Command(
@@ -679,7 +882,7 @@ class AccountBuilderOrchestrationServiceTest {
     OrchestrationRequest sample = request("capability", Mode.HELD);
     FakeGateway gateway = new FakeGateway(State.ACTIVE);
     gateway.staleCapabilities = true;
-    InMemoryAccountBuilderOrchestrationStore store = new InMemoryAccountBuilderOrchestrationStore();
+    InMemoryAccountBuilderOrchestrationStore store = v2Store();
     AccountBuilderOrchestrationService service = service(gateway, store);
     service.orchestrateFrozenV2(
         new AccountBuilderOrchestrationModels.FrozenV2Command(
@@ -731,6 +934,16 @@ class AccountBuilderOrchestrationServiceTest {
 
   private AccountBuilderOrchestrationModels.FrozenV2Bundle frozenV2Bundle(
       OrchestrationRequest sample) {
+    return frozenV2Bundle(sample, 1, null);
+  }
+
+  private AccountBuilderOrchestrationModels.FrozenV2Bundle frozenV2Bundle(
+      OrchestrationRequest sample, int maxActions) {
+    return frozenV2Bundle(sample, maxActions, null);
+  }
+
+  private AccountBuilderOrchestrationModels.FrozenV2Bundle frozenV2Bundle(
+      OrchestrationRequest sample, int maxActions, String killSwitchScope) {
     var envelope = objectMapper.createObjectNode();
     envelope.put("contractVersion", "sc-1429/v2");
     envelope.put("mode", "LIVE_TASK");
@@ -749,11 +962,17 @@ class AccountBuilderOrchestrationServiceTest {
     envelope.put("buildId", sample.envelope().buildId());
     envelope.put("expectedObservationRevision", sample.envelope().expectedObservationRevision());
     envelope.put("expectedTaskRevision", sample.envelope().expectedTaskRevision());
+    envelope.put("capabilitySnapshotDigest", sample.bindings().capabilityDigest());
+    envelope.put("leaseGeneration", 1);
+    envelope.put("fence", 1);
     envelope.put("authorityId", "authority-v2-1");
+    if (killSwitchScope != null) {
+      envelope.put("killSwitchScope", killSwitchScope);
+    }
     envelope.put("deadline", NOW.plusSeconds(300).toString());
     envelope.putObject("identities").put("clientId", "client-1");
     var budgets = envelope.putObject("budgets");
-    budgets.put("maxActions", 1);
+    budgets.put("maxActions", maxActions);
     budgets.put("maxAttempts", 1);
     budgets.put("maxElapsedMs", 300000);
 
@@ -764,7 +983,7 @@ class AccountBuilderOrchestrationServiceTest {
     authority.put("approvedBy", "operator-1");
     authority.put("approvedAt", NOW.minusSeconds(60).toString());
     authority.put("expiresAt", NOW.plusSeconds(300).toString());
-    authority.put("envelopeDigest", "sha256:" + "1".repeat(64));
+    authority.put("envelopeDigest", V2_ENVELOPE_DIGEST);
     authority.put("scopeDigest", "sha256:" + "2".repeat(64));
     authority.put("oneUse", true);
     authority.put("signature", "hmac-sha256:" + "3".repeat(64));
@@ -794,7 +1013,7 @@ class AccountBuilderOrchestrationServiceTest {
     return new AccountBuilderOrchestrationModels.FrozenV2Bundle(
         bytes,
         "sha256:" + "4".repeat(64),
-        "sha256:" + "5".repeat(64),
+        V2_ENVELOPE_DIGEST,
         "sha256:" + "6".repeat(64),
         sample.bindings().catalogDigest(),
         "sha256:" + "7".repeat(64),
@@ -1003,7 +1222,9 @@ class AccountBuilderOrchestrationServiceTest {
     private boolean staleCapabilities;
     private boolean failReservation;
     private boolean refuseConnection;
+    private boolean executorRefused;
     private boolean timeOutAfterSubmission;
+    private boolean lookupCarriesLease;
     private boolean lastStopKillSwitch;
 
     private FakeGateway(State dispatchState) {
@@ -1014,6 +1235,10 @@ class AccountBuilderOrchestrationServiceTest {
     @Override
     public CapabilitySnapshot capabilities(OrchestrationRequest request) {
       capabilityReads.incrementAndGet();
+      if (executorRefused) {
+        // A certification-mode executor refuses to bind its listener, so no probe can succeed.
+        return null;
+      }
       OrchestrationRequest sample = request("capability", Mode.HELD);
       return new CapabilitySnapshot(
           staleCapabilities ? "sha256:" + "d".repeat(64) : sample.bindings().catalogDigest(),
@@ -1097,7 +1322,21 @@ class AccountBuilderOrchestrationServiceTest {
     public GatewayReceipt reconcileReservation(GatewayCorrelation correlation) {
       reservationReconciliations.incrementAndGet();
       return receipt(
-          correlation, "RESERVATION_RECONCILE", statusState, null, true, statusState.terminal());
+          correlation,
+          "RESERVATION_RECONCILE",
+          statusState,
+          lookupCarriesLease ? reservationLease(correlation) : null,
+          true,
+          statusState.terminal());
+    }
+
+    private Lease reservationLease(GatewayCorrelation correlation) {
+      return new Lease(
+          "reservation-" + correlation.requestId(),
+          1,
+          1,
+          "sha256:" + "f".repeat(64),
+          NOW.plusSeconds(120));
     }
 
     private GatewayReceipt receipt(

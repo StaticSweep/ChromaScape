@@ -150,6 +150,19 @@ public final class AccountBuilderOrchestrationModels {
     INTERNAL_FAILURE
   }
 
+  /**
+   * True when the authority declares a contract version this adapter can durably own.
+   *
+   * <p>The store enforces one-use ownership and exact binding, not the contract version itself: a v2
+   * authority is produced by the assembler against the same rules and re-validated independently by
+   * Micro6 on reserve, so the store must not reject it merely because it is not the v1 record.
+   */
+  public static boolean ownsAuthorityVersion(String contractVersion) {
+    return com.chromascape.web.gameplay.contract.GameplayContracts.VERSION.equals(contractVersion)
+        || com.chromascape.web.gameplay.contract.v2.GameplayV2Contracts.VERSION.equals(
+            contractVersion);
+  }
+
   public record TaskCapability(
       String taskKey,
       boolean eligible,
