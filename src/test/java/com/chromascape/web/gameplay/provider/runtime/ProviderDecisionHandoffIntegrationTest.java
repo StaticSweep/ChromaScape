@@ -75,6 +75,90 @@ class ProviderDecisionHandoffIntegrationTest extends AbstractProviderRuntimePost
     assertTrue(runtime.findValidatedDecision(session.sessionId(), "missing-turn").isEmpty());
   }
 
+  /**
+   * A v1 decision still loads through the v1 handoff and must never surface through the v2 read:
+   * the two contract generations are distinguished by the persisted contractVersion, not by shape.
+   */
+  @Test
+  void aV1DecisionLoadsOnlyThroughTheV1Handoff() {
+    ProviderRuntimeProperties properties = new ProviderRuntimeProperties();
+    properties.setTranscriptRoot(temporary.resolve("transcripts-v1"));
+    RedactedTranscriptStore transcripts = new RedactedTranscriptStore(properties, canonicalJson);
+    String marker = "v1-" + System.nanoTime();
+    RedactedTranscriptStore.Artifact transcript = transcripts.store("provider transcript " + marker);
+
+    SessionRequest session = session("handoff-v1-" + System.nanoTime());
+    store.createSession(session);
+    TurnRequest decided = turn(session, "v1");
+    reserveAndStream(session, decided);
+    ProviderDecision v1Decision =
+        new ProviderDecision(
+            GameplayContracts.VERSION,
+            Provider.CODEX,
+            "gpt-5",
+            "decision-" + marker,
+            0.91,
+            JsonNodeFactory.instance.objectNode().put("kind", "ABSTAIN"),
+            List.of("observation:1"));
+    store.finish(
+        decided.turnId(), TurnState.DECIDED, FailureCode.NONE, v1Decision, null,
+        transcript.reference());
+    store.recordTranscript(decided.turnId(), transcript.reference(), transcript.byteLength());
+
+    GameplayProviderRuntime runtime =
+        new GameplayProviderRuntime(
+            properties, null, store, null, null, transcripts, null, List.of());
+
+    assertTrue(runtime.findValidatedDecision(session.sessionId(), decided.turnId()).isPresent());
+    assertTrue(runtime.findValidatedV2Decision(session.sessionId(), decided.turnId()).isEmpty());
+  }
+
+  /**
+   * A v2 decision is exposed only through the v2 read, with its own digests. The v1 view stays
+   * empty because deserialising the v2 bytes into the v1 record would fabricate a v1 projection.
+   */
+  @Test
+  void aV2DecisionLoadsOnlyThroughTheV2Handoff() {
+    ProviderRuntimeProperties properties = new ProviderRuntimeProperties();
+    properties.setTranscriptRoot(temporary.resolve("transcripts-v2"));
+    RedactedTranscriptStore transcripts = new RedactedTranscriptStore(properties, canonicalJson);
+    String marker = "v2-" + System.nanoTime();
+    RedactedTranscriptStore.Artifact transcript = transcripts.store("provider transcript " + marker);
+
+    SessionRequest session = session("handoff-v2-" + System.nanoTime());
+    store.createSession(session);
+    TurnRequest decided = turn(session, "v2");
+    reserveAndStream(session, decided);
+
+    var decision = JsonNodeFactory.instance.objectNode();
+    decision.put("contractVersion", "sc-1429/v2");
+    decision.put("kind", "SELECTED");
+    decision.put("decisionId", "decision-" + marker);
+    decision.put("eligibleInputDigest", DIGEST);
+    var goalPlan = decision.putObject("goalPlan");
+    goalPlan.put("goalPlanDigest", DIGEST);
+    String decisionDigest = canonicalJson.digest(decision);
+    String actionDigest = canonicalJson.digest(JsonNodeFactory.instance.objectNode().put("kind", "START_FISHING_TASK"));
+
+    store.finishV2(
+        decided.turnId(), TurnState.DECIDED, FailureCode.NONE, decision, decisionDigest,
+        actionDigest, null, transcript.reference());
+    store.recordTranscript(decided.turnId(), transcript.reference(), transcript.byteLength());
+
+    GameplayProviderRuntime runtime =
+        new GameplayProviderRuntime(
+            properties, null, store, null, null, transcripts, null, List.of());
+
+    ProviderDecisionHandoff.PersistedV2Decision persisted =
+        runtime.findValidatedV2Decision(session.sessionId(), decided.turnId()).orElseThrow();
+    assertEquals("decision-" + marker, persisted.decision().path("decisionId").asText());
+    assertEquals(decisionDigest, persisted.decisionDigest());
+    assertEquals(DIGEST, persisted.goalPlanDigest());
+    assertEquals(DIGEST, persisted.eligibleInputDigest());
+    assertEquals(transcript.reference(), persisted.transcriptSha256());
+    assertTrue(runtime.findValidatedDecision(session.sessionId(), decided.turnId()).isEmpty());
+  }
+
   private ProviderDecision decision() {
     return new ProviderDecision(
         GameplayContracts.VERSION,
