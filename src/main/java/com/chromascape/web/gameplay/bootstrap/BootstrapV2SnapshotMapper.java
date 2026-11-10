@@ -57,7 +57,15 @@ public final class BootstrapV2SnapshotMapper {
     snapshot.put("executorArtifactId", text(catalogWire, "executorArtifactId"));
     snapshot.put("executorBuildId", text(catalogWire, "buildId"));
     snapshot.put("pluginId", text(catalogWire, "pluginId"));
-    snapshot.put("capabilitySnapshotDigest", text(catalogWire, "capabilityDigest"));
+    // The capability snapshot is a fixed contract object, so the executor must attest exactly its
+    // canonical digest. A different value means the executor speaks another contract, and the
+    // deterministic filter would reject every task; refuse here instead of discovering it later.
+    String pinnedCapabilities = GameplayV2EligibilityFilter.capabilitySnapshotDigest(MAPPER);
+    if (!pinnedCapabilities.equals(text(catalogWire, "capabilityDigest"))) {
+      throw new IllegalArgumentException(
+          "Micro6 capability digest does not match the pinned sc-1429/v2 capability snapshot");
+    }
+    snapshot.put("capabilitySnapshotDigest", pinnedCapabilities);
     ArrayNode tasks = snapshot.putArray("tasks");
     tasks.add(descriptor.deepCopy());
     // The digest is computed last, over the object without it.

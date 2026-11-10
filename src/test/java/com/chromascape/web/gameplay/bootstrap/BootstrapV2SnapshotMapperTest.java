@@ -164,7 +164,9 @@ class BootstrapV2SnapshotMapperTest {
     catalog.put("buildId", "build-abc");
     catalog.put("catalogHash", "sha256:" + "c".repeat(64));
     catalog.put("catalogRevision", 7);
-    catalog.put("capabilityDigest", "sha256:" + "a".repeat(64));
+    catalog.put("capabilityDigest",
+                com.chromascape.web.gameplay.contract.v2.GameplayV2EligibilityFilter
+                    .capabilitySnapshotDigest(mapper));
     catalog.put("observationRevision", 11);
     catalog.put("taskRevision", 13);
     catalog.set("tasks", mapper.createArrayNode().add(task));
@@ -178,7 +180,9 @@ class BootstrapV2SnapshotMapperTest {
         .put("buildId", "build-abc")
         .put("catalogHash", "sha256:" + "c".repeat(64))
         .put("catalogRevision", 7)
-        .put("capabilityDigest", "sha256:" + "a".repeat(64))
+        .put("capabilityDigest",
+                com.chromascape.web.gameplay.contract.v2.GameplayV2EligibilityFilter
+                    .capabilitySnapshotDigest(mapper))
         .put("observationRevision", 11)
         .put("taskRevision", 13);
   }

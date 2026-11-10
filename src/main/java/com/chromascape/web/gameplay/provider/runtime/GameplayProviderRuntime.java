@@ -230,6 +230,7 @@ public final class GameplayProviderRuntime implements ProviderDecisionHandoff {
             decision.path("eligibleInputDigest").asText(null),
             turn.get().transcriptRef(),
             transcript.digest(),
+            session.knowledgeDigest(),
             decision));
   }
 

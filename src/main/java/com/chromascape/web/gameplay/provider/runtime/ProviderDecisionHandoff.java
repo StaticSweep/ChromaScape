@@ -57,6 +57,7 @@ public interface ProviderDecisionHandoff {
       String eligibleInputDigest,
       String transcriptRef,
       String transcriptSha256,
+      String knowledgeDigest,
       com.fasterxml.jackson.databind.JsonNode decision) {}
 
   /**
