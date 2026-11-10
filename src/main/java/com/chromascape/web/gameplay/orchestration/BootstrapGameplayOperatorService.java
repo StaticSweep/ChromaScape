@@ -705,6 +705,16 @@ public final class BootstrapGameplayOperatorService {
     }
   }
 
+  /**
+   * Authenticates the operator key for another operator surface.
+   *
+   * <p>The comparison is the same constant-time check this service uses for its own routes, so a
+   * second facade cannot weaken it by re-implementing it.
+   */
+  public void authorizeOperator(String presentedKey) {
+    requireOperator(presentedKey);
+  }
+
   private void requireOperator(String presentedKey) {
     byte[] presented =
         presentedKey == null ? new byte[0] : presentedKey.getBytes(StandardCharsets.UTF_8);
