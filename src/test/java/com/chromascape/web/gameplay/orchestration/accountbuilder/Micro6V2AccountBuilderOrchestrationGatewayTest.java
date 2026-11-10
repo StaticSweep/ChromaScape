@@ -35,6 +35,10 @@ class Micro6V2AccountBuilderOrchestrationGatewayTest {
   private volatile String catalogBody;
   /** Exact bytes the gateway transmitted on the last reserve call. */
   private volatile String lastReserveBody;
+  /** Exact bytes the gateway transmitted on the last start call. */
+  private volatile String lastStartBody;
+  /** Idempotency key the gateway presented on the last start call. */
+  private volatile String lastStartIdempotencyKey;
   /** Mutable so a test can script malformed worker evidence on the status route. */
   private volatile String badStatusBody;
   /** Scripted per-request delay for the slow-status deadline test. */
@@ -100,6 +104,31 @@ class Micro6V2AccountBuilderOrchestrationGatewayTest {
                   + "\"expiresAt\":\"2026-08-30T13:00:00Z\"},"
                   + "\"receiptId\":\"micro6:v2:reserve:req-1\","
                   + "\"evidenceRefs\":[\"micro6:v2:reserve:req-1\"]}");
+        });
+    server.createContext(
+        "/api/v2/gameplay/start",
+        exchange -> {
+          lastStartBody =
+              new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+          lastStartIdempotencyKey = exchange.getRequestHeaders().getFirst("Idempotency-Key");
+          // Micro6 echoes the start idempotency key and recomputes the envelope digest from the
+          // transmitted bytes; the scripted response attests the same digest the request carries.
+          exchange.getResponseHeaders().set("Idempotency-Key", "idem-1:start");
+          respond(
+              exchange,
+              200,
+              "{\"success\":true,\"requestId\":\"req-1\",\"status\":\"ACTIVE\","
+                  + "\"envelopeDigest\":\"sha256:"
+                  + "e".repeat(64)
+                  + "\","
+                  + "\"deliveryAcknowledged\":true,\"terminalReconciled\":false,"
+                  + "\"lease\":{\"reservationId\":\"reservation:req-1\",\"generation\":1,"
+                  + "\"fence\":1,\"fenceTokenDigest\":\"sha256:"
+                  + "d".repeat(64)
+                  + "\","
+                  + "\"expiresAt\":\"2026-08-30T13:00:00Z\"},"
+                  + "\"receiptId\":\"micro6:v2:start:req-1\","
+                  + "\"evidenceRefs\":[\"micro6:v2:start:req-1\"]}");
         });
     server.createContext(
         "/api/v2/gameplay/status/req-1",
@@ -349,6 +378,94 @@ class Micro6V2AccountBuilderOrchestrationGatewayTest {
         .isInstanceOf(AccountBuilderOrchestrationException.class)
         .hasMessageContaining("envelope digest");
     assertThat(lastReserveBody).isNull();
+  }
+
+  /**
+   * Start is the envelope-only contract Micro6 implements: it recomputes the envelope digest from
+   * the transmitted bytes and compares it to the reservation. Sending a re-serialisation of the v1
+   * carrier record would therefore be a 409, so the gateway must transmit the approved envelope
+   * exactly as it appears in the frozen bundle.
+   */
+  @Test
+  void dispatchTransmitsTheApprovedExecutionEnvelopeVerbatim() throws Exception {
+    var gateway = gateway();
+    byte[] frozen = frozenBundleBytes();
+    GatewayReceipt receipt =
+        gateway.dispatch(
+            deliveryRequest(frozen),
+            "sha256:" + "e".repeat(64),
+            new AccountBuilderOrchestrationModels.Lease(
+                "reservation:req-1", 1, 1, "sha256:" + "d".repeat(64), NOW.plusSeconds(3600)));
+
+    assertThat(receipt.state()).isEqualTo(State.ACTIVE);
+    assertThat(receipt.failureCode()).isEqualTo(FailureCode.NONE);
+    assertThat(receipt.lease()).isNotNull();
+    assertThat(lastStartIdempotencyKey).isEqualTo("idem-1:start");
+
+    com.fasterxml.jackson.databind.JsonNode body = objectMapper.readTree(lastStartBody);
+    java.util.List<String> members = new java.util.ArrayList<>();
+    body.fieldNames().forEachRemaining(members::add);
+    assertThat(members).as("start accepts exactly the envelope member").containsExactly("envelope");
+    com.fasterxml.jackson.databind.JsonNode approved =
+        objectMapper.readTree(frozen).path("executionEnvelope");
+    assertThat(body.path("envelope"))
+        .as("the transmitted envelope is the approved one, not the carrier record")
+        .isEqualTo(approved);
+    assertThat(body.path("envelope").path("mode").asText())
+        .as("a v1 carrier projection would have dropped the v2-only mode member")
+        .isEqualTo("LIVE_TASK");
+    assertThat(body.path("envelope").path("contractVersion").asText()).isEqualTo("sc-1429/v2");
+  }
+
+  /** A bundle that is not JSON can never be the approved envelope, so start must not be attempted. */
+  @Test
+  void dispatchWithUnparseableFrozenBundleFailsClosedBeforeAnyWireCall() {
+    var gateway = gateway();
+    OrchestrationRequest request =
+        deliveryRequest("not-json".getBytes(StandardCharsets.UTF_8));
+    assertThatThrownBy(
+            () ->
+                gateway.dispatch(
+                    request,
+                    "sha256:" + "e".repeat(64),
+                    new AccountBuilderOrchestrationModels.Lease(
+                        "reservation:req-1",
+                        1,
+                        1,
+                        "sha256:" + "d".repeat(64),
+                        NOW.plusSeconds(3600))))
+        .isInstanceOf(AccountBuilderOrchestrationException.class)
+        .hasMessageContaining("not valid JSON");
+    assertThat(lastStartBody).isNull();
+  }
+
+  /**
+   * Micro6's failure vocabulary is wider than this adapter's enum. An unmapped denial must keep the
+   * verbatim code as durable provenance rather than collapsing silently into a generic
+   * classification, and a code the adapter does understand must not gain a spurious reference.
+   */
+  @Test
+  void unmappedWireDenialCodeIsPreservedVerbatim() {
+    reconfigure(
+        "/api/v2/gameplay/reserve",
+        "{\"success\":false,\"outcome\":\"DENIED\",\"failureCode\":\"EXECUTOR_QUARANTINED\","
+            + "\"message\":\"executor quarantined\",\"deliveryAcknowledged\":false,"
+            + "\"terminalReconciled\":true,\"evidenceRefs\":[]}");
+    GatewayReceipt unmapped = gateway().reserve(request(), "sha256:" + "e".repeat(64));
+    assertThat(unmapped.state()).isEqualTo(State.DENIED);
+    assertThat(unmapped.failureCode()).isEqualTo(FailureCode.DELIVERY_UNCERTAIN);
+    assertThat(unmapped.evidenceRefs()).containsExactly("micro6:denial:EXECUTOR_QUARANTINED");
+
+    reconfigure(
+        "/api/v2/gameplay/reserve",
+        "{\"success\":false,\"outcome\":\"DENIED\",\"failureCode\":\"DEADLINE_EXPIRED\","
+            + "\"message\":\"deadline expired\",\"deliveryAcknowledged\":false,"
+            + "\"terminalReconciled\":true,\"evidenceRefs\":[]}");
+    GatewayReceipt mapped = gateway().reserve(request(), "sha256:" + "e".repeat(64));
+    assertThat(mapped.failureCode()).isEqualTo(FailureCode.DEADLINE_EXPIRED);
+    assertThat(mapped.evidenceRefs())
+        .as("a code the adapter classifies needs no extra provenance")
+        .isEmpty();
   }
 
   @Test

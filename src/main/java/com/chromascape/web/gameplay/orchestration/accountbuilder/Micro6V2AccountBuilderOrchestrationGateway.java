@@ -514,7 +514,8 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
       boolean acknowledged = response.path("deliveryAcknowledged").asBoolean(true);
       boolean reconciled = response.path("terminalReconciled").asBoolean(state.provenTerminal());
       Lease lease = parseLease(response);
-      List<String> evidenceRefs = parseEvidenceRefs(response, acknowledged);
+      List<String> evidenceRefs =
+          withWireDenialCode(response, parseEvidenceRefs(response, acknowledged));
       return new GatewayReceipt(
           responseRequestId,
           responseEnvelopeDigest,
@@ -543,7 +544,8 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
     // Failure responses carry no attested identity: the receipt records the attempted
     // correlation so recovery can reconcile it. No worker evidence is fabricated here.
     Lease lease = parseLease(response);
-    List<String> evidenceRefs = parseEvidenceRefs(response, acknowledged);
+    List<String> evidenceRefs =
+        withWireDenialCode(response, parseEvidenceRefs(response, acknowledged));
     return new GatewayReceipt(
         requestId,
         envelopeDigest,
@@ -641,6 +643,38 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
           "Micro6 v2 acknowledged delivery is missing worker evidence");
     }
     return List.copyOf(refsList);
+  }
+
+  /**
+   * The verbatim wire denial code as durable provenance.
+   *
+   * <p>Micro6's failure vocabulary is wider than this adapter's {@link FailureCode} enum, and a code
+   * outside it would otherwise be reduced to a generic classification with no trace of what the
+   * executor actually said. The raw code is recorded as a namespaced reference so a denial stays
+   * truthful after the fact; the {@code micro6:denial:} prefix keeps it distinguishable from worker
+   * evidence, which is the only thing {@code evidenceRefs} is otherwise allowed to carry.
+   */
+  private List<String> withWireDenialCode(JsonNode response, List<String> evidenceRefs) {
+    String code = firstText(response, "failureCode", "failure_code");
+    if (code == null || code.isBlank() || isKnownFailureCode(code)) {
+      return evidenceRefs;
+    }
+    String reference = "micro6:denial:" + code.trim();
+    if (evidenceRefs.contains(reference)) {
+      return evidenceRefs;
+    }
+    List<String> merged = new ArrayList<>(evidenceRefs);
+    merged.add(reference);
+    return List.copyOf(merged);
+  }
+
+  private boolean isKnownFailureCode(String code) {
+    try {
+      FailureCode.valueOf(code);
+      return true;
+    } catch (IllegalArgumentException ignored) {
+      return false;
+    }
   }
 
   private State mapWireState(String wireStatus, boolean success) {
