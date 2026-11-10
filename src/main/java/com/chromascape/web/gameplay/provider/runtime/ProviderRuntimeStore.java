@@ -40,7 +40,34 @@ public interface ProviderRuntimeStore {
       ProviderUsage usage,
       String transcriptRef);
 
+  /**
+   * Terminal write for an SC-1429/v2 decision.
+   *
+   * <p>The v2 decision is not the v1 record: it carries the provider's GoalPlan, the prompt
+   * identity, the confidence triple and the eligibility digest it was shown. It is persisted as the
+   * exact provider bytes with {@code contractVersion = sc-1429/v2}, so a later draft can be derived
+   * from durable provider output rather than from a relabelled v1 projection.
+   */
+  TurnView finishV2(
+      String turnId,
+      TurnState state,
+      FailureCode failureCode,
+      com.fasterxml.jackson.databind.JsonNode decision,
+      String decisionDigest,
+      String semanticActionDigest,
+      ProviderUsage usage,
+      String transcriptRef);
+
   TurnView markNeedsReconciliation(String turnId, FailureCode failureCode);
+
+  /**
+   * Read-only lookup of the raw persisted decision row for a turn, whatever its contract version.
+   * Returns empty when the turn has no decision row. The JSON is the exact persisted provider
+   * bytes; callers must check {@code contractVersion} before interpreting it.
+   */
+  java.util.Optional<com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels
+          .PersistedDecisionRow>
+      findDecisionRow(String turnId);
 
   void recordTranscript(String turnId, String artifactRef, long byteLength);
 

@@ -30,6 +30,36 @@ public interface ProviderDecisionHandoff {
   }
 
   /**
+   * Returns the persisted SC-1429/v2 decision for a proven {@code DECIDED} turn.
+   *
+   * <p>The decision is the exact provider bytes that were validated and stored, never a projection
+   * of them. It is the only legitimate source for a v2 draft: a v1 decision carries no GoalPlan and
+   * cannot be relabelled. Defaulted to empty so read-only test doubles stay functional; the
+   * production runtime overrides it.
+   */
+  default Optional<PersistedV2Decision> findValidatedV2Decision(String sessionId, String turnId) {
+    return Optional.empty();
+  }
+
+  /**
+   * Complete provenance of one persisted v2 decision. Every digest is the canonical digest of the
+   * exact bytes that were validated and persisted.
+   */
+  record PersistedV2Decision(
+      String sessionId,
+      String turnId,
+      String requestId,
+      String provider,
+      String modelId,
+      String decisionDigest,
+      String semanticActionDigest,
+      String goalPlanDigest,
+      String eligibleInputDigest,
+      String transcriptRef,
+      String transcriptSha256,
+      com.fasterxml.jackson.databind.JsonNode decision) {}
+
+  /**
    * Complete immutable provenance of one persisted provider decision. Every digest is the canonical
    * digest of the exact bytes that were validated and persisted; the transcript reference doubles
    * as the transcript content hash of the redacted artifact.

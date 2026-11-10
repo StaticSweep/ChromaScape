@@ -371,6 +371,8 @@ class GameplayProviderRuntimeTest {
     private final Map<String, String> toolCalls = new LinkedHashMap<>();
     private final Map<String, String> toolCallArguments = new LinkedHashMap<>();
     private final Map<String, String> toolCallResults = new LinkedHashMap<>();
+    private final Map<String, ProviderRuntimeModels.PersistedDecisionRow> v2Decisions =
+        new LinkedHashMap<>();
 
     private InMemoryStore(CanonicalGameplayJson canonical) {
       this.canonical = canonical;
@@ -477,6 +479,36 @@ class GameplayProviderRuntimeTest {
         String transcriptRef) {
       replace(turnId, state, failureCode, decision, usage, transcriptRef, null, null);
       return turns.get(turnId);
+    }
+
+    @Override
+    public synchronized TurnView finishV2(
+        String turnId,
+        TurnState state,
+        FailureCode failureCode,
+        com.fasterxml.jackson.databind.JsonNode decision,
+        String decisionDigest,
+        String semanticActionDigest,
+        ProviderUsage usage,
+        String transcriptRef) {
+      replace(turnId, state, failureCode, null, usage, transcriptRef, null, null);
+      v2Decisions.put(
+          turnId,
+          new ProviderRuntimeModels.PersistedDecisionRow(
+              turnId,
+              "sc-1429/v2",
+              decision.path("decisionId").asText(),
+              decisionDigest,
+              semanticActionDigest,
+              state.name(),
+              decision.deepCopy()));
+      return turns.get(turnId);
+    }
+
+    @Override
+    public synchronized Optional<ProviderRuntimeModels.PersistedDecisionRow> findDecisionRow(
+        String turnId) {
+      return Optional.ofNullable(v2Decisions.get(turnId));
     }
 
     @Override

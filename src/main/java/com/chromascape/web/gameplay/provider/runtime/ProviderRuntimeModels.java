@@ -275,6 +275,19 @@ public final class ProviderRuntimeModels {
       boolean operatorKeyConfigured,
       Map<Provider, ProviderReadiness> providers) {}
 
+  /**
+   * Raw persisted decision row. The v2 decision is exposed as the exact provider bytes plus its
+   * digests; it is never projected into the v1 record type.
+   */
+  public record PersistedDecisionRow(
+      String turnId,
+      String contractVersion,
+      String decisionId,
+      String decisionDigest,
+      String semanticActionDigest,
+      String outcome,
+      com.fasterxml.jackson.databind.JsonNode decision) {}
+
   public record ProviderReadiness(
       boolean available, String executable, String version, FailureCode failureCode) {}
 }

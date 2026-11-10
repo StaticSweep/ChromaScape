@@ -143,6 +143,85 @@ class ProviderOutputNormalizerTest {
     assertEquals("INVALID_EVIDENCE_REFERENCE", exception.failureCode());
   }
 
+  @Test
+  void normalizesAValidV2DecisionAndDerivesItsDigests() throws Exception {
+    JsonNode fixturesV2 = v2Fixtures();
+    JsonNode decision = fixturesV2.path("claudeDecision").deepCopy();
+    TurnRequest request = requestWith(fixturesV2.path("semanticAction"));
+    bindDecision(decision, request);
+
+    var normalized =
+        normalizer.normalizeV2(
+            mapper.writeValueAsString(decision), Provider.CLAUDE, decision.path("modelVersion").asText(), request);
+
+    assertEquals(TurnState.DECIDED, normalized.state());
+    assertEquals(canonical.digest(decision), normalized.decisionDigest());
+    org.junit.jupiter.api.Assertions.assertTrue(
+        normalized.semanticActionDigest().matches("sha256:[0-9a-f]{64}"));
+    org.junit.jupiter.api.Assertions.assertTrue(
+        normalized.decisionDigest().matches("sha256:[0-9a-f]{64}"));
+  }
+
+  @Test
+  void rejectsAV2DecisionThatDidNotBindTheShownEligibilityDigest() throws Exception {
+    JsonNode fixturesV2 = v2Fixtures();
+    JsonNode decision = fixturesV2.path("claudeDecision").deepCopy();
+    TurnRequest request = requestWith(fixturesV2.path("semanticAction"));
+    bindDecision(decision, request);
+    ((com.fasterxml.jackson.databind.node.ObjectNode) decision)
+        .put("eligibleInputDigest", "sha256:" + "9".repeat(64));
+
+    ProviderRuntimeException exception =
+        assertThrows(
+            ProviderRuntimeException.class,
+            () ->
+                normalizer.normalizeV2(
+                    mapper.writeValueAsString(decision),
+                    Provider.CLAUDE,
+                    decision.path("modelVersion").asText(),
+                    request));
+    assertEquals(ProviderRuntimeModels.FailureCode.INVALID_OUTPUT.name(), exception.failureCode());
+  }
+
+  @Test
+  void rejectsAV2DecisionWhoseGoalPlanDigestDoesNotMatchItsBytes() throws Exception {
+    JsonNode fixturesV2 = v2Fixtures();
+    JsonNode decision = fixturesV2.path("claudeDecision").deepCopy();
+    TurnRequest request = requestWith(fixturesV2.path("semanticAction"));
+    bindDecision(decision, request);
+    ((com.fasterxml.jackson.databind.node.ObjectNode) decision.path("goalPlan"))
+        .put("terminalObjective", "TAMPERED");
+
+    ProviderRuntimeException exception =
+        assertThrows(
+            ProviderRuntimeException.class,
+            () ->
+                normalizer.normalizeV2(
+                    mapper.writeValueAsString(decision),
+                    Provider.CLAUDE,
+                    decision.path("modelVersion").asText(),
+                    request));
+    assertEquals(ProviderRuntimeModels.FailureCode.INVALID_OUTPUT.name(), exception.failureCode());
+  }
+
+  private JsonNode v2Fixtures() throws Exception {
+    try (InputStream input =
+        getClass()
+            .getClassLoader()
+            .getResourceAsStream("contracts/gameplay/sc-1429-golden-fixtures-v2.json")) {
+      return mapper.readTree(input);
+    }
+  }
+
+  /** Binds the fixture decision to the request's pinned eligibility digest and evidence. */
+  private void bindDecision(JsonNode decision, TurnRequest request) {
+    var node = (com.fasterxml.jackson.databind.node.ObjectNode) decision;
+    node.put("eligibleInputDigest", request.eligibilityDigest());
+    var evidence = mapper.createArrayNode();
+    evidence.add(request.observationDigest());
+    node.set("evidenceRefs", evidence);
+  }
+
   private TurnRequest requestWith(JsonNode action) {
     ArrayNode eligible = mapper.createArrayNode().add(action);
     JsonNode observation = fixtures.path("observation");

@@ -201,6 +201,38 @@ public final class GameplayProviderRuntime implements ProviderDecisionHandoff {
     return Optional.of(transcripts.read(turn.get().transcriptRef()));
   }
 
+  @Override
+  public Optional<PersistedV2Decision> findValidatedV2Decision(String sessionId, String turnId) {
+    Optional<TurnView> turn = store.findTurn(sessionId, turnId);
+    if (turn.isEmpty() || turn.get().state() != TurnState.DECIDED) {
+      return Optional.empty();
+    }
+    Optional<ProviderRuntimeModels.PersistedDecisionRow> row = store.findDecisionRow(turnId);
+    if (row.isEmpty() || !"sc-1429/v2".equals(row.get().contractVersion())) {
+      return Optional.empty();
+    }
+    SessionView session = store.findSession(sessionId).orElse(null);
+    if (session == null || turn.get().transcriptRef() == null) {
+      return Optional.empty();
+    }
+    RedactedTranscriptStore.Verification transcript = transcripts.verify(turn.get().transcriptRef());
+    com.fasterxml.jackson.databind.JsonNode decision = row.get().decision();
+    return Optional.of(
+        new PersistedV2Decision(
+            sessionId,
+            turnId,
+            turn.get().requestId(),
+            session.provider().name(),
+            session.modelId(),
+            row.get().decisionDigest(),
+            row.get().semanticActionDigest(),
+            decision.path("goalPlan").path("goalPlanDigest").asText(null),
+            decision.path("eligibleInputDigest").asText(null),
+            turn.get().transcriptRef(),
+            transcript.digest(),
+            decision));
+  }
+
   void recoverAtStartup() {
     for (TurnView turn : store.recoverableTurns()) {
       if (turn.state().submitted()) {
@@ -265,6 +297,21 @@ public final class GameplayProviderRuntime implements ProviderDecisionHandoff {
         return;
       }
       store.markNormalizing(request.turnId());
+      if (session.v2()) {
+        ProviderOutputNormalizer.NormalizedV2Decision normalizedV2 =
+            normalizer.normalizeV2(
+                result.rawDecision(), session.provider(), session.modelId(), request);
+        store.finishV2(
+            request.turnId(),
+            normalizedV2.state(),
+            FailureCode.NONE,
+            normalizedV2.decision(),
+            normalizedV2.decisionDigest(),
+            normalizedV2.semanticActionDigest(),
+            result.usage(),
+            artifact.reference());
+        return;
+      }
       NormalizedDecision normalized =
           normalizer.normalize(
               result.rawDecision(), session.provider(), session.modelId(), request);

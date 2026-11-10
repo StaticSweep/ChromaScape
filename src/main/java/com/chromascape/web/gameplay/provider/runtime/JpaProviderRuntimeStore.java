@@ -268,6 +268,94 @@ public class JpaProviderRuntimeStore implements ProviderRuntimeStore {
 
   @Override
   @Transactional
+  public TurnView finishV2(
+      String turnId,
+      TurnState state,
+      FailureCode failureCode,
+      com.fasterxml.jackson.databind.JsonNode decision,
+      String decisionDigest,
+      String semanticActionDigest,
+      ProviderUsage usage,
+      String transcriptRef) {
+    if (!state.terminal()) {
+      throw new IllegalArgumentException("finishV2 requires a terminal turn state");
+    }
+    ProviderTurnEntity turn = mutableTurnForFinish(turnId);
+    final ProviderSessionEntity session = lockSession(turn.sessionId);
+    if (usage != null && exceedsBudget(turn, usage)) {
+      state = TurnState.BUDGET_EXHAUSTED;
+      failureCode = FailureCode.BUDGET_EXHAUSTED;
+      decision = null;
+    }
+    transition(turn, state, failureCode);
+    turn.usageJson = usage == null ? null : write(usage);
+    turn.transcriptRef = transcriptRef;
+    if (decision != null) {
+      if (decisionDigest == null
+          || !decisionDigest.matches("sha256:[0-9a-f]{64}")
+          || semanticActionDigest == null
+          || !semanticActionDigest.matches("sha256:[0-9a-f]{64}")) {
+        throw new IllegalArgumentException("A v2 decision requires canonical digests");
+      }
+      ProviderDecisionEntity persisted = new ProviderDecisionEntity();
+      persisted.decisionId = decision.path("decisionId").asText();
+      persisted.turnId = turnId;
+      persisted.contractVersion = decision.path("contractVersion").asText();
+      persisted.decisionDigest = decisionDigest;
+      persisted.semanticActionDigest = semanticActionDigest;
+      persisted.outcome = state.name();
+      persisted.decisionJson = write(decision);
+      persisted.createdAt = clock.instant();
+      turn.decisionDigest = decisionDigest;
+      turn.semanticActionDigest = semanticActionDigest;
+      entityManager.persist(persisted);
+    }
+    if (usage != null) {
+      chargeUsage(turn, usage);
+    }
+    refreshSessionState(session);
+    appendEvent(turnId, "TURN_" + state.name(), canonicalJson.digest(failureCode.name()));
+    entityManager.flush();
+    return turnView(turn);
+  }
+
+  @Override
+  @Transactional
+  public java.util.Optional<ProviderRuntimeModels.PersistedDecisionRow> findDecisionRow(
+      String turnId) {
+    java.util.List<ProviderDecisionEntity> rows =
+        entityManager
+            .createQuery(
+                "select d from ProviderDecisionEntity d where d.turnId=:turnId",
+                ProviderDecisionEntity.class)
+            .setParameter("turnId", turnId)
+            .setMaxResults(1)
+            .getResultList();
+    if (rows.isEmpty()) {
+      return java.util.Optional.empty();
+    }
+    ProviderDecisionEntity row = rows.get(0);
+    com.fasterxml.jackson.databind.JsonNode decision;
+    try {
+      decision = objectMapper.readTree(row.decisionJson);
+    } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+      throw new ProviderRuntimeException(
+          ProviderRuntimeModels.FailureCode.INVALID_EVIDENCE_REFERENCE.name(),
+          "Persisted decision row is not valid JSON");
+    }
+    return java.util.Optional.of(
+        new ProviderRuntimeModels.PersistedDecisionRow(
+            row.turnId,
+            row.contractVersion,
+            row.decisionId,
+            row.decisionDigest,
+            row.semanticActionDigest,
+            row.outcome,
+            decision));
+  }
+
+  @Override
+  @Transactional
   public TurnView markNeedsReconciliation(String turnId, FailureCode failureCode) {
     ProviderTurnEntity turn = mutableTurn(turnId);
     ProviderSessionEntity session = lockSession(turn.sessionId);
@@ -636,7 +724,12 @@ public class JpaProviderRuntimeStore implements ProviderRuntimeStore {
                   ProviderDecisionEntity.class)
               .setParameter("turnId", entity.turnId)
               .getSingleResult();
-      decision = read(persisted.decisionJson, ProviderDecision.class);
+      // A v2 decision is not a v1 record: it carries the GoalPlan and is exposed through the
+      // dedicated v2 handoff read. Deserialising it into the v1 type would silently fabricate a
+      // v1 projection, so the v1 view stays empty for it.
+      if (!"sc-1429/v2".equals(persisted.contractVersion)) {
+        decision = read(persisted.decisionJson, ProviderDecision.class);
+      }
     } catch (NoResultException ignored) {
       // Non-decision terminal and in-flight turns intentionally have no decision row.
     }
