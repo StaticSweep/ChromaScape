@@ -218,7 +218,88 @@ public final class AccountBuilderOrchestrationModels {
       SnapshotBindings bindings,
       HumanAuthority authority,
       JsonNode observation,
-      Instant deadline) {}
+      Instant deadline,
+      FrozenV2Bundle frozenBundle) {
+
+    /**
+     * Legacy twelve-argument form for callers that carry no frozen v2 bundle (probes, held/shadow
+     * requests and tests). A delivery-mode request without a frozen bundle is refused by the v2
+     * gateway, so this constructor can never smuggle a partial bundle onto the wire.
+     */
+    public OrchestrationRequest(
+        String orchestrationId,
+        String requestId,
+        String idempotencyKey,
+        String requestFingerprint,
+        Mode mode,
+        String sourceType,
+        ProviderDecision decision,
+        ExecutionEnvelope envelope,
+        SnapshotBindings bindings,
+        HumanAuthority authority,
+        JsonNode observation,
+        Instant deadline) {
+      this(
+          orchestrationId,
+          requestId,
+          idempotencyKey,
+          requestFingerprint,
+          mode,
+          sourceType,
+          decision,
+          envelope,
+          bindings,
+          authority,
+          observation,
+          deadline,
+          null);
+    }
+  }
+
+  /**
+   * The exact SC-1429/v2 bundle that passed local validation, frozen as canonical bytes.
+   *
+   * <p>The v2 gateway transmits {@link #bundleBytes()} verbatim on reserve; it never rebuilds the
+   * request from mutable domain objects. Every digest here is the digest of the bytes the operator
+   * previewed and the human approved, so a later mutation cannot change what is delivered. The
+   * bundle is absent for non-delivery requests and its absence is a proven denial, never a reason
+   * to fall back to a partial payload.
+   */
+  public record FrozenV2Bundle(
+      byte[] bundleBytes,
+      String bundleDigest,
+      String envelopeDigest,
+      String scopeDigest,
+      String catalogDigest,
+      String observationDigest,
+      String planningInputDigest,
+      String eligibilityResultDigest,
+      String goalPlanDigest,
+      String semanticActionDigest,
+      String authorityId,
+      String requestId,
+      String idempotencyKey,
+      Instant envelopeDeadline) {
+    public FrozenV2Bundle {
+      bundleBytes = bundleBytes == null ? new byte[0] : bundleBytes.clone();
+    }
+
+    /** Defensive copy of the exact bytes that were validated and approved. */
+    public byte[] bytes() {
+      return bundleBytes.clone();
+    }
+
+    /** True when this bundle carries usable bytes and identity. */
+    public boolean usable() {
+      return bundleBytes.length > 0
+          && requestId != null
+          && !requestId.isBlank()
+          && idempotencyKey != null
+          && !idempotencyKey.isBlank()
+          && envelopeDigest != null
+          && !envelopeDigest.isBlank();
+    }
+  }
 
   /**
    * Production provider-orchestration command. It carries provider session and turn identity plus
@@ -236,7 +317,38 @@ public final class AccountBuilderOrchestrationModels {
       ExecutionEnvelope envelope,
       HumanAuthority authority,
       JsonNode observation,
-      Instant deadline) {}
+      Instant deadline,
+      FrozenV2Bundle frozenBundle) {
+
+    /**
+     * Legacy nine-argument form for callers with no frozen v2 bundle. The v2 gateway refuses a
+     * delivery request without one, so this form cannot silently deliver a partial bundle.
+     */
+    public ProviderOrchestrationCommand(
+        String providerSessionId,
+        String providerTurnId,
+        String orchestrationId,
+        String requestId,
+        String idempotencyKey,
+        Mode mode,
+        ExecutionEnvelope envelope,
+        HumanAuthority authority,
+        JsonNode observation,
+        Instant deadline) {
+      this(
+          providerSessionId,
+          providerTurnId,
+          orchestrationId,
+          requestId,
+          idempotencyKey,
+          mode,
+          envelope,
+          authority,
+          observation,
+          deadline,
+          null);
+    }
+  }
 
   /**
    * Non-secret identity used for every gateway operation after the initial validated request.

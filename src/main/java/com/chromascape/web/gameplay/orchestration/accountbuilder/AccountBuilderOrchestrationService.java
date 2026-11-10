@@ -201,6 +201,15 @@ public final class AccountBuilderOrchestrationService {
     if (!properties.isEnabled() || !properties.isLiveDeliveryEnabled()) {
       return terminal(request, State.DENIED, FailureCode.RUNTIME_DISABLED, null, false);
     }
+    // A delivery request must carry the frozen complete v2 bundle before any budget or authority
+    // is touched. Refusing here is a proven pre-submission denial: no authority is consumed and no
+    // gateway call is made, so a partial payload can never burn a one-use approval.
+    if (request.frozenBundle() == null || !request.frozenBundle().usable()) {
+      return terminal(request, State.DENIED, FailureCode.INVALID_CONTRACT, null, false);
+    }
+    if (!request.frozenBundle().envelopeDigest().equals(envelopeDigest)) {
+      return terminal(request, State.DENIED, FailureCode.STALE_BINDING, null, false);
+    }
 
     boolean authorityConsumed = false;
     try {

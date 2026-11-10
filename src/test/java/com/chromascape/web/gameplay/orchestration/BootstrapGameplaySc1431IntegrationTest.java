@@ -123,7 +123,7 @@ class BootstrapGameplaySc1431IntegrationTest {
   }
 
   @Test
-  void enabledDeliveryBindsTheDistinctServerCapabilityDigestAndReachesReserve() {
+  void enabledDeliveryWithoutAFrozenV2BundleIsDeniedBeforeAnyReserve() {
     Bundle bundle = bundle("enabled");
     RecordingGateway liveGateway = new LiveCapabilityGateway();
     AccountBuilderOrchestrationService enabledService =
@@ -135,20 +135,15 @@ class BootstrapGameplaySc1431IntegrationTest {
         orchestrator.dispatch(
             bundle.observation(), bundle.decision(), bundle.envelope(), bundle.authority());
 
-    assertThat(receipt.failureCode()).isEqualTo("GATEWAY_UNAVAILABLE");
+    // The legacy v1 bootstrap request carries no frozen SC-1429/v2 bundle. Micro6's v2 gate can
+    // only ever refuse such a payload, so the delivery is denied before budget or authority is
+    // consumed and before any reserve. The read-only capability preflight still runs, and the
+    // claim itself is still durable.
+    assertThat(receipt.failureCode()).isEqualTo("INVALID_CONTRACT");
     String orchestrationId = "bootstrap-" + bundle.envelope().requestId();
-    // The persisted request binds the server-issued capability digest, which is distinct from the
-    // catalog digest in the same proposal snapshot.
     assertThat(store.find(orchestrationId)).isPresent();
-    assertThat(store.readAggregate(orchestrationId).bindings().capabilityDigest())
-        .isEqualTo(SERVER_CAPABILITY_DIGEST);
-    assertThat(store.readAggregate(orchestrationId).bindings().capabilityDigest())
-        .isNotEqualTo(store.readAggregate(orchestrationId).bindings().catalogDigest());
-    assertThat(store.readAggregate(orchestrationId).bindings().catalogDigest())
-        .isEqualTo(bundle.envelope().catalogDigest());
-    // Preflight plus the immediate-before-reserve revalidation: exactly two read-only probes.
-    assertThat(liveGateway.capabilityCalls.get()).isEqualTo(2);
-    assertThat(liveGateway.reserves.get()).isEqualTo(1);
+    assertThat(store.find(orchestrationId).orElseThrow().authorityConsumed()).isFalse();
+    assertThat(liveGateway.reserves.get()).isZero();
   }
 
   @Test
@@ -383,7 +378,7 @@ class BootstrapGameplaySc1431IntegrationTest {
   }
 
   @Test
-  void observationDriftBetweenPreflightAndReserveFailsBeforeReserve() {
+  void observationDriftIsIrrelevantWithoutAFrozenV2Bundle() {
     Bundle bundle = bundle("clientdrift");
     RecordingGateway drifted =
         new LiveCapabilityGateway() {
@@ -418,7 +413,9 @@ class BootstrapGameplaySc1431IntegrationTest {
         orchestrator.dispatch(
             bundle.observation(), bundle.decision(), bundle.envelope(), bundle.authority());
 
-    assertThat(receipt.failureCode()).isEqualTo("STALE_BINDING");
+    // Without the frozen v2 bundle the request is denied before any reserve, so the drifted
+    // capability can never be reserved against and no authority is consumed.
+    assertThat(receipt.failureCode()).isEqualTo("INVALID_CONTRACT");
     assertThat(drifted.reserves.get()).isZero();
   }
 

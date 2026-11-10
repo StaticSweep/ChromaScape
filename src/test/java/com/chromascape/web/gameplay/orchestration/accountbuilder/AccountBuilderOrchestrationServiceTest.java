@@ -677,8 +677,36 @@ class AccountBuilderOrchestrationServiceTest {
             bindings,
             authority,
             observation,
-            envelope.deadline());
+            envelope.deadline(),
+            frozenBundle(envelope));
     return withFingerprint(withoutFingerprint, validator.immutableFingerprint(withoutFingerprint));
+  }
+
+  /**
+   * Minimal frozen v2 bundle for delivery-mode fixtures. Its envelope digest is the canonical digest
+   * of the request envelope, which is exactly the identity the service and gateway compare.
+   */
+  private AccountBuilderOrchestrationModels.FrozenV2Bundle frozenBundle(ExecutionEnvelope envelope) {
+    String envelopeDigest = canonicalJson.digest(envelope);
+    return new AccountBuilderOrchestrationModels.FrozenV2Bundle(
+        ("{\"executionEnvelope\":{\"contractVersion\":\"sc-1429/v2\",\"mode\":\"LIVE_TASK\","
+                + "\"requestId\":\""
+                + envelope.requestId()
+                + "\"}}")
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8),
+        canonicalJson.digest(java.util.Map.of("bundle", envelope.requestId())),
+        envelopeDigest,
+        fixtures.at("/expectedDigests/approvedScope").asText(),
+        envelope.catalogDigest(),
+        "sha256:" + "b".repeat(64),
+        "sha256:" + "e".repeat(64),
+        "sha256:" + "f".repeat(64),
+        envelope.goalPlanDigest(),
+        envelope.semanticActionDigest(),
+        envelope.authorityId(),
+        envelope.requestId(),
+        envelope.idempotencyKey(),
+        envelope.deadline());
   }
 
   private OrchestrationRequest withKillSwitchScope(OrchestrationRequest request, String scope) {
@@ -700,7 +728,8 @@ class AccountBuilderOrchestrationServiceTest {
             request.bindings(),
             request.authority(),
             request.observation(),
-            request.deadline());
+            request.deadline(),
+            frozenBundle(envelope));
     return withFingerprint(changed, validator.immutableFingerprint(changed));
   }
 
@@ -718,7 +747,8 @@ class AccountBuilderOrchestrationServiceTest {
             request.bindings(),
             request.authority(),
             request.observation(),
-            request.deadline());
+            request.deadline(),
+            request.frozenBundle());
     return withFingerprint(changed, validator.immutableFingerprint(changed));
   }
 
@@ -736,7 +766,8 @@ class AccountBuilderOrchestrationServiceTest {
             request.bindings(),
             request.authority(),
             request.observation(),
-            request.deadline());
+            request.deadline(),
+            request.frozenBundle());
     return withFingerprint(changed, validator.immutableFingerprint(changed));
   }
 
@@ -753,7 +784,8 @@ class AccountBuilderOrchestrationServiceTest {
         request.bindings(),
         request.authority(),
         request.observation(),
-        request.deadline());
+        request.deadline(),
+        request.frozenBundle());
   }
 
   private final class FakeGateway implements AccountBuilderOrchestrationGateway {

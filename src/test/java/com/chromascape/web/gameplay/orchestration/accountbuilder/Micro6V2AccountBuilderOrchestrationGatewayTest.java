@@ -33,6 +33,8 @@ class Micro6V2AccountBuilderOrchestrationGatewayTest {
   private HttpServer server;
   /** Mutable so a test can script the catalog's per-task attestation. */
   private volatile String catalogBody;
+  /** Exact bytes the gateway transmitted on the last reserve call. */
+  private volatile String lastReserveBody;
   /** Mutable so a test can script malformed worker evidence on the status route. */
   private volatile String badStatusBody;
   /** Scripted per-request delay for the slow-status deadline test. */
@@ -81,7 +83,8 @@ class Micro6V2AccountBuilderOrchestrationGatewayTest {
     server.createContext(
         "/api/v2/gameplay/reserve",
         exchange -> {
-          exchange.getRequestBody().readAllBytes();
+          lastReserveBody =
+              new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
           respond(
               exchange,
               201,
@@ -282,13 +285,77 @@ class Micro6V2AccountBuilderOrchestrationGatewayTest {
     assertThat(stopped.state()).isEqualTo(State.STOPPED);
   }
 
+  /**
+   * The bootstrap reserve body must be the complete SC-1429/v2 bundle transmitted verbatim. Micro6's
+   * {@code GameplayEnvelopeV2Gate} requires ten objects and rejects the legacy five-key shape with
+   * {@code INVALID_BUNDLE}, so a five-key transmission can never reserve. The captured bytes are
+   * written to {@code build/sc1498/bootstrap-reserve-body.json} so the Micro6 side can run them
+   * through the real gate.
+   */
+  @Test
+  void reserveTransmitsTheFrozenBundleVerbatim() throws Exception {
+    var gateway = gateway();
+    byte[] frozen = frozenBundleBytes();
+    gateway.reserve(deliveryRequest(frozen), "sha256:" + "e".repeat(64));
+
+    assertThat(lastReserveBody).isNotNull();
+    // Capture the exact transmitted bytes first: the Micro6 cross-boundary test consumes them,
+    // and the artifact must exist even while this assertion is still failing.
+    java.nio.file.Path captured =
+        java.nio.file.Path.of("build", "sc1498", "bootstrap-reserve-body.json");
+    java.nio.file.Files.createDirectories(captured.getParent());
+    java.nio.file.Files.writeString(captured, lastReserveBody);
+    assertThat(lastReserveBody.getBytes(StandardCharsets.UTF_8)).isEqualTo(frozen);
+    com.fasterxml.jackson.databind.JsonNode body = objectMapper.readTree(lastReserveBody);
+    java.util.List<String> members = new java.util.ArrayList<>();
+    body.fieldNames().forEachRemaining(members::add);
+    assertThat(members)
+        .containsExactlyInAnyOrder(
+            "executionEnvelope",
+            "catalogSnapshot",
+            "semanticObservation",
+            "planningInput",
+            "eligibilityResult",
+            "providerDecision",
+            "goalPlan",
+            "semanticAction",
+            "approvedScope",
+            "authority");
+    assertThat(body.path("executionEnvelope").path("contractVersion").asText())
+        .isEqualTo("sc-1429/v2");
+    assertThat(body.path("executionEnvelope").path("mode").asText()).isEqualTo("LIVE_TASK");
+  }
+
+  /**
+   * A delivery request without a frozen bundle is a proven pre-submission denial. Falling back to a
+   * partial payload would consume authority and then be refused by Micro6, which is exactly the
+   * defect this adapter must never reintroduce.
+   */
+  @Test
+  void reserveWithoutAFrozenBundleFailsClosedBeforeAnyWireCall() {
+    var gateway = gateway();
+    assertThatThrownBy(
+            () -> gateway.reserve(requestWithoutFrozenBundle(), "sha256:" + "e".repeat(64)))
+        .isInstanceOf(AccountBuilderOrchestrationException.class)
+        .hasMessageContaining("frozen SC-1429/v2 bundle");
+    assertThat(lastReserveBody).isNull();
+  }
+
+  @Test
+  void reserveWithAMismatchedFrozenEnvelopeDigestFailsClosed() {
+    var gateway = gateway();
+    OrchestrationRequest delivery = deliveryRequest(frozenBundleBytesUnchecked());
+    assertThatThrownBy(() -> gateway.reserve(delivery, "sha256:" + "f".repeat(64)))
+        .isInstanceOf(AccountBuilderOrchestrationException.class)
+        .hasMessageContaining("envelope digest");
+    assertThat(lastReserveBody).isNull();
+  }
+
   @Test
   void unknownWireStateFailsClosedToReconciliation() {
-    var gateway = gateway();
     assertThat(State.NEEDS_RECONCILIATION.terminal()).isTrue();
     assertThat(FailureCode.DELIVERY_UNCERTAIN).isNotEqualTo(FailureCode.NONE);
   }
-
   @Test
   void awaitTerminalReturnsProvenTerminalReceiptWhileWithinDeadline() {
     var gateway = gateway();
@@ -620,7 +687,73 @@ class Micro6V2AccountBuilderOrchestrationGatewayTest {
         Clock.fixed(NOW, ZoneOffset.UTC));
   }
 
+  /**
+   * A delivery request carrying the frozen ten-object bundle. The envelope digest is the one the
+   * scripted Micro6 reserve response attests.
+   */
+  private OrchestrationRequest deliveryRequest(byte[] frozenBytes) {
+    return new OrchestrationRequest(
+        "orch-1",
+        "req-1",
+        "idem-1",
+        "sha256:" + "f".repeat(64),
+        AccountBuilderOrchestrationModels.Mode.BOOTSTRAP_RECORDING,
+        "PROVIDER:CLAUDE",
+        null,
+        envelope(),
+        null,
+        null,
+        null,
+        NOW.plusSeconds(300),
+        new AccountBuilderOrchestrationModels.FrozenV2Bundle(
+            frozenBytes,
+            "sha256:" + "9".repeat(64),
+            "sha256:" + "e".repeat(64),
+            "sha256:" + "8".repeat(64),
+            "sha256:" + "c".repeat(64),
+            "sha256:" + "7".repeat(64),
+            "sha256:" + "6".repeat(64),
+            "sha256:" + "5".repeat(64),
+            "sha256:" + "1".repeat(64),
+            "sha256:" + "4".repeat(64),
+            "auth-1",
+            "req-1",
+            "idem-1",
+            NOW.plusSeconds(300)));
+  }
+
+  /** Minimal ten-object sc-1429/v2 bundle; the shape is what the Micro6 gate asserts. */
+  private byte[] frozenBundleBytes() throws Exception {
+    com.fasterxml.jackson.databind.node.ObjectNode bundle = objectMapper.createObjectNode();
+    com.fasterxml.jackson.databind.node.ObjectNode envelopeNode =
+        bundle.putObject("executionEnvelope");
+    envelopeNode.put("contractVersion", "sc-1429/v2");
+    envelopeNode.put("mode", "LIVE_TASK");
+    envelopeNode.put("requestId", "req-1");
+    envelopeNode.put("idempotencyKey", "idem-1");
+    envelopeNode.put("taskKey", "FISHING_TRAINING");
+    for (String member :
+        java.util.List.of(
+            "catalogSnapshot",
+            "semanticObservation",
+            "planningInput",
+            "eligibilityResult",
+            "providerDecision",
+            "goalPlan",
+            "semanticAction",
+            "approvedScope",
+            "authority")) {
+      bundle.putObject(member).put("contractVersion", "sc-1429/v2");
+    }
+    return objectMapper.writeValueAsBytes(bundle);
+  }
+
   private OrchestrationRequest request() {
+    return deliveryRequest(frozenBundleBytesUnchecked());
+  }
+
+  /** A delivery-shaped request with no frozen bundle, used only to prove the fail-closed denial. */
+  private OrchestrationRequest requestWithoutFrozenBundle() {
     return new OrchestrationRequest(
         "orch-1",
         "req-1",
@@ -634,6 +767,14 @@ class Micro6V2AccountBuilderOrchestrationGatewayTest {
         null,
         null,
         NOW.plusSeconds(300));
+  }
+
+  private byte[] frozenBundleBytesUnchecked() {
+    try {
+      return frozenBundleBytes();
+    } catch (Exception exception) {
+      throw new IllegalStateException("bundle fixture could not be serialized", exception);
+    }
   }
 
   private ExecutionEnvelope envelope() {

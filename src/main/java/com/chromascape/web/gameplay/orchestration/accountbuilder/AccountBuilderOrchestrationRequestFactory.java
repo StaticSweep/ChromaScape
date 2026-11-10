@@ -121,7 +121,8 @@ public final class AccountBuilderOrchestrationRequestFactory {
         draft.bindings(),
         draft.authority(),
         draft.observation(),
-        draft.deadline());
+        draft.deadline(),
+        draft.frozenBundle());
   }
 
   /**
@@ -168,7 +169,8 @@ public final class AccountBuilderOrchestrationRequestFactory {
             bound,
             draft.authority(),
             draft.observation(),
-            draft.deadline()));
+            draft.deadline(),
+            draft.frozenBundle()));
   }
 
   /**

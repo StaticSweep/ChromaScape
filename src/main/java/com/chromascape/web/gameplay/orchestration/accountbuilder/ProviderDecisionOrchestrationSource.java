@@ -173,7 +173,8 @@ public final class ProviderDecisionOrchestrationSource {
             bindings,
             command.authority(),
             command.observation(),
-            command.deadline());
+            command.deadline(),
+            command.frozenBundle());
     // Every persisted provenance digest is re-verified against the draft before any capability
     // access or durable claim. The full immutable invariant set (request identity, deadline,
     // authority shape, decision/envelope binding) is then validated without the capability digest
@@ -324,6 +325,7 @@ public final class ProviderDecisionOrchestrationSource {
         bindings,
         request.authority(),
         request.observation(),
-        request.deadline());
+        request.deadline(),
+        request.frozenBundle());
   }
 }

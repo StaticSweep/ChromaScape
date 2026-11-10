@@ -3,6 +3,7 @@ package com.chromascape.web.gameplay.orchestration.accountbuilder;
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FrozenV2Bundle;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayCorrelation;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayReceipt;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Lease;
@@ -174,9 +175,24 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
   @Override
   public GatewayReceipt reserve(OrchestrationRequest request, String envelopeDigest) {
     Instant at = clock.instant();
+    // The complete SC-1429/v2 bundle is the only payload Micro6's gate accepts. A delivery request
+    // without one is a proven pre-submission denial: the adapter never falls back to a partial
+    // five-key body, because that body can only ever be refused after consuming authority.
+    FrozenV2Bundle frozen = request == null ? null : request.frozenBundle();
+    if (frozen == null || !frozen.usable()) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_CONTRACT,
+          "A complete frozen SC-1429/v2 bundle is required to reserve");
+    }
+    if (!frozen.envelopeDigest().equals(envelopeDigest)) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.STALE_BINDING,
+          "Frozen bundle envelope digest does not match the request envelope");
+    }
     try {
-      Map<String, Object> bundle = v2Bundle(request);
-      JsonNode response = post("api/v2/gameplay/reserve", bundle, request.idempotencyKey());
+      JsonNode response =
+          postBytes(
+              "api/v2/gameplay/reserve", frozen.bytes(), request.idempotencyKey());
       return toReceipt(request.requestId(), envelopeDigest, "RESERVATION", response, at, false);
     } catch (AccountBuilderOrchestrationException exception) {
       throw exception;
@@ -416,26 +432,33 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
     }
   }
 
-  private Map<String, Object> v2Bundle(OrchestrationRequest request) {
-    return Map.of(
-        "executionEnvelope",
-            request.envelope() == null
-                ? objectMapper.createObjectNode()
-                : objectMapper.valueToTree(request.envelope()),
-        "semanticObservation",
-            request.observation() == null ? objectMapper.createObjectNode() : request.observation(),
-        "providerDecision",
-            request.decision() == null
-                ? objectMapper.createObjectNode()
-                : objectMapper.valueToTree(request.decision()),
-        "authority",
-            request.authority() == null
-                ? objectMapper.createObjectNode()
-                : objectMapper.valueToTree(request.authority()),
-        "snapshotBindings",
-            request.bindings() == null
-                ? objectMapper.createObjectNode()
-                : objectMapper.valueToTree(request.bindings()));
+  /**
+   * Transmits the exact validated bundle bytes. The gateway never re-serializes a bundle: the
+   * bytes Micro6 validates are the bytes ChromaScape validated and the operator approved.
+   */
+  private JsonNode postBytes(String path, byte[] body, String idempotencyKey) {
+    try {
+      HttpRequest request =
+          HttpRequest.newBuilder(baseUri.resolve(path))
+              .timeout(requestTimeout)
+              .header("Content-Type", "application/json")
+              .header("Idempotency-Key", idempotencyKey)
+              .POST(HttpRequest.BodyPublishers.ofByteArray(body))
+              .build();
+      HttpResponse<String> response =
+          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      JsonNode json = objectMapper.readTree(response.body());
+      if (json.isObject()) {
+        ((com.fasterxml.jackson.databind.node.ObjectNode) json)
+            .put("_httpStatus", response.statusCode());
+      }
+      return json;
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException("Micro6 v2 request interrupted", exception);
+    } catch (Exception exception) {
+      throw new IllegalStateException("Micro6 v2 request could not be reconciled", exception);
+    }
   }
 
   private GatewayReceipt toReceipt(
