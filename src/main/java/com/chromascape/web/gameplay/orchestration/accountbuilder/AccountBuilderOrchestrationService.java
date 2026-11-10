@@ -1,9 +1,14 @@
 package com.chromascape.web.gameplay.orchestration.accountbuilder;
 
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
+import com.chromascape.web.gameplay.contract.GameplayContracts.ExecutionEnvelope;
+import com.chromascape.web.gameplay.contract.GameplayContracts.HumanAuthority;
+import com.chromascape.web.gameplay.contract.GameplayContracts.ProviderDecision;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderBudgetPolicy.OrchestrationBudget;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FrozenV2Bundle;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FrozenV2Command;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayCorrelation;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayReceipt;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Lease;
@@ -14,6 +19,7 @@ import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderO
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Readiness;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.SnapshotBindings;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.State;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -26,6 +32,18 @@ import org.springframework.stereotype.Service;
 @Service
 public final class AccountBuilderOrchestrationService {
   private static final String DIGEST_PATTERN = "sha256:[0-9a-f]{64}";
+
+  /**
+   * Conversion only. Every value it converts has already been validated by the assembler, and the
+   * v2 envelope carries members the v1 carrier record does not model, so unknown members are
+   * ignored rather than rejected.
+   */
+  private static final com.fasterxml.jackson.databind.ObjectMapper CONVERTER =
+      new com.fasterxml.jackson.databind.ObjectMapper()
+          .findAndRegisterModules()
+          .configure(
+              com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,
+              false);
 
   private final AccountBuilderOrchestrationValidator validator;
   private final CanonicalGameplayJson canonicalJson;
@@ -170,6 +188,106 @@ public final class AccountBuilderOrchestrationService {
   private Submission orchestrateInternal(OrchestrationRequest request) {
     String fingerprint = validator.validateAndFingerprint(request);
     String envelopeDigest = canonicalJson.digest(request.envelope());
+    return orchestrateInternal(request, fingerprint, envelopeDigest, false);
+  }
+
+  /**
+   * Delivers one frozen SC-1429/v2 bundle.
+   *
+   * <p>The bundle was validated locally by the assembler with the same schema, eligibility replay,
+   * full-binding and authority rules Micro6 applies, and Micro6 re-validates it independently on
+   * reserve. This path therefore uses the bundle's own digests as the immutable identity — the
+   * fingerprint is the bundle digest and the envelope digest is the one the authority binds — and
+   * skips the frozen v1 contract and authority-record checks, which require the sc-1429/v1
+   * contract version.
+   */
+  public Submission orchestrateFrozenV2(FrozenV2Command command) {
+    Objects.requireNonNull(command, "command");
+    FrozenV2Bundle frozen = command.frozenBundle();
+    if (frozen == null || !frozen.usable()) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_CONTRACT, "A complete frozen SC-1429/v2 bundle is required");
+    }
+    OrchestrationRequest request = frozenV2Carrier(command, frozen);
+    return orchestrateInternal(request, frozen.bundleDigest(), frozen.envelopeDigest(), true);
+  }
+
+  /**
+   * Carrier request for the durable store and the read-only capability probe.
+   *
+   * <p>Every value is taken from the frozen bundle, so the persisted request snapshot is a faithful
+   * projection of the approved bytes rather than a synthesised v1 decision: the decision carries the
+   * bundle's own semantic action, the bindings carry the bundle's own digests, and the observation
+   * is the bundle's semantic observation.
+   */
+  private OrchestrationRequest frozenV2Carrier(FrozenV2Command command, FrozenV2Bundle frozen) {
+    JsonNode bundle;
+    try {
+      bundle = CONVERTER.readTree(frozen.bytes());
+    } catch (java.io.IOException exception) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_CONTRACT, "Frozen bundle bytes are not valid JSON", exception);
+    }
+    JsonNode envelopeNode = bundle.path("executionEnvelope");
+    JsonNode decisionNode = bundle.path("providerDecision");
+    JsonNode observationNode = bundle.path("semanticObservation");
+    ExecutionEnvelope envelope =
+        CONVERTER.convertValue(envelopeNode, ExecutionEnvelope.class);
+    HumanAuthority authority =
+        CONVERTER.convertValue(bundle.path("authority"), HumanAuthority.class);
+    ProviderDecision decision =
+        new ProviderDecision(
+            "sc-1429/v2",
+            envelope.provider(),
+            envelope.modelVersion(),
+            envelope.decisionId(),
+            decisionNode.path("policyConfidence").asDouble(),
+            bundle.path("semanticAction").deepCopy(),
+            CONVERTER.convertValue(
+                decisionNode.path("evidenceRefs"),
+                CONVERTER.getTypeFactory().constructCollectionType(java.util.List.class, String.class)));
+    SnapshotBindings bindings =
+        new SnapshotBindings(
+            frozen.bundleDigest(),
+            frozen.semanticActionDigest(),
+            frozen.catalogDigest(),
+            envelopeNode.path("capabilitySnapshotDigest").asText(null),
+            frozen.goalPlanDigest(),
+            CONVERTER.convertValue(
+                envelopeNode.path("taskSkillDigests"),
+                CONVERTER.getTypeFactory().constructCollectionType(java.util.List.class, String.class)),
+            envelope.schemaDigest(),
+            envelope.knowledgeDigest(),
+            envelope.policyDigest(),
+            envelope.verifierId(),
+            envelope.buildId(),
+            envelope.expectedObservationRevision(),
+            envelope.expectedTaskRevision(),
+            frozen.observationDigest(),
+            envelopeNode.path("promptId").asText(null),
+            command.providerSessionId(),
+            command.providerTurnId());
+    return new OrchestrationRequest(
+        command.orchestrationId(),
+        command.requestId(),
+        command.idempotencyKey(),
+        frozen.bundleDigest(),
+        command.mode(),
+        "PROVIDER:" + envelope.provider().name(),
+        decision,
+        envelope,
+        bindings,
+        authority,
+        observationNode.deepCopy(),
+        command.deadline(),
+        frozen);
+  }
+
+  private Submission orchestrateInternal(
+      OrchestrationRequest request,
+      String fingerprint,
+      String envelopeDigest,
+      boolean frozenV2) {
     // The budget is parsed and validated before the claim, so an invalid frozen contract can
     // never persist any part of the orchestration aggregate.
     AccountBuilderBudgetPolicy.OrchestrationBudget budget;
@@ -222,7 +340,12 @@ public final class AccountBuilderOrchestrationService {
         return terminal(request, State.DENIED, FailureCode.GATEWAY_UNAVAILABLE, null, false);
       }
       validator.validateCapabilities(request, capabilities);
-      validator.validateAuthority(request, envelopeDigest, request.authority());
+      if (!frozenV2) {
+        // The v1 authority record check requires the frozen sc-1429/v1 contract version. A v2
+        // authority was already checked by the assembler against the same rules and is checked
+        // again independently by Micro6 on reserve.
+        validator.validateAuthority(request, envelopeDigest, request.authority());
+      }
 
       // Authority ownership is its own short transaction and is committed before reserve. If the
       // process dies after this call, the orchestration is recoverable but never redispatched.

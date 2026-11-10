@@ -351,6 +351,23 @@ public final class AccountBuilderOrchestrationModels {
   }
 
   /**
+   * One frozen SC-1429/v2 delivery.
+   *
+   * <p>The bundle carries the complete validated snapshot; the identities here are the durable
+   * orchestration identity, the provider turn the decision came from, and the operator-supplied
+   * deadline. Nothing in this command can alter the approved bytes.
+   */
+  public record FrozenV2Command(
+      String orchestrationId,
+      String requestId,
+      String idempotencyKey,
+      Mode mode,
+      Instant deadline,
+      String providerSessionId,
+      String providerTurnId,
+      FrozenV2Bundle frozenBundle) {}
+
+  /**
    * Non-secret identity used for every gateway operation after the initial validated request.
    *
    * <p>This contract deliberately contains digests and immutable routing metadata only. It is not a

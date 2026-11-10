@@ -605,6 +605,120 @@ class AccountBuilderOrchestrationServiceTest {
         new AccountBuilderCapabilityPreflight(gateway));
   }
 
+  /**
+   * A frozen v2 bundle is delivered through the same durable owner. The v1 contract and authority
+   * record checks are skipped because the assembler already applied the same rules and Micro6
+   * re-validates independently, but the claim, the capability probe and the fail-closed denials are
+   * identical.
+   */
+  @Test
+  void frozenV2DeliveryClaimsAndFailsClosedWhenTheGatewayCannotAttest() {
+    OrchestrationRequest sample = request("capability", Mode.HELD);
+    FakeGateway gateway = new FakeGateway(State.ACTIVE);
+    gateway.staleCapabilities = true;
+    InMemoryAccountBuilderOrchestrationStore store = new InMemoryAccountBuilderOrchestrationStore();
+    AccountBuilderOrchestrationService service = service(gateway, store);
+
+    var command =
+        new AccountBuilderOrchestrationModels.FrozenV2Command(
+            "orch-v2-1",
+            "req-v2-1",
+            "idem-v2-1",
+            Mode.BOOTSTRAP_RECORDING,
+            NOW.plusSeconds(300),
+            "session-v2-1",
+            "turn-v2-1",
+            frozenV2Bundle(sample));
+
+    var submission = service.orchestrateFrozenV2(command);
+
+    assertThat(submission.view().state()).isEqualTo(State.DENIED);
+    assertThat(submission.view().failureCode()).isNotEqualTo(FailureCode.NONE);
+    assertThat(gateway.reservations.get()).isZero();
+    assertThat(store.find("orch-v2-1")).isPresent();
+    assertThat(store.find("orch-v2-1").orElseThrow().authorityConsumed()).isFalse();
+  }
+
+  /** Minimal frozen bundle whose envelope attests the same capability identity as the fixture. */
+  private AccountBuilderOrchestrationModels.FrozenV2Bundle frozenV2Bundle(
+      OrchestrationRequest sample) {
+    var envelope = objectMapper.createObjectNode();
+    envelope.put("contractVersion", "sc-1429/v2");
+    envelope.put("mode", "LIVE_TASK");
+    envelope.put("provider", "CLAUDE");
+    envelope.put("modelVersion", sample.envelope().modelVersion());
+    envelope.put("decisionId", sample.envelope().decisionId());
+    envelope.put("requestId", "req-v2-1");
+    envelope.put("idempotencyKey", "idem-v2-1");
+    envelope.put("promptId", "prompt-v2-1");
+    envelope.put("taskKey", "FISHING_TRAINING");
+    envelope.put("catalogDigest", sample.bindings().catalogDigest());
+    envelope.put("schemaDigest", sample.envelope().schemaDigest());
+    envelope.put("policyDigest", sample.envelope().policyDigest());
+    envelope.put("knowledgeDigest", sample.envelope().knowledgeDigest());
+    envelope.put("verifierId", sample.envelope().verifierId());
+    envelope.put("buildId", sample.envelope().buildId());
+    envelope.put("expectedObservationRevision", sample.envelope().expectedObservationRevision());
+    envelope.put("expectedTaskRevision", sample.envelope().expectedTaskRevision());
+    envelope.put("authorityId", "authority-v2-1");
+    envelope.put("deadline", NOW.plusSeconds(300).toString());
+    envelope.putObject("identities").put("clientId", "client-1");
+    var budgets = envelope.putObject("budgets");
+    budgets.put("maxActions", 1);
+    budgets.put("maxAttempts", 1);
+    budgets.put("maxElapsedMs", 300000);
+
+    var authority = objectMapper.createObjectNode();
+    authority.put("contractVersion", "sc-1429/v2");
+    authority.put("authorityId", "authority-v2-1");
+    authority.put("actorType", "HUMAN");
+    authority.put("approvedBy", "operator-1");
+    authority.put("approvedAt", NOW.minusSeconds(60).toString());
+    authority.put("expiresAt", NOW.plusSeconds(300).toString());
+    authority.put("envelopeDigest", "sha256:" + "1".repeat(64));
+    authority.put("scopeDigest", "sha256:" + "2".repeat(64));
+    authority.put("oneUse", true);
+    authority.put("signature", "hmac-sha256:" + "3".repeat(64));
+
+    var decision = objectMapper.createObjectNode();
+    decision.put("contractVersion", "sc-1429/v2");
+    decision.put("kind", "SELECTED");
+    decision.put("policyConfidence", 0.9);
+    decision.putArray("evidenceRefs").add("observation:1");
+
+    var observation = objectMapper.createObjectNode();
+    observation.put("contractVersion", "sc-1429/v2");
+    observation.put("observationId", "observation-1");
+
+    var bundle = objectMapper.createObjectNode();
+    bundle.set("executionEnvelope", envelope);
+    bundle.set("authority", authority);
+    bundle.set("providerDecision", decision);
+    bundle.set("semanticAction", objectMapper.createObjectNode().put("kind", "START_FISHING_TASK"));
+    bundle.set("semanticObservation", observation);
+    byte[] bytes;
+    try {
+      bytes = objectMapper.writeValueAsBytes(bundle);
+    } catch (Exception exception) {
+      throw new IllegalStateException(exception);
+    }
+    return new AccountBuilderOrchestrationModels.FrozenV2Bundle(
+        bytes,
+        "sha256:" + "4".repeat(64),
+        "sha256:" + "5".repeat(64),
+        "sha256:" + "6".repeat(64),
+        sample.bindings().catalogDigest(),
+        "sha256:" + "7".repeat(64),
+        "sha256:" + "8".repeat(64),
+        "sha256:" + "9".repeat(64),
+        "sha256:" + "a".repeat(64),
+        "sha256:" + "b".repeat(64),
+        "authority-v2-1",
+        "req-v2-1",
+        "idem-v2-1",
+        NOW.plusSeconds(300));
+  }
+
   private OrchestrationRequest request(String suffix, Mode mode) {
     JsonNode observation = fixtures.path("observation").deepCopy();
     JsonNode action = fixtures.path("semanticAction").deepCopy();

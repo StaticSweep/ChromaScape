@@ -206,12 +206,25 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
   public GatewayReceipt dispatch(OrchestrationRequest request, String envelopeDigest, Lease lease) {
     Instant at = clock.instant();
     try {
-      Map<String, Object> body =
-          Map.of(
-              "envelope",
-              request.envelope() == null
-                  ? objectMapper.createObjectNode()
-                  : objectMapper.valueToTree(request.envelope()));
+      // Start is the envelope-only contract Micro6 implements: it recomputes the envelope digest
+      // from the transmitted bytes and compares it to the reservation. A v2 delivery must therefore
+      // send the exact approved envelope, not a re-serialisation of the carrier record.
+      JsonNode envelopeNode;
+      if (request.frozenBundle() != null && request.frozenBundle().usable()) {
+        try {
+          envelopeNode =
+              objectMapper.readTree(request.frozenBundle().bytes()).path("executionEnvelope");
+        } catch (java.io.IOException exception) {
+          throw new AccountBuilderOrchestrationException(
+              FailureCode.INVALID_CONTRACT, "Frozen bundle bytes are not valid JSON");
+        }
+      } else {
+        envelopeNode =
+            request.envelope() == null
+                ? objectMapper.createObjectNode()
+                : objectMapper.valueToTree(request.envelope());
+      }
+      Map<String, Object> body = Map.of("envelope", envelopeNode);
       JsonNode response = post("api/v2/gameplay/start", body, request.idempotencyKey() + ":start");
       GatewayReceipt receipt =
           toReceipt(request.requestId(), envelopeDigest, "DISPATCH", response, at, false);
