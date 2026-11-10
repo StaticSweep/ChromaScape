@@ -540,15 +540,7 @@ public final class BootstrapGameplayOperatorService {
       Instant finalizedAt = durableFinalizedAt(approval.orchestrationId(), view);
       var manifest =
           manifestService.buildManifest(
-              approval,
-              recording,
-              artifact,
-              assembled.decision(),
-              boundEnvelope,
-              assembled.bindings(),
-              assembled.observation(),
-              authority,
-              view,
+              approval, recording, artifact, assembled.decision(), assembled.bindings(), view,
               finalizedAt);
       manifestService.publish(
           recording.recordingId(), manifest.document(), manifest.manifestDigest());
@@ -597,15 +589,7 @@ public final class BootstrapGameplayOperatorService {
       Instant finalizedAt = durableFinalizedAt(orchestrationId, view);
       var manifest =
           manifestService.buildManifest(
-              approval,
-              recording,
-              artifact,
-              persisted.decision(),
-              persisted.envelope(),
-              persisted.bindings(),
-              persisted.observation(),
-              persisted.authority(),
-              view,
+              approval, recording, artifact, persisted.decision(), persisted.bindings(), view,
               finalizedAt);
       manifestService.publish(
           recording.recordingId(), manifest.document(), manifest.manifestDigest());

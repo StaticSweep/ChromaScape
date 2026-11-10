@@ -86,11 +86,7 @@ class BootstrapEvidenceManifestServiceTest {
             inputs.approval(),
             inputs.recording(),
             inputs.artifact(),
-            inputs.decision(),
-            inputs.envelope(),
-            inputs.bindings(),
-            inputs.observation(),
-            inputs.authority(),
+            inputs.decision(), inputs.bindings(),
             inputs.view(),
             finalizedAt);
     ManifestPublication second =
@@ -98,11 +94,7 @@ class BootstrapEvidenceManifestServiceTest {
             inputs.approval(),
             inputs.recording(),
             inputs.artifact(),
-            inputs.decision(),
-            inputs.envelope(),
-            inputs.bindings(),
-            inputs.observation(),
-            inputs.authority(),
+            inputs.decision(), inputs.bindings(),
             inputs.view(),
             finalizedAt);
 
@@ -121,11 +113,7 @@ class BootstrapEvidenceManifestServiceTest {
             inputs.approval(),
             inputs.recording(),
             inputs.artifact(),
-            inputs.decision(),
-            inputs.envelope(),
-            inputs.bindings(),
-            inputs.observation(),
-            inputs.authority(),
+            inputs.decision(), inputs.bindings(),
             inputs.view(),
             NOW.plus(1, ChronoUnit.MINUTES));
     ManifestPublication second =
@@ -133,11 +121,7 @@ class BootstrapEvidenceManifestServiceTest {
             inputs.approval(),
             inputs.recording(),
             inputs.artifact(),
-            inputs.decision(),
-            inputs.envelope(),
-            inputs.bindings(),
-            inputs.observation(),
-            inputs.authority(),
+            inputs.decision(), inputs.bindings(),
             inputs.view(),
             NOW.plus(2, ChronoUnit.MINUTES));
 
@@ -153,11 +137,7 @@ class BootstrapEvidenceManifestServiceTest {
                     inputs.approval(),
                     inputs.recording(),
                     inputs.artifact(),
-                    inputs.decision(),
-                    inputs.envelope(),
-                    inputs.bindings(),
-                    inputs.observation(),
-                    inputs.authority(),
+                    inputs.decision(), inputs.bindings(),
                     inputs.view(),
                     null))
         .isInstanceOf(IllegalArgumentException.class)
@@ -173,11 +153,7 @@ class BootstrapEvidenceManifestServiceTest {
             inputs.approval(),
             inputs.recording(),
             inputs.artifact(),
-            inputs.decision(),
-            inputs.envelope(),
-            inputs.bindings(),
-            inputs.observation(),
-            inputs.authority(),
+            inputs.decision(), inputs.bindings(),
             inputs.view(),
             finalizedAt);
 
@@ -250,11 +226,7 @@ class BootstrapEvidenceManifestServiceTest {
             inputs.approval(),
             inputs.recording(),
             artifact,
-            inputs.decision(),
-            inputs.envelope(),
-            inputs.bindings(),
-            inputs.observation(),
-            inputs.authority(),
+            inputs.decision(), inputs.bindings(),
             inputs.view(),
             finalizedAt);
     Path firstPath = service.publish(recordingId, first.document(), first.manifestDigest());
@@ -266,11 +238,7 @@ class BootstrapEvidenceManifestServiceTest {
             inputs.approval(),
             inputs.recording(),
             recovered,
-            inputs.decision(),
-            inputs.envelope(),
-            inputs.bindings(),
-            inputs.observation(),
-            inputs.authority(),
+            inputs.decision(), inputs.bindings(),
             inputs.view(),
             finalizedAt);
     Path recoveredPath =
@@ -283,6 +251,50 @@ class BootstrapEvidenceManifestServiceTest {
     assertThat(Files.readAllBytes(recoveredPath)).isEqualTo(Files.readAllBytes(firstPath));
     assertThat(recoveredPath).isEqualTo(firstPath);
     verify(recordingService, never()).startRecording(any(), any(), any(), any());
+  }
+
+  /**
+   * The manifest is a function of durable evidence only. The persisted request snapshot is
+   * redacted, so a manifest built from it must match the one the live run published: nothing in the
+   * document may hash a value that redaction rewrites.
+   */
+  @Test
+  void redactedDecisionProducesTheSameManifestAsTheOriginal() {
+    Inputs inputs = inputs();
+    Instant finalizedAt = NOW.plus(1, ChronoUnit.MINUTES);
+    ProviderDecision redacted =
+        new ProviderDecision(
+            inputs.decision().contractVersion(),
+            inputs.decision().provider(),
+            inputs.decision().modelVersion(),
+            inputs.decision().decisionId(),
+            inputs.decision().policyConfidence(),
+            objectMapper
+                .createObjectNode()
+                .put("digest", "sha256:" + "1".repeat(64))
+                .put("redacted", true),
+            List.of("sha256:" + "2".repeat(64)));
+
+    ManifestPublication live =
+        service.buildManifest(
+            inputs.approval(),
+            inputs.recording(),
+            inputs.artifact(),
+            inputs.decision(),
+            inputs.bindings(),
+            inputs.view(),
+            finalizedAt);
+    ManifestPublication recovered =
+        service.buildManifest(
+            inputs.approval(),
+            inputs.recording(),
+            inputs.artifact(),
+            redacted,
+            inputs.bindings(),
+            inputs.view(),
+            finalizedAt);
+
+    assertThat(recovered.manifestDigest()).isEqualTo(live.manifestDigest());
   }
 
   private Inputs inputs() {

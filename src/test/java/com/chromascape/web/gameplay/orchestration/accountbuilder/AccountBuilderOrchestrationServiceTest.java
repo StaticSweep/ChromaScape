@@ -682,6 +682,42 @@ class AccountBuilderOrchestrationServiceTest {
     assertThat(gateway.reservations.get()).isEqualTo(1);
     assertThat(gateway.dispatches.get()).isEqualTo(1);
     assertThat(store.find("orch-v2-live").orElseThrow().authorityConsumed()).isTrue();
+    assertThat(store.find("orch-v2-live").orElseThrow().lease().reservationId())
+        .as("the durable lease is the one the executor attested, never a local invention")
+        .isEqualTo("reservation-req-v2-live");
+  }
+
+  /**
+   * The durable request snapshot is redacted: the approved bytes, the authority signature and every
+   * free-form member are either dropped or replaced by a digest, so a persisted delivery can never
+   * leak the operator's approval material or the account's observation.
+   */
+  @Test
+  void frozenV2PersistedRequestSnapshotIsRedacted() {
+    OrchestrationRequest sample = request("capability", Mode.HELD);
+    FakeGateway gateway = new FakeGateway(State.CONFIRMED);
+    InMemoryAccountBuilderOrchestrationStore store = v2Store();
+    AccountBuilderOrchestrationService service = service(gateway, store);
+    service.orchestrateFrozenV2(
+        new AccountBuilderOrchestrationModels.FrozenV2Command(
+            "orch-v2-redacted",
+            "req-v2-redacted",
+            "idem-v2-redacted",
+            Mode.BOOTSTRAP_RECORDING,
+            NOW.plusSeconds(300),
+            "session-v2-1",
+            "turn-v2-1",
+            frozenV2Bundle(sample)));
+
+    OrchestrationRequest persisted = service.findRequest("orch-v2-redacted");
+
+    assertThat(persisted.frozenBundle()).as("the approved bytes are never persisted").isNull();
+    assertThat(persisted.authority().signature()).as("the signature is never persisted").isNull();
+    assertThat(persisted.authority().authorityId()).isEqualTo("authority-v2-1");
+    assertThat(persisted.envelope().settings().path("redacted").asBoolean(false)).isTrue();
+    assertThat(persisted.envelope().identities().path("redacted").asBoolean(false)).isTrue();
+    assertThat(persisted.observation().path("redacted").asBoolean(false)).isTrue();
+    assertThat(persisted.envelope().requestId()).isEqualTo("req-v2-1");
   }
 
   /**

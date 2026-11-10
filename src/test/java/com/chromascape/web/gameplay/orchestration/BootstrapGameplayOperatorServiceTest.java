@@ -482,7 +482,7 @@ class BootstrapGameplayOperatorServiceTest {
     when(orchestrationService.orchestrateProvider(any()))
         .thenReturn(new AccountBuilderOrchestrationService.Submission(terminalView, true));
     when(manifestService.buildManifest(
-            any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+            any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(
             new BootstrapEvidenceManifestService.ManifestPublication(
                 Map.of("manifestDigest", "sha256:" + "d".repeat(64)), "sha256:" + "d".repeat(64)));

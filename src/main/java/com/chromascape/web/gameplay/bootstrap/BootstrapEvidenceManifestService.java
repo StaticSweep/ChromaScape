@@ -4,8 +4,6 @@ import com.chromascape.web.gameplay.bootstrap.BootstrapApprovalStore.ApprovalVie
 import com.chromascape.web.gameplay.bootstrap.BootstrapRecordingCoordinator.RecordingArtifact;
 import com.chromascape.web.gameplay.bootstrap.BootstrapRecordingCoordinator.RecordingView;
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
-import com.chromascape.web.gameplay.contract.GameplayContracts.ExecutionEnvelope;
-import com.chromascape.web.gameplay.contract.GameplayContracts.HumanAuthority;
 import com.chromascape.web.gameplay.contract.GameplayContracts.ProviderDecision;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationView;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.SnapshotBindings;
@@ -66,10 +64,7 @@ public final class BootstrapEvidenceManifestService {
       RecordingView recording,
       RecordingArtifact artifact,
       ProviderDecision decision,
-      ExecutionEnvelope envelope,
       SnapshotBindings bindings,
-      JsonNode observation,
-      HumanAuthority authority,
       OrchestrationView orchestration,
       Instant finalizedAt) {
     Map<String, Object> document = new LinkedHashMap<>();
@@ -81,17 +76,20 @@ public final class BootstrapEvidenceManifestService {
     provenance.put("providerSessionId", approval.providerSessionId());
     provenance.put("providerTurnId", approval.providerTurnId());
     provenance.put("decisionId", decision.decisionId());
-    provenance.put("decisionDigest", canonicalJson.digest(decision));
-    provenance.put("semanticActionDigest", canonicalJson.digest(decision.semanticAction()));
+    // Digests come from the durable bindings, never from re-hashing the values in hand. The
+    // persistable request snapshot is redacted, so hashing the values would make a crash-recovery
+    // manifest differ from the one the live run published for the same delivery.
+    provenance.put("decisionDigest", bindings.decisionDigest());
+    provenance.put("semanticActionDigest", bindings.semanticActionDigest());
     document.put("provenance", provenance);
     Map<String, Object> identities = new LinkedHashMap<>();
     identities.put("orchestrationId", approval.orchestrationId());
     identities.put("requestId", approval.requestId());
     identities.put("recordingId", approval.recordingId());
-    identities.put("authorityId", authority.authorityId());
+    identities.put("authorityId", approval.boundAuthorityId());
     document.put("identities", identities);
-    document.put("observationDigest", canonicalJson.digest(observation));
-    document.put("envelopeDigest", canonicalJson.digest(envelope));
+    document.put("observationDigest", bindings.observationDigest());
+    document.put("envelopeDigest", orchestration.envelopeDigest());
     document.put("scopeDigest", approval.scopeDigest());
     document.put("requestFingerprint", approval.requestFingerprint());
     document.put("bindingsDigest", canonicalJson.digest(bindings));
