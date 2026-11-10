@@ -639,7 +639,96 @@ class AccountBuilderOrchestrationServiceTest {
     assertThat(store.find("orch-v2-1").orElseThrow().authorityConsumed()).isFalse();
   }
 
+  /**
+   * An exact replay of a frozen v2 delivery is lookup-only: the durable claim already owns the
+   * bundle digest, so no second reserve is attempted.
+   */
+  @Test
+  void frozenV2ExactReplayIsIdempotentAndDoesNotReserveAgain() {
+    OrchestrationRequest sample = request("capability", Mode.HELD);
+    FakeGateway gateway = new FakeGateway(State.ACTIVE);
+    gateway.staleCapabilities = true;
+    InMemoryAccountBuilderOrchestrationStore store = new InMemoryAccountBuilderOrchestrationStore();
+    AccountBuilderOrchestrationService service = service(gateway, store);
+    var command =
+        new AccountBuilderOrchestrationModels.FrozenV2Command(
+            "orch-v2-replay",
+            "req-v2-replay",
+            "idem-v2-replay",
+            Mode.BOOTSTRAP_RECORDING,
+            NOW.plusSeconds(300),
+            "session-v2-1",
+            "turn-v2-1",
+            frozenV2Bundle(sample));
+
+    var first = service.orchestrateFrozenV2(command);
+    var replay = service.orchestrateFrozenV2(command);
+
+    assertThat(first.created()).isTrue();
+    assertThat(replay.created()).isFalse();
+    assertThat(replay.view().requestFingerprint()).isEqualTo(first.view().requestFingerprint());
+    assertThat(gateway.reservations.get()).isZero();
+  }
+
+  /**
+   * A different bundle under the same orchestration identity is a conflict, never a second attempt:
+   * the approved bytes are the identity.
+   */
+  @Test
+  void frozenV2ChangedBundleConflictsWithTheExistingClaim() {
+    OrchestrationRequest sample = request("capability", Mode.HELD);
+    FakeGateway gateway = new FakeGateway(State.ACTIVE);
+    gateway.staleCapabilities = true;
+    InMemoryAccountBuilderOrchestrationStore store = new InMemoryAccountBuilderOrchestrationStore();
+    AccountBuilderOrchestrationService service = service(gateway, store);
+    service.orchestrateFrozenV2(
+        new AccountBuilderOrchestrationModels.FrozenV2Command(
+            "orch-v2-conflict",
+            "req-v2-conflict",
+            "idem-v2-conflict",
+            Mode.BOOTSTRAP_RECORDING,
+            NOW.plusSeconds(300),
+            "session-v2-1",
+            "turn-v2-1",
+            frozenV2Bundle(sample)));
+
+    var changed =
+        new AccountBuilderOrchestrationModels.FrozenV2Command(
+            "orch-v2-conflict",
+            "req-v2-conflict",
+            "idem-v2-conflict",
+            Mode.BOOTSTRAP_RECORDING,
+            NOW.plusSeconds(300),
+            "session-v2-1",
+            "turn-v2-1",
+            frozenV2BundleWithDigest(sample, "sha256:" + "e".repeat(64)));
+
+    assertThatThrownBy(() -> service.orchestrateFrozenV2(changed))
+        .isInstanceOf(AccountBuilderOrchestrationException.class);
+    assertThat(gateway.reservations.get()).isZero();
+  }
+
   /** Minimal frozen bundle whose envelope attests the same capability identity as the fixture. */
+  private AccountBuilderOrchestrationModels.FrozenV2Bundle frozenV2BundleWithDigest(
+      OrchestrationRequest sample, String bundleDigest) {
+    var base = frozenV2Bundle(sample);
+    return new AccountBuilderOrchestrationModels.FrozenV2Bundle(
+        base.bytes(),
+        bundleDigest,
+        base.envelopeDigest(),
+        base.scopeDigest(),
+        base.catalogDigest(),
+        base.observationDigest(),
+        base.planningInputDigest(),
+        base.eligibilityResultDigest(),
+        base.goalPlanDigest(),
+        base.semanticActionDigest(),
+        base.authorityId(),
+        base.requestId(),
+        base.idempotencyKey(),
+        base.envelopeDeadline());
+  }
+
   private AccountBuilderOrchestrationModels.FrozenV2Bundle frozenV2Bundle(
       OrchestrationRequest sample) {
     var envelope = objectMapper.createObjectNode();
