@@ -44,7 +44,7 @@ class AccountBuilderOrchestrationRestartTest {
               .locations("classpath:db/migration")
               .load();
       flyway.migrate();
-      assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("89");
+      assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("90");
 
       Map<String, CommittedAggregate> before;
       try (ConfigurableApplicationContext contextA = start(database)) {
@@ -99,7 +99,7 @@ class AccountBuilderOrchestrationRestartTest {
               .locations("classpath:db/migration")
               .load();
       flyway.migrate();
-      assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("89");
+      assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("90");
 
       CapabilitySnapshot preflight =
           new CapabilitySnapshot(
@@ -185,7 +185,7 @@ class AccountBuilderOrchestrationRestartTest {
         "--spring.datasource.hikari.schema=" + database.schema(),
         "--spring.flyway.schemas=" + database.schema(),
         "--spring.flyway.default-schema=" + database.schema(),
-        "--spring.flyway.target=89",
+        "--spring.flyway.target=90",
         "--spring.flyway.create-schemas=true",
         "--spring.flyway.locations=classpath:db/migration",
         "--spring.jpa.properties.hibernate.default_schema=" + database.schema(),

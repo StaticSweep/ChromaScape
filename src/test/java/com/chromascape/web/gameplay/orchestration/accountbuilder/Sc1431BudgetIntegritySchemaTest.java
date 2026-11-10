@@ -60,7 +60,7 @@ class Sc1431BudgetIntegritySchemaTest {
     assertEquals("88", currentVersion());
     migrate(null);
 
-    assertEquals("89", currentVersion());
+    assertEquals("90", currentVersion());
     assertFalse(columnIsNullable("ab_orchestration_budget", "started_at"));
     assertFalse(columnIsNullable("ab_orchestration_budget", "expires_at"));
     assertFalse(columnIsNullable("ab_orchestration_budget", "max_actions"));

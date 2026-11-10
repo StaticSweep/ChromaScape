@@ -42,7 +42,7 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest(
     classes = AccountBuilderOrchestrationPostgresConcurrencyTest.TestBootstrap.class,
     properties = {
-      "spring.flyway.target=89",
+      "spring.flyway.target=90",
       "spring.jpa.hibernate.ddl-auto=validate",
       "stabilization.auth.token=sc1431-read-token",
       "stabilization.auth.write-token=sc1431-write-token"

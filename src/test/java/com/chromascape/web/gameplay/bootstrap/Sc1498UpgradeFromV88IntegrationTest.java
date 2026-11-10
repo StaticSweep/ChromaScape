@@ -31,7 +31,7 @@ class Sc1498UpgradeFromV88IntegrationTest {
           .withPassword("test");
 
   @Test
-  void aPopulatedV88DatabaseUpgradesToV89AndKeepsItsRows() throws Exception {
+  void aPopulatedV88DatabaseUpgradesToTheCurrentHeadAndKeepsItsRows() throws Exception {
     migrateTo("88");
     assertThat(currentVersion()).isEqualTo("88");
 
@@ -48,7 +48,7 @@ class Sc1498UpgradeFromV88IntegrationTest {
 
     migrateTo(null);
 
-    assertThat(currentVersion()).isEqualTo("89");
+    assertThat(currentVersion()).isEqualTo("90");
     assertThat(
             queryInt(
                 "SELECT count(*) FROM ab_orchestration WHERE orchestration_id='orch-upgrade-1'"))
@@ -57,8 +57,9 @@ class Sc1498UpgradeFromV88IntegrationTest {
     assertThat(
             queryInt(
                 "SELECT count(*) FROM information_schema.tables WHERE table_name IN"
-                    + " ('gameplay_bootstrap_approval','gameplay_bootstrap_recording')"))
-        .isEqualTo(2);
+                    + " ('gameplay_bootstrap_approval','gameplay_bootstrap_recording',"
+                    + " 'gameplay_bootstrap_v2_draft')"))
+        .isEqualTo(3);
 
     // The new intent guard is live immediately after the upgrade.
     execute(
