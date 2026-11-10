@@ -62,6 +62,7 @@ class BootstrapV2BundleAssemblerTest {
         .isEqualTo(GameplayV2EligibilityFilter.canonicalDigest(mapper, assembled.executionEnvelope()));
     assertThat(assembled.frozen().scopeDigest()).isEqualTo(assembled.frozen().scopeDigest());
     assertThat(assembled.frozen().bundleDigest()).matches("sha256:[0-9a-f]{64}");
+    captureForCrossBoundaryProof(assembled.frozen().bytes());
   }
 
   @Test
@@ -108,6 +109,21 @@ class BootstrapV2BundleAssemblerTest {
     assertThatThrownBy(() -> unsigned.assemble(draft(fixtures)))
         .isInstanceOf(GameplayV2ContractValidator.GameplayV2ContractViolation.class)
         .hasMessageContaining("signing secret is not configured");
+  }
+
+  /**
+   * Writes the exact frozen bytes so the Micro6 side can run them through the real gate. The
+   * cross-boundary test consumes this artifact; it is the same bytes the gateway would transmit.
+   */
+  private void captureForCrossBoundaryProof(byte[] bytes) {
+    try {
+      java.nio.file.Path target =
+          java.nio.file.Path.of("build", "sc1498", "v2-bootstrap-bundle.json");
+      java.nio.file.Files.createDirectories(target.getParent());
+      java.nio.file.Files.write(target, bytes);
+    } catch (java.io.IOException exception) {
+      throw new IllegalStateException("bundle capture failed", exception);
+    }
   }
 
   private BootstrapV2BundleAssembler.Draft draft(JsonNode source) {
