@@ -146,6 +146,68 @@ class BootstrapFinalizationRecoveryTest {
             exception -> assertThat(exception.failureCode()).isEqualTo("RECORDING_STOP_UNRECONCILED"));
   }
 
+  @Test
+  @org.springframework.transaction.annotation.Transactional
+  void finalizationConvergesWhenTheRowAdvancedOutsideThePersistenceContext() {
+    seedProjection("orch-final-1", "rec-final-1");
+    seedTerminalEvidence("orch-final-1");
+    // Load the projection into the request-scoped persistence context, exactly as dispatch does
+    // before it reaches finalization.
+    assertThat(coordinator.find("orch-final-1")).isPresent();
+    // Another writer advances the durable row (recording lifecycle or recovery thread) after that
+    // load. A flush that trusts the cached version fails with an optimistic-lock exception and
+    // leaves the published manifest against a STARTED projection.
+    jdbc.update(
+        "UPDATE gameplay_bootstrap_recording SET entity_version = entity_version + 1"
+            + " WHERE orchestration_id = ?",
+        "orch-final-1");
+
+    String manifestDigest = "sha256:" + "c".repeat(64);
+    var view =
+        coordinator.finalizeRecording(
+            "orch-final-1",
+            "DENIED",
+            "DELIVERY_UNCERTAIN",
+            manifestDigest,
+            "/tmp/rec-final-1.mp4",
+            "sha256:" + "d".repeat(64),
+            CLOCK.instant());
+
+    assertThat(view.manifestState()).isEqualTo("FINALIZED");
+    assertThat(view.manifestDigest()).isEqualTo(manifestDigest);
+    assertThat(view.finalizedAt()).isEqualTo(CLOCK.instant());
+  }
+
+  /**
+   * The V89 guard only permits STARTED -> FINALIZED once the delivered SC-1431 orchestration and
+   * its durable terminal result exist, so the fixture must carry that evidence.
+   */
+  private void seedTerminalEvidence(String orchestrationId) {
+    jdbc.update(
+        "INSERT INTO ab_orchestration (orchestration_id, request_id, idempotency_key,"
+            + " request_fingerprint, envelope_digest, source_type, mode, state, failure_code,"
+            + " request_json, view_json, created_at, updated_at, retry_allowed, view_version,"
+            + " entity_version) VALUES (?,?,?,?,?,?,?,?,?,'{}','{}', now(), now(), false, 0, 0)"
+            + " ON CONFLICT DO NOTHING",
+        orchestrationId,
+        "request-" + orchestrationId,
+        "idem-" + orchestrationId,
+        "sha256:" + "e".repeat(64),
+        "sha256:" + "b".repeat(64),
+        "PROVIDER:CLAUDE",
+        "BOOTSTRAP_RECORDING",
+        "DENIED",
+        "DELIVERY_UNCERTAIN");
+    jdbc.update(
+        "INSERT INTO ab_orchestration_terminal_result (orchestration_id, outcome, stable_code,"
+            + " retry_allowed, reconciled, evidence_digest, terminal_at)"
+            + " VALUES (?,?,?,false,false,?, now()) ON CONFLICT DO NOTHING",
+        orchestrationId,
+        "DENIED",
+        "DELIVERY_UNCERTAIN",
+        "sha256:" + "f".repeat(64));
+  }
+
   private void seedProjection(String orchestrationId, String recordingId) {
     jdbc.execute(
         "INSERT INTO gameplay_bootstrap_recording (orchestration_id, recording_id,"

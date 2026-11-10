@@ -455,6 +455,18 @@ public class BootstrapRecordingCoordinator {
       String artifactRef,
       String artifactDigest,
       Instant finalizedAt) {
+    // The recording row is written by the recording lifecycle as well as by this coordinator, and
+    // the request-scoped persistence context may still hold an instance loaded before that write.
+    // A locked load of a stale cached instance throws StaleObjectStateException before any
+    // mutation, so drop the cached copy first and re-read the durable row under the lock. The
+    // immutability check below then runs against the durable state.
+    BootstrapRecordingEntity cached =
+        entityManager.find(BootstrapRecordingEntity.class, orchestrationId);
+    if (cached == null) {
+      throw new BootstrapRecordingException(
+          "RECORDING_MISSING", "Bootstrap recording was not found");
+    }
+    entityManager.detach(cached);
     BootstrapRecordingEntity entity =
         entityManager.find(
             BootstrapRecordingEntity.class, orchestrationId, LockModeType.PESSIMISTIC_WRITE);
