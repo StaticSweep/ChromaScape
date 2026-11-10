@@ -89,6 +89,43 @@ class ProviderTranscriptPersistenceIntegrationTest extends AbstractProviderRunti
         tamper.failureCode());
   }
 
+  /**
+   * The v2 producer derives its decision from persisted provider output, so the handoff needs the
+   * verified transcript text — not just its digest. The read must return exactly the stored,
+   * redacted bytes and must fail closed once the artifact is tampered with.
+   */
+  @Test
+  void verifiedTranscriptTextIsReadableAndTamperingFailsClosed() throws Exception {
+    ProviderRuntimeProperties properties = new ProviderRuntimeProperties();
+    properties.setTranscriptRoot(temporary.resolve("transcripts-read"));
+    RedactedTranscriptStore transcripts = new RedactedTranscriptStore(properties, canonicalJson);
+
+    RedactedTranscriptStore.Artifact artifact =
+        transcripts.store("{\"decision\":\"ok\",\"api_key\":\"super-secret\"}");
+
+    String text = transcripts.read(artifact.reference());
+    assertEquals(Files.readString(
+            temporary.resolve(
+                "transcripts-read/"
+                    + artifact.reference().substring("sha256:".length())
+                    + ".json")),
+        text);
+    assertTrue(text.contains("\"decision\":\"ok\""));
+    assertFalse(text.contains("super-secret"));
+
+    Path file =
+        temporary.resolve(
+            "transcripts-read/" + artifact.reference().substring("sha256:".length()) + ".json");
+    Files.writeString(file, "{\"decision\":\"tampered\"}");
+
+    ProviderRuntimeException tamper =
+        assertThrows(
+            ProviderRuntimeException.class, () -> transcripts.read(artifact.reference()));
+    assertEquals(
+        ProviderRuntimeModels.FailureCode.TRANSCRIPT_DIGEST_MISMATCH.name(),
+        tamper.failureCode());
+  }
+
   private SessionRequest session(String id) {
     return new SessionRequest(
         id,

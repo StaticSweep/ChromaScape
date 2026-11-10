@@ -195,5 +195,10 @@ class BootstrapProposalAssemblerTest {
               ProviderRuntimeModels.FailureCode.NONE,
               decision));
     }
+
+    @Override
+    public Optional<String> findProviderTranscript(String sessionId, String turnId) {
+      return Optional.empty();
+    }
   }
 }

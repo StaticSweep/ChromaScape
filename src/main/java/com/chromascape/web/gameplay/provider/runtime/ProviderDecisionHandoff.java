@@ -16,6 +16,20 @@ public interface ProviderDecisionHandoff {
   Optional<PersistedDecision> findValidatedDecision(String sessionId, String turnId);
 
   /**
+   * Returns the verified, credential-redacted provider transcript for a persisted turn.
+   *
+   * <p>The bytes are re-hashed against the recorded reference before they are returned, so the text
+   * is provably the artifact that was persisted. It is the only durable record of what the provider
+   * actually emitted: the normalised decision is a projection of it, and a v2 decision can only be
+   * derived from persisted provider output. The lookup is read-only and never mutates runtime state.
+   */
+  default Optional<String> findProviderTranscript(String sessionId, String turnId) {
+    // Defaulted so the handoff stays a functional interface for read-only test doubles. A
+    // production implementation must override it; an absent transcript fails closed upstream.
+    return Optional.empty();
+  }
+
+  /**
    * Complete immutable provenance of one persisted provider decision. Every digest is the canonical
    * digest of the exact bytes that were validated and persisted; the transcript reference doubles
    * as the transcript content hash of the redacted artifact.

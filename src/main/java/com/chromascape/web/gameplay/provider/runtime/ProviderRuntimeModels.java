@@ -144,7 +144,55 @@ public final class ProviderRuntimeModels {
       List<String> taskSkillDigests,
       Instant deadline,
       BudgetLimits budgets,
-      boolean decideOnly) {}
+      boolean decideOnly,
+      String gameplayContractVersion) {
+
+    public SessionRequest {
+      gameplayContractVersion =
+          gameplayContractVersion == null || gameplayContractVersion.isBlank()
+              ? "sc-1429/v1"
+              : gameplayContractVersion;
+    }
+
+    /** Legacy fourteen-argument form: a v1 session. */
+    public SessionRequest(
+        String sessionId,
+        Provider provider,
+        String modelId,
+        String taskId,
+        String runId,
+        String recordingId,
+        String promptDigest,
+        String toolsetDigest,
+        String knowledgeDigest,
+        String goalPlanDigest,
+        List<String> taskSkillDigests,
+        Instant deadline,
+        BudgetLimits budgets,
+        boolean decideOnly) {
+      this(
+          sessionId,
+          provider,
+          modelId,
+          taskId,
+          runId,
+          recordingId,
+          promptDigest,
+          toolsetDigest,
+          knowledgeDigest,
+          goalPlanDigest,
+          taskSkillDigests,
+          deadline,
+          budgets,
+          decideOnly,
+          "sc-1429/v1");
+    }
+
+    /** True when this session must be asked for an SC-1429/v2 decision. */
+    public boolean v2() {
+      return "sc-1429/v2".equals(gameplayContractVersion);
+    }
+  }
 
   public record TurnRequest(
       String turnId,

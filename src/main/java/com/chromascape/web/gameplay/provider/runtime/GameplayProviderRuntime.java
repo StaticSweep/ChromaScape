@@ -190,6 +190,17 @@ public final class GameplayProviderRuntime implements ProviderDecisionHandoff {
             value.decision()));
   }
 
+  @Override
+  public Optional<String> findProviderTranscript(String sessionId, String turnId) {
+    Optional<TurnView> turn = store.findTurn(sessionId, turnId);
+    if (turn.isEmpty() || turn.get().transcriptRef() == null) {
+      return Optional.empty();
+    }
+    // The store verifies the artifact bytes against the recorded reference before returning them,
+    // so a transcript that does not match its digest can never reach a consumer.
+    return Optional.of(transcripts.read(turn.get().transcriptRef()));
+  }
+
   void recoverAtStartup() {
     for (TurnView turn : store.recoverableTurns()) {
       if (turn.state().submitted()) {

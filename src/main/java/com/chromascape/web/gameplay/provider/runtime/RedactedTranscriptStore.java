@@ -70,6 +70,22 @@ public final class RedactedTranscriptStore {
    * provider-runtime exception; no transcript content ever appears in a message.
    */
   public Verification verify(String reference) {
+    return new Verification(reference, verifiedBytes(reference).length);
+  }
+
+  /**
+   * Returns the verified transcript text for a reference.
+   *
+   * <p>The bytes are the exact stored artifact, re-hashed against {@code reference} before they are
+   * returned, so a caller can never read a transcript that does not match its recorded digest. The
+   * content is already credential-redacted at store time; this method never re-applies redaction
+   * and never logs the content.
+   */
+  public String read(String reference) {
+    return new String(verifiedBytes(reference), StandardCharsets.UTF_8);
+  }
+
+  private byte[] verifiedBytes(String reference) {
     if (reference == null || !reference.matches("sha256:[0-9a-f]{64}")) {
       throw new ProviderRuntimeException(
           ProviderRuntimeModels.FailureCode.INVALID_EVIDENCE_REFERENCE.name(),
@@ -111,7 +127,7 @@ public final class RedactedTranscriptStore {
             ProviderRuntimeModels.FailureCode.TRANSCRIPT_DIGEST_MISMATCH.name(),
             "Transcript artifact bytes do not match the recorded digest");
       }
-      return new Verification(actual, content.length);
+      return content;
     } catch (ProviderRuntimeException exception) {
       throw exception;
     } catch (IOException | RuntimeException exception) {
