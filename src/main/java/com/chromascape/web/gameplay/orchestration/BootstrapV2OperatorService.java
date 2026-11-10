@@ -1,6 +1,7 @@
 package com.chromascape.web.gameplay.orchestration;
 
 import com.chromascape.web.gameplay.bootstrap.BootstrapApprovalStore;
+import com.chromascape.web.gameplay.bootstrap.BootstrapRecordingCoordinator;
 import com.chromascape.web.gameplay.bootstrap.BootstrapV2ApprovalService;
 import com.chromascape.web.gameplay.bootstrap.BootstrapV2DraftService;
 import com.chromascape.web.gameplay.bootstrap.BootstrapV2DraftStore;
@@ -9,7 +10,9 @@ import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderO
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FrozenV2Command;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Mode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationView;
+import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Objects;
@@ -33,6 +36,9 @@ public final class BootstrapV2OperatorService {
   private final BootstrapV2ApprovalService approvals;
   private final BootstrapApprovalStore approvalStore;
   private final AccountBuilderOrchestrationService orchestration;
+  private final BootstrapRecordingCoordinator recordings;
+  private final CanonicalGameplayJson canonicalJson;
+  private final ObjectMapper objectMapper;
   private final Clock clock;
 
   @Autowired
@@ -42,7 +48,10 @@ public final class BootstrapV2OperatorService {
       BootstrapV2DraftStore draftStore,
       BootstrapV2ApprovalService approvals,
       BootstrapApprovalStore approvalStore,
-      AccountBuilderOrchestrationService orchestration) {
+      AccountBuilderOrchestrationService orchestration,
+      BootstrapRecordingCoordinator recordings,
+      CanonicalGameplayJson canonicalJson,
+      ObjectMapper objectMapper) {
     this(
         operator,
         drafts,
@@ -50,6 +59,9 @@ public final class BootstrapV2OperatorService {
         approvals,
         approvalStore,
         orchestration,
+        recordings,
+        canonicalJson,
+        objectMapper,
         Clock.systemUTC());
   }
 
@@ -60,6 +72,9 @@ public final class BootstrapV2OperatorService {
       BootstrapV2ApprovalService approvals,
       BootstrapApprovalStore approvalStore,
       AccountBuilderOrchestrationService orchestration,
+      BootstrapRecordingCoordinator recordings,
+      CanonicalGameplayJson canonicalJson,
+      ObjectMapper objectMapper,
       Clock clock) {
     this.operator = Objects.requireNonNull(operator, "operator");
     this.drafts = Objects.requireNonNull(drafts, "drafts");
@@ -67,6 +82,9 @@ public final class BootstrapV2OperatorService {
     this.approvals = Objects.requireNonNull(approvals, "approvals");
     this.approvalStore = Objects.requireNonNull(approvalStore, "approvalStore");
     this.orchestration = Objects.requireNonNull(orchestration, "orchestration");
+    this.recordings = Objects.requireNonNull(recordings, "recordings");
+    this.canonicalJson = Objects.requireNonNull(canonicalJson, "canonicalJson");
+    this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
     this.clock = Objects.requireNonNull(clock, "clock");
   }
 
@@ -190,18 +208,49 @@ public final class BootstrapV2OperatorService {
             draft.requestId(),
             draft.idempotencyKey(),
             draft.deadline());
-    return orchestration
-        .orchestrateFrozenV2(
-            new FrozenV2Command(
-                draft.requestId(),
-                draft.requestId(),
-                draft.idempotencyKey(),
-                Mode.BOOTSTRAP_RECORDING,
-                draft.deadline(),
-                draft.providerSessionId(),
-                draft.providerTurnId(),
-                bundle))
-        .view();
+    com.fasterxml.jackson.databind.JsonNode bundleNode;
+    try {
+      bundleNode = objectMapper.readTree(draft.bytes());
+    } catch (java.io.IOException exception) {
+      throw new OperatorException(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "INVALID_BUNDLE",
+          "The frozen draft is not valid JSON");
+    }
+    com.fasterxml.jackson.databind.JsonNode envelopeNode = bundleNode.path("executionEnvelope");
+    // The durable recording projection starts before delivery, exactly as the v1 path does. If the
+    // process dies after this point, recovery finds the STARTED projection and resumes
+    // reconciliation or finalization only; gameplay is never redispatched.
+    recordings.start(
+        draft.requestId(),
+        draft.recordingId(),
+        draft.providerSessionId(),
+        draft.providerTurnId(),
+        canonicalJson.digest(bundleNode.path("providerDecision")),
+        draft.envelopeDigest(),
+        envelopeNode.path("provider").asText(null),
+        envelopeNode.path("modelVersion").asText(null),
+        null,
+        null);
+    OrchestrationView view =
+        orchestration
+            .orchestrateFrozenV2(
+                new FrozenV2Command(
+                    draft.requestId(),
+                    draft.requestId(),
+                    draft.idempotencyKey(),
+                    Mode.BOOTSTRAP_RECORDING,
+                    draft.deadline(),
+                    draft.providerSessionId(),
+                    draft.providerTurnId(),
+                    bundle))
+            .view();
+    if (!view.state().provenTerminal()) {
+      // The one-run bound: wait read-only for a proven terminal receipt before projecting the
+      // evidence. The wait never redispatches and stays reconciliation-only if the bound elapses.
+      view = orchestration.reconcileUntilTerminal(draft.requestId(), draft.deadline());
+    }
+    return operator.finalizeDelivered(operatorKey, draft.requestId());
   }
 
   /** Durable state of one delivery, for the operator's bounded wait. */

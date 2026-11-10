@@ -563,6 +563,20 @@ public final class BootstrapGameplayOperatorService {
     return view;
   }
 
+  /**
+   * Completes evidence finalization for an already-terminal delivery.
+   *
+   * <p>Used by the frozen v2 surface, which owns its own delivery step but must finalize through the
+   * same durable-evidence path: the manifest is rebuilt from the persisted request snapshot and the
+   * persisted approval, so a crash between publication and database finalization replays identical
+   * bytes. It never redispatches.
+   */
+  public OrchestrationView finalizeDelivered(String operatorKey, String orchestrationId) {
+    requireOperator(operatorKey);
+    return finalizeIfTerminalForExisting(
+        orchestrationId, orchestrationService.find(orchestrationId));
+  }
+
   private OrchestrationView finalizeIfTerminalForExisting(
       String orchestrationId, OrchestrationView view) {
     if (!view.state().provenTerminal()) {

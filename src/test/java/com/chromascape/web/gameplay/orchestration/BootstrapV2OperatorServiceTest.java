@@ -6,9 +6,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.chromascape.web.gameplay.bootstrap.BootstrapApprovalStore;
+import com.chromascape.web.gameplay.bootstrap.BootstrapRecordingCoordinator;
 import com.chromascape.web.gameplay.bootstrap.BootstrapV2ApprovalService;
 import com.chromascape.web.gameplay.bootstrap.BootstrapV2DraftService;
 import com.chromascape.web.gameplay.bootstrap.BootstrapV2DraftStore;
@@ -18,7 +20,11 @@ import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderO
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Mode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationView;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.State;
+import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
@@ -40,6 +46,9 @@ class BootstrapV2OperatorServiceTest {
   private static final String OPERATOR_KEY = "k".repeat(32);
   private static final String SCOPE_DIGEST = "sha256:" + "a".repeat(64);
   private static final String BUNDLE_DIGEST = "sha256:" + "b".repeat(64);
+  private static final String BUNDLE_JSON =
+      "{\"executionEnvelope\":{\"provider\":\"CLAUDE\",\"modelVersion\":\"model-v1\"},"
+          + "\"providerDecision\":{\"contractVersion\":\"sc-1429/v2\"}}";
 
   private BootstrapGameplayOperatorService operator;
   private BootstrapV2DraftService drafts;
@@ -47,6 +56,8 @@ class BootstrapV2OperatorServiceTest {
   private BootstrapV2ApprovalService approvals;
   private BootstrapApprovalStore approvalStore;
   private AccountBuilderOrchestrationService orchestration;
+  private BootstrapRecordingCoordinator recordings;
+  private ObjectMapper objectMapper;
   private BootstrapV2OperatorService service;
 
   @BeforeEach
@@ -57,6 +68,12 @@ class BootstrapV2OperatorServiceTest {
     approvals = mock(BootstrapV2ApprovalService.class);
     approvalStore = mock(BootstrapApprovalStore.class);
     orchestration = mock(AccountBuilderOrchestrationService.class);
+    recordings = mock(BootstrapRecordingCoordinator.class);
+    objectMapper =
+        JsonMapper.builder()
+            .findAndAddModules()
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .build();
     service =
         new BootstrapV2OperatorService(
             operator,
@@ -65,21 +82,40 @@ class BootstrapV2OperatorServiceTest {
             approvals,
             approvalStore,
             orchestration,
+            recordings,
+            new CanonicalGameplayJson(objectMapper),
+            objectMapper,
             Clock.fixed(NOW, ZoneOffset.UTC));
   }
 
   @Test
-  void dispatchDeliversThePersistedDraftBytesAndNothingElse() {
+  void dispatchDeliversThePersistedDraftBytesAndNothingElse() throws Exception {
     when(approvalStore.find("approval-1")).thenReturn(approval("APPROVED", NOW.plusSeconds(300)));
     when(draftStore.findByScopeDigest(SCOPE_DIGEST)).thenReturn(Optional.of(draft()));
     when(orchestration.orchestrateFrozenV2(any()))
         .thenReturn(
-            new AccountBuilderOrchestrationService.Submission(
-                view("orch-1", State.RESERVED), true));
+            new AccountBuilderOrchestrationService.Submission(view("req-1", State.RESERVED), true));
+    when(orchestration.reconcileUntilTerminal("req-1", NOW.plusSeconds(300)))
+        .thenReturn(view("req-1", State.CONFIRMED));
+    when(operator.finalizeDelivered(OPERATOR_KEY, "req-1"))
+        .thenReturn(view("req-1", State.CONFIRMED));
 
     OrchestrationView delivered = service.dispatch(OPERATOR_KEY, "approval-1");
 
-    assertThat(delivered.state()).isEqualTo(State.RESERVED);
+    assertThat(delivered.state()).isEqualTo(State.CONFIRMED);
+    verify(recordings)
+        .start(
+            "req-1",
+            "recording-1",
+            "session-1",
+            "turn-1",
+            new CanonicalGameplayJson(objectMapper)
+                .digest(objectMapper.readTree(BUNDLE_JSON).path("providerDecision")),
+            "sha256:" + "e".repeat(64),
+            "CLAUDE",
+            "model-v1",
+            null,
+            null);
     ArgumentCaptor<AccountBuilderOrchestrationModels.FrozenV2Command> captor =
         ArgumentCaptor.forClass(AccountBuilderOrchestrationModels.FrozenV2Command.class);
     verify(orchestration).orchestrateFrozenV2(captor.capture());
@@ -89,7 +125,7 @@ class BootstrapV2OperatorServiceTest {
     assertThat(command.deadline()).isEqualTo(NOW.plusSeconds(300));
     assertThat(command.frozenBundle().bytes())
         .as("the delivered bytes are the persisted draft, never a caller-supplied payload")
-        .isEqualTo("frozen-bundle-bytes".getBytes(StandardCharsets.UTF_8));
+        .isEqualTo(BUNDLE_JSON.getBytes(StandardCharsets.UTF_8));
     assertThat(command.frozenBundle().bundleDigest()).isEqualTo(BUNDLE_DIGEST);
     assertThat(command.frozenBundle().scopeDigest()).isEqualTo(SCOPE_DIGEST);
   }
@@ -102,6 +138,7 @@ class BootstrapV2OperatorServiceTest {
         .isInstanceOf(OperatorException.class)
         .hasMessageContaining("EXPIRED");
     verify(orchestration, never()).orchestrateFrozenV2(any());
+    verifyNoInteractions(recordings);
   }
 
   @Test
@@ -112,6 +149,7 @@ class BootstrapV2OperatorServiceTest {
         .isInstanceOf(OperatorException.class)
         .hasMessageContaining("expired");
     verify(orchestration, never()).orchestrateFrozenV2(any());
+    verifyNoInteractions(recordings);
   }
 
   @Test
@@ -141,6 +179,7 @@ class BootstrapV2OperatorServiceTest {
         .isInstanceOf(OperatorException.class)
         .hasMessageContaining("does not bind");
     verify(orchestration, never()).orchestrateFrozenV2(any());
+    verifyNoInteractions(recordings);
   }
 
   @Test
@@ -153,6 +192,7 @@ class BootstrapV2OperatorServiceTest {
         .isInstanceOf(OperatorException.class)
         .hasMessageContaining("deadline");
     verify(orchestration, never()).orchestrateFrozenV2(any());
+    verifyNoInteractions(recordings);
   }
 
   @Test
@@ -206,7 +246,7 @@ class BootstrapV2OperatorServiceTest {
 
   private AccountBuilderOrchestrationModels.FrozenV2Bundle bundle() {
     return new AccountBuilderOrchestrationModels.FrozenV2Bundle(
-        "frozen-bundle-bytes".getBytes(StandardCharsets.UTF_8),
+        BUNDLE_JSON.getBytes(StandardCharsets.UTF_8),
         BUNDLE_DIGEST,
         "sha256:" + "e".repeat(64),
         SCOPE_DIGEST,
@@ -235,7 +275,7 @@ class BootstrapV2OperatorServiceTest {
         "idem-1",
         "recording-1",
         "authority-1",
-        "frozen-bundle-bytes".getBytes(StandardCharsets.UTF_8),
+        BUNDLE_JSON.getBytes(StandardCharsets.UTF_8),
         BUNDLE_DIGEST,
         "sha256:" + "e".repeat(64),
         SCOPE_DIGEST,
