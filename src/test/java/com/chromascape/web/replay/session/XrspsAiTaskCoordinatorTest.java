@@ -25,7 +25,8 @@ class XrspsAiTaskCoordinatorTest {
           mock(XrspsSessionRepository.class),
           sessions,
           runtime,
-          new ProviderRuntimeValidator(contracts, json),
+          new ProviderRuntimeValidator(
+            contracts, new com.chromascape.web.gameplay.contract.v2.GameplayV2ContractValidator(mapper), json),
           mock(ReplayPrincipalService.class),
           mapper,
           json);
@@ -70,7 +71,8 @@ class XrspsAiTaskCoordinatorTest {
     var persisted = mapper.readValue(mapper.writeValueAsString(doc), XrspsSessionDocument.class);
     var request = mapper.convertValue(persisted.aiProviderSession, SessionRequest.class);
     var turn = mapper.convertValue(persisted.aiProviderTurn, TurnRequest.class);
-    new ProviderRuntimeValidator(contracts, json).validateTurn(request, turn);
+    new ProviderRuntimeValidator(
+            contracts, new com.chromascape.web.gameplay.contract.v2.GameplayV2ContractValidator(mapper), json).validateTurn(request, turn);
   }
 
   @Test
@@ -79,7 +81,8 @@ class XrspsAiTaskCoordinatorTest {
     prepare(doc);
     var request = mapper.convertValue(doc.aiProviderSession, SessionRequest.class);
     var turn = mapper.convertValue(doc.aiProviderTurn, TurnRequest.class);
-    new ProviderRuntimeValidator(contracts, json).validateTurn(request, turn);
+    new ProviderRuntimeValidator(
+            contracts, new com.chromascape.web.gameplay.contract.v2.GameplayV2ContractValidator(mapper), json).validateTurn(request, turn);
     assertEquals(
         "xrsps-offline", turn.observation().path("identities").path("environmentId").asText());
     assertEquals(0, turn.observation().path("skills").path("fishingXp").asInt());

@@ -353,6 +353,8 @@ class XrspsDurableSessionIntegrationTest {
               new com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeValidator(
                   new com.chromascape.web.gameplay.contract.GameplayContractValidator(
                       provider.mapper),
+                  new com.chromascape.web.gameplay.contract.v2.GameplayV2ContractValidator(
+                      provider.mapper),
                   canonical),
               new com.chromascape.web.replay.security.ReplayPrincipalService(),
               provider.mapper,
@@ -453,6 +455,8 @@ class XrspsDurableSessionIntegrationTest {
               provider.runtime,
               new com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeValidator(
                   new com.chromascape.web.gameplay.contract.GameplayContractValidator(
+                      provider.mapper),
+                  new com.chromascape.web.gameplay.contract.v2.GameplayV2ContractValidator(
                       provider.mapper),
                   provider.canonical),
               new com.chromascape.web.replay.security.ReplayPrincipalService(),

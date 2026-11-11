@@ -235,7 +235,10 @@ class GameplayProviderRuntimeTest {
             Instant.now().plusSeconds(60),
             true);
     ProviderRuntimeValidator validator =
-        new ProviderRuntimeValidator(new GameplayContractValidator(mapper), canonical);
+        new ProviderRuntimeValidator(
+            new GameplayContractValidator(mapper),
+            new com.chromascape.web.gameplay.contract.v2.GameplayV2ContractValidator(mapper),
+            canonical);
     final TurnRequest turn =
         new TurnRequest(
             preliminary.turnId(),

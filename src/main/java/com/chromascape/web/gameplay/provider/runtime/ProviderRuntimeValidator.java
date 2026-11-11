@@ -2,6 +2,7 @@ package com.chromascape.web.gameplay.provider.runtime;
 
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import com.chromascape.web.gameplay.contract.GameplayContractValidator;
+import com.chromascape.web.gameplay.contract.v2.GameplayV2ContractValidator;
 import com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.SessionRequest;
 import com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.TurnRequest;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -18,20 +19,25 @@ public final class ProviderRuntimeValidator {
   private static final String ID = "[A-Za-z0-9][A-Za-z0-9._:-]{0,159}";
 
   private final GameplayContractValidator contractValidator;
+  private final GameplayV2ContractValidator v2ContractValidator;
   private final CanonicalGameplayJson canonicalJson;
   private final Clock clock;
 
   @Autowired
   public ProviderRuntimeValidator(
-      GameplayContractValidator contractValidator, CanonicalGameplayJson canonicalJson) {
-    this(contractValidator, canonicalJson, Clock.systemUTC());
+      GameplayContractValidator contractValidator,
+      GameplayV2ContractValidator v2ContractValidator,
+      CanonicalGameplayJson canonicalJson) {
+    this(contractValidator, v2ContractValidator, canonicalJson, Clock.systemUTC());
   }
 
   ProviderRuntimeValidator(
       GameplayContractValidator contractValidator,
+      GameplayV2ContractValidator v2ContractValidator,
       CanonicalGameplayJson canonicalJson,
       Clock clock) {
     this.contractValidator = contractValidator;
+    this.v2ContractValidator = v2ContractValidator;
     this.canonicalJson = canonicalJson;
     this.clock = clock;
   }
@@ -78,14 +84,24 @@ public final class ProviderRuntimeValidator {
     if (request.estimatedInputTokens() <= 0 || request.estimatedOutputTokens() <= 0) {
       throw invalid("TOKEN_ESTIMATE_REQUIRED", "Conservative token estimates are required");
     }
-    contractValidator.validate("observation", request.observation());
-    if (request.eligibleActions() == null
-        || !request.eligibleActions().isArray()
-        || request.eligibleActions().isEmpty()) {
-      throw invalid("ELIGIBLE_ACTIONS_REQUIRED", "Eligible actions must be a non-empty array");
-    }
-    for (JsonNode action : request.eligibleActions()) {
-      contractValidator.validate("semanticAction", action);
+    if (session.v2()) {
+      // A v2 turn carries the semantic observation and the eligibility result the provider must
+      // answer about; the v1 semantic-action list is a different contract and would reject them.
+      v2ContractValidator.validate("semanticObservation", request.observation());
+      if (request.eligibleActions() == null || !request.eligibleActions().isObject()) {
+        throw invalid("ELIGIBLE_ACTIONS_REQUIRED", "A v2 turn requires the eligibility result");
+      }
+      v2ContractValidator.validate("eligibilityResult", request.eligibleActions());
+    } else {
+      contractValidator.validate("observation", request.observation());
+      if (request.eligibleActions() == null
+          || !request.eligibleActions().isArray()
+          || request.eligibleActions().isEmpty()) {
+        throw invalid("ELIGIBLE_ACTIONS_REQUIRED", "Eligible actions must be a non-empty array");
+      }
+      for (JsonNode action : request.eligibleActions()) {
+        contractValidator.validate("semanticAction", action);
+      }
     }
     requireDigestMatch(request.observation(), request.observationDigest(), "observationDigest");
     requireDigestMatch(request.eligibleActions(), request.eligibilityDigest(), "eligibilityDigest");

@@ -81,9 +81,17 @@ public final class BootstrapV2ProviderTurnService {
     if (!request.deadline().isAfter(now)) {
       throw new TurnException("DEADLINE_EXPIRED", "The turn deadline has already passed");
     }
-    JsonNode catalogWire = wire.catalog();
-    JsonNode observeWire = wire.observe();
-    JsonNode observationWire = wire.observation();
+    JsonNode catalogWire;
+    JsonNode observeWire;
+    JsonNode observationWire;
+    try {
+      catalogWire = wire.catalog();
+      observeWire = wire.observe();
+      observationWire = wire.observation();
+    } catch (RuntimeException failure) {
+      // An unreachable or slow executor is a stable, retryable condition, never a server error.
+      throw new TurnException("GATEWAY_UNAVAILABLE", failure.getMessage());
+    }
     JsonNode catalogSnapshot;
     JsonNode observation;
     JsonNode planningInput;

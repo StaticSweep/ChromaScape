@@ -52,7 +52,7 @@ public final class BootstrapV2SnapshotMapper {
     ObjectNode snapshot = MAPPER.createObjectNode();
     snapshot.put("contractVersion", GameplayV2Contracts.VERSION);
     snapshot.put("catalogId", "micro6:" + text(catalogWire, "buildId"));
-    snapshot.put("catalogRevision", number(catalogWire, "catalogRevision"));
+    snapshot.put("catalogRevision", revision(catalogWire, "catalogRevision"));
     snapshot.put("capturedAt", capturedAt.toString());
     snapshot.put("executorArtifactId", text(catalogWire, "executorArtifactId"));
     snapshot.put("executorBuildId", text(catalogWire, "buildId"));
@@ -204,6 +204,26 @@ public final class BootstrapV2SnapshotMapper {
       throw new IllegalArgumentException("Micro6 response is missing " + field);
     }
     return value;
+  }
+
+  /**
+   * Reads a contract {@code revision}.
+   *
+   * <p>The sc-1429/v2 contract types revisions as integers, but the deployed executor publishes the
+   * catalog revision as a decimal string while publishing observation and task revisions as numbers.
+   * A digits-only string is therefore accepted and converted; anything else is refused, so a
+   * malformed or fractional value can never be silently coerced. The producer-side deviation is
+   * recorded so the wire can be made conformant.
+   */
+  private long revision(JsonNode node, String field) {
+    JsonNode value = node.path(field);
+    if (value.isNumber()) {
+      return value.asLong();
+    }
+    if (value.isTextual() && value.asText().matches("0|[1-9][0-9]{0,17}")) {
+      return Long.parseLong(value.asText());
+    }
+    throw new IllegalArgumentException("Micro6 response is missing " + field);
   }
 
   private long number(JsonNode node, String field) {

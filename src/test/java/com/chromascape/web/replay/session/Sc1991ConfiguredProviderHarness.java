@@ -36,7 +36,10 @@ public final class Sc1991ConfiguredProviderHarness implements AutoCloseable {
     properties.setTranscriptRoot(temporary.resolve("provider-transcripts"));
     properties.getCodex().setCommand(List.of(executable));
     properties.getCodex().setAllowedModels(List.of(model));
-    var validator = new ProviderRuntimeValidator(new GameplayContractValidator(mapper), canonical);
+    var validator = new ProviderRuntimeValidator(
+            new GameplayContractValidator(mapper),
+            new com.chromascape.web.gameplay.contract.v2.GameplayV2ContractValidator(mapper),
+            canonical);
     var store = context.getBean(ProviderRuntimeStore.class);
     runtime =
         new GameplayProviderRuntime(
