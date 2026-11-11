@@ -55,6 +55,17 @@ public final class BootstrapV2DraftService {
    *     is incomplete, or the assembled bundle fails any contract rule
    */
   public Preview preview(DraftRequest request) {
+    return preview(request, null);
+  }
+
+  /**
+   * Assembles the draft from an already captured observation.
+   *
+   * <p>Micro6's live observation route increments its revision on every read, so a draft assembled
+   * from a second read would describe a different moment than the provider answered about. When the
+   * caller already holds the observation it asked the provider about, it must supply it here.
+   */
+  public Preview preview(DraftRequest request, JsonNode capturedObservation) {
     Objects.requireNonNull(request, "request");
     Instant now = clock.instant();
     if (!request.deadline().isAfter(now)) {
@@ -73,7 +84,7 @@ public final class BootstrapV2DraftService {
     JsonNode observation =
         mapper.semanticObservation(
             wire.observe(),
-            wire.observation(),
+            capturedObservation == null ? wire.observation() : capturedObservation,
             request.identities(),
             catalogSnapshot,
             decision.knowledgeDigest());

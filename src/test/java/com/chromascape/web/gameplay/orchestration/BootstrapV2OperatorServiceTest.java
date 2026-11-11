@@ -14,6 +14,7 @@ import com.chromascape.web.gameplay.bootstrap.BootstrapRecordingCoordinator;
 import com.chromascape.web.gameplay.bootstrap.BootstrapV2ApprovalService;
 import com.chromascape.web.gameplay.bootstrap.BootstrapV2DraftService;
 import com.chromascape.web.gameplay.bootstrap.BootstrapV2DraftStore;
+import com.chromascape.web.gameplay.bootstrap.BootstrapV2ProviderTurnService;
 import com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorService.OperatorException;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
@@ -54,6 +55,7 @@ class BootstrapV2OperatorServiceTest {
   private BootstrapV2DraftService drafts;
   private BootstrapV2DraftStore draftStore;
   private BootstrapV2ApprovalService approvals;
+  private BootstrapV2ProviderTurnService turns;
   private BootstrapApprovalStore approvalStore;
   private AccountBuilderOrchestrationService orchestration;
   private BootstrapRecordingCoordinator recordings;
@@ -66,6 +68,7 @@ class BootstrapV2OperatorServiceTest {
     drafts = mock(BootstrapV2DraftService.class);
     draftStore = mock(BootstrapV2DraftStore.class);
     approvals = mock(BootstrapV2ApprovalService.class);
+    turns = mock(BootstrapV2ProviderTurnService.class);
     approvalStore = mock(BootstrapApprovalStore.class);
     orchestration = mock(AccountBuilderOrchestrationService.class);
     recordings = mock(BootstrapRecordingCoordinator.class);
@@ -80,6 +83,7 @@ class BootstrapV2OperatorServiceTest {
             drafts,
             draftStore,
             approvals,
+            turns,
             approvalStore,
             orchestration,
             recordings,

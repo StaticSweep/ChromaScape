@@ -1,6 +1,7 @@
 package com.chromascape.web.gameplay.controller;
 
 import com.chromascape.web.gameplay.bootstrap.BootstrapV2DraftService;
+import com.chromascape.web.gameplay.bootstrap.BootstrapV2ProviderTurnService;
 import com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorService.OperatorException;
 import com.chromascape.web.gameplay.orchestration.BootstrapV2OperatorService;
 import com.chromascape.web.gameplay.orchestration.BootstrapV2OperatorService.ApprovalRequest;
@@ -41,6 +42,13 @@ public final class GameplayBootstrapV2Controller {
       @RequestHeader(OPERATOR_KEY_HEADER) String operatorKey,
       @RequestBody BootstrapV2DraftService.DraftRequest request) {
     return operatorService.preview(operatorKey, request);
+  }
+
+  @PostMapping("/turns")
+  public Object turns(
+      @RequestHeader(OPERATOR_KEY_HEADER) String operatorKey,
+      @RequestBody BootstrapV2ProviderTurnService.TurnPreparation request) {
+    return operatorService.prepareTurn(operatorKey, request);
   }
 
   @PostMapping("/approvals")

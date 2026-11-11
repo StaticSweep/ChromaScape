@@ -12,8 +12,9 @@ package com.chromascape.web.gameplay.provider.runtime;
  * contract schema in {@code contracts/gameplay/sc-1429-gameplay-contract-v2.schema.json}; this
  * narrower shape keeps the provider from emitting fields the runtime would have to discard.
  */
-final class ProviderProposalSchemaV2 {
-  static final String JSON =
+public final class ProviderProposalSchemaV2 {
+  /** The authoritative proposal schema embedded in every sc-1429/v2 prompt. */
+  public static final String JSON =
       """
       {"type":"object","additionalProperties":false,
        "required":["contractVersion","kind","provider","modelVersion","decisionId","promptId",

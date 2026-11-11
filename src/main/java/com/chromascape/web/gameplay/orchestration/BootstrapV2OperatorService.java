@@ -5,6 +5,7 @@ import com.chromascape.web.gameplay.bootstrap.BootstrapRecordingCoordinator;
 import com.chromascape.web.gameplay.bootstrap.BootstrapV2ApprovalService;
 import com.chromascape.web.gameplay.bootstrap.BootstrapV2DraftService;
 import com.chromascape.web.gameplay.bootstrap.BootstrapV2DraftStore;
+import com.chromascape.web.gameplay.bootstrap.BootstrapV2ProviderTurnService;
 import com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorService.OperatorException;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FrozenV2Bundle;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FrozenV2Command;
@@ -34,6 +35,7 @@ public final class BootstrapV2OperatorService {
   private final BootstrapV2DraftService drafts;
   private final BootstrapV2DraftStore draftStore;
   private final BootstrapV2ApprovalService approvals;
+  private final BootstrapV2ProviderTurnService turns;
   private final BootstrapApprovalStore approvalStore;
   private final AccountBuilderOrchestrationService orchestration;
   private final BootstrapRecordingCoordinator recordings;
@@ -47,6 +49,7 @@ public final class BootstrapV2OperatorService {
       BootstrapV2DraftService drafts,
       BootstrapV2DraftStore draftStore,
       BootstrapV2ApprovalService approvals,
+      BootstrapV2ProviderTurnService turns,
       BootstrapApprovalStore approvalStore,
       AccountBuilderOrchestrationService orchestration,
       BootstrapRecordingCoordinator recordings,
@@ -57,6 +60,7 @@ public final class BootstrapV2OperatorService {
         drafts,
         draftStore,
         approvals,
+        turns,
         approvalStore,
         orchestration,
         recordings,
@@ -70,6 +74,7 @@ public final class BootstrapV2OperatorService {
       BootstrapV2DraftService drafts,
       BootstrapV2DraftStore draftStore,
       BootstrapV2ApprovalService approvals,
+      BootstrapV2ProviderTurnService turns,
       BootstrapApprovalStore approvalStore,
       AccountBuilderOrchestrationService orchestration,
       BootstrapRecordingCoordinator recordings,
@@ -80,6 +85,7 @@ public final class BootstrapV2OperatorService {
     this.drafts = Objects.requireNonNull(drafts, "drafts");
     this.draftStore = Objects.requireNonNull(draftStore, "draftStore");
     this.approvals = Objects.requireNonNull(approvals, "approvals");
+    this.turns = Objects.requireNonNull(turns, "turns");
     this.approvalStore = Objects.requireNonNull(approvalStore, "approvalStore");
     this.orchestration = Objects.requireNonNull(orchestration, "orchestration");
     this.recordings = Objects.requireNonNull(recordings, "recordings");
@@ -119,6 +125,23 @@ public final class BootstrapV2OperatorService {
         preview.approvedScope(),
         preview.executionEnvelope(),
         preview.assembledAt());
+  }
+
+  /**
+   * Asks the provider for one v2 decision and returns the frozen draft it grounds.
+   *
+   * <p>The observation is captured once inside the turn service and reused for the draft, so the
+   * provider's eligibility digest and the bundle describe the same moment.
+   */
+  public BootstrapV2ProviderTurnService.PreparedTurn prepareTurn(
+      String operatorKey, BootstrapV2ProviderTurnService.TurnPreparation request) {
+    operator.authorizeOperator(operatorKey);
+    try {
+      return turns.prepare(request);
+    } catch (BootstrapV2ProviderTurnService.TurnException exception) {
+      throw new OperatorException(
+          HttpStatus.UNPROCESSABLE_ENTITY, exception.failureCode(), exception.getMessage());
+    }
   }
 
   /** Records the owner's approval of one frozen draft scope. */
